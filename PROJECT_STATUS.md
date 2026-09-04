@@ -21,7 +21,8 @@
 - Migrar las vistas de recepción a `modules/reservations`, `modules/stays` y
   `modules/billing` sin alterar la experiencia visual.
 - Extraer los tipos y datos de demostración de `src/app/App.tsx` a sus módulos.
-- Incorporar un enrutador de cliente que represente las rutas documentadas.
+- Conectar las rutas nuevas con las vistas de cada módulo conforme se
+  implementen, manteniendo los layouts público y privado existentes.
 
 ## Pendiente por módulo
 
@@ -45,6 +46,8 @@
 - No introducir bibliotecas visuales adicionales sin una necesidad concreta.
 - Consultar `src/ARCHITECTURE.md` antes de crear archivos web y
   `mobile/README.md` antes de crear archivos móviles.
+- Copiar `.env.example` a `.env` para desarrollo local y ejecutar `npm run
+check` antes de publicar cambios.
 
 ## Verificación más reciente
 

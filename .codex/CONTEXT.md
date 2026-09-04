@@ -18,22 +18,29 @@ Seguir el documento `Taller de Arquitectura y Desglose Frontend.pdf`:
 - `src/modules/<dominio>/`: `models`, `dtos`, `mappers`, `adapters`,
   `services` y `components`.
 - `src/shared/components/`: piezas genéricas reutilizables.
+- `src/layouts/`: layouts React Router por sección.
+- `src/services/http-client.ts`: cliente HTTP centralizado; toma la URL base de
+  `VITE_API_BASE_URL` en `.env`.
+- `src/assets/` y `src/styles/`: recursos estáticos y tokens visuales.
 
 Consultar `src/ARCHITECTURE.md` antes de crear archivos. Solo código usado por
 dos o más áreas va en `shared/`; toda lógica específica se conserva en su
 respectivo módulo. No agregar trabajo nuevo a `src/app/` ni `src/components/`:
 son código temporal heredado de Bolt y se migrará gradualmente.
 
-El proyecto usa Vite, no Next.js. Conserva la intención de las rutas del PDF,
-pero no añadas archivos `page.tsx` con la expectativa de que Vite los enrute
-automáticamente. Cuando se implemente navegación, usa un enrutador de cliente
-o una capa de rutas explícita.
+El proyecto usa Vite, no Next.js. La navegación se configura explícitamente
+con React Router en `src/app/router.tsx`; las rutas base son `/`, `/login` y
+`/pms`. No confiar en el nombre de un archivo para crear una ruta.
 
 ## Reglas de trabajo
 
 - Preservar `src/index.css`; reutilizar sus clases y variables antes de añadir
   estilos nuevos.
 - Mantener TypeScript estricto y el alias `@/`.
+- Copiar `.env.example` a `.env` antes de consumir servicios. Nunca versionar
+  credenciales ni modificar la URL base dentro del código.
+- Ejecutar `npm run check` antes de publicar cambios: valida Prettier,
+  TypeScript, ESLint y la compilación.
 - Migrar de forma incremental: no eliminar UI funcional de `src/app/App.tsx`
   hasta que su reemplazo esté conectado y verificado.
 - Poner modelos, DTOs, mappers, adaptadores y servicios en el módulo que les

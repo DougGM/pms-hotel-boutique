@@ -12,6 +12,8 @@ src/
     components/           Componentes exclusivos del layout privado
     guards/               Protección de sesión y permisos
     routes/               Definición de rutas privadas
+  layouts/                Layouts conectados a React Router
+  pages/                  Páginas base conectadas a las rutas
   modules/                Lógica por dominio de negocio
     <modulo>/
       models/             Modelos de dominio
@@ -27,6 +29,10 @@ src/
     lib/                  Configuración de librerías
     types/                Tipos transversales
     utils/                Funciones utilitarias puras
+  services/               Cliente HTTP y servicios transversales
+  assets/                 Imágenes, fuentes e iconos propios
+  styles/                 Tokens, estilos globales y temas
+  app/router.tsx          Configuración explícita de React Router
 ```
 
 ## Reglas
@@ -37,4 +43,5 @@ src/
 - Todo lo específico de un dominio se coloca en `modules/<modulo>/`.
 - Solo código reutilizable por dos o más áreas debe estar en `shared/`.
 - No agregar lógica nueva a `src/app/` o `src/components/`; son la capa
-  temporal heredada de Bolt que se migrará de forma gradual.
+  temporal heredada de Bolt que se migrará de forma gradual. La excepción es
+  `src/app/router.tsx`, que define las rutas base de la aplicación.
