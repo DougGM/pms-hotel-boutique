@@ -10,6 +10,11 @@ button, input, textarea, select { font: inherit; }
 button { cursor: pointer; border: 0; }
 
 .app-shell { min-height: 100vh; display: flex; background: #f7f4ef; }
+.public-page-shell { min-height: 100vh; display: grid; place-items: center; padding: 24px; background: linear-gradient(135deg, #f7f4ef, #efe5d8); }
+.public-page-card { width: min(100%, 460px); padding: 42px; background: #fff; border: 1px solid #ebe4dc; border-radius: 18px; box-shadow: 0 20px 45px #2e211a14; }
+.public-page-card h1 { margin: 8px 0 12px; color: #2e211a; font-size: clamp(2rem, 5vw, 3rem); line-height: 1.05; }
+.public-page-card .button { margin-top: 20px; }
+.pagination { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 16px; }
 .sidebar { width: 256px; min-height: 100vh; background: #2e211a; color: #fff; padding: 24px 16px 18px; display: flex; flex-direction: column; }
 .brand, .login-brand { display: flex; align-items: center; gap: 10px; font-size: 15px; letter-spacing: .13em; font-weight: 700; color: #f7f4ef; }
 .brand small, .login-brand small { display: block; font-size: 8px; letter-spacing: .18em; opacity: .55; margin-top: 4px; }

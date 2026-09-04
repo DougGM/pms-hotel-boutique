@@ -3,7 +3,13 @@
 ## Estado actual
 
 - Base visual importada desde el proyecto Bolt `sb1-8sal4vhj`.
-- Arquitectura de directorios alineada con el taller de frontend.
+- Arquitectura de directorios alineada con el taller de frontend, incluyendo
+  las capas `models`, `dtos`, `mappers`, `adapters`, `services` y `components`.
+- Zonas web definidas: `src/public/` para vistas sin sesión, `src/private/`
+  para el layout autenticado, `src/modules/` para dominios y `src/shared/`
+  para reutilizables.
+- Base de la app React Native creada en `mobile/` para empleados, con módulos
+  de autenticación, tareas, habitaciones, solicitudes y pedidos.
 - La UI funcional sigue centralizada temporalmente en `src/app/App.tsx` y sus
   componentes de apoyo en `src/components/`.
 
@@ -34,6 +40,8 @@
 - `src/index.css` es la fuente visual que debe preservarse durante toda la
   migración.
 - No introducir bibliotecas visuales adicionales sin una necesidad concreta.
+- Consultar `src/ARCHITECTURE.md` antes de crear archivos web y
+  `mobile/README.md` antes de crear archivos móviles.
 
 ## Verificación más reciente
 

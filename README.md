@@ -18,9 +18,9 @@ del huésped y consola operativa para personal y administración del hotel.
 
 ## Organización
 
-`src/app/` contiene el punto de entrada y las vistas agrupadas por tipo de
-acceso: público, huésped y PMS interno. `src/modules/` organiza el dominio por
-módulos con sus modelos, DTOs, adaptadores, servicios y componentes.
+`src/public/` contiene las vistas sin sesión y `src/private/` el layout con
+menú principal para vistas internas. `src/modules/` organiza el dominio por
+módulos con sus modelos, DTOs, mappers, adaptadores, servicios y componentes.
 `src/shared/components/` queda reservado para componentes reutilizables.
 
 La interfaz heredada del ZIP está inicialmente conservada en `src/app/App.tsx`
@@ -40,4 +40,7 @@ npm run build
 ## Seguimiento y contexto
 
 - [PROJECT_STATUS.md](PROJECT_STATUS.md): estado, prioridades y decisiones.
+- [src/ARCHITECTURE.md](src/ARCHITECTURE.md): contrato de carpetas y reglas.
 - [.codex/CONTEXT.md](.codex/CONTEXT.md): instrucciones de continuidad para agentes.
+- [mobile/README.md](mobile/README.md): alcance de la futura aplicación nativa.
+- [NEXT_CONTRIBUTOR.md](NEXT_CONTRIBUTOR.md): guía de trabajo para el siguiente compañero.
