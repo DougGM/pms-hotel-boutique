@@ -9,11 +9,23 @@ export function Pagination({ currentPage, onPageChange, totalPages }: Pagination
 
   return (
     <nav className="pagination" aria-label="Paginacion">
-      <button className="button small secondary" disabled={currentPage === 1} onClick={() => onPageChange(currentPage - 1)} type="button">
+      <button
+        className="button small secondary"
+        disabled={currentPage === 1}
+        onClick={() => onPageChange(currentPage - 1)}
+        type="button"
+      >
         Anterior
       </button>
-      <span className="muted">Pagina {currentPage} de {totalPages}</span>
-      <button className="button small secondary" disabled={currentPage === totalPages} onClick={() => onPageChange(currentPage + 1)} type="button">
+      <span className="muted">
+        Pagina {currentPage} de {totalPages}
+      </span>
+      <button
+        className="button small secondary"
+        disabled={currentPage === totalPages}
+        onClick={() => onPageChange(currentPage + 1)}
+        type="button"
+      >
         Siguiente
       </button>
     </nav>

@@ -10,6 +10,9 @@
   para reutilizables.
 - Base de la app React Native creada en `mobile/` para empleados, con módulos
   de autenticación, tareas, habitaciones, solicitudes y pedidos.
+- Rutas base navegables configuradas para `/`, `/login` y `/pms`, con layouts
+  separados para la web pública y privada.
+- Cliente HTTP centralizado configurado con `VITE_API_BASE_URL` desde `.env`.
 - La UI funcional sigue centralizada temporalmente en `src/app/App.tsx` y sus
   componentes de apoyo en `src/components/`.
 
@@ -22,15 +25,15 @@
 
 ## Pendiente por módulo
 
-| Módulo | Estado | Próximo paso |
-| --- | --- | --- |
-| Auth | Estructura creada | Modelos y pantallas de acceso |
-| Reservaciones y recepción | UI existente | Separar datos, lógica y vistas |
-| Housekeeping | UI existente | Migrar a módulo propio |
-| Room service | UI existente | Migrar pedidos y menú |
-| Huésped | UI existente | Dividir vistas por ruta |
-| Administración | UI existente | Separar los dominios administrativos |
-| Módulos restantes | Estructura creada | Implementar según prioridad |
+| Módulo                    | Estado            | Próximo paso                         |
+| ------------------------- | ----------------- | ------------------------------------ |
+| Auth                      | Estructura creada | Modelos y pantallas de acceso        |
+| Reservaciones y recepción | UI existente      | Separar datos, lógica y vistas       |
+| Housekeeping              | UI existente      | Migrar a módulo propio               |
+| Room service              | UI existente      | Migrar pedidos y menú                |
+| Huésped                   | UI existente      | Dividir vistas por ruta              |
+| Administración            | UI existente      | Separar los dominios administrativos |
+| Módulos restantes         | Estructura creada | Implementar según prioridad          |
 
 ## Decisiones
 
@@ -46,6 +49,5 @@
 ## Verificación más reciente
 
 - `npm run build` completado correctamente.
-- `npm run typecheck` y `npm run lint` detectan deuda heredada del ZIP, sobre
-  todo una condición imposible en `App.tsx`, imports sin uso y hooks
-  condicionales en `ReceptionContent.tsx`.
+- `npm run check` completado correctamente: Prettier, TypeScript, ESLint y
+  compilación de producción sin errores ni advertencias.

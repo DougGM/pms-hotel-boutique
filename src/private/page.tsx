@@ -12,7 +12,10 @@ export function PrivatePage({ activeItem, children, menuItems, onNavigate }: Pri
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <div className="brand"><span className="brand-mark">A</span><span>Hotel Aurora</span></div>
+        <div className="brand">
+          <span className="brand-mark">A</span>
+          <span>Hotel Aurora</span>
+        </div>
         <nav className="side-nav" aria-label="Menu principal">
           <div className="workspace-label">OPERACION</div>
           {menuItems.map((item) => (

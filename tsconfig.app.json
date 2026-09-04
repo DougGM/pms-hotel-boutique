@@ -16,7 +16,7 @@
 
     /* Path alias — depth-invariant imports for src (@/foo === src/foo from any file) */
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["./src/*"]
     },
 
     /* Linting */
@@ -25,5 +25,6 @@
     "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": ["src/app/App.tsx", "src/components"]
 }

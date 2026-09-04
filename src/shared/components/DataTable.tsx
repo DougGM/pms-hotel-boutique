@@ -25,12 +25,18 @@ export function DataTable<Row extends object>({
     <div className="adm-table-wrap">
       <table className="adm-table">
         <thead>
-          <tr>{columns.map((column) => <th key={column.id}>{column.header}</th>)}</tr>
+          <tr>
+            {columns.map((column) => (
+              <th key={column.id}>{column.header}</th>
+            ))}
+          </tr>
         </thead>
         <tbody>
           {data.map((row, index) => (
             <tr key={getRowId(row, index)}>
-              {columns.map((column) => <td key={column.id}>{column.cell(row)}</td>)}
+              {columns.map((column) => (
+                <td key={column.id}>{column.cell(row)}</td>
+              ))}
             </tr>
           ))}
         </tbody>
