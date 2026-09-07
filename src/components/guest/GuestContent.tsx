@@ -558,7 +558,7 @@ export function GuestContent({
 
   // ─── MY PROFILE ────────────────────────────────────────────────
   if (nav === 'Mi perfil') {
-    return <><div className="panel" style={{ maxWidth: 580, margin: '0 auto' }}>
+    return <><div className="panel" style={{ maxWidth: 'var(--size-legacy-580)', margin: '0 auto' }}>
       <div className="panel-heading"><div><h3>Mi perfil</h3><p>Datos personales registrados</p></div>
         <button className="button small secondary" onClick={() => setShowEditProfile(true)}><Pencil size={14} /> Editar perfil</button>
       </div>
@@ -587,7 +587,7 @@ export function GuestContent({
 
   // ─── LOG OUT ───────────────────────────────────────────────────
   if (nav === 'Cerrar sesión') {
-    return <div className="panel" style={{ maxWidth: 420, margin: '0 auto' }}>
+    return <div className="panel" style={{ maxWidth: 'var(--size-legacy-420)', margin: '0 auto' }}>
       <div className="hk-empty"><UserRound size={22} /><p>¿Seguro que deseas cerrar sesión?</p><small>Puedes volver a iniciar sesión cuando quieras.</small></div>
       <div style={{ display: 'flex', gap: 'var(--space-3)', justifyContent: 'center', marginTop: 'var(--space-7)' }}>
         <button className="button secondary" onClick={() => onAction('Cancelado')}>Cancelar</button>

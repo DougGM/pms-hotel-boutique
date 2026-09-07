@@ -217,7 +217,7 @@ export function RoomServiceContent({
             </div>
             <div className="rs-legend" style={{ borderTop: 'none', paddingTop: 0 }}>
               <strong>Ventas del turno</strong>
-              <span style={{ fontSize: 'var(--font-size-legacy-18)', color: 'var(--color-brand-gold-dark)', fontWeight: 700 }}>
+              <span style={{ fontSize: 'var(--font-size-legacy-18)', color: 'var(--color-brand-gold-dark)', fontWeight: 'var(--font-weight-bold)' }}>
                 {money(orders.filter((o) => o.status === 'Entregado').reduce((s, o) => s + orderTotal(o), 0))}
               </span>
             </div>
@@ -234,7 +234,7 @@ export function RoomServiceContent({
         )}
         {rejectionOrderId !== null && (
           <div className="modal-backdrop" onMouseDown={() => setRejectionOrderId(null)}>
-            <div className="modal" style={{ width: 420 }} onMouseDown={(e) => e.stopPropagation()}>
+            <div className="modal" style={{ width: 'var(--size-legacy-420)' }} onMouseDown={(e) => e.stopPropagation()}>
               <div className="modal-head">
                 <div>
                   <p className="eyebrow">RECHAZAR PEDIDO</p>
@@ -268,7 +268,7 @@ export function RoomServiceContent({
         )}
         {cancelOrderId !== null && (
           <div className="modal-backdrop" onMouseDown={() => setCancelOrderId(null)}>
-            <div className="modal" style={{ width: 420 }} onMouseDown={(e) => e.stopPropagation()}>
+            <div className="modal" style={{ width: 'var(--size-legacy-420)' }} onMouseDown={(e) => e.stopPropagation()}>
               <div className="modal-head">
                 <div>
                   <p className="eyebrow">CANCELAR PEDIDO</p>

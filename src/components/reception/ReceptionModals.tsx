@@ -86,7 +86,7 @@ export function ReservationFormModal({
   if (showSummary) {
     return (
       <div className="modal-backdrop" onMouseDown={onClose}>
-        <div className="modal" style={{ width: 460 }} onMouseDown={(e) => e.stopPropagation()}>
+        <div className="modal" style={{ width: 'var(--size-legacy-460)' }} onMouseDown={(e) => e.stopPropagation()}>
           <div className="modal-head"><div><p className="eyebrow">RESUMEN DE RESERVA</p><h2>{nextCode}</h2></div><button className="icon-btn" onClick={onClose}><X size={18} /></button></div>
           <div className="rc-summary-box">
             <div><small>Huésped</small><span>{guest.name} {guest.lastName}</span></div>
@@ -203,7 +203,7 @@ export function CheckinModal({
 
   return (
     <div className="modal-backdrop" onMouseDown={onClose}>
-      <div className="modal" style={{ width: 460 }} onMouseDown={(e) => e.stopPropagation()}>
+      <div className="modal" style={{ width: 'var(--size-legacy-460)' }} onMouseDown={(e) => e.stopPropagation()}>
         <div className="modal-head"><div><p className="eyebrow">CHECK-IN</p><h2>{reservation.code} · Hab. {reservation.roomNumber}</h2></div><button className="icon-btn" onClick={onClose}><X size={18} /></button></div>
         <p className="login-helper">Huésped: {reservation.guest.name} {reservation.guest.lastName}</p>
         <div className="rc-form-grid">
@@ -239,7 +239,7 @@ export function CheckoutModal({ reservation, onClose, onCheckout, folioTotals }:
   const nights = Math.max(1, Math.round((new Date(reservation.checkOut).getTime() - new Date(reservation.checkIn).getTime()) / 86400000));
   return (
     <div className="modal-backdrop" onMouseDown={onClose}>
-      <div className="modal" style={{ width: 420 }} onMouseDown={(e) => e.stopPropagation()}>
+      <div className="modal" style={{ width: 'var(--size-legacy-420)' }} onMouseDown={(e) => e.stopPropagation()}>
         <div className="modal-head"><div><p className="eyebrow">CHECK-OUT</p><h2>{reservation.code}</h2></div><button className="icon-btn" onClick={onClose}><X size={18} /></button></div>
         <p className="login-helper">{reservation.guest.name} {reservation.guest.lastName} · Hab. {reservation.roomNumber} · {nights} {nights === 1 ? 'noche' : 'noches'}</p>
         <div className="rc-folio-summary">
@@ -263,7 +263,7 @@ export function ReasonModal({ title, label, tone, onClose, onConfirm }: { title:
   const [reason, setReason] = useState('');
   return (
     <div className="modal-backdrop" onMouseDown={onClose}>
-      <div className="modal" style={{ width: 400 }} onMouseDown={(e) => e.stopPropagation()}>
+      <div className="modal" style={{ width: 'var(--size-legacy-400)' }} onMouseDown={(e) => e.stopPropagation()}>
         <div className="modal-head"><div><p className="eyebrow">{title}</p><h2>{label}</h2></div><button className="icon-btn" onClick={onClose}><X size={18} /></button></div>
         <p className="login-helper">Esta acción no se puede deshacer. El registro se conservará para auditoría.</p>
         <label className="rc-field"><span>Motivo</span><textarea className="rc-input" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Indica el motivo..." /></label>
@@ -291,7 +291,7 @@ export function ChargeModal({ onClose, onAdd }: { onClose: () => void; onAdd: (c
   };
   return (
     <div className="modal-backdrop" onMouseDown={onClose}>
-      <div className="modal" style={{ width: 400 }} onMouseDown={(e) => e.stopPropagation()}>
+      <div className="modal" style={{ width: 'var(--size-legacy-400)' }} onMouseDown={(e) => e.stopPropagation()}>
         <div className="modal-head"><div><p className="eyebrow">AGREGAR CARGO</p><h2>Nuevo cargo</h2></div><button className="icon-btn" onClick={onClose}><X size={18} /></button></div>
         <label className="rc-field"><span>Concepto</span><input className="rc-input" value={concept} onChange={(e) => setConcept(e.target.value)} placeholder="Ej. Room service — Almuerzo" /></label>
         <label className="rc-field"><span>Categoría</span><select value={category} onChange={(e) => setCategory(e.target.value)}><option>Servicios</option><option>Room service</option><option>Amenidades</option><option>Productos</option><option>Otro</option></select></label>
@@ -317,7 +317,7 @@ export function PaymentModal({ title, onClose, onSubmit, isDeposit }: { title: s
   };
   return (
     <div className="modal-backdrop" onMouseDown={onClose}>
-      <div className="modal" style={{ width: 400 }} onMouseDown={(e) => e.stopPropagation()}>
+      <div className="modal" style={{ width: 'var(--size-legacy-400)' }} onMouseDown={(e) => e.stopPropagation()}>
         <div className="modal-head"><div><p className="eyebrow">{title}</p><h2>{isDeposit ? 'Registrar depósito' : 'Registrar pago'}</h2></div><button className="icon-btn" onClick={onClose}><X size={18} /></button></div>
         <label className="rc-field"><span>Monto</span><input className="rc-input" type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" /></label>
         <label className="rc-field"><span>Método</span><select value={method} onChange={(e) => setMethod(e.target.value as PaymentMethod)}><option>Efectivo</option><option>Tarjeta</option><option>Transferencia</option></select></label>
@@ -340,7 +340,7 @@ export function RoomChangeModal({ reservation, rooms, hasConflict, isRoomBlocked
 
   return (
     <div className="modal-backdrop" onMouseDown={onClose}>
-      <div className="modal" style={{ width: 440 }} onMouseDown={(e) => e.stopPropagation()}>
+      <div className="modal" style={{ width: 'var(--size-legacy-440)' }} onMouseDown={(e) => e.stopPropagation()}>
         <div className="modal-head"><div><p className="eyebrow">CAMBIO DE HABITACIÓN</p><h2>{reservation.code}</h2></div><button className="icon-btn" onClick={onClose}><X size={18} /></button></div>
         <div className="rc-room-change-current"><span>Actual:</span><strong>Hab. {reservation.roomNumber} · {reservation.roomType} · {money(currentRoom?.rate ?? 0)}/noche</strong></div>
         {available.length === 0 ? <div className="hk-empty"><BedDouble size={22} /><p>No hay habitaciones compatibles disponibles</p></div> :
@@ -373,7 +373,7 @@ export function BlockModal({ rooms, onClose, onAdd }: { rooms: RecRoom[]; onClos
   const blockable = rooms.filter((r) => r.status !== 'Ocupada');
   return (
     <div className="modal-backdrop" onMouseDown={onClose}>
-      <div className="modal" style={{ width: 420 }} onMouseDown={(e) => e.stopPropagation()}>
+      <div className="modal" style={{ width: 'var(--size-legacy-420)' }} onMouseDown={(e) => e.stopPropagation()}>
         <div className="modal-head"><div><p className="eyebrow">BLOQUEAR HABITACIÓN</p><h2>Bloqueo temporal</h2></div><button className="icon-btn" onClick={onClose}><X size={18} /></button></div>
         <label className="rc-field"><span>Habitación</span><select value={roomNumber} onChange={(e) => setRoomNumber(e.target.value)}><option value="">Selecciona...</option>{blockable.map((r) => <option key={r.id} value={r.number}>Hab. {r.number} · {r.type}</option>)}</select></label>
         <div className="rc-form-grid">
