@@ -1,7 +1,7 @@
 export type RoomStatusDto =
   'available' | 'occupied' | 'cleaning' | 'maintenance' | 'out_of_service';
 
-export interface RoomDto {
+export interface RoomDTO {
   id: string;
   room_number: string;
   room_type_id: string;
@@ -11,3 +11,5 @@ export interface RoomDto {
   created_at: string;
   updated_at: string;
 }
+
+export type RoomDto = RoomDTO;

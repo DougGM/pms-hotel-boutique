@@ -1,6 +1,6 @@
 export type GuestDocumentTypeDto = 'passport' | 'national_id' | 'driver_license';
 
-export interface GuestDto {
+export interface GuestDTO {
   id: string;
   first_name: string;
   last_name: string;
@@ -12,3 +12,5 @@ export interface GuestDto {
   created_at: string;
   updated_at: string;
 }
+
+export type GuestDto = GuestDTO;

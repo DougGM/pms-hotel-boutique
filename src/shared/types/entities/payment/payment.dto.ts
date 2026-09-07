@@ -3,7 +3,7 @@ import type { Currency } from '@/shared/types/common';
 export type PaymentMethodDto = 'cash' | 'credit_card' | 'debit_card' | 'bank_transfer' | 'online';
 export type PaymentStatusDto = 'pending' | 'completed' | 'failed' | 'refunded';
 
-export interface PaymentDto {
+export interface PaymentDTO {
   id: string;
   booking_id: string;
   amount_cents: number;
@@ -15,3 +15,5 @@ export interface PaymentDto {
   processed_by_user_id?: string;
   created_at: string;
 }
+
+export type PaymentDto = PaymentDTO;

@@ -1,7 +1,7 @@
 export type UserRoleDto = 'admin' | 'manager' | 'front_desk' | 'housekeeping' | 'maintenance';
 export type UserStatusDto = 'active' | 'inactive';
 
-export interface UserDto {
+export interface UserDTO {
   id: string;
   first_name: string;
   last_name: string;
@@ -11,3 +11,5 @@ export interface UserDto {
   created_at: string;
   updated_at: string;
 }
+
+export type UserDto = UserDTO;

@@ -1,6 +1,6 @@
 import type { Currency } from '@/shared/types/common';
 
-export interface RateDto {
+export interface RateDTO {
   id: string;
   room_type_id: string;
   name: string;
@@ -14,3 +14,5 @@ export interface RateDto {
   created_at: string;
   updated_at: string;
 }
+
+export type RateDto = RateDTO;

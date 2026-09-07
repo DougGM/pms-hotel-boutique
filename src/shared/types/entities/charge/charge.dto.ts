@@ -2,7 +2,7 @@ import type { Currency } from '@/shared/types/common';
 
 export type ChargeStatusDto = 'pending' | 'posted' | 'voided';
 
-export interface ChargeDto {
+export interface ChargeDTO {
   id: string;
   booking_id: string;
   product_id?: string;
@@ -16,3 +16,5 @@ export interface ChargeDto {
   created_by_user_id?: string;
   created_at: string;
 }
+
+export type ChargeDto = ChargeDTO;

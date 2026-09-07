@@ -1,6 +1,6 @@
 export type AmenityCategoryDto = 'room' | 'hotel' | 'service';
 
-export interface AmenityDto {
+export interface AmenityDTO {
   id: string;
   name: string;
   description?: string;
@@ -10,3 +10,5 @@ export interface AmenityDto {
   created_at: string;
   updated_at: string;
 }
+
+export type AmenityDto = AmenityDTO;
