@@ -1,0 +1,10 @@
+export * as amenity from './amenity';
+export * as booking from './booking';
+export * as charge from './charge';
+export * as guest from './guest';
+export * as payment from './payment';
+export * as product from './product';
+export * as rate from './rate';
+export * as room from './room';
+export * as roomType from './room-type';
+export * as user from './user';
