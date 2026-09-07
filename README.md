@@ -13,7 +13,7 @@ privado, dejando una estructura lista para que el equipo implemente módulos.
 - React 18, TypeScript y Vite.
 - npm como gestor de paquetes.
 - React Router para la navegación web.
-- Tailwind CSS y tokens visuales base en `src/styles/tokens.css`.
+- Tailwind CSS y sistema de diseno centralizado en `src/styles/tokens.css`.
 - Iconos de `lucide-react`.
 - Alias `@/` para importar desde `src/`.
 
@@ -108,6 +108,8 @@ Ver [el módulo auth](src/modules/auth/README.md) para contrato y pruebas.
 
 - [PROJECT_STATUS.md](PROJECT_STATUS.md): estado, prioridades y decisiones.
 - [src/ARCHITECTURE.md](src/ARCHITECTURE.md): contrato de carpetas y reglas.
+- [src/styles/README.md](src/styles/README.md): tokens de diseno de WEB-03,
+  extraidos desde WEB-08.
 - [.codex/CONTEXT.md](.codex/CONTEXT.md): instrucciones de continuidad para agentes.
 - [mobile/README.md](mobile/README.md): alcance de la futura aplicación nativa.
 - [NEXT_CONTRIBUTOR.md](NEXT_CONTRIBUTOR.md): guía de trabajo para el siguiente compañero.
