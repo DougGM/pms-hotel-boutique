@@ -17,6 +17,10 @@
   conservadas. Páginas 404 pública y privada con enlaces de retorno; las
   rutas desconocidas bajo `/pms/` mantienen el menú operativo.
 - Cliente HTTP centralizado configurado con `VITE_API_BASE_URL` desde `.env`.
+- WEB-06 (#18): implementación en `feat/web-06-auth-role-guards`, con login
+  simulado, sesión persistente, guardas y menú por rol. Pendiente de revisión
+  visual y de coordinar la dependencia WEB-05 y los permisos con WEB-09/WEB-12;
+  aún no integrada en `develop` ni cerrada.
 - La UI funcional sigue centralizada temporalmente en `src/app/App.tsx` y sus
   componentes de apoyo en `src/components/`.
 
@@ -40,7 +44,7 @@
 
 | Módulo                    | Estado            | Próximo paso                         |
 | ------------------------- | ----------------- | ------------------------------------ |
-| Auth                      | Estructura creada | Modelos y pantallas de acceso        |
+| Auth                      | Demo implementada | Integrar WEB-05 y validar permisos   |
 | Reservaciones y recepción | UI existente      | Separar datos, lógica y vistas       |
 | Housekeeping              | UI existente      | Migrar a módulo propio               |
 | Room service              | UI existente      | Migrar pedidos y menú                |
@@ -66,8 +70,7 @@ check` antes de publicar cambios.
 - `npm run check` completado correctamente: Prettier, TypeScript, ESLint y
   compilación de producción sin errores. Vite advierte que los datos de
   Browserslist están desactualizados.
-- WEB-02: 12 casos de resolución y renderizado verificados con React Router
-  en memoria: entradas públicas y privadas, alias, barra final, rutas
-  inexistentes anidadas, conservación del menú y enlaces de retorno.
+- `npm run test:auth`: pruebas de WEB-06 con el árbol de rutas real y React
+  Router en memoria; incluyen las 404 de WEB-02 bajo las nuevas guardas.
 - La revisión visual en navegador queda pendiente: no había un navegador
   disponible en la sesión de implementación.

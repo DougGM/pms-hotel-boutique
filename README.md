@@ -55,14 +55,16 @@ alojan recursos transversales.
 Rutas base disponibles: `/` (pública), `/auth/login` (inicio de sesión) y
 `/pms/dashboard` (panel privado). `/login` y `/pms` siguen disponibles por
 compatibilidad. Las rutas inexistentes muestran una página 404; bajo `/pms/`
-se conserva el menú privado y se ofrece volver al panel operativo.
+se conserva el menú privado y se ofrece volver al panel operativo con sesión
+activa. Sin sesión, toda ruta bajo `/pms` redirige al login.
 
 `src/app/routes.ts` centraliza las URL: `routePaths` contiene las entradas
 implementadas, los alias y los comodines que consume el router; `routes`
 conserva el catálogo de rutas previstas por módulo y referencia las entradas
 implementadas. Al conectar una vista nueva, definir su URL en ese archivo y
 referenciarla desde `src/app/router.tsx`. Las vistas pendientes aún muestran
-la 404 de su área.
+la 404 de su área, excepto las entradas del menú por rol, que muestran una
+página provisional hasta integrar cada módulo.
 
 El código heredado de Bolt se conserva temporalmente fuera de los chequeos
 mientras se migra a esta estructura.
@@ -73,10 +75,34 @@ mientras se migra a esta estructura.
 npm install
 npm run dev
 npm run check
+npm run test:auth
 npm run format
 ```
 
 `npm run check` ejecuta formato, TypeScript, ESLint y compilación de producción.
+
+## Acceso de demostración (WEB-06)
+
+Abrir `/auth/login`. Todas las cuentas de prueba usan la contraseña pública
+`AuroraDemo2026!`. No utilizar credenciales reales.
+
+| Correo                 | Rol            |
+| ---------------------- | -------------- |
+| admin@hotel.test       | Administración |
+| recepcion@hotel.test   | Recepción      |
+| limpieza@hotel.test    | Limpieza       |
+| roomservice@hotel.test | Room Service   |
+| conserjeria@hotel.test | Conserjería    |
+| caja@hotel.test        | Caja           |
+
+La sesión dura ocho horas y se conserva al recargar. El menú depende del rol;
+abrir directamente una sección ajena muestra acceso restringido. «Cerrar
+sesión» elimina la persistencia y sincroniza el cierre con otras pestañas.
+
+La autenticación es simulada y no protege datos de producción. WEB-05 sigue
+pendiente: el adaptador local deberá conectarse a sus servicios, y los roles
+y permisos deberán coordinarse con WEB-09/WEB-12 antes de integrar WEB-06.
+Ver [el módulo auth](src/modules/auth/README.md) para contrato y pruebas.
 
 ## Seguimiento y contexto
 

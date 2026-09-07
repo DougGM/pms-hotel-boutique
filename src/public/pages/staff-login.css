@@ -1,0 +1,18 @@
+.staff-login .auth-form {
+  margin-top: 1.5rem;
+}
+
+.staff-login .auth-form label,
+.staff-login .auth-form input {
+  font-size: 1rem;
+}
+
+.staff-login .auth-form input {
+  min-height: 2.75rem;
+  min-width: 0;
+}
+
+.staff-login button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}

@@ -35,6 +35,10 @@ con React Router en `src/app/router.tsx`, que consume `routePaths` desde
 `src/app/routes.ts`. Las rutas base son `/`, `/auth/login` y `/pms/dashboard`;
 `/login` y `/pms` siguen disponibles por compatibilidad. Hay páginas 404 en
 ambos layouts y las rutas desconocidas bajo `/pms/` conservan el menú privado.
+WEB-06 añade `AuthProvider` en `main.tsx` y guardas de sesión/permisos; el menú
+consume `private/routes/navigation.ts`. Sin sesión, el área PMS redirige al
+login. Auth usa un adaptador provisional mientras WEB-05/WEB-09/WEB-12 definen
+los servicios y permisos compartidos; consultar `src/modules/auth/README.md`.
 No confiar en el nombre de un archivo para crear una ruta.
 
 ## Reglas de trabajo
@@ -46,6 +50,7 @@ No confiar en el nombre de un archivo para crear una ruta.
   credenciales ni modificar la URL base dentro del código.
 - Ejecutar `npm run check` antes de publicar cambios: valida Prettier,
   TypeScript, ESLint y la compilación.
+- Ejecutar `npm run test:auth` al modificar sesión, permisos o navegación.
 - Migrar de forma incremental: no eliminar UI funcional de `src/app/App.tsx`
   hasta que su reemplazo esté conectado y verificado.
 - Poner modelos, DTOs, mappers, adaptadores y servicios en el módulo que les
