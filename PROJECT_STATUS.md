@@ -21,6 +21,9 @@
   simulado, sesión persistente, guardas y menú por rol. Pendiente de revisión
   visual y de coordinar la dependencia WEB-05 y los permisos con WEB-09/WEB-12;
   aún no integrada en `develop` ni cerrada.
+- Ajuste visual de WEB-06: formulario de login con clase y estilos propios,
+  sin el ancho fijo ni la sombra del modal heredado; campos y botón ajustados
+  al contenedor, con padding adaptable para pantallas pequeñas.
 - La UI funcional sigue centralizada temporalmente en `src/app/App.tsx` y sus
   componentes de apoyo en `src/components/`.
 

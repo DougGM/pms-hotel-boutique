@@ -39,7 +39,7 @@ export function StaffLoginPage() {
         <p className="eyebrow">Acceso del personal</p>
         <h1>Iniciar sesión</h1>
         <p className="muted">Ingresa con tu cuenta para acceder a tu área de trabajo.</p>
-        <form className="auth-form" onSubmit={submit} aria-busy={isSubmitting}>
+        <form className="staff-login-form" onSubmit={submit} aria-busy={isSubmitting}>
           <label htmlFor="staff-email">
             Correo electrónico
             <input
