@@ -16,6 +16,10 @@
   `/auth/login` y `/pms/dashboard` disponibles y las entradas anteriores
   conservadas. Páginas 404 pública y privada con enlaces de retorno; las
   rutas desconocidas bajo `/pms/` mantienen el menú operativo.
+- WEB-03: sistema de diseno web centralizado en `src/styles/tokens.css`, usando
+  la extraccion de WEB-08 para paleta, tipografia, espaciado, radios y colores
+  por estado de reserva/habitacion. La documentacion vive en
+  `src/styles/README.md`.
 - Cliente HTTP centralizado configurado con `VITE_API_BASE_URL` desde `.env`.
 - La UI funcional sigue centralizada temporalmente en `src/app/App.tsx` y sus
   componentes de apoyo en `src/components/`.
@@ -54,7 +58,7 @@
   arquitectura y rutas, mientras que Vite permite reutilizar directamente el
   proyecto entregado por Bolt.
 - `src/index.css` es la fuente visual que debe preservarse durante toda la
-  migración.
+  migración, consumiendo los tokens importados desde `src/styles/tokens.css`.
 - No introducir bibliotecas visuales adicionales sin una necesidad concreta.
 - Consultar `src/ARCHITECTURE.md` antes de crear archivos web y
   `mobile/README.md` antes de crear archivos móviles.

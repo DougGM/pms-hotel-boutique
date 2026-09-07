@@ -40,6 +40,9 @@ los mappers, no directamente en las pantallas.
 
 - `README.md`: contexto general.
 - `src/ARCHITECTURE.md`: estructura y reglas del frontend web.
+- `src/styles/README.md`: contrato de tokens web de WEB-03; usar
+  `src/styles/tokens.css` como punto unico para paleta, tipografia, espaciado,
+  radios y colores por estado.
 - `.codex/CONTEXT.md`: reglas de arquitectura y continuidad.
 - `PROJECT_STATUS.md`: estado y deuda técnica registrada.
 - `mobile/README.md`: alcance específico de la aplicación nativa.

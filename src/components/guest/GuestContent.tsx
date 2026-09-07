@@ -307,7 +307,7 @@ export function GuestContent({
   // ─── MY STAY ───────────────────────────────────────────────────
   if (nav === 'Mi estancia') {
     if (!currentStay) {
-      return <div className="panel"><div className="hk-empty"><BedDouble size={22} /><p>No tienes una estancia activa en este momento</p><button className="button primary" style={{ marginTop: 16 }} onClick={() => setShowLink(true)}>Vincular una reserva</button></div></div>;
+      return <div className="panel"><div className="hk-empty"><BedDouble size={22} /><p>No tienes una estancia activa en este momento</p><button className="button primary" style={{ marginTop: 'var(--space-7)' }} onClick={() => setShowLink(true)}>Vincular una reserva</button></div></div>;
     }
     const nights = Math.max(1, Math.round((new Date(currentStay.checkOut).getTime() - new Date(currentStay.checkIn).getTime()) / 86400000));
     return <><div className="gs-stay-layout">
@@ -589,7 +589,7 @@ export function GuestContent({
   if (nav === 'Cerrar sesión') {
     return <div className="panel" style={{ maxWidth: 420, margin: '0 auto' }}>
       <div className="hk-empty"><UserRound size={22} /><p>¿Seguro que deseas cerrar sesión?</p><small>Puedes volver a iniciar sesión cuando quieras.</small></div>
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 16 }}>
+      <div style={{ display: 'flex', gap: 'var(--space-3)', justifyContent: 'center', marginTop: 'var(--space-7)' }}>
         <button className="button secondary" onClick={() => onAction('Cancelado')}>Cancelar</button>
         <button className="button terracotta-btn" onClick={onLogout}><LogOut size={16} /> Cerrar sesión</button>
       </div>
