@@ -117,7 +117,7 @@ export function RoomServiceContent({
       <div className="rs-order-foot">
         <strong>{money(orderTotal(order))}</strong>
         {order.note && <span className="rs-note"><ClipboardList size={13} /> {order.note}</span>}
-        {order.rejectionReason && <span className="rs-note" style={{ background: '#f2d6cd', color: '#a9483c' }}><Ban size={13} /> {order.rejectionReason}</span>}
+        {order.rejectionReason && <span className="rs-note" style={{ background: 'var(--color-legacy-f2d6cd)', color: 'var(--color-terracotta)' }}><Ban size={13} /> {order.rejectionReason}</span>}
         {order.charged && <span className="rs-charged"><Check size={13} /> Cargado a habitación</span>}
         <div className="rs-order-actions">
           {nextAction(order)}
@@ -217,7 +217,7 @@ export function RoomServiceContent({
             </div>
             <div className="rs-legend" style={{ borderTop: 'none', paddingTop: 0 }}>
               <strong>Ventas del turno</strong>
-              <span style={{ fontSize: '18px', color: '#9b713d', fontWeight: 700 }}>
+              <span style={{ fontSize: 'var(--font-size-legacy-18)', color: 'var(--color-brand-gold-dark)', fontWeight: 700 }}>
                 {money(orders.filter((o) => o.status === 'Entregado').reduce((s, o) => s + orderTotal(o), 0))}
               </span>
             </div>
@@ -361,7 +361,7 @@ export function RoomServiceContent({
                 <div>
                   <strong>#{order.id} · Habitación {order.room}</strong>
                   <span>{order.guest} · {order.items.length} {order.items.length === 1 ? 'artículo' : 'artículos'} · {money(orderTotal(order))}</span>
-                  {order.rejectionReason && <small style={{ color: '#a9483c' }}>Motivo: {order.rejectionReason}</small>}
+                  {order.rejectionReason && <small style={{ color: 'var(--color-terracotta)' }}>Motivo: {order.rejectionReason}</small>}
                 </div>
                 <span className={`status-pill ${statusClass(order.status)}`}>{order.status}</span>
                 {order.charged && <span className="rs-charged"><Check size={13} /> Cargado</span>}
@@ -455,11 +455,11 @@ function RoomServiceOrderModal({
           <strong>{money(orderTotal(order))}</strong>
         </div>
         {order.rejectionReason && (
-          <div style={{ marginTop: 12, padding: 12, background: '#f2d6cd', borderRadius: 8, display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-            <Ban size={16} style={{ color: '#a9483c', flexShrink: 0, marginTop: 2 }} />
+          <div style={{ marginTop: 'var(--space-5)', padding: 'var(--space-5)', background: 'var(--color-legacy-f2d6cd)', borderRadius: 'var(--radius-md)', display: 'flex', gap: 'var(--space-3)', alignItems: 'flex-start' }}>
+            <Ban size={16} style={{ color: 'var(--color-terracotta)', flexShrink: 0, marginTop: 'var(--space-1)' }} />
             <div>
-              <strong style={{ fontSize: 11, color: '#a9483c', display: 'block' }}>Motivo de rechazo</strong>
-              <p style={{ fontSize: 11, color: '#a9483c', margin: '4px 0 0' }}>{order.rejectionReason}</p>
+              <strong style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-terracotta)', display: 'block' }}>Motivo de rechazo</strong>
+              <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-terracotta)', margin: 'var(--space-1) 0 0' }}>{order.rejectionReason}</p>
             </div>
           </div>
         )}

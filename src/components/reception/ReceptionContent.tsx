@@ -3,7 +3,7 @@ import {
   ArrowRight, Ban, BedDouble, CalendarDays, Check, ClipboardList, DoorOpen,
   Eye, FileText, Plus, Search, Users, Wallet, X,
 } from 'lucide-react';
-import type { Companion, FolioEntry, PaymentMethod, RecRoom, Reservation, ReservationStatus, RoomBlock } from '@/app/App';
+import type { Companion, FolioEntry, PaymentMethod, RecRoom, Reservation, ReservationStatus, RoomBlock, RecRoomStatus } from '@/app/App';
 import { ReservationDetail } from './ReservationDetail';
 import {
   BlockModal, ChargeModal, CheckinModal, CheckoutModal, InvoiceModal, PaymentModal,
@@ -17,6 +17,9 @@ type Totals = { charges: number; deposits: number; payments: number; balance: nu
 
 const statusClass = (status: ReservationStatus): string =>
   status === 'Pendiente' ? 'warning' : status === 'Confirmada' ? 'info' : status === 'Check-in' ? 'gold' : status === 'Check-out' ? 'success' : 'terracotta';
+
+const roomStatusClass = (status: RecRoomStatus): string =>
+  status === 'Disponible' ? 'gold' : status === 'Ocupada' ? 'success' : status === 'Limpieza' ? 'info' : 'terracotta';
 
 type CalFilter = { room: string; type: string; status: string };
 
@@ -403,7 +406,7 @@ export function ReceptionContent({
           <div className="rc-room-grid">
             {rooms.map((r) => (
               <div className={`rc-room-card rc-room-${r.status.toLowerCase()}`} key={r.id}>
-                <div className="rc-room-head"><div><strong>Hab. {r.number}</strong><span>{r.type} · {r.floor}</span></div><span className={`status-pill ${r.status === 'Disponible' ? 'success' : r.status === 'Ocupada' ? 'gold' : r.status === 'Limpieza' ? 'info' : 'terracotta'}`}>{r.status}</span></div>
+                <div className="rc-room-head"><div><strong>Hab. {r.number}</strong><span>{r.type} · {r.floor}</span></div><span className={`status-pill ${roomStatusClass(r.status)}`}>{r.status}</span></div>
                 <div className="rc-room-meta"><div><small>Capacidad</small><span>{r.capacity}</span></div><div><small>Tarifa</small><span>{money(r.rate)}</span></div></div>
                 <div className="rc-room-features">{r.features.slice(0, 3).map((f) => <span key={f}>{f}</span>)}</div>
               </div>
@@ -547,8 +550,8 @@ function CashResSelectorModal({
           {filtered.map((r) => {
             const t = folioTotals(r.folio);
             return (
-              <div className="rc-res-card" key={r.id} onClick={() => onSelect(r.id)} style={{ padding: '12px 14px' }}>
-                <div className="rc-res-card-head" style={{ marginBottom: 8 }}>
+              <div className="rc-res-card" key={r.id} onClick={() => onSelect(r.id)} style={{ padding: 'var(--space-5) var(--space-6)' }}>
+                <div className="rc-res-card-head" style={{ marginBottom: 'var(--space-3)' }}>
                   <div><strong>{r.code}</strong><span>{r.guest.name} {r.guest.lastName} · Hab. {r.roomNumber}</span></div>
                   <span className={`status-pill ${statusClass(r.status)}`}>{r.status}</span>
                 </div>
