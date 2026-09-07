@@ -1,11 +1,25 @@
 /**
  * Contract of routes defined in the frontend architecture workshop.
- * Vite does not auto-discover files, so this list is the source of truth until
- * the client router is introduced.
+ * Source of truth for URL paths. The router connects implemented pages below;
+ * the remaining module routes are reserved until their views are ready.
  */
+export const routePaths = {
+  public: {
+    home: '/',
+    login: '/auth/login',
+    legacyLogin: '/login',
+    notFound: '*',
+  },
+  pms: {
+    root: '/pms',
+    dashboard: '/pms/dashboard',
+    notFound: '*',
+  },
+} as const;
+
 export const routes = {
   public: [
-    '/',
+    routePaths.public.home,
     '/rooms',
     '/rooms/:roomId',
     '/availability',
@@ -15,7 +29,7 @@ export const routes = {
     '/reservations/new',
     '/reservations/payment',
     '/reservations/confirmation',
-    '/auth/login',
+    routePaths.public.login,
     '/auth/register',
     '/auth/forgot-password',
     '/auth/reset-password',
@@ -37,7 +51,7 @@ export const routes = {
     '/my-account/notifications',
   ],
   pms: [
-    '/pms/dashboard',
+    routePaths.pms.dashboard,
     '/pms/reception',
     '/pms/reception/calendar',
     '/pms/reception/availability',

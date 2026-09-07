@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { routePaths } from '@/app/routes';
 
 export function LoginPage() {
   return (
@@ -7,7 +8,7 @@ export function LoginPage() {
         <p className="eyebrow">Acceso seguro</p>
         <h1>Iniciar sesion</h1>
         <p className="muted">La autenticacion se conectara cuando el backend este disponible.</p>
-        <Link className="button secondary" to="/">
+        <Link className="button secondary" to={routePaths.public.home}>
           Volver al inicio
         </Link>
       </section>

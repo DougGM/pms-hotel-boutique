@@ -52,9 +52,20 @@ módulos con sus modelos, DTOs, mappers, adaptadores, servicios y componentes.
 reutilizables. `src/layouts/`, `src/services/`, `src/assets/` y `src/styles/`
 alojan recursos transversales.
 
-Rutas base disponibles: `/` (pública), `/login` (inicio de sesión) y `/pms`
-(panel privado). El código heredado de Bolt se conserva temporalmente fuera de
-los chequeos mientras se migra a esta estructura.
+Rutas base disponibles: `/` (pública), `/auth/login` (inicio de sesión) y
+`/pms/dashboard` (panel privado). `/login` y `/pms` siguen disponibles por
+compatibilidad. Las rutas inexistentes muestran una página 404; bajo `/pms/`
+se conserva el menú privado y se ofrece volver al panel operativo.
+
+`src/app/routes.ts` centraliza las URL: `routePaths` contiene las entradas
+implementadas, los alias y los comodines que consume el router; `routes`
+conserva el catálogo de rutas previstas por módulo y referencia las entradas
+implementadas. Al conectar una vista nueva, definir su URL en ese archivo y
+referenciarla desde `src/app/router.tsx`. Las vistas pendientes aún muestran
+la 404 de su área.
+
+El código heredado de Bolt se conserva temporalmente fuera de los chequeos
+mientras se migra a esta estructura.
 
 ## Comandos
 
