@@ -1,14 +1,14 @@
+export type Currency = 'USD' | 'MXN' | 'EUR';
 export type ID = string;
 export type ISODateString = string;
-export type Currency = 'GTQ' | 'USD';
-export type PaymentMethod = 'cash' | 'card' | 'transfer';
-export type PaymentStatus = 'pending' | 'paid' | 'refunded' | 'failed';
-export type BookingStatus = 'pending' | 'confirmed' | 'checked_in' | 'checked_out' | 'cancelled';
-export type RoomStatus = 'available' | 'occupied' | 'maintenance' | 'cleaning';
-export type UserRole = 'admin' | 'receptionist' | 'housekeeping';
-export type ProductCategory = 'minibar' | 'amenity' | 'service' | 'other';
-export type ChargeType = 'room' | 'product' | 'service' | 'adjustment';
-export interface PaginationParams { page?: number; pageSize?: number }
-export interface PaginatedResponse<T> { data: T[]; page: number; pageSize: number; total: number; totalPages: number }
-export interface ApiResponse<T> { data: T; message?: string }
-export interface ApiError { code: string; message: string; details?: unknown }
+export type BookingStatus = 'PENDING' | 'CONFIRMED' | 'CHECKED_IN' | 'CHECKED_OUT' | 'CANCELLED';
+export type UserRole = 'ADMIN' | 'RECEPTIONIST' | 'MANAGER' | 'STAFF';
+export type RoomStatus = 'AVAILABLE' | 'OCCUPIED' | 'MAINTENANCE' | 'CLEANING';
+export type PaymentStatus = 'PENDING' | 'COMPLETED' | 'REFUNDED' | 'FAILED';
+export type PaymentMethod = 'CREDIT_CARD' | 'DEBIT_CARD' | 'CASH' | 'TRANSFER';
+export type ChargeType = 'ROOM' | 'MINIBAR' | 'SERVICE' | 'DAMAGE' | 'OTHER';
+export type ProductCategory = 'MINIBAR' | 'RESTAURANT' | 'SPA' | 'ROOM_SERVICE';
+
+export const toDomainDate = (value: string): Date => new Date(value);
+
+export const toDtoDate = (value: Date): string => value.toISOString();

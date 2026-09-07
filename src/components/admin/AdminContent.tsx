@@ -223,7 +223,7 @@ function AdminTable({ headers, children }: { headers: string[]; children: React.
   );
 }
 
-function MiniChart({ data, labels, color = '#b88d50' }: { data: number[]; labels: string[]; color?: string }) {
+function MiniChart({ data, labels, color = 'var(--color-brand-gold)' }: { data: number[]; labels: string[]; color?: string }) {
   const max = Math.max(...data, 1);
   const points = data.map((v, i) => `${(i / (data.length - 1)) * 720},${210 - (v / max) * 180}`).join(' ');
   const fillPoints = `${points} 720,210 0,210`;
@@ -778,7 +778,7 @@ export function AdminContent({ nav, onAction }: { nav: string; onAction: (messag
                 <div className="metric-card"><div className="metric-icon terracotta"><Ban size={19} /></div><div><p>Cancelaciones</p><h2>12</h2><span>-2.4%</span></div></div>
                 <div className="metric-card"><div className="metric-icon info"><Percent size={19} /></div><div><p>Tasa de cancelación</p><h2>8.5%</h2><span className="positive">-1.2%</span></div></div>
               </div>
-              <MiniChart data={[15, 12, 10, 14, 8, 11, 9, 12, 7, 10, 8, 6]} labels={['E', 'F', 'M', 'A', 'M', 'J', 'J']} color="#a9483c" />
+              <MiniChart data={[15, 12, 10, 14, 8, 11, 9, 12, 7, 10, 8, 6]} labels={['E', 'F', 'M', 'A', 'M', 'J', 'J']} color="var(--color-terracotta)" />
             </>
           )}
           {reportTab === 'Canales' && (
