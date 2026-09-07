@@ -48,6 +48,7 @@
   --font-size-4xl: 31px;
   --font-size-5xl: 35px;
   --font-size-hero: 56px;
+  --font-size-page-title: clamp(2rem, 5vw, 3rem);
   --font-size-legacy-13: 13px;
   --font-size-legacy-15: 15px;
   --font-size-legacy-16: 16px;

@@ -54,7 +54,7 @@ button {
 .public-page-card h1 {
   margin: var(--space-3) 0 var(--space-5);
   color: var(--color-text-primary);
-  font-size: clamp(2rem, 5vw, 3rem);
+  font-size: var(--font-size-page-title);
   line-height: var(--line-height-tight);
 }
 .public-page-card .button {
@@ -83,7 +83,7 @@ button {
   gap: var(--space-4);
   font-size: var(--font-size-legacy-15);
   letter-spacing: 0.13em;
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
   color: var(--color-background);
 }
 .brand small,
@@ -106,7 +106,7 @@ button {
 .workspace-label,
 .eyebrow {
   font-size: var(--font-size-xs);
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
   letter-spacing: 0.13em;
   text-transform: uppercase;
   color: var(--color-legacy-a89c91);
@@ -176,7 +176,7 @@ button {
 .nav-item.active {
   background: var(--color-brand-gold);
   color: var(--color-text-primary);
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
 }
 .nav-item b {
   margin-left: auto;
@@ -310,7 +310,7 @@ button {
   place-items: center;
   border-radius: var(--radius-round);
   font-size: var(--font-size-sm);
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
 }
 .terracotta {
   background: var(--color-legacy-f2d6cd);
@@ -389,7 +389,7 @@ button {
   margin: var(--space-2) 0 var(--size-legacy-5);
   font-family: var(--font-family-heading);
   font-size: var(--font-size-4xl);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   letter-spacing: -0.035em;
   color: var(--color-text-primary);
 }
@@ -413,7 +413,7 @@ button {
   border-radius: var(--radius-md);
   padding: 0 var(--size-legacy-15);
   font-size: var(--font-size-md);
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
   transition: 0.2s;
 }
 .button.primary {
@@ -472,7 +472,7 @@ button {
   margin: 0 0 var(--size-legacy-5);
   font-size: var(--font-size-3xl);
   letter-spacing: -0.05em;
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
   color: var(--color-text-primary);
 }
 .metric-card span {
@@ -519,7 +519,7 @@ button {
   gap: var(--space-2);
   color: var(--color-legacy-9a703a);
   font-size: var(--font-size-sm);
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
   background: transparent;
   padding: var(--size-legacy-3);
 }
@@ -598,7 +598,7 @@ button {
   background: transparent;
   color: var(--color-legacy-6a594f);
   font-size: var(--font-size-sm);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   border-radius: var(--radius-legacy-5);
   text-align: left;
   transition: background 0.15s;
@@ -656,7 +656,7 @@ button {
   border-radius: var(--radius-pill);
   padding: var(--size-legacy-5) var(--size-legacy-9);
   font-size: var(--font-size-2xs);
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
 }
 .status-pill.warning {
   background: var(--color-legacy-f6ebd5);
@@ -845,7 +845,7 @@ button {
 .chart-tabs button.active {
   color: var(--color-brand-gold-dark);
   border-bottom: var(--size-legacy-2) solid var(--color-brand-gold);
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
 }
 .chart-tabs span {
   margin-left: auto;
@@ -1088,7 +1088,7 @@ button {
   display: block;
   color: var(--color-legacy-6f5f55);
   font-size: var(--font-size-sm);
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
   margin: var(--space-6) 0 var(--space-3);
 }
 .modal-options {
@@ -1207,7 +1207,7 @@ button {
   background: transparent;
   color: var(--color-legacy-796b60);
   font-size: var(--font-size-sm);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   padding: var(--space-3) var(--space-6);
   border-radius: var(--radius-legacy-7);
   transition: 0.2s;
@@ -1294,7 +1294,7 @@ button {
   line-height: var(--line-height-tight);
   letter-spacing: -0.045em;
   margin: var(--size-legacy-17) 0 var(--space-7);
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
 }
 .visitor-hero h1 em,
 .visitor-benefits h2 em,
@@ -1347,7 +1347,7 @@ button {
   font-family: var(--font-family-heading);
   font-size: var(--font-size-legacy-34);
   line-height: var(--line-height-tight);
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
   margin: var(--size-legacy-28) 0 var(--size-legacy-8);
 }
 .orbit-card h3 em {
@@ -1460,7 +1460,7 @@ button {
   border-radius: var(--radius-md);
   padding: var(--space-4) var(--space-7);
   font-size: var(--font-size-sm);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   display: flex;
   align-items: center;
   gap: var(--space-3);
@@ -1492,7 +1492,7 @@ button {
 .search-results-nights {
   background: var(--color-legacy-f1e3ce);
   color: var(--color-brand-gold-dark);
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
   padding: var(--size-legacy-3) var(--space-4);
   border-radius: var(--radius-sm);
 }
@@ -1505,7 +1505,7 @@ button {
 .search-results-count {
   font-size: var(--font-size-sm);
   color: var(--color-success);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 .room-total-stay {
   display: flex;
@@ -1566,7 +1566,7 @@ button {
   font-family: var(--font-family-heading);
   font-size: var(--font-size-5xl);
   line-height: var(--line-height-legacy-104);
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
   letter-spacing: -0.04em;
   margin: var(--size-legacy-9) 0 0;
 }
@@ -1632,7 +1632,7 @@ button {
   font-family: var(--font-family-heading);
   font-size: var(--font-size-xl);
   margin: 0 0 var(--space-2);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 .room-card-body p {
   margin: 0;
@@ -1837,7 +1837,7 @@ button {
 }
 .promo-code-row code {
   font-size: var(--font-size-md);
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
   color: var(--color-brand-gold-dark);
   background: var(--color-legacy-f6ebd5);
   padding: var(--space-2) var(--space-6);
@@ -1846,7 +1846,7 @@ button {
 }
 .promo-copy {
   font-size: var(--font-size-xs);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   color: var(--color-brand-gold-dark);
   background: transparent;
   border: var(--size-legacy-1) solid var(--color-legacy-d9bd97);
@@ -1945,7 +1945,7 @@ button {
   font-family: var(--font-family-heading);
   font-size: var(--font-size-5xl);
   line-height: var(--line-height-legacy-104);
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
   letter-spacing: -0.04em;
   margin: var(--size-legacy-9) 0 0;
 }
@@ -2393,7 +2393,7 @@ button {
   gap: var(--space-2);
   color: var(--color-legacy-6f6056);
   font-size: var(--font-size-xs);
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
   margin-bottom: var(--space-5);
 }
 .auth-form input {
@@ -2456,7 +2456,7 @@ button {
 .auth-switch button {
   background: transparent;
   color: var(--color-brand-gold-dark);
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
   padding: 0;
 }
 @media (max-width: 1180px) {
@@ -2815,7 +2815,7 @@ button {
 }
 .res-step.active {
   color: var(--color-brand-gold-dark);
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
 }
 .res-step.done {
   color: var(--color-success);
@@ -2827,7 +2827,7 @@ button {
   display: grid;
   place-items: center;
   font-size: var(--font-size-xs);
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
   background: var(--color-legacy-ede4d8);
   color: var(--color-legacy-8e8075);
   flex-shrink: 0;
@@ -2914,7 +2914,7 @@ button {
 }
 .res-field span {
   font-size: var(--font-size-xs);
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
   color: var(--color-legacy-6f5f55);
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -2943,7 +2943,7 @@ button {
 .res-error {
   color: var(--color-terracotta);
   font-size: var(--font-size-xs);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   font-style: normal;
   margin-top: var(--size-legacy-2);
 }
@@ -2984,7 +2984,7 @@ button {
   border-radius: var(--radius-md);
   background: var(--color-surface);
   font-size: var(--font-size-md);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   color: var(--color-legacy-6f5f55);
   transition: 0.2s;
   cursor: pointer;
@@ -3019,7 +3019,7 @@ button {
 }
 .res-transfer-bank span {
   color: var(--color-text-muted);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 .res-transfer-bank strong {
   color: var(--color-text-primary);
@@ -3043,7 +3043,7 @@ button {
 .res-payment-total span {
   font-size: var(--font-size-md);
   color: var(--color-legacy-876426);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 .res-payment-total strong {
   font-size: var(--font-size-legacy-22);
@@ -3330,7 +3330,7 @@ button {
 .hk-done-label {
   font-size: var(--font-size-xs);
   color: var(--color-success);
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
 }
 
 .hk-req-summary {
@@ -3448,7 +3448,7 @@ button {
   display: grid;
   place-items: center;
   font-size: var(--font-size-legacy-16);
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
 }
 .hk-profile-info h4 {
   margin: 0 0 var(--space-1);
@@ -3597,7 +3597,7 @@ button {
   background: var(--color-surface);
   color: var(--color-text-secondary);
   font-size: var(--font-size-md);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   transition: 0.2s;
 }
 .hk-status-option:hover {
@@ -3609,7 +3609,7 @@ button {
   display: block;
   color: var(--color-legacy-6f5f55);
   font-size: var(--font-size-sm);
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
   margin: var(--space-5) 0 var(--space-2);
 }
 .hk-form-select {
@@ -3706,7 +3706,7 @@ button {
 }
 .hk-checklist-count {
   font-size: var(--font-size-xs);
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
   color: var(--color-success);
   white-space: nowrap;
 }
@@ -3716,7 +3716,7 @@ button {
   color: var(--color-terracotta);
   font-size: var(--font-size-xs);
   margin-top: var(--space-1);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 .hk-form-select.error,
 .hk-form-textarea.error {
@@ -3784,7 +3784,7 @@ button {
   gap: var(--space-2);
   font-size: var(--font-size-xs);
   color: var(--color-success);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 .rs-live i {
   width: var(--size-legacy-7);
@@ -3848,7 +3848,7 @@ button {
 }
 .rs-order-number {
   font-size: var(--font-size-2xs);
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--color-legacy-a89c92);
@@ -3881,7 +3881,7 @@ button {
 }
 .rs-order-items strong {
   color: var(--color-text-secondary);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 .rs-order-foot {
   display: flex;
@@ -4115,7 +4115,7 @@ button {
 .rs-detail-total span {
   font-size: var(--font-size-sm);
   color: var(--color-legacy-8e8075);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 .rs-detail-total strong {
   font-size: var(--font-size-legacy-18);
@@ -4125,7 +4125,7 @@ button {
   display: block;
   color: var(--color-legacy-6f5f55);
   font-size: var(--font-size-sm);
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
   margin: var(--space-3) 0 var(--space-2);
 }
 .rs-note-label textarea {
@@ -4155,7 +4155,7 @@ button {
   gap: var(--size-legacy-5);
   font-size: var(--font-size-sm);
   color: var(--color-success);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 
 .rs-rejection-textarea {
@@ -4182,7 +4182,7 @@ button {
 }
 .rs-menu-cat {
   font-size: var(--font-size-xs);
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
   color: var(--color-brand-gold-dark);
   background: var(--color-legacy-f1e3ce);
   padding: var(--size-legacy-5) var(--space-5);
@@ -4212,7 +4212,7 @@ button {
   gap: var(--space-2);
   font-size: var(--font-size-xs);
   color: var(--color-success);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 .cg-live i {
   width: var(--size-legacy-7);
@@ -4268,7 +4268,7 @@ button {
 }
 .cg-request-number {
   font-size: var(--font-size-2xs);
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--color-legacy-a89c92);
@@ -4651,7 +4651,7 @@ button {
   display: block;
   color: var(--color-legacy-6f5f55);
   font-size: var(--font-size-sm);
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
   margin: var(--space-3) 0 var(--space-2);
 }
 .cg-note-label textarea {
@@ -4681,7 +4681,7 @@ button {
   gap: var(--size-legacy-5);
   font-size: var(--font-size-sm);
   color: var(--color-success);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 
 .cg-rejection-textarea {
@@ -4784,7 +4784,7 @@ button {
   font-size: var(--font-size-md);
   color: var(--color-text-secondary);
   margin: 0 0 var(--space-4);
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
 }
 .rc-dash-list {
   display: flex;
@@ -4965,7 +4965,7 @@ button {
   padding-top: var(--space-4);
   color: var(--color-brand-gold-dark);
   font-size: var(--font-size-xs);
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
 }
 
 /* Guest search results */
@@ -5031,7 +5031,7 @@ button {
 .rc-guest-balance {
   font-size: var(--font-size-xs);
   color: var(--color-terracotta);
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
   background: var(--color-legacy-f2d6cd);
   padding: var(--size-legacy-3) var(--space-3);
   border-radius: var(--radius-sm);
@@ -5058,7 +5058,7 @@ button {
 .rc-avail-count {
   font-size: var(--font-size-legacy-13);
   color: var(--color-text-secondary);
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
   margin-bottom: var(--space-6);
 }
 .rc-avail-card {
@@ -5111,7 +5111,7 @@ button {
 .rc-avail-meta span {
   font-size: var(--font-size-md);
   color: var(--color-legacy-5f5047);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 .rc-avail-features {
   display: flex;
@@ -5342,7 +5342,7 @@ button {
   background: transparent;
   color: var(--color-brand-gold-dark);
   font-size: var(--font-size-xs);
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
   padding: var(--space-1) var(--space-3);
   border: 0;
   cursor: pointer;
@@ -5429,7 +5429,7 @@ button {
 }
 .rc-gantt-res span {
   font-size: var(--font-size-xs);
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
   color: var(--color-surface);
   white-space: nowrap;
   overflow: hidden;
@@ -5479,7 +5479,7 @@ button {
   place-items: center;
   font-size: var(--font-size-2xs);
   color: var(--color-legacy-6b4f3a);
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
 }
 .rc-gantt-block-pill {
   width: var(--size-legacy-16);
@@ -5538,7 +5538,7 @@ button {
   color: var(--color-legacy-a09389);
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
 }
 .rc-field input,
 .rc-field select,
@@ -5590,7 +5590,7 @@ button {
 .rc-field-error {
   color: var(--color-terracotta);
   font-size: var(--font-size-xs);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   display: block;
   margin-top: var(--size-legacy-2);
 }
@@ -5610,7 +5610,7 @@ button {
 .rc-form-section-title {
   font-size: var(--font-size-sm);
   color: var(--color-brand-gold-dark);
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
   text-transform: uppercase;
   letter-spacing: 0.08em;
   margin: var(--space-8) 0 var(--space-4);
@@ -5668,7 +5668,7 @@ button {
 .rc-room-unavailable {
   font-size: var(--font-size-2xs);
   color: var(--color-terracotta);
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
 }
 .rc-rate-preview {
   font-size: var(--font-size-sm);
@@ -5848,7 +5848,7 @@ button {
 .rc-detail-origin {
   font-size: var(--font-size-sm);
   color: var(--color-legacy-6f5f55);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 .rc-detail-meta {
   font-size: var(--font-size-xs);
@@ -5864,7 +5864,7 @@ button {
   background: transparent;
   color: var(--color-legacy-a09085);
   font-size: var(--font-size-sm);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   padding: var(--space-4) var(--space-7);
   border-bottom: var(--size-legacy-2) solid transparent;
   transition: 0.2s;
@@ -5890,7 +5890,7 @@ button {
 .rc-detail-section h4 {
   font-size: var(--font-size-sm);
   color: var(--color-brand-gold-dark);
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   margin: 0 0 var(--space-4);
@@ -5985,7 +5985,7 @@ button {
 }
 .rc-void-reason {
   color: var(--color-terracotta);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   display: block;
   margin-top: var(--size-legacy-3);
 }
@@ -5997,7 +5997,7 @@ button {
 }
 .rc-folio-amount {
   font-size: var(--font-size-legacy-13);
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
 }
 .rc-folio-amount.charge {
   color: var(--color-terracotta);
@@ -6155,7 +6155,7 @@ button {
 }
 .rc-invoice-final span {
   font-size: var(--font-size-md);
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
 }
 .rc-invoice-final strong {
   font-size: var(--font-size-legacy-16);
@@ -6260,7 +6260,7 @@ button {
 }
 .gs-overview-hero h4 {
   font-size: var(--font-size-2xl);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   margin: var(--space-3) 0 var(--space-1);
   color: var(--ink);
 }
@@ -6289,7 +6289,7 @@ button {
 .gs-overview-details strong {
   display: block;
   font-size: var(--font-size-3xl);
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
   color: var(--ink);
   margin: var(--space-1) 0;
 }
@@ -6323,7 +6323,7 @@ button {
 }
 .gs-overview-quick strong {
   font-size: var(--font-size-lg);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   color: var(--ink);
 }
 .gs-overview-quick small {
@@ -6368,7 +6368,7 @@ button {
 }
 .gs-overview-notif-head h3 {
   font-size: var(--font-size-legacy-16);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   color: var(--ink);
   margin: 0 0 var(--size-legacy-2);
 }
@@ -6414,7 +6414,7 @@ button {
 .gs-res-card-head strong {
   display: block;
   font-size: var(--font-size-legacy-15);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   color: var(--ink);
   margin: var(--size-legacy-2) 0;
 }
@@ -6471,7 +6471,7 @@ button {
 }
 .gs-detail-grid strong {
   font-size: var(--font-size-lg);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   color: var(--ink);
 }
 .gs-detail-section {
@@ -6481,7 +6481,7 @@ button {
 .gs-detail-section strong {
   display: block;
   font-size: var(--font-size-legacy-13);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   color: var(--ink);
   margin-bottom: var(--space-1);
 }
@@ -6530,7 +6530,7 @@ button {
 }
 .gs-cancel-summary strong {
   font-size: var(--font-size-lg);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   color: var(--ink);
 }
 
@@ -6549,7 +6549,7 @@ button {
 }
 .gs-receipt-head strong {
   font-size: var(--font-size-lg);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   color: var(--ink);
 }
 .gs-receipt-head small {
@@ -6568,7 +6568,7 @@ button {
 .gs-receipt-guest strong {
   display: block;
   font-size: var(--font-size-lg);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   margin: var(--size-legacy-2) 0;
 }
 .gs-receipt-guest span {
@@ -6592,7 +6592,7 @@ button {
 }
 .gs-receipt-stay strong {
   font-size: var(--font-size-legacy-13);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 .gs-receipt-folio {
   padding: var(--space-5) var(--space-7);
@@ -6601,7 +6601,7 @@ button {
 .gs-receipt-folio > strong {
   display: block;
   font-size: var(--font-size-legacy-13);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   margin-bottom: var(--space-3);
 }
 .gs-receipt-empty {
@@ -6623,7 +6623,7 @@ button {
 }
 .gs-receipt-row strong {
   font-size: var(--font-size-legacy-13);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 .gs-receipt-row small {
   font-size: var(--font-size-sm);
@@ -6631,12 +6631,12 @@ button {
 }
 .gs-receipt-charge {
   font-size: var(--font-size-legacy-13);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   color: var(--color-legacy-c47155);
 }
 .gs-receipt-payment {
   font-size: var(--font-size-legacy-13);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   color: var(--color-legacy-5e8268);
 }
 .gs-receipt-totals {
@@ -6652,7 +6652,7 @@ button {
   color: var(--muted);
 }
 .gs-receipt-totals strong {
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   color: var(--ink);
 }
 .gs-receipt-balance {
@@ -6684,7 +6684,7 @@ button {
 }
 .gs-profile-detail strong {
   font-size: var(--font-size-lg);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   color: var(--ink);
 }
 .gs-form-grid {
@@ -6710,7 +6710,7 @@ button {
 }
 .gs-stay-hero h4 {
   font-size: var(--font-size-legacy-18);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   margin: 0 0 var(--space-1);
 }
 .gs-stay-hero p {
@@ -6743,7 +6743,7 @@ button {
 }
 .gs-stay-info strong {
   font-size: var(--font-size-lg);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 .gs-stay-info span {
   font-size: var(--font-size-md);
@@ -6751,7 +6751,7 @@ button {
 }
 .gs-stay-services h4 {
   font-size: var(--font-size-legacy-15);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   margin: var(--space-7) 0 var(--space-5);
 }
 .gs-stay-service-list {
@@ -6773,7 +6773,7 @@ button {
 .gs-stay-service-item strong {
   display: block;
   font-size: var(--font-size-legacy-13);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 .gs-stay-service-item small {
   font-size: var(--font-size-md);
@@ -6818,7 +6818,7 @@ button {
 .gs-stay-balance {
   display: block;
   font-size: var(--font-size-3xl);
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
   color: var(--ink);
   margin-bottom: var(--space-1);
 }
@@ -6863,7 +6863,7 @@ button {
 }
 .gs-amenity-body strong {
   font-size: var(--font-size-lg);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   color: var(--ink);
 }
 .gs-amenity-body p {
@@ -6895,7 +6895,7 @@ button {
 }
 .gs-req-summary strong {
   font-size: var(--font-size-2xl);
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
   color: var(--ink);
 }
 .gs-req-list {
@@ -6932,7 +6932,7 @@ button {
 .gs-req-info strong {
   display: block;
   font-size: var(--font-size-legacy-13);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 .gs-req-info small {
   font-size: var(--font-size-md);
@@ -6988,7 +6988,7 @@ button {
 }
 .gs-menu-card-body > div > strong {
   font-size: var(--font-size-lg);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 .gs-menu-card-body > div > p {
   font-size: var(--font-size-md);
@@ -6997,7 +6997,7 @@ button {
 }
 .gs-menu-price {
   font-size: var(--font-size-lg);
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
   color: var(--color-brand-gold);
 }
 .gs-rs-cart {
@@ -7022,7 +7022,7 @@ button {
 .gs-cart-info strong {
   display: block;
   font-size: var(--font-size-legacy-13);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 .gs-cart-info small {
   font-size: var(--font-size-md);
@@ -7051,13 +7051,13 @@ button {
 }
 .gs-cart-controls span {
   font-size: var(--font-size-legacy-13);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   min-width: var(--size-legacy-20);
   text-align: center;
 }
 .gs-cart-subtotal {
   font-size: var(--font-size-legacy-13);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 .gs-cart-remove {
   color: var(--color-legacy-c47155) !important;
@@ -7073,12 +7073,12 @@ button {
 }
 .gs-cart-total span {
   font-size: var(--font-size-lg);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   color: var(--muted);
 }
 .gs-cart-total strong {
   font-size: var(--font-size-2xl);
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
   color: var(--ink);
 }
 .gs-cart-submit {
@@ -7092,7 +7092,7 @@ button {
 }
 .gs-orders-section h4 {
   font-size: var(--font-size-legacy-15);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   margin: 0 0 var(--space-5);
 }
 .gs-orders-list {
@@ -7121,7 +7121,7 @@ button {
 .gs-order-head strong {
   display: block;
   font-size: var(--font-size-lg);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   margin: var(--size-legacy-2) 0;
 }
 .gs-order-head small {
@@ -7149,7 +7149,7 @@ button {
 }
 .gs-order-total {
   font-size: var(--font-size-legacy-15);
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
   color: var(--ink);
 }
 .gs-order-cancelled {
@@ -7208,7 +7208,7 @@ button {
 }
 .gs-notif-head strong {
   font-size: var(--font-size-lg);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   color: var(--ink);
 }
 .gs-notif-body p {
@@ -7240,7 +7240,7 @@ button {
 }
 .gs-qty-selector span {
   font-size: var(--font-size-legacy-15);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   min-width: var(--size-legacy-24);
   text-align: center;
 }
@@ -7386,7 +7386,7 @@ button {
   text-align: left;
   padding: var(--size-legacy-11) var(--space-7);
   font-size: var(--font-size-xs);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--color-legacy-93867d);
@@ -7837,7 +7837,7 @@ button {
   left: 50%;
   transform: translateX(-50%);
   font-size: var(--font-size-sm);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   color: var(--color-legacy-6b5d52);
   white-space: nowrap;
 }

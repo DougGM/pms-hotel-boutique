@@ -217,7 +217,7 @@ export function RoomServiceContent({
             </div>
             <div className="rs-legend" style={{ borderTop: 'none', paddingTop: 0 }}>
               <strong>Ventas del turno</strong>
-              <span style={{ fontSize: 'var(--font-size-legacy-18)', color: 'var(--color-brand-gold-dark)', fontWeight: 700 }}>
+              <span style={{ fontSize: 'var(--font-size-legacy-18)', color: 'var(--color-brand-gold-dark)', fontWeight: 'var(--font-weight-bold)' }}>
                 {money(orders.filter((o) => o.status === 'Entregado').reduce((s, o) => s + orderTotal(o), 0))}
               </span>
             </div>
