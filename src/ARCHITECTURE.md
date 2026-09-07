@@ -50,4 +50,6 @@ src/
 - Auth vive en `modules/auth/`; su proveedor envuelve el router desde `main.tsx`.
   El login está en `public/pages/StaffLoginPage.tsx`. Las guardas y el catálogo
   de navegación por permiso se mantienen en `private/guards/` y `private/routes/`.
-  Consultar `modules/auth/README.md` antes de sustituir el adaptador provisional.
+  La fachada de auth consume `services/authService.ts` y los tipos compartidos.
+  No crear otra persistencia ni duplicar DTOs de usuario. Consultar
+  `modules/auth/README.md` para el contrato y la política de permisos.

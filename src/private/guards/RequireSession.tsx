@@ -7,7 +7,7 @@ export function RequireSession() {
   const { session, isLoading, error } = useAuth();
   const location = useLocation();
   if (isLoading || error) return <SessionStatus />;
-  if (!session || session.expiresAt <= Date.now()) {
+  if (!session || session.expiresAt.getTime() <= Date.now()) {
     return (
       <Navigate
         to={routePaths.public.login}

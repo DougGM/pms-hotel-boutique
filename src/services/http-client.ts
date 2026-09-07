@@ -38,7 +38,12 @@ export class HttpClient {
     return this.request<T>('DELETE', path, undefined, init);
   }
 
-  private async request<T>(method: string, path: string, body?: unknown, init?: RequestInit): Promise<T> {
+  private async request<T>(
+    method: string,
+    path: string,
+    body?: unknown,
+    init?: RequestInit,
+  ): Promise<T> {
     const baseUrl = import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE_URL;
     const url = new URL(path.replace(/^\/+/, ''), `${baseUrl.replace(/\/+$/, '')}/`);
     const headers = new Headers(init?.headers);
@@ -54,7 +59,12 @@ export class HttpClient {
     });
 
     const contentType = response.headers.get('content-type') ?? '';
-    const data = response.status === 204 ? undefined : contentType.includes('application/json') ? await response.json() : await response.text();
+    const data =
+      response.status === 204
+        ? undefined
+        : contentType.includes('application/json')
+          ? await response.json()
+          : await response.text();
     if (!response.ok) throw new HttpError(response.status, response.statusText, data);
     return data as T;
   }

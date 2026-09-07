@@ -14,9 +14,7 @@ await build({
   jsx: 'automatic',
   loader: { '.css': 'empty' },
   define: {
-    'import.meta.env.VITE_AUTH_FORCE_ERROR': JSON.stringify(
-      process.env.VITE_AUTH_FORCE_ERROR ?? 'false',
-    ),
+    'import.meta.env.VITE_API_BASE_URL': JSON.stringify('http://localhost:3000/api'),
   },
   plugins: [
     {

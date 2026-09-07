@@ -1,62 +1,70 @@
-# Autenticación del personal — WEB-06
+﻿# Autenticación del personal — WEB-06 con WEB-05
 
-## Alcance y dependencia
+## Contrato
 
-Login por correo y contraseña, sesión tipada, persistencia de ocho horas,
-guardas de sesión y permisos, menú por rol y cierre de sesión. Las cuentas
-de demostración están documentadas en el README principal. No se implementan
-registro, recuperación de contraseña ni autenticación de huéspedes.
+El flujo es `StaffLoginPage` → `AuthProvider` → fachada de `modules/auth/services`
+→ `services/authService.ts`. La fachada agrega permisos de navegación a
+`AuthSession`; no guarda datos ni conoce fixtures. Usuario, credenciales y
+sesión se importan del barrel `shared/types/entities`; `UserRole` viene de
+`shared/types/common` (ADMIN, RECEPTIONIST, MANAGER y STAFF).
 
-WEB-05 (#17) sigue abierta. `adapters/mock-auth.ts` es un adaptador provisional
-exclusivo de auth; no sustituye la capa compartida ni su contrato pendiente.
-Los seis roles y sus permisos son provisionales y requieren coordinación con
-WEB-09/WEB-12. Administración puede entrar a todas las secciones; los otros
-roles tienen acceso al panel y a su área. No hay un backend que haga cumplir
-estos permisos: las guardas controlan únicamente la navegación de la demo.
+No usar el contrato anterior en `shared/types/entities/user/user.model.ts`
+para esta integración: el servicio WEB-05 exporta su contrato desde `user.ts`.
+Se eliminó el DTO local y el adaptador independiente de WEB-06.
 
-## Flujo
+## Cuentas y permisos
 
-`StaffLoginPage` → contexto → `authService` → adaptador → DTO → mapper → sesión.
-Las pantallas no importan fixtures. El adaptador simula 350 ms de latencia;
-para ejercitar fallos configurar `VITE_AUTH_FORCE_ERROR=true` en `.env` y
-reiniciar Vite. Volver a `false` y reiniciar para comprobar el reintento.
+Contraseña pública de demostración: `AuroraDemo2026!`.
 
-`AuthProvider` envuelve el router. Restaura la sesión antes de mostrar rutas
-privadas, descarta respuestas asíncronas obsoletas y atiende el evento
-`storage` para sincronizar pestañas. Al vencer la sesión la elimina.
+| Cuenta                       | Rol          | Entradas visibles y permitidas                                         |
+| ---------------------------- | ------------ | ---------------------------------------------------------------------- |
+| admin@hotelboutique.test     | ADMIN        | Panel, recepción, limpieza, room service, conserjería, caja y usuarios |
+| recepcion@hotelboutique.test | RECEPTIONIST | Panel y recepción                                                      |
+| gerente@hotelboutique.test   | MANAGER      | Panel y áreas operativas/caja; sin gestión de usuarios                 |
+| personal@hotelboutique.test  | STAFF        | Panel, limpieza, room service y conserjería                            |
 
-La clave `hotel-aurora.auth.v1` guarda únicamente versión, identificador de
-usuario y vencimiento. El servicio recupera el usuario y reconstruye permisos
-desde su fuente de datos; no acepta permisos serializados del navegador.
-Una sesión corrupta, desconocida o vencida se elimina. El fallo de persistencia
-impide completar el login; los errores de recuperación permiten reintentar.
-Este identificador local es manipulable: al integrar el backend se deberá
-sustituir por autenticación y autorización validadas por el servidor.
+La matriz de navegación vive en `models/session.ts`; los enlaces y las guardas
+comparten esta política. El contrato actual no distingue departamentos dentro
+de STAFF. Si el equipo introduce permisos más específicos, ajustar la matriz
+y las pruebas junto con ese contrato. Las secciones siguen siendo provisionales;
+este cambio no implementa sus funciones de negocio.
 
-Las rutas se declaran en `src/app/routes.ts`. `private/routes/navigation.ts`
-asocia entradas con permisos y sirve al menú y al árbol de rutas. Las entradas
-de módulo son provisionales; las rutas anidadas desconocidas conservan la 404
-privada después de comprobar el permiso. Un retorno tras login solo admite
-rutas internas del área PMS.
+## Persistencia y cierre
 
-## Verificación
+WEB-05 es el único propietario de `PMS_AUTH_SESSION` y del token de `httpClient`.
+`login` valida correo y contraseña, persiste el DTO y devuelve una `AuthSession`
+con fechas de dominio. La sesión vence ocho horas después del login, sin cierre
+por inactividad ni renovación al navegar. `getCurrentSession` restaura la fecha,
+comprueba vencimiento/estructura y reconstruye el usuario desde los datos mock,
+sin confiar en roles editados en el almacenamiento. `getCurrentUser` conserva
+su API y delega en la misma recuperación.
 
-`npm run test:auth` ejecuta pruebas con React Test Renderer y React Router
-en memoria. Se mantiene el árbol real de rutas; únicamente se sustituye el
-historial del navegador por memoria y se omite CSS al compilar las pruebas.
+`logout` elimina inmediatamente persistencia y token HTTP, antes de la latencia
+y del posible error simulado. `clearSession` es la limpieza local síncrona que
+comparte esa operación. Las solicitudes canceladas u obsoletas no guardan
+credenciales. AuthProvider cancela operaciones al desmontarse, recuperar otra
+sesión o cerrar sesión; el evento storage sincroniza cambios entre pestañas.
 
-Casos: acceso anónimo, credenciales incorrectas y reintento, retorno al destino,
-menús de los seis roles, bloqueo por URL, recarga, cierre entre pestañas, 404,
-sesión corrupta/vencida, permisos serializados, fallo de almacenamiento,
-vencimiento con la app abierta y recuperación tras fallo del servicio.
+Las cuentas antiguas `@hotel.test` y la clave `hotel-aurora.auth.v1` se retiran:
+es necesario iniciar sesión de nuevo. También se invalidan sesiones antiguas
+de WEB-05 con el token genérico o un vencimiento fuera del nuevo plazo.
 
-El usuario confirmó que sus pruebas manuales funcionan correctamente tras el
-ajuste visual del login (`2082a33`). No se registró una matriz de dispositivos
-ni el detalle de cada caso. El merge queda pendiente de coordinar dependencias.
+Todo sigue siendo una demo: los tokens y contraseñas son públicos y manipulables;
+la autorización real debe validarse en el servidor al integrar un backend.
 
-Lista para futuras revisiones: abrir en escritorio y móvil, probar los seis roles,
-recargar una sección, introducir una URL de otro rol, abrir dos pestañas y cerrar
-sesión. Comprobar mensajes, navegación por teclado y menú en pantalla estrecha.
+## Errores y pruebas
 
-La duración de ocho horas es provisional y absoluta desde el login: no hay
-cierre por inactividad y la navegación o recarga no renueva el vencimiento.
+Se usan los mecanismos de WEB-05: `mockUtils.setForceError(true)`,
+`?mockError=true` o `PMS_FORCE_MOCK_ERROR=true` en localStorage. Desactivarlos
+permite reintentar. Ya no se utiliza `VITE_AUTH_FORCE_ERROR`.
+
+`npm run test:auth` ejecuta 14 pruebas con React Test Renderer, React Router en
+memoria y el servicio compartido real de la demo. Cubren login y contraseñas,
+cuatro roles, URLs denegadas, retorno seguro, persistencia, vencimiento, 404,
+recuperación ante errores, sesión corrupta, cambios entre pestañas, token HTTP,
+logout con error simulado, migración del almacenamiento y cancelación del login.
+
+La prueba manual aprobada por el usuario correspondía a la versión anterior.
+Repetir ahora login con las cuatro cuentas, contraseña incorrecta, recarga,
+acceso a una sección ajena, cierre y navegación Atrás/Adelante. La rama queda
+lista para esa revisión; no se ha integrado en develop ni cerrado la issue.

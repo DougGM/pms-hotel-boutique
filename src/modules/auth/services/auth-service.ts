@@ -1,62 +1,19 @@
-import { mockAuthAdapter } from '@/modules/auth/adapters/mock-auth';
+﻿import { authService as sharedAuthService } from '@/services/authService';
 import { toSession } from '@/modules/auth/mappers/session-mapper';
 import type { Credentials, Session } from '@/modules/auth/models/session';
 
-export const sessionStorageKey = 'hotel-aurora.auth.v1';
-const sessionDuration = 8 * 60 * 60 * 1000;
+export { sessionStorageKey } from '@/services/authService';
 
+// UI facade only: persistence, tokens, fixtures and transport belong to WEB-05.
 export const authService = {
-  async login(credentials: Credentials): Promise<Session> {
-    const user = await mockAuthAdapter.login(credentials);
-    return toSession(user, Date.now() + sessionDuration);
+  async login(credentials: Credentials, signal?: AbortSignal): Promise<Session> {
+    return toSession(
+      await sharedAuthService.login(credentials.email, credentials.password, signal),
+    );
   },
-  persist(session: Session) {
-    try {
-      localStorage.setItem(
-        sessionStorageKey,
-        JSON.stringify({
-          version: 1,
-          userId: session.user.id,
-          expiresAt: session.expiresAt,
-        }),
-      );
-    } catch {
-      throw new Error(
-        'No se pudo guardar la sesión. Habilita el almacenamiento del navegador e intenta nuevamente.',
-      );
-    }
+  async restore(signal?: AbortSignal): Promise<Session | null> {
+    const session = await sharedAuthService.getCurrentSession(signal);
+    return session ? toSession(session) : null;
   },
-  clear() {
-    localStorage.removeItem(sessionStorageKey);
-  },
-  async restore(): Promise<Session | null> {
-    const raw = localStorage.getItem(sessionStorageKey);
-    if (!raw) return null;
-    let stored;
-    try {
-      stored = JSON.parse(raw);
-    } catch {
-      this.clear();
-      return null;
-    }
-    if (
-      !stored ||
-      stored.version !== 1 ||
-      typeof stored.userId !== 'string' ||
-      typeof stored.expiresAt !== 'number' ||
-      !Number.isFinite(stored.expiresAt) ||
-      stored.expiresAt <= Date.now() ||
-      stored.expiresAt > Date.now() + sessionDuration
-    ) {
-      this.clear();
-      return null;
-    }
-    const user = await mockAuthAdapter.findUser(stored.userId);
-    if (!user || stored.expiresAt <= Date.now()) {
-      this.clear();
-      return null;
-    }
-    // Never restore role/permissions from browser storage.
-    return toSession(user, stored.expiresAt);
-  },
+  logout: () => sharedAuthService.logout(),
 };

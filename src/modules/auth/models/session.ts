@@ -1,13 +1,13 @@
-export const roleLabels = {
-  admin: 'Administración',
-  reception: 'Recepción',
-  housekeeping: 'Limpieza',
-  'room-service': 'Room Service',
-  concierge: 'Conserjería',
-  payment: 'Caja',
-} as const;
+﻿import type { UserRole } from '@/shared/types/common';
+import type { AuthSession, LoginDTO } from '@/shared/types/entities';
 
-export type StaffRole = keyof typeof roleLabels;
+export const roleLabels: Record<UserRole, string> = {
+  ADMIN: 'Administración',
+  RECEPTIONIST: 'Recepción',
+  MANAGER: 'Gerencia',
+  STAFF: 'Personal operativo',
+};
+export type StaffRole = UserRole;
 export type Permission =
   | 'dashboard:view'
   | 'reception:view'
@@ -17,8 +17,8 @@ export type Permission =
   | 'cash:view'
   | 'users:view';
 
-export const rolePermissions: Record<StaffRole, readonly Permission[]> = {
-  admin: [
+export const rolePermissions: Record<UserRole, readonly Permission[]> = {
+  ADMIN: [
     'dashboard:view',
     'reception:view',
     'housekeeping:view',
@@ -27,25 +27,26 @@ export const rolePermissions: Record<StaffRole, readonly Permission[]> = {
     'cash:view',
     'users:view',
   ],
-  reception: ['dashboard:view', 'reception:view'],
-  housekeeping: ['dashboard:view', 'housekeeping:view'],
-  'room-service': ['dashboard:view', 'room-service:view'],
-  concierge: ['dashboard:view', 'concierge:view'],
-  payment: ['dashboard:view', 'cash:view'],
+  RECEPTIONIST: ['dashboard:view', 'reception:view'],
+  MANAGER: [
+    'dashboard:view',
+    'reception:view',
+    'housekeeping:view',
+    'room-service:view',
+    'concierge:view',
+    'cash:view',
+  ],
+  STAFF: ['dashboard:view', 'housekeeping:view', 'room-service:view', 'concierge:view'],
 };
-
-export interface Session {
-  user: { id: string; name: string; email: string };
-  role: StaffRole;
+export interface Session extends AuthSession {
+  role: UserRole;
   permissions: readonly Permission[];
-  expiresAt: number;
 }
-
-export interface Credentials {
-  email: string;
-  password: string;
-}
-
+export type Credentials = LoginDTO;
 export function hasPermission(session: Session | null, permission: Permission) {
-  return !!session && session.expiresAt > Date.now() && session.permissions.includes(permission);
+  return (
+    !!session &&
+    session.expiresAt.getTime() > Date.now() &&
+    session.permissions.includes(permission)
+  );
 }

@@ -6,7 +6,9 @@ import { router as configuredRouter } from '@/app/router';
 import { AuthProvider } from '@/modules/auth/components/AuthProvider';
 import { authService, sessionStorageKey } from '@/modules/auth/services/auth-service';
 import { getLoginDestination } from '@/private/routes/navigation';
-import { mockAuthAdapter } from '@/modules/auth/adapters/mock-auth';
+import { authService as sharedAuthService } from '@/services/authService';
+import { mockUtils } from '@/services/mockUtils';
+import { httpClient } from '@/services/http-client';
 
 const values = new Map();
 const storage = {
@@ -18,15 +20,18 @@ globalThis.localStorage = storage;
 globalThis.window = Object.assign(new EventTarget(), {
   setTimeout: (callback, delay) => setTimeout(callback, delay).unref(),
   clearTimeout,
+  location: { search: '' },
 });
 let view;
 let router;
-const wait = () => new Promise((resolve) => setTimeout(resolve, 400));
+const wait = () => new Promise((resolve) => setTimeout(resolve, 650));
 const text = () => JSON.stringify(view.toJSON());
 
 beforeEach(() => {
   values.clear();
   globalThis.localStorage = storage;
+  sharedAuthService.clearSession();
+  mockUtils.setForceError(false);
 });
 afterEach(() => {
   if (view) act(() => view.unmount());
@@ -76,10 +81,10 @@ test('all private entries, including unknown nested URLs, redirect guests to log
 
 test('wrong credentials show an error, retry succeeds, and intended URL is restored', async () => {
   await open('/pms/reception?day=today#calendar');
-  await login('recepcion@hotel.test', 'incorrecta');
+  await login('recepcion@hotelboutique.test', 'incorrecta');
   assert.ok(text().includes('Correo o contraseña incorrectos.'));
   assert.equal(values.size, 0);
-  await login(' RECEPCION@hotel.test ');
+  await login(' RECEPCION@hotelboutique.test ');
   assert.equal(router.state.location.pathname, '/pms/reception');
   assert.equal(router.state.location.search, '?day=today');
   assert.equal(router.state.location.hash, '#calendar');
@@ -91,21 +96,19 @@ test('wrong credentials show an error, retry succeeds, and intended URL is resto
 test('each staff role only sees its menu and direct unauthorized URLs are blocked', async () => {
   await open('/login');
   const roles = [
-    ['recepcion', 'Recepción', '/pms/users'],
-    ['limpieza', 'Limpieza', '/pms/reception'],
-    ['roomservice', 'Room Service', '/pms/cash'],
-    ['conserjeria', 'Conserjería', '/pms/housekeeping'],
-    ['caja', 'Caja', '/pms/room-service'],
-    ['admin', 'Usuarios', null],
+    ['recepcion', 'Recepción', '/pms/users', 2],
+    ['personal', 'Limpieza', '/pms/cash', 4],
+    ['gerente', 'Caja', '/pms/users', 6],
+    ['admin', 'Usuarios', null, 7],
   ];
-  for (const [account, section, forbidden] of roles) {
-    await login(`${account}@hotel.test`);
+  for (const [account, section, forbidden, count] of roles) {
+    await login(`${account}@hotelboutique.test`);
     const nav = view.root.findByType('nav');
     const labels = nav
       .findAllByType('button')
       .map((button) => button.findByType('span').children.join(''));
     assert.ok(labels.includes(section), account);
-    assert.equal(labels.length, account === 'admin' ? 7 : 2, account);
+    assert.equal(labels.length, count, account);
     if (forbidden) {
       await act(async () => {
         await router.navigate(`${forbidden}/no-existe`);
@@ -125,7 +128,7 @@ test('each staff role only sees its menu and direct unauthorized URLs are blocke
 
 test('session survives remount; logout in another tab clears access', async () => {
   await open('/auth/login');
-  await login('limpieza@hotel.test');
+  await login('personal@hotelboutique.test');
   act(() => view.unmount());
   router.dispose();
   await open('/pms/housekeeping');
@@ -146,7 +149,7 @@ test('public and private 404 pages remain scoped to their layouts', async () => 
   await act(async () => {
     await router.navigate('/auth/login');
   });
-  await login('admin@hotel.test');
+  await login('admin@hotelboutique.test');
   for (const path of ['/pms/no-existe', '/pms/reception/no-existe']) {
     await act(async () => {
       await router.navigate(path);
@@ -156,30 +159,36 @@ test('public and private 404 pages remain scoped to their layouts', async () => 
   }
 });
 
+function storedSession(id = 'user-1', expiresAt = Date.now() + 10000) {
+  return JSON.stringify({
+    user: { id, role: 'ADMIN' },
+    token: 'mock-access-' + id,
+    refreshToken: 'mock-refresh-' + id,
+    expiresAt: new Date(expiresAt).toISOString(),
+  });
+}
+
 test('expired, malformed and unknown sessions are cleared; persisted roles are ignored', async () => {
   for (const value of [
     '{',
     'null',
-    JSON.stringify({ version: 1, userId: 'demo-admin', expiresAt: Date.now() - 1 }),
-    JSON.stringify({ version: 1, userId: 'missing', expiresAt: Date.now() + 10000 }),
+    storedSession('user-1', Date.now() - 1),
+    storedSession('missing'),
   ]) {
     storage.setItem(sessionStorageKey, value);
     assert.equal(await authService.restore(), null);
     assert.equal(values.size, 0);
   }
-  storage.setItem(
-    sessionStorageKey,
-    JSON.stringify({
-      version: 1,
-      userId: 'demo-housekeeping',
-      role: 'admin',
-      permissions: ['users:view'],
-      expiresAt: Date.now() + 10000,
-    }),
-  );
+  storage.setItem(sessionStorageKey, storedSession('user-staff'));
   const session = await authService.restore();
-  assert.equal(session.role, 'housekeeping');
-  assert.deepEqual(session.permissions, ['dashboard:view', 'housekeeping:view']);
+  assert.equal(session.role, 'STAFF');
+  assert.deepEqual(session.permissions, [
+    'dashboard:view',
+    'housekeeping:view',
+    'room-service:view',
+    'concierge:view',
+  ]);
+  assert.ok(session.expiresAt instanceof Date);
 });
 
 test('storage failure is surfaced without granting a nonpersistent session', async () => {
@@ -190,7 +199,7 @@ test('storage failure is surfaced without granting a nonpersistent session', asy
       throw new Error('Storage disabled');
     },
   };
-  await login('admin@hotel.test');
+  await login('admin@hotelboutique.test');
   assert.ok(text().includes('No se pudo guardar la sesión'));
   assert.equal(router.state.location.pathname, '/auth/login');
 });
@@ -211,10 +220,7 @@ test('return URL cannot redirect to another origin or a non-private page', () =>
 });
 
 test('session expiration removes persisted credentials and redirects the mounted app', async () => {
-  storage.setItem(
-    sessionStorageKey,
-    JSON.stringify({ version: 1, userId: 'demo-admin', expiresAt: Date.now() + 900 }),
-  );
+  storage.setItem(sessionStorageKey, storedSession('user-1', Date.now() + 1100));
   await open('/pms');
   assert.ok(text().includes('Cerrar sesión'));
   await act(async () => {
@@ -225,23 +231,82 @@ test('session expiration removes persisted credentials and redirects the mounted
 });
 
 test('session recovery failure offers a working retry', async () => {
-  storage.setItem(
-    sessionStorageKey,
-    JSON.stringify({ version: 1, userId: 'demo-admin', expiresAt: Date.now() + 10000 }),
-  );
-  const findUser = mockAuthAdapter.findUser;
+  storage.setItem(sessionStorageKey, storedSession());
+
   try {
-    mockAuthAdapter.findUser = async () => {
-      throw new Error('Simulated service failure');
-    };
+    mockUtils.setForceError(true);
     await open('/pms');
     assert.ok(text().includes('No se pudo recuperar la sesión'));
-    mockAuthAdapter.findUser = findUser;
+    mockUtils.setForceError(false);
     await act(async () => {
       await view.root.findByType('button').props.onClick();
     });
     assert.ok(text().includes('Cerrar sesión'));
   } finally {
-    mockAuthAdapter.findUser = findUser;
+    mockUtils.setForceError(false);
   }
+});
+
+test('shared service sets and clears the HTTP token, even when remote logout fails', async () => {
+  const fetch = globalThis.fetch;
+  const headers = [];
+  globalThis.fetch = async (_url, init) => {
+    headers.push(init.headers.get('Authorization'));
+    return new Response(null, { status: 204 });
+  };
+  try {
+    const session = await sharedAuthService.login('admin@hotelboutique.test', 'AuroraDemo2026!');
+    await httpClient.get('/probe');
+    assert.equal(headers.at(-1), `Bearer ${session.token}`);
+    httpClient.clearToken();
+    assert.equal((await sharedAuthService.getCurrentUser()).role, 'ADMIN');
+    await httpClient.get('/probe');
+    assert.equal(headers.at(-1), `Bearer ${session.token}`);
+    mockUtils.setForceError(true);
+    const logout = sharedAuthService.logout();
+    assert.equal(values.size, 0);
+    await httpClient.get('/probe');
+    assert.equal(headers.at(-1), null);
+    await assert.rejects(logout, /sesión local se cerró/);
+  } finally {
+    globalThis.fetch = fetch;
+    mockUtils.setForceError(false);
+  }
+});
+
+test('in-flight login cannot restore a session after cancellation or logout', async () => {
+  const controller = new AbortController();
+  const pending = sharedAuthService.login(
+    'admin@hotelboutique.test',
+    'AuroraDemo2026!',
+    controller.signal,
+  );
+  controller.abort();
+  await assert.rejects(pending, { name: 'AbortError' });
+  assert.equal(values.size, 0);
+  const second = sharedAuthService.login('admin@hotelboutique.test', 'AuroraDemo2026!');
+  sharedAuthService.clearSession();
+  await assert.rejects(second, { name: 'AbortError' });
+  assert.equal(values.size, 0);
+});
+
+test('old isolated WEB-06 sessions are removed rather than granted new permissions', async () => {
+  storage.setItem(
+    'hotel-aurora.auth.v1',
+    JSON.stringify({ version: 1, userId: 'demo-admin', expiresAt: Date.now() + 10000 }),
+  );
+  assert.equal(await sharedAuthService.getCurrentSession(), null);
+  assert.equal(values.size, 0);
+});
+
+test('shared service rejects wrong passwords and unknown email addresses', async () => {
+  await assert.rejects(
+    sharedAuthService.login('admin@hotelboutique.test', 'wrong'),
+    /Correo o contraseña incorrectos/,
+  );
+  await assert.rejects(
+    sharedAuthService.login('unknown@hotelboutique.test', 'AuroraDemo2026!'),
+    /Correo o contraseña incorrectos/,
+  );
+  assert.equal(values.size, 0);
 });

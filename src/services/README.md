@@ -16,13 +16,20 @@ export function RoomsView() {
 
   useEffect(() => {
     let active = true;
-    roomService.getRooms()
-      .then((data) => { if (active) setRooms(data); })
+    roomService
+      .getRooms()
+      .then((data) => {
+        if (active) setRooms(data);
+      })
       .catch((cause: unknown) => {
         if (active) setError(cause instanceof Error ? cause.message : 'Error inesperado');
       })
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   if (loading) return <p>Cargando...</p>;
@@ -47,3 +54,21 @@ sus respuestas siempre son modelos de dominio.
 
 Todas las operaciones esperan entre 300 y 600 ms por defecto. Para pruebas
 unitarias se puede usar `simulateLatency(0, 0)` directamente.
+
+## Integración con WEB-06
+
+`authService.login(email, password, signal?)` conserva su API y admite cancelar
+una solicitud pendiente. Valida ambas credenciales contra cuentas públicas de
+`authMockData.ts`, una por cada rol del contrato compartido. Las cuentas y
+permisos se documentan en `src/modules/auth/README.md`.
+
+`getCurrentSession(signal?)` devuelve la sesión completa con fechas de dominio;
+`getCurrentUser()` delega en ella. La persistencia única usa `PMS_AUTH_SESSION`.
+La restauración rechaza datos corruptos/vencidos y reconstruye el usuario desde
+los fixtures. La sesión dura ocho horas desde el inicio.
+
+`logout()` limpia inmediatamente la persistencia y el token HTTP incluso cuando
+falla la solicitud simulada posterior. `clearSession()` expone la limpieza local.
+Las respuestas de login canceladas u obsoletas no reabren la sesión. Se retiró
+la clave aislada `hotel-aurora.auth.v1`; las cuentas anteriores deben iniciar
+sesión otra vez. Todo es simulado y no constituye autenticación de producción.

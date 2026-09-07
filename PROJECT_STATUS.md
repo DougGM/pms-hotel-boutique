@@ -24,9 +24,10 @@
 - WEB-06 (#18): implementación en `feat/web-06-auth-role-guards`, con login
   simulado, sesión persistente, guardas y menú por rol. El usuario confirmó
   que sus pruebas manuales funcionan correctamente después del ajuste visual.
-  Pendiente de coordinar WEB-05 y los permisos con WEB-09/WEB-12; por acuerdo
-  con el usuario, no hacer merge todavía. Commits publicados: `1ebe036`
-  (implementación) y `2082a33` (ajuste visual).
+  WEB-05 ya se incorporó a esta rama desde `develop` (`3efa3f7`). Se conectó
+  el servicio compartido, eliminando el adaptador aislado y usando los cuatro
+  roles actuales. Pendiente repetir la revisión manual con las nuevas cuentas;
+  no integrada en `develop` ni cerrada. Commits iniciales: `1ebe036` y `2082a33`.
 - Ajuste visual de WEB-06: formulario de login con clase y estilos propios,
   sin el ancho fijo ni la sombra del modal heredado; campos y botón ajustados
   al contenedor, con padding adaptable para pantallas pequeñas.
@@ -51,15 +52,15 @@
 
 ## Pendiente por módulo
 
-| Módulo                    | Estado            | Próximo paso                         |
-| ------------------------- | ----------------- | ------------------------------------ |
-| Auth                      | Demo implementada | Integrar WEB-05 y validar permisos   |
-| Reservaciones y recepción | UI existente      | Separar datos, lógica y vistas       |
-| Housekeeping              | UI existente      | Migrar a módulo propio               |
-| Room service              | UI existente      | Migrar pedidos y menú                |
-| Huésped                   | UI existente      | Dividir vistas por ruta              |
-| Administración            | UI existente      | Separar los dominios administrativos |
-| Módulos restantes         | Estructura creada | Implementar según prioridad          |
+| Módulo                    | Estado             | Próximo paso                         |
+| ------------------------- | ------------------ | ------------------------------------ |
+| Auth                      | Conectada a WEB-05 | Revisar cuatro roles y hacer merge   |
+| Reservaciones y recepción | UI existente       | Separar datos, lógica y vistas       |
+| Housekeeping              | UI existente       | Migrar a módulo propio               |
+| Room service              | UI existente       | Migrar pedidos y menú                |
+| Huésped                   | UI existente       | Dividir vistas por ruta              |
+| Administración            | UI existente       | Separar los dominios administrativos |
+| Módulos restantes         | Estructura creada  | Implementar según prioridad          |
 
 ## Decisiones
 
@@ -79,8 +80,9 @@ check` antes de publicar cambios.
 - `npm run check` completado correctamente: Prettier, TypeScript, ESLint y
   compilación de producción sin errores. Vite advierte que los datos de
   Browserslist están desactualizados.
-- `npm run test:auth`: pruebas de WEB-06 con el árbol de rutas real y React
-  Router en memoria; incluyen las 404 de WEB-02 bajo las nuevas guardas.
+- `npm run test:auth`: 14 pruebas con el árbol de rutas y servicio compartido;
+  incluyen los cuatro roles, las 404, contraseña incorrecta, persistencia,
+  token HTTP, cancelación y limpieza local aunque falle el cierre remoto.
 - WEB-06: revisión manual confirmada por el usuario después del ajuste visual.
   No se registró el detalle de dispositivos ni de cada caso manual. No hubo
   navegador disponible para verificación visual automatizada del agente.

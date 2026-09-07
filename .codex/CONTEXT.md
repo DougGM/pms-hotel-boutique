@@ -37,8 +37,9 @@ con React Router en `src/app/router.tsx`, que consume `routePaths` desde
 ambos layouts y las rutas desconocidas bajo `/pms/` conservan el menú privado.
 WEB-06 añade `AuthProvider` en `main.tsx` y guardas de sesión/permisos; el menú
 consume `private/routes/navigation.ts`. Sin sesión, el área PMS redirige al
-login. Auth usa un adaptador provisional mientras WEB-05/WEB-09/WEB-12 definen
-los servicios y permisos compartidos; consultar `src/modules/auth/README.md`.
+login. Auth consume `services/authService.ts` de WEB-05; usa los tipos del
+barrel `shared/types/entities` y los cuatro roles de `shared/types/common`.
+Consultar `src/modules/auth/README.md` para contrato y permisos.
 No confiar en el nombre de un archivo para crear una ruta.
 
 ## Continuidad de WEB-06
@@ -46,8 +47,13 @@ No confiar en el nombre de un archivo para crear una ruta.
 - Rama publicada: `feat/web-06-auth-role-guards`. Commits `1ebe036` y `2082a33`.
 - El usuario confirmó que la prueba manual funciona bien tras corregir el
   desbordamiento del formulario. Los estilos propios evitan el modal heredado.
-- Se acordó no integrar todavía en `develop`: falta coordinar WEB-05 y los
-  roles/permisos con WEB-09/WEB-12. No dar la issue #18 por cerrada.
+- WEB-05 ya llegó a `develop` (merge `3efa3f7`) y se incorporó a esta rama.
+  Se retiró el adaptador aislado: sesión y token HTTP pertenecen al servicio
+  compartido. Roles ADMIN, RECEPTIONIST, MANAGER y STAFF; ya no usar los seis
+  roles iniciales ni las cuentas `@hotel.test`.
+- La adaptación permanece en la rama WEB-06, sin merge a `develop` ni cierre
+  de #18. La validación manual anterior corresponde a la versión aislada;
+  repetirla con las cuatro cuentas actuales antes de integrar.
 - Sesión de ocho horas desde el login, sin cierre por inactividad; valor
   provisional pendiente de la política definitiva del equipo.
 - La siguiente asignación, WEB-13 (#25), depende de WEB-03 (#15) y WEB-04 (#16).

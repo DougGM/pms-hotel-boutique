@@ -86,23 +86,22 @@ npm run format
 Abrir `/auth/login`. Todas las cuentas de prueba usan la contraseña pública
 `AuroraDemo2026!`. No utilizar credenciales reales.
 
-| Correo                 | Rol            |
-| ---------------------- | -------------- |
-| admin@hotel.test       | Administración |
-| recepcion@hotel.test   | Recepción      |
-| limpieza@hotel.test    | Limpieza       |
-| roomservice@hotel.test | Room Service   |
-| conserjeria@hotel.test | Conserjería    |
-| caja@hotel.test        | Caja           |
+| Correo                       | Rol                        |
+| ---------------------------- | -------------------------- |
+| admin@hotelboutique.test     | Administración (ADMIN)     |
+| recepcion@hotelboutique.test | Recepción (RECEPTIONIST)   |
+| gerente@hotelboutique.test   | Gerencia (MANAGER)         |
+| personal@hotelboutique.test  | Personal operativo (STAFF) |
 
 La sesión dura ocho horas y se conserva al recargar. El menú depende del rol;
 abrir directamente una sección ajena muestra acceso restringido. «Cerrar
 sesión» elimina la persistencia y sincroniza el cierre con otras pestañas.
 
-La autenticación es simulada y no protege datos de producción. WEB-05 sigue
-pendiente: el adaptador local deberá conectarse a sus servicios, y los roles
-y permisos deberán coordinarse con WEB-09/WEB-12 antes de integrar WEB-06.
-Ver [el módulo auth](src/modules/auth/README.md) para contrato y pruebas.
+La autenticación es simulada y no protege datos de producción. WEB-06 consume
+el servicio compartido de WEB-05 y los tipos `User`, `AuthSession` y `UserRole`
+que este exporta. Las cuentas antiguas `@hotel.test` y su sesión local dejaron
+de utilizarse; iniciar sesión con una cuenta de la tabla. Ver
+[el módulo auth](src/modules/auth/README.md) para permisos, contrato y pruebas.
 
 ## Seguimiento y contexto
 
