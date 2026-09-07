@@ -47,3 +47,8 @@ src/
   temporal heredada de Bolt que se migrará de forma gradual. Las excepciones
   son `src/app/router.tsx` y `src/app/routes.ts`, que configuran la navegación
   y centralizan sus URL. El router y los enlaces deben referenciar el catálogo.
+- El catálogo de UI está en `public/pages/ComponentsCatalogPage.tsx`; sus
+  ejemplos asíncronos viven en `modules/ui-catalog/`. Los primitivos están
+  en `shared/components/` y consumen tokens desde `styles/tokens.css`.
+- `TableFrame` en `shared/components/DataTable.tsx` es el único renderizador
+  de tablas. Los consumidores heredados delegan en él sin reescribir sus filas.

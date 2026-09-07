@@ -1,0 +1,48 @@
+/* Provisional WEB-13 tokens. Reconcile with WEB-03 before merging. */
+:root {
+  --ui-font: var(--font-sans);
+  --ui-ink: var(--color-ink);
+  --ui-surface: var(--color-surface);
+  --ui-background: var(--color-background);
+  --ui-accent: var(--color-accent);
+  --ui-border: var(--color-border);
+  --ui-muted: #72675c;
+  --ui-neutral: #51493f;
+  --ui-neutral-bg: #f0ece6;
+  --ui-info: #205770;
+  --ui-info-bg: #eaf4fa;
+  --ui-success: #246046;
+  --ui-success-bg: #e9f5ee;
+  --ui-warning: #76500c;
+  --ui-warning-bg: #fff3d6;
+  --ui-danger: #923b37;
+  --ui-danger-bg: #fbeeed;
+  --ui-radius-sm: 0.5rem;
+  --ui-radius: 1rem;
+  --ui-pill: 999px;
+  --ui-space-1: 0.25rem;
+  --ui-space-2: 0.5rem;
+  --ui-space-3: 0.75rem;
+  --ui-space-4: 1rem;
+  --ui-space-6: 1.5rem;
+  --ui-space-8: 2rem;
+  --ui-space-12: 3rem;
+  --ui-text-sm: 0.8125rem;
+  --ui-text-base: 1rem;
+  --ui-text-lg: 1.25rem;
+  --ui-title: clamp(2rem, 5vw, 3.5rem);
+  --ui-leading: 1.5;
+  --ui-heading-leading: 1.1;
+  --ui-weight: 600;
+  --ui-border-width: 1px;
+  --ui-focus-width: 2px;
+  --ui-focus-offset: 3px;
+  --ui-control-height: 2.75rem;
+  --ui-shadow: 0 0.75rem 2rem #2e211a0a;
+  --ui-content-width: 72rem;
+  --ui-column-width: 16rem;
+  --ui-table-width: 32rem;
+  --ui-spinner-size: 1.25rem;
+  --ui-motion-duration: 0.8s;
+  --ui-disabled-opacity: 0.55;
+}

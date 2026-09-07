@@ -8,6 +8,7 @@ export const routePaths = {
     home: '/',
     login: '/auth/login',
     legacyLogin: '/login',
+    components: '/components',
     notFound: '*',
   },
   pms: {

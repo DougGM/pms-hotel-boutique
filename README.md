@@ -73,10 +73,27 @@ mientras se migra a esta estructura.
 npm install
 npm run dev
 npm run check
+npm run test:presentation
 npm run format
 ```
 
 `npm run check` ejecuta formato, TypeScript, ESLint y compilación de producción.
+
+## Catálogo de interfaz — WEB-13
+
+Abrir `/components` para revisar Card (outlined, raised, muted), Badge (cinco
+tonos y dos tamaños), EmptyState, LoadingState, ErrorState y DataTable con
+paginación y ordenación. El ejemplo de error ejecuta una solicitud simulada
+fallida; «Reintentar» recupera los registros y permite reproducir el fallo.
+
+Los colores y medidas de esta entrega se centralizan en
+`src/styles/presentation-tokens.css`, importado desde `tokens.css`. Son
+provisionales mientras WEB-03 esté pendiente. Button, Input, Select, Modal y
+DatePicker se muestran como pendientes; sus variantes se integrarán cuando
+esté disponible WEB-04. La issue #25 aún no está lista para cierre o merge.
+
+`npm run test:presentation` verifica comportamiento y compatibilidad con las
+tablas heredadas. Ver [la guía de componentes](src/shared/README.md).
 
 ## Seguimiento y contexto
 

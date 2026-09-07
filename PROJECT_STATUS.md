@@ -17,10 +17,21 @@
   conservadas. Páginas 404 pública y privada con enlaces de retorno; las
   rutas desconocidas bajo `/pms/` mantienen el menú operativo.
 - Cliente HTTP centralizado configurado con `VITE_API_BASE_URL` desde `.env`.
+- WEB-13 (#25): avance en `feat/web-13-presentation-catalog`, creada desde
+  `origin/develop`. Catálogo `/components`, Card, Badge, estados de pantalla y
+  DataTable con ordenación/paginación. AdminTable y factura usan el mismo
+  renderizador. Pendientes WEB-03, WEB-04 y revisión visual; no hacer merge.
 - La UI funcional sigue centralizada temporalmente en `src/app/App.tsx` y sus
   componentes de apoyo en `src/components/`.
 
 ## Prioridad inmediata
+
+- WEB-13: reconciliar tokens con WEB-03 (#15) e incorporar los componentes y
+  variantes de WEB-04 (#16). Ambas dependencias seguían abiertas al iniciar
+  esta rama. No cerrar #25 hasta cubrir el catálogo completo y el tema oficial.
+- WEB-06 (#18) permanece en la rama independiente `feat/web-06-auth-role-guards`:
+  demo y revisión manual completadas, commits `1ebe036`, `2082a33` y `c233d32`.
+  Pendiente de coordinar WEB-05 y permisos de WEB-09/WEB-12; no integrada.
 
 - WEB-02 ([issue #14](https://github.com/DougGM/pms-hotel-boutique/issues/14)):
   implementación integrada en `develop` desde `feat/web-02-routing-layouts`
@@ -66,8 +77,7 @@ check` antes de publicar cambios.
 - `npm run check` completado correctamente: Prettier, TypeScript, ESLint y
   compilación de producción sin errores. Vite advierte que los datos de
   Browserslist están desactualizados.
-- WEB-02: 12 casos de resolución y renderizado verificados con React Router
-  en memoria: entradas públicas y privadas, alias, barra final, rutas
-  inexistentes anidadas, conservación del menú y enlaces de retorno.
+- `npm run test:presentation`: 8 pruebas aprobadas, incluyendo las tablas
+  heredadas de administración y factura y el reintento real del catálogo.
 - La revisión visual en navegador queda pendiente: no había un navegador
   disponible en la sesión de implementación.

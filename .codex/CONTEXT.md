@@ -37,6 +37,19 @@ con React Router en `src/app/router.tsx`, que consume `routePaths` desde
 ambos layouts y las rutas desconocidas bajo `/pms/` conservan el menú privado.
 No confiar en el nombre de un archivo para crear una ruta.
 
+## Continuidad de las ramas
+
+- WEB-13 se trabaja en `feat/web-13-presentation-catalog` desde `develop`.
+  `/components` muestra los primitivos de presentación y las ausencias de
+  WEB-04. Los tokens de presentación son provisionales hasta integrar WEB-03.
+  Ejecutar `npm run test:presentation` cuando se modifiquen los componentes.
+  Consultar `src/shared/README.md` para API, dependencias y tabla única.
+- No cerrar #25 ni hacer merge antes de integrar WEB-03/04 y revisar el
+  catálogo. El agente no dispone de navegador para validación visual.
+- WEB-06 permanece separada en `feat/web-06-auth-role-guards`, con revisión
+  manual confirmada por el usuario y sin merge por dependencias pendientes.
+  Su último commit de seguimiento es `c233d32`; no mezclar auth en WEB-13.
+
 ## Reglas de trabajo
 
 - Preservar `src/index.css`; reutilizar sus clases y variables antes de añadir
