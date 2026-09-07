@@ -47,3 +47,9 @@ src/
   temporal heredada de Bolt que se migrará de forma gradual. Las excepciones
   son `src/app/router.tsx` y `src/app/routes.ts`, que configuran la navegación
   y centralizan sus URL. El router y los enlaces deben referenciar el catálogo.
+- Auth vive en `modules/auth/`; su proveedor envuelve el router desde `main.tsx`.
+  El login está en `public/pages/StaffLoginPage.tsx`. Las guardas y el catálogo
+  de navegación por permiso se mantienen en `private/guards/` y `private/routes/`.
+  La fachada de auth consume `services/authService.ts` y los tipos compartidos.
+  No crear otra persistencia ni duplicar DTOs de usuario. Consultar
+  `modules/auth/README.md` para el contrato y la política de permisos.

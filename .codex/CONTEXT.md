@@ -35,7 +35,29 @@ con React Router en `src/app/router.tsx`, que consume `routePaths` desde
 `src/app/routes.ts`. Las rutas base son `/`, `/auth/login` y `/pms/dashboard`;
 `/login` y `/pms` siguen disponibles por compatibilidad. Hay páginas 404 en
 ambos layouts y las rutas desconocidas bajo `/pms/` conservan el menú privado.
+WEB-06 añade `AuthProvider` en `main.tsx` y guardas de sesión/permisos; el menú
+consume `private/routes/navigation.ts`. Sin sesión, el área PMS redirige al
+login. Auth consume `services/authService.ts` de WEB-05; usa los tipos del
+barrel `shared/types/entities` y los cuatro roles de `shared/types/common`.
+Consultar `src/modules/auth/README.md` para contrato y permisos.
 No confiar en el nombre de un archivo para crear una ruta.
+
+## Continuidad de WEB-06
+
+- Rama publicada: `feat/web-06-auth-role-guards`. Commits `1ebe036` y `2082a33`.
+- El usuario confirmó que la prueba manual funciona bien tras corregir el
+  desbordamiento del formulario. Los estilos propios evitan el modal heredado.
+- WEB-05 ya llegó a `develop` (merge `3efa3f7`) y se incorporó a esta rama.
+  Se retiró el adaptador aislado: sesión y token HTTP pertenecen al servicio
+  compartido. Roles ADMIN, RECEPTIONIST, MANAGER y STAFF; ya no usar los seis
+  roles iniciales ni las cuentas `@hotel.test`.
+- El usuario confirmó las pruebas de la versión conectada a WEB-05 y autorizó
+  el merge el 2026-09-07. WEB-06 se integra en `develop` sin conflictos desde
+  `feat/web-06-auth-role-guards`; adaptación al servicio en commit `eeb22fe`.
+  La integración no modifica automáticamente el estado de la issue #18.
+- Sesión de ocho horas desde el login, sin cierre por inactividad; valor
+  provisional pendiente de la política definitiva del equipo.
+- La siguiente asignación, WEB-13 (#25), depende de WEB-03 (#15) y WEB-04 (#16).
 
 ## Reglas de trabajo
 
@@ -46,6 +68,7 @@ No confiar en el nombre de un archivo para crear una ruta.
   credenciales ni modificar la URL base dentro del código.
 - Ejecutar `npm run check` antes de publicar cambios: valida Prettier,
   TypeScript, ESLint y la compilación.
+- Ejecutar `npm run test:auth` al modificar sesión, permisos o navegación.
 - Migrar de forma incremental: no eliminar UI funcional de `src/app/App.tsx`
   hasta que su reemplazo esté conectado y verificado.
 - Poner modelos, DTOs, mappers, adaptadores y servicios en el módulo que les

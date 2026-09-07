@@ -1,17 +1,5 @@
-import { Link } from 'react-router-dom';
-import { routePaths } from '@/app/routes';
+﻿import { StaffLoginPage } from '@/public/pages/StaffLoginPage';
 
 export function LoginPage() {
-  return (
-    <main className="public-page-shell">
-      <section className="public-page-card">
-        <p className="eyebrow">Acceso seguro</p>
-        <h1>Iniciar sesion</h1>
-        <p className="muted">La autenticacion se conectara cuando el backend este disponible.</p>
-        <Link className="button secondary" to={routePaths.public.home}>
-          Volver al inicio
-        </Link>
-      </section>
-    </main>
-  );
+  return <StaffLoginPage />;
 }

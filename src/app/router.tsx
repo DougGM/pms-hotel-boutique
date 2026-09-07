@@ -7,6 +7,10 @@ import { PublicHomePage } from '@/pages/PublicHomePage';
 import { PrivateNotFoundPage } from '@/private/pages/PrivateNotFoundPage';
 import { PublicNotFoundPage } from '@/public/pages/PublicNotFoundPage';
 import { routePaths } from '@/app/routes';
+import { RequireSession } from '@/private/guards/RequireSession';
+import { RequirePermission } from '@/private/guards/RequirePermission';
+import { privateNavigation } from '@/private/routes/navigation';
+import { ModuleHomePage } from '@/private/pages/ModuleHomePage';
 
 export const router = createBrowserRouter([
   {
@@ -19,12 +23,27 @@ export const router = createBrowserRouter([
     ],
   },
   {
-    path: routePaths.pms.root,
-    element: <PrivateLayout />,
+    element: <RequireSession />,
     children: [
-      { index: true, element: <OperationsHomePage /> },
-      { path: routePaths.pms.dashboard, element: <OperationsHomePage /> },
-      { path: routePaths.pms.notFound, element: <PrivateNotFoundPage /> },
+      {
+        path: routePaths.pms.root,
+        element: <PrivateLayout />,
+        children: [
+          { index: true, element: <OperationsHomePage /> },
+          { path: routePaths.pms.dashboard, element: <OperationsHomePage /> },
+          ...privateNavigation
+            .filter((item) => item.path !== routePaths.pms.dashboard)
+            .map((item) => ({
+              path: item.path,
+              element: <RequirePermission permission={item.permission} />,
+              children: [
+                { index: true, element: <ModuleHomePage title={item.label} /> },
+                { path: routePaths.pms.notFound, element: <PrivateNotFoundPage /> },
+              ],
+            })),
+          { path: routePaths.pms.notFound, element: <PrivateNotFoundPage /> },
+        ],
+      },
     ],
   },
 ]);

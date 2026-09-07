@@ -21,6 +21,17 @@
   por estado de reserva/habitacion. La documentacion vive en
   `src/styles/README.md`.
 - Cliente HTTP centralizado configurado con `VITE_API_BASE_URL` desde `.env`.
+- WEB-06 (#18): implementación en `feat/web-06-auth-role-guards`, con login
+  simulado, sesión persistente, guardas y menú por rol. El usuario confirmó
+  que sus pruebas manuales funcionan correctamente después del ajuste visual.
+  WEB-05 ya se incorporó a esta rama desde `develop` (`3efa3f7`). Se conectó
+  el servicio compartido, eliminando el adaptador aislado y usando los cuatro
+  roles actuales (adaptación `eeb22fe`). El usuario confirmó las pruebas de esta
+  versión y autorizó el merge el 2026-09-07: integrada en `develop` sin conflictos.
+  El estado de la issue no se modifica automáticamente con este merge.
+- Ajuste visual de WEB-06: formulario de login con clase y estilos propios,
+  sin el ancho fijo ni la sombra del modal heredado; campos y botón ajustados
+  al contenedor, con padding adaptable para pantallas pequeñas.
 - La UI funcional sigue centralizada temporalmente en `src/app/App.tsx` y sus
   componentes de apoyo en `src/components/`.
 
@@ -29,8 +40,8 @@
 - WEB-02 ([issue #14](https://github.com/DougGM/pms-hotel-boutique/issues/14)):
   implementación integrada en `develop` desde `feat/web-02-routing-layouts`
   mediante merge, con commit de implementación `49be302` y documentación
-  `683e05d`. El issue sigue abierto; queda confirmar la revisión visual de las
-  páginas 404 antes del cierre. No se creó un PR para esta integración.
+  `683e05d`. El usuario confirmó que ambas páginas 404 funcionan correctamente;
+  WEB-02 cumple sus verificaciones. No se creó un PR para esta integración.
 - Fase 0 ([issue #9](https://github.com/DougGM/pms-hotel-boutique/issues/9)):
   seguimiento conjunto; completar cuando estén terminadas las tareas que agrupa.
 
@@ -42,15 +53,15 @@
 
 ## Pendiente por módulo
 
-| Módulo                    | Estado            | Próximo paso                         |
-| ------------------------- | ----------------- | ------------------------------------ |
-| Auth                      | Estructura creada | Modelos y pantallas de acceso        |
-| Reservaciones y recepción | UI existente      | Separar datos, lógica y vistas       |
-| Housekeeping              | UI existente      | Migrar a módulo propio               |
-| Room service              | UI existente      | Migrar pedidos y menú                |
-| Huésped                   | UI existente      | Dividir vistas por ruta              |
-| Administración            | UI existente      | Separar los dominios administrativos |
-| Módulos restantes         | Estructura creada | Implementar según prioridad          |
+| Módulo                    | Estado              | Próximo paso                         |
+| ------------------------- | ------------------- | ------------------------------------ |
+| Auth                      | Integrada y probada | Integrar las vistas de cada módulo   |
+| Reservaciones y recepción | UI existente        | Separar datos, lógica y vistas       |
+| Housekeeping              | UI existente        | Migrar a módulo propio               |
+| Room service              | UI existente        | Migrar pedidos y menú                |
+| Huésped                   | UI existente        | Dividir vistas por ruta              |
+| Administración            | UI existente        | Separar los dominios administrativos |
+| Módulos restantes         | Estructura creada   | Implementar según prioridad          |
 
 ## Decisiones
 
@@ -70,8 +81,10 @@ check` antes de publicar cambios.
 - `npm run check` completado correctamente: Prettier, TypeScript, ESLint y
   compilación de producción sin errores. Vite advierte que los datos de
   Browserslist están desactualizados.
-- WEB-02: 12 casos de resolución y renderizado verificados con React Router
-  en memoria: entradas públicas y privadas, alias, barra final, rutas
-  inexistentes anidadas, conservación del menú y enlaces de retorno.
-- La revisión visual en navegador queda pendiente: no había un navegador
-  disponible en la sesión de implementación.
+- `npm run test:auth`: 14 pruebas con el árbol de rutas y servicio compartido;
+  incluyen los cuatro roles, las 404, contraseña incorrecta, persistencia,
+  token HTTP, cancelación y limpieza local aunque falle el cierre remoto.
+- WEB-06: revisión manual confirmada por el usuario también después de conectar
+  WEB-05 y adaptar los cuatro roles compartidos, antes del merge a `develop`.
+  No se registró el detalle de dispositivos ni de cada caso manual. No hubo
+  navegador disponible para verificación visual automatizada del agente.

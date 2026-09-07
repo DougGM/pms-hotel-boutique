@@ -8,11 +8,16 @@ export async function simulateLatency(minMs = 300, maxMs = 600): Promise<void> {
 }
 
 function hasUrlErrorFlag(): boolean {
-  return typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('mockError') === 'true';
+  return (
+    typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).get('mockError') === 'true'
+  );
 }
 
 function hasStorageErrorFlag(): boolean {
-  return typeof localStorage !== 'undefined' && localStorage.getItem('PMS_FORCE_MOCK_ERROR') === 'true';
+  return (
+    typeof localStorage !== 'undefined' && localStorage.getItem('PMS_FORCE_MOCK_ERROR') === 'true'
+  );
 }
 
 export const mockUtils = {
