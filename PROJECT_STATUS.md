@@ -18,9 +18,11 @@
   rutas desconocidas bajo `/pms/` mantienen el menú operativo.
 - Cliente HTTP centralizado configurado con `VITE_API_BASE_URL` desde `.env`.
 - WEB-06 (#18): implementación en `feat/web-06-auth-role-guards`, con login
-  simulado, sesión persistente, guardas y menú por rol. Pendiente de revisión
-  visual y de coordinar la dependencia WEB-05 y los permisos con WEB-09/WEB-12;
-  aún no integrada en `develop` ni cerrada.
+  simulado, sesión persistente, guardas y menú por rol. El usuario confirmó
+  que sus pruebas manuales funcionan correctamente después del ajuste visual.
+  Pendiente de coordinar WEB-05 y los permisos con WEB-09/WEB-12; por acuerdo
+  con el usuario, no hacer merge todavía. Commits publicados: `1ebe036`
+  (implementación) y `2082a33` (ajuste visual).
 - Ajuste visual de WEB-06: formulario de login con clase y estilos propios,
   sin el ancho fijo ni la sombra del modal heredado; campos y botón ajustados
   al contenedor, con padding adaptable para pantallas pequeñas.
@@ -75,5 +77,6 @@ check` antes de publicar cambios.
   Browserslist están desactualizados.
 - `npm run test:auth`: pruebas de WEB-06 con el árbol de rutas real y React
   Router en memoria; incluyen las 404 de WEB-02 bajo las nuevas guardas.
-- La revisión visual en navegador queda pendiente: no había un navegador
-  disponible en la sesión de implementación.
+- WEB-06: revisión manual confirmada por el usuario después del ajuste visual.
+  No se registró el detalle de dispositivos ni de cada caso manual. No hubo
+  navegador disponible para verificación visual automatizada del agente.

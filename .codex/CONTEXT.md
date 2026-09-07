@@ -41,6 +41,17 @@ login. Auth usa un adaptador provisional mientras WEB-05/WEB-09/WEB-12 definen
 los servicios y permisos compartidos; consultar `src/modules/auth/README.md`.
 No confiar en el nombre de un archivo para crear una ruta.
 
+## Continuidad de WEB-06
+
+- Rama publicada: `feat/web-06-auth-role-guards`. Commits `1ebe036` y `2082a33`.
+- El usuario confirmó que la prueba manual funciona bien tras corregir el
+  desbordamiento del formulario. Los estilos propios evitan el modal heredado.
+- Se acordó no integrar todavía en `develop`: falta coordinar WEB-05 y los
+  roles/permisos con WEB-09/WEB-12. No dar la issue #18 por cerrada.
+- Sesión de ocho horas desde el login, sin cierre por inactividad; valor
+  provisional pendiente de la política definitiva del equipo.
+- La siguiente asignación, WEB-13 (#25), depende de WEB-03 (#15) y WEB-04 (#16).
+
 ## Reglas de trabajo
 
 - Preservar `src/index.css`; reutilizar sus clases y variables antes de añadir

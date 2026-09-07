@@ -50,6 +50,13 @@ menús de los seis roles, bloqueo por URL, recarga, cierre entre pestañas, 404,
 sesión corrupta/vencida, permisos serializados, fallo de almacenamiento,
 vencimiento con la app abierta y recuperación tras fallo del servicio.
 
-Revisión manual pendiente: abrir en escritorio y móvil, probar los seis roles,
+El usuario confirmó que sus pruebas manuales funcionan correctamente tras el
+ajuste visual del login (`2082a33`). No se registró una matriz de dispositivos
+ni el detalle de cada caso. El merge queda pendiente de coordinar dependencias.
+
+Lista para futuras revisiones: abrir en escritorio y móvil, probar los seis roles,
 recargar una sección, introducir una URL de otro rol, abrir dos pestañas y cerrar
 sesión. Comprobar mensajes, navegación por teclado y menú en pantalla estrecha.
+
+La duración de ocho horas es provisional y absoluta desde el login: no hay
+cierre por inactividad y la navegación o recarga no renueva el vencimiento.
