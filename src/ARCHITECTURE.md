@@ -33,6 +33,7 @@ src/
   assets/                 Imágenes, fuentes e iconos propios
   styles/                 Tokens, estilos globales y temas
   app/router.tsx          Configuración explícita de React Router
+  app/routes.ts           Catálogo tipado y constantes de rutas
 ```
 
 ## Reglas
@@ -43,5 +44,6 @@ src/
 - Todo lo específico de un dominio se coloca en `modules/<modulo>/`.
 - Solo código reutilizable por dos o más áreas debe estar en `shared/`.
 - No agregar lógica nueva a `src/app/` o `src/components/`; son la capa
-  temporal heredada de Bolt que se migrará de forma gradual. La excepción es
-  `src/app/router.tsx`, que define las rutas base de la aplicación.
+  temporal heredada de Bolt que se migrará de forma gradual. Las excepciones
+  son `src/app/router.tsx` y `src/app/routes.ts`, que configuran la navegación
+  y centralizan sus URL. El router y los enlaces deben referenciar el catálogo.
