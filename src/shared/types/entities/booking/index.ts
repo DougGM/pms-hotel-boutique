@@ -1,3 +1,3 @@
-export type { BookingDto, BookingStatusDto } from './booking.dto';
+export type { BookingDTO, BookingDto, BookingStatusDto } from './booking.dto';
 export type { Booking, BookingStatus } from './booking.model';
 export { toDomain, toDTO } from './booking.mapper';

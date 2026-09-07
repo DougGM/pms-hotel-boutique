@@ -3,7 +3,7 @@ import type { Currency } from '@/shared/types/common';
 export type BookingStatusDto =
   'pending' | 'confirmed' | 'checked_in' | 'checked_out' | 'cancelled' | 'no_show';
 
-export interface BookingDto {
+export interface BookingDTO {
   id: string;
   confirmation_code: string;
   guest_id: string;
@@ -21,3 +21,5 @@ export interface BookingDto {
   created_at: string;
   updated_at: string;
 }
+
+export type BookingDto = BookingDTO;

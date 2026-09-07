@@ -2,7 +2,7 @@ import type { Currency } from '@/shared/types/common';
 
 export type ProductCategoryDto = 'minibar' | 'shop' | 'food_and_beverage' | 'other';
 
-export interface ProductDto {
+export interface ProductDTO {
   id: string;
   sku: string;
   name: string;
@@ -16,3 +16,5 @@ export interface ProductDto {
   created_at: string;
   updated_at: string;
 }
+
+export type ProductDto = ProductDTO;

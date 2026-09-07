@@ -1,4 +1,5 @@
 import type { ID, ISODateString, UserRole } from '../common';
+export type { UserDto } from './user/user.dto';
 export interface UserDTO { id: ID; email: string; name: string; role: UserRole; avatarUrl?: string; createdAt: ISODateString }
 export interface LoginDTO { email: string; password: string }
 export interface User { id: ID; email: string; name: string; role: UserRole; avatarUrl?: string; createdAt: Date }

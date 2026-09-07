@@ -1,4 +1,4 @@
-export type Currency = 'USD' | 'MXN' | 'EUR';
+export type Currency = 'USD' | 'MXN' | 'EUR' | 'GTQ';
 export type ID = string;
 export type ISODateString = string;
 export type BookingStatus = 'PENDING' | 'CONFIRMED' | 'CHECKED_IN' | 'CHECKED_OUT' | 'CANCELLED';
