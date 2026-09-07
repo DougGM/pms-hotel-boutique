@@ -64,6 +64,6 @@ La escala de espaciado de WEB-08 esta en `--space-1` a `--space-12`.
 Los radios estan en `--radius-sm`, `--radius-md`, `--radius-lg`,
 `--radius-xl`, `--radius-2xl`, `--radius-pill` y `--radius-round`.
 
-Los tokens `--color-legacy-*`, `--font-size-legacy-*` y
+Los tokens `--color-legacy-*`, `--font-size-legacy-*`, `--size-legacy-*` y
 `--radius-legacy-*` existen para cubrir valores heredados del prototipo sin
 cambiar visualmente la app mientras se completa la migracion por modulos.

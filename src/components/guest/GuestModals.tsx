@@ -83,7 +83,7 @@ export function ReservationDetailModal({
   const total = reservation.rate * nights;
   return (
     <div className="modal-backdrop" onMouseDown={onClose}>
-      <div className="modal" style={{ width: 480, maxWidth: 'calc(100vw - 32px)' }} onMouseDown={(e) => e.stopPropagation()}>
+      <div className="modal" style={{ width: 'var(--size-legacy-480)', maxWidth: 'calc(100vw - var(--size-legacy-32))' }} onMouseDown={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <div><p className="eyebrow">DETALLE DE RESERVA</p><h2>Reserva {reservation.code}</h2></div>
           <button className="icon-btn" onClick={onClose}><X size={18} /></button>
@@ -147,7 +147,7 @@ export function ModifyReservationModal({
   const [observations, setObservations] = useState(reservation.observations);
   return (
     <div className="modal-backdrop" onMouseDown={onClose}>
-      <div className="modal" style={{ width: 440, maxWidth: 'calc(100vw - 32px)' }} onMouseDown={(e) => e.stopPropagation()}>
+      <div className="modal" style={{ width: 'var(--size-legacy-440)', maxWidth: 'calc(100vw - var(--size-legacy-32))' }} onMouseDown={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <div><p className="eyebrow">MODIFICAR RESERVA</p><h2>Reserva {reservation.code}</h2></div>
           <button className="icon-btn" onClick={onClose}><X size={18} /></button>
@@ -176,7 +176,7 @@ export function CancelReservationModal({
   const [reason, setReason] = useState('');
   return (
     <div className="modal-backdrop" onMouseDown={onClose}>
-      <div className="modal" style={{ width: 420, maxWidth: 'calc(100vw - 32px)' }} onMouseDown={(e) => e.stopPropagation()}>
+      <div className="modal" style={{ width: 'var(--size-legacy-420)', maxWidth: 'calc(100vw - var(--size-legacy-32))' }} onMouseDown={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <div><p className="eyebrow">CANCELAR RESERVA</p><h2>Reserva {reservation.code}</h2></div>
           <button className="icon-btn" onClick={onClose}><X size={18} /></button>
@@ -211,7 +211,7 @@ export function ReceiptModal({
   const nights = Math.max(1, Math.round((new Date(reservation.checkOut).getTime() - new Date(reservation.checkIn).getTime()) / 86400000));
   return (
     <div className="modal-backdrop" onMouseDown={onClose}>
-      <div className="modal" style={{ width: 460, maxWidth: 'calc(100vw - 32px)' }} onMouseDown={(e) => e.stopPropagation()}>
+      <div className="modal" style={{ width: 'var(--size-legacy-460)', maxWidth: 'calc(100vw - var(--size-legacy-32))' }} onMouseDown={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <div><p className="eyebrow">RECIBO DE RESERVA</p><h2>Reserva {reservation.code}</h2></div>
           <button className="icon-btn" onClick={onClose}><X size={18} /></button>
@@ -266,7 +266,7 @@ export function LinkReservationModal({
   const [code, setCode] = useState('');
   return (
     <div className="modal-backdrop" onMouseDown={onClose}>
-      <div className="modal" style={{ width: 420, maxWidth: 'calc(100vw - 32px)' }} onMouseDown={(e) => e.stopPropagation()}>
+      <div className="modal" style={{ width: 'var(--size-legacy-420)', maxWidth: 'calc(100vw - var(--size-legacy-32))' }} onMouseDown={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <div><p className="eyebrow">VINCULAR RESERVA</p><h2>Ingresa tu código</h2></div>
           <button className="icon-btn" onClick={onClose}><X size={18} /></button>
@@ -293,7 +293,7 @@ export function EditProfileModal({
   const update = (field: keyof GuestInfo, value: string) => setData((prev) => ({ ...prev, [field]: value }));
   return (
     <div className="modal-backdrop" onMouseDown={onClose}>
-      <div className="modal" style={{ width: 460, maxWidth: 'calc(100vw - 32px)' }} onMouseDown={(e) => e.stopPropagation()}>
+      <div className="modal" style={{ width: 'var(--size-legacy-460)', maxWidth: 'calc(100vw - var(--size-legacy-32))' }} onMouseDown={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <div><p className="eyebrow">EDITAR PERFIL</p><h2>Mis datos personales</h2></div>
           <button className="icon-btn" onClick={onClose}><X size={18} /></button>
@@ -327,7 +327,7 @@ export function CancelOrderModal({
 }) {
   return (
     <div className="modal-backdrop" onMouseDown={onClose}>
-      <div className="modal" style={{ width: 400, maxWidth: 'calc(100vw - 32px)' }} onMouseDown={(e) => e.stopPropagation()}>
+      <div className="modal" style={{ width: 'var(--size-legacy-400)', maxWidth: 'calc(100vw - var(--size-legacy-32))' }} onMouseDown={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <div><p className="eyebrow">CANCELAR PEDIDO</p><h2>Pedido #{orderId}</h2></div>
           <button className="icon-btn" onClick={onClose}><X size={18} /></button>
@@ -365,7 +365,7 @@ export function RequestServiceModal({
   };
   return (
     <div className="modal-backdrop" onMouseDown={onClose}>
-      <div className="modal" style={{ width: 440, maxWidth: 'calc(100vw - 32px)' }} onMouseDown={(e) => e.stopPropagation()}>
+      <div className="modal" style={{ width: 'var(--size-legacy-440)', maxWidth: 'calc(100vw - var(--size-legacy-32))' }} onMouseDown={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <div><p className="eyebrow">SOLICITAR SERVICIO</p><h2>{mode === 'Limpieza' ? 'Limpieza de habitación' : 'Artículos adicionales'}</h2></div>
           <button className="icon-btn" onClick={onClose}><X size={18} /></button>
