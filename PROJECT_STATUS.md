@@ -22,6 +22,13 @@
 
 ## Prioridad inmediata
 
+- WEB-02 ([issue #14](https://github.com/DougGM/pms-hotel-boutique/issues/14)):
+  implementación publicada en `feat/web-02-routing-layouts`, creada desde
+  `origin/develop`, con commit `49be302`. El issue sigue abierto; quedan la
+  revisión visual, el PR y la integración en `develop` antes del cierre.
+- Fase 0 ([issue #9](https://github.com/DougGM/pms-hotel-boutique/issues/9)):
+  seguimiento conjunto; completar cuando estén terminadas las tareas que agrupa.
+
 - Migrar las vistas de recepción a `modules/reservations`, `modules/stays` y
   `modules/billing` sin alterar la experiencia visual.
 - Extraer los tipos y datos de demostración de `src/app/App.tsx` a sus módulos.

@@ -26,11 +26,16 @@ Seguir el documento `Taller de Arquitectura y Desglose Frontend.pdf`:
 Consultar `src/ARCHITECTURE.md` antes de crear archivos. Solo código usado por
 dos o más áreas va en `shared/`; toda lógica específica se conserva en su
 respectivo módulo. No agregar trabajo nuevo a `src/app/` ni `src/components/`:
-son código temporal heredado de Bolt y se migrará gradualmente.
+son código temporal heredado de Bolt y se migrará gradualmente. La configuración
+de navegación en `src/app/router.tsx` y su catálogo en `src/app/routes.ts`
+son excepciones a esta regla.
 
 El proyecto usa Vite, no Next.js. La navegación se configura explícitamente
-con React Router en `src/app/router.tsx`; las rutas base son `/`, `/login` y
-`/pms`. No confiar en el nombre de un archivo para crear una ruta.
+con React Router en `src/app/router.tsx`, que consume `routePaths` desde
+`src/app/routes.ts`. Las rutas base son `/`, `/auth/login` y `/pms/dashboard`;
+`/login` y `/pms` siguen disponibles por compatibilidad. Hay páginas 404 en
+ambos layouts y las rutas desconocidas bajo `/pms/` conservan el menú privado.
+No confiar en el nombre de un archivo para crear una ruta.
 
 ## Reglas de trabajo
 
@@ -46,7 +51,10 @@ con React Router en `src/app/router.tsx`; las rutas base son `/`, `/login` y
 - Poner modelos, DTOs, mappers, adaptadores y servicios en el módulo que les
   corresponde. Los mappers traducen DTOs, respuestas externas y modelos de UI
   al modelo de dominio; no debe haber esa conversión dispersa en las vistas.
-- Actualizar `PROJECT_STATUS.md` al cerrar cambios relevantes.
+- Actualizar los documentos `.md` afectados conforme avance el trabajo:
+  `PROJECT_STATUS.md` para estado y verificaciones, `README.md` para uso y
+  `.codex/CONTEXT.md` y `src/ARCHITECTURE.md` para continuidad y arquitectura.
+  Distinguir implementación publicada de integración y cierre del issue.
 
 ## Estado de la migración
 
