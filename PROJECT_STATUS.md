@@ -32,6 +32,19 @@
 - Ajuste visual de WEB-06: formulario de login con clase y estilos propios,
   sin el ancho fijo ni la sombra del modal heredado; campos y botón ajustados
   al contenedor, con padding adaptable para pantallas pequeñas.
+- WEB-04 (#16): primitivos de formulario implementados en
+  `feat/web-04-form-primitives` (rama publicada en origin, pendiente de
+  integración a `develop`) — `Button` (variantes primary/secondary/ghost/danger,
+  tamaños, `disabled`, `loading`), `Input` y `Select` (`label`, `helpText`,
+  `error`, `disabled`, `aria-invalid`/`aria-describedby`), `Modal` (controlado,
+  cierre con Escape y clic en el overlay, gestión y restauración de foco,
+  bloqueo/restauración del scroll del body, nombre accesible obligatorio por
+  tipos) y `DatePickerRange` (rango de estadía, impide un rango invertido y una
+  estadía de cero noches, marca e impide seleccionar fechas no disponibles,
+  impide un rango que atraviese una fecha no disponible, mensajes de
+  validación internos, `disabled`, `minDate` configurable). Todos en
+  `src/shared/components/`, consumiendo los tokens de WEB-03
+  (`src/styles/tokens.css`) sin modificarlo. Sin dependencias nuevas.
 - La UI funcional sigue centralizada temporalmente en `src/app/App.tsx` y sus
   componentes de apoyo en `src/components/`.
 
@@ -88,3 +101,8 @@ check` antes de publicar cambios.
   WEB-05 y adaptar los cuatro roles compartidos, antes del merge a `develop`.
   No se registró el detalle de dispositivos ni de cada caso manual. No hubo
   navegador disponible para verificación visual automatizada del agente.
+- WEB-04: `npm run typecheck`, `npm run lint` y `npm run build` sin errores;
+  Prettier verificado únicamente sobre los 9 archivos nuevos de
+  `src/shared/components/` (todos conformes). Hallazgo preexistente y no
+  relacionado con WEB-04: `npm run format:check` falla en 123 archivos fuera
+  de su alcance; no se corrigió, queda fuera de este ticket.
