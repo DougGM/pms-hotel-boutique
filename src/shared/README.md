@@ -22,11 +22,11 @@ Convención de nombre: sufijo `Cents` (`amountCents`, `priceCents`,
 
 Ejemplos de conversión:
 
-| Quetzales  | Centavos almacenados |
-| ---------- | --------------------- |
-| Q15.00     | `1500`                |
-| Q950.00    | `95000`               |
-| Q2,850.00  | `285000`               |
+| Quetzales | Centavos almacenados |
+| --------- | -------------------- |
+| Q15.00    | `1500`               |
+| Q950.00   | `95000`              |
+| Q2,850.00 | `285000`             |
 
 `formatCurrency(amountCents, currency = 'GTQ')` (`src/shared/utils/currency.ts`)
 es la **única** función de formato de moneda autorizada. Para GTQ produce
@@ -75,13 +75,13 @@ UTC y puede desplazar el día según la zona horaria de ejecución.
 
 ### Migración de contratos activos
 
-| Entidad  | Campo legacy      | Campo actual            |
-| -------- | ----------------- | ------------------------ |
-| Payment  | `amount`          | `amountCents`            |
-| Room     | `pricePerNight`   | `pricePerNightCents`     |
-| Booking  | `pricePerNight`   | `pricePerNightCents`     |
-| Booking  | `totalAmount`     | `totalAmountCents`       |
-| Product  | `price`           | `priceCents`             |
+| Entidad | Campo legacy    | Campo actual         |
+| ------- | --------------- | -------------------- |
+| Payment | `amount`        | `amountCents`        |
+| Room    | `pricePerNight` | `pricePerNightCents` |
+| Booking | `pricePerNight` | `pricePerNightCents` |
+| Booking | `totalAmount`   | `totalAmountCents`   |
+| Product | `price`         | `priceCents`         |
 
 Los cuatro contratos mantienen `currency: Currency` explícita. Este es un
 cambio de contrato del **frontend** (tipos y datos simulados); no hay
@@ -121,12 +121,12 @@ diferencia mediante el contrato compartido que acuerde el equipo.
 
 ### Pruebas
 
-| Script                              | Pruebas |
-| ------------------------------------ | ------- |
-| `scripts/test-currency.mjs`          | 11      |
-| `scripts/test-date.mjs`              | 35      |
-| `scripts/test-money-contract.mjs`    | 13      |
-| **Total**                             | **59**  |
+| Script                            | Pruebas |
+| --------------------------------- | ------- |
+| `scripts/test-currency.mjs`       | 11      |
+| `scripts/test-date.mjs`           | 35      |
+| `scripts/test-money-contract.mjs` | 13      |
+| **Total**                         | **59**  |
 
 Además de estas pruebas, toda la superficie de WEB-07 pasa `npm run
 typecheck`, `npm run lint` y `npm run build`.

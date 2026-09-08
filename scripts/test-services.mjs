@@ -30,11 +30,18 @@ test('regla de oro: ningún archivo fuera de services/ importa de shared/mocks o
   const offenders = [];
   for (const file of files) {
     const content = await readFile(file, 'utf8');
-    if (/from ['"][^'"]*shared\/mocks/.test(content) || /from ['"][^'"]*services\/mockData/.test(content)) {
+    if (
+      /from ['"][^'"]*shared\/mocks/.test(content) ||
+      /from ['"][^'"]*services\/mockData/.test(content)
+    ) {
       offenders.push(file);
     }
   }
-  assert.deepEqual(offenders, [], `Archivos fuera de services/ que importan mocks: ${offenders.join(', ')}`);
+  assert.deepEqual(
+    offenders,
+    [],
+    `Archivos fuera de services/ que importan mocks: ${offenders.join(', ')}`,
+  );
 });
 
 // --- B. Contrato de servicio: async, latencia simulada, Model no DTO -------
@@ -66,8 +73,14 @@ await build({
 });
 
 const require = createRequire(import.meta.url);
-const { bookingService, roomService, guestService, paymentService, catalogService, mockUtils } =
-  require(require.resolve('../.cache/services-harness.cjs'));
+const {
+  bookingService,
+  roomService,
+  guestService,
+  paymentService,
+  catalogService,
+  mockUtils,
+} = require(require.resolve('../.cache/services-harness.cjs'));
 
 const MIN_LATENCY_MS = 250; // 300ms nominal, con margen por scheduling
 const MAX_LATENCY_MS = 900; // 600ms nominal, con margen para CI lento

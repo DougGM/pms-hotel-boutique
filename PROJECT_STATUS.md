@@ -147,7 +147,7 @@ check` antes de publicar cambios.
 - WEB-07: `scripts/test-currency.mjs` 11/11, `scripts/test-date.mjs` 35/35,
   `scripts/test-money-contract.mjs` 13/13 (59 pruebas en total, todas contra
   datos y funciones reales del repositorio, sin dependencias nuevas); `npm run
-  typecheck`, `npm run lint` y `npm run build` sin errores. Auditoría de
+typecheck`, `npm run lint` y `npm run build` sin errores. Auditoría de
   legacy UI (`src/app/App.tsx`, `src/components/`) confirmada como excluida
   del typecheck, no alcanzada desde `src/main.tsx` y ausente del bundle de
   producción compilado (`dist/`); no se modificó esa capa.

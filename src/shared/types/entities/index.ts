@@ -3,7 +3,13 @@
 // those exact two names, so re-exporting all of them from one barrel would
 // collide. Import a mapper from its own entity path instead, e.g.
 // `import { toDomain as toBooking } from '@/shared/types/entities/booking'`.
-export type { AmenityDTO, AmenityDto, AmenityCategoryDto, Amenity, AmenityCategory } from './amenity';
+export type {
+  AmenityDTO,
+  AmenityDto,
+  AmenityCategoryDto,
+  Amenity,
+  AmenityCategory,
+} from './amenity';
 export type {
   BookingDTO,
   BookingDto,
@@ -35,7 +41,15 @@ export type { PromotionDto, Promotion } from './promotion';
 export type { RateDTO, RateDto, Rate } from './rate';
 export type { RoomDTO, RoomDto, RoomStatusDto, Room, RoomStatus } from './room';
 export type { RoomTypeDto, RoomType } from './room-type';
-export type { UserDTO, UserDto, UserRoleDto, UserStatusDto, User, UserRole, UserStatus } from './user';
+export type {
+  UserDTO,
+  UserDto,
+  UserRoleDto,
+  UserStatusDto,
+  User,
+  UserRole,
+  UserStatus,
+} from './user';
 
 // `session/` (login/session response) is intentionally NOT re-exported here:
 // it models a different concept than `user/` (PMS access role vs. staff job

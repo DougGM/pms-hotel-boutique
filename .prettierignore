@@ -1,6 +1,5 @@
 node_modules/
 dist/
 .tmp-bolt-source/
-src/app/App.tsx
-src/components/
 package-lock.json
+docs/

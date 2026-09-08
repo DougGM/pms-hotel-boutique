@@ -6,13 +6,13 @@
 
 ## Revalidación previa (FASE PREVIA)
 
-| # | Punto del plan original | Estado encontrado | Veredicto |
-|---|---|---|---|
-| 1 | Contrato de entidades duplicado (`booking`/`guest`/`room`/`payment`/`user` planos vs. oficiales) | Sin cambios: `entities/index.ts` sigue exportando los archivos planos. | CONFIRMADO |
-| 2 | Moneda `'USD'` y montos sin centavos en `bookingService.ts`/`mockData.ts` | Corregido por PR #31 (WEB-07, fusionado 2026-09-08T08:18:18Z): `currency: 'GTQ'`, campos `*Cents` con valores ×100 correctos. Pero aplicado sobre el contrato **duplicado** (camelCase), no el oficial (snake_case). `Currency` en `common.ts` seguía siendo unión de 4 monedas. | CAMBIÓ |
-| 3a | `origin/feat/web-07-format-utils` sin fusionar | Fusionada (PR #31). Issue #19 CLOSED. Trae `formatCurrency`/`formatDateGT`/`formatTimeGT` y 3 suites de prueba (`test-currency.mjs`, `test-date.mjs`, `test-money-contract.mjs`), no enganchadas a `package.json`. | CAMBIÓ |
-| 3b | `origin/feat/web-13-presentation-catalog` sin fusionar | Sin cambios: 1 commit (`ab32a9a`), sin PR, issue #25 OPEN. | CONFIRMADO |
-| 4 | Código muerto de Bolt (`src/app/App.tsx`, `src/components/*`) sin referencias | Sin cambios: 5.359 líneas, sin importar desde `main.tsx`/`router.tsx`. `tokens.css` con 312 alias legacy. | CONFIRMADO |
+| #   | Punto del plan original                                                                          | Estado encontrado                                                                                                                                                                                                                                                                | Veredicto  |
+| --- | ------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| 1   | Contrato de entidades duplicado (`booking`/`guest`/`room`/`payment`/`user` planos vs. oficiales) | Sin cambios: `entities/index.ts` sigue exportando los archivos planos.                                                                                                                                                                                                           | CONFIRMADO |
+| 2   | Moneda `'USD'` y montos sin centavos en `bookingService.ts`/`mockData.ts`                        | Corregido por PR #31 (WEB-07, fusionado 2026-09-08T08:18:18Z): `currency: 'GTQ'`, campos `*Cents` con valores ×100 correctos. Pero aplicado sobre el contrato **duplicado** (camelCase), no el oficial (snake_case). `Currency` en `common.ts` seguía siendo unión de 4 monedas. | CAMBIÓ     |
+| 3a  | `origin/feat/web-07-format-utils` sin fusionar                                                   | Fusionada (PR #31). Issue #19 CLOSED. Trae `formatCurrency`/`formatDateGT`/`formatTimeGT` y 3 suites de prueba (`test-currency.mjs`, `test-date.mjs`, `test-money-contract.mjs`), no enganchadas a `package.json`.                                                               | CAMBIÓ     |
+| 3b  | `origin/feat/web-13-presentation-catalog` sin fusionar                                           | Sin cambios: 1 commit (`ab32a9a`), sin PR, issue #25 OPEN.                                                                                                                                                                                                                       | CONFIRMADO |
+| 4   | Código muerto de Bolt (`src/app/App.tsx`, `src/components/*`) sin referencias                    | Sin cambios: 5.359 líneas, sin importar desde `main.tsx`/`router.tsx`. `tokens.css` con 312 alias legacy.                                                                                                                                                                        | CONFIRMADO |
 
 **Ajustes acordados con el usuario tras esta revalidación** (sustituyen lo que decía el plan original en esos puntos; todo lo demás del plan queda igual):
 
@@ -23,28 +23,28 @@
 
 ## Estado inicial (en `feat/fase-0-cierre`, recién creada desde `origin/develop`)
 
-| Comando | Resultado |
-|---|---|
-| `npm install` (falló `npm ci` por `EPERM` en `node_modules/@esbuild`, posiblemente locked por otro proceso; se usó `npm install` como fallback) | ✅ 233 paquetes añadidos, 64 cambiados |
-| `npm run lint` | ✅ limpio |
-| `npm run typecheck` | ✅ limpio |
-| `npm run build` | ✅ compila (`dist/` generado) |
-| `npm run format:check` | ❌ 137 archivos con problemas de formato |
-| `node scripts/test-auth.mjs` | ✅ 14/14 |
-| `node scripts/test-currency.mjs` | ✅ 11/11 |
-| `node scripts/test-date.mjs` | ✅ 35/35 |
-| `node scripts/test-money-contract.mjs` | ✅ 13/13 |
+| Comando                                                                                                                                         | Resultado                                |
+| ----------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| `npm install` (falló `npm ci` por `EPERM` en `node_modules/@esbuild`, posiblemente locked por otro proceso; se usó `npm install` como fallback) | ✅ 233 paquetes añadidos, 64 cambiados   |
+| `npm run lint`                                                                                                                                  | ✅ limpio                                |
+| `npm run typecheck`                                                                                                                             | ✅ limpio                                |
+| `npm run build`                                                                                                                                 | ✅ compila (`dist/` generado)            |
+| `npm run format:check`                                                                                                                          | ❌ 137 archivos con problemas de formato |
+| `node scripts/test-auth.mjs`                                                                                                                    | ✅ 14/14                                 |
+| `node scripts/test-currency.mjs`                                                                                                                | ✅ 11/11                                 |
+| `node scripts/test-date.mjs`                                                                                                                    | ✅ 35/35                                 |
+| `node scripts/test-money-contract.mjs`                                                                                                          | ✅ 13/13                                 |
 
 ## Bitácora
 
-| Fase | Descripción | Commit | Estado |
-|---|---|---|---|
-| 0 | Crear rama `feat/fase-0-cierre` desde `origin/develop`, línea base, esta bitácora | `74919dd` | ✅ hecho |
-| 1 | Verificación previa al borrado (aislamiento del código de Bolt) | — (sin commit, solo lectura) | ⚠️ parcial — desbloqueado por el usuario: Opción A (ver más abajo) |
-| 2 | Integrar `feat/web-13-presentation-catalog` (WEB-07 ya venía heredado en `develop`) | `af96f51` | ✅ hecho |
-| 3+4 | Unificar el contrato de entidades y portar los montos en centavos al contrato oficial | `a2fd595` | ✅ hecho |
-| 5 | Conectar el dataset del Lote B (`lot-b.ts`) a `roomService`/`guestService`/`bookingService` | `22fdd2c` | ✅ hecho |
-| 6 | Eliminar la UI muerta de Bolt (alcance reducido, Opción A) | `e09eeb7` | ✅ hecho |
+| Fase | Descripción                                                                                 | Commit                       | Estado                                                             |
+| ---- | ------------------------------------------------------------------------------------------- | ---------------------------- | ------------------------------------------------------------------ |
+| 0    | Crear rama `feat/fase-0-cierre` desde `origin/develop`, línea base, esta bitácora           | `74919dd`                    | ✅ hecho                                                           |
+| 1    | Verificación previa al borrado (aislamiento del código de Bolt)                             | — (sin commit, solo lectura) | ⚠️ parcial — desbloqueado por el usuario: Opción A (ver más abajo) |
+| 2    | Integrar `feat/web-13-presentation-catalog` (WEB-07 ya venía heredado en `develop`)         | `af96f51`                    | ✅ hecho                                                           |
+| 3+4  | Unificar el contrato de entidades y portar los montos en centavos al contrato oficial       | `a2fd595`                    | ✅ hecho                                                           |
+| 5    | Conectar el dataset del Lote B (`lot-b.ts`) a `roomService`/`guestService`/`bookingService` | `22fdd2c`                    | ✅ hecho                                                           |
+| 6    | Eliminar la UI muerta de Bolt (alcance reducido, Opción A)                                  | `e09eeb7`                    | ✅ hecho                                                           |
 
 ### FASE 1 — detalle del bloqueo
 
@@ -123,14 +123,14 @@ Sobrevive el contrato oficial de WEB-09 (`entities/<x>/<x>.dto.ts`, snake_case, 
 
 **Tabla de montos (verificada antes del commit, ningún valor cambió de magnitud):**
 
-| Campo | Antes | Después | ¿Cambió? |
-|---|---|---|---|
-| pricePerNightCents (room-101) → Rate.price_cents | 95000 | 95000 | No |
-| pricePerNightCents (room-202) → Rate.price_cents | 78000 | 78000 | No |
-| totalAmountCents (booking-1) | 285000 | 285000 | No |
-| amountCents (payment-1) | 285000 | 285000 | No |
-| priceCents (product-1) | 1500 | 1500 | No |
-| priceCents (product-2) | 7500 | 7500 | No |
+| Campo                                            | Antes  | Después | ¿Cambió? |
+| ------------------------------------------------ | ------ | ------- | -------- |
+| pricePerNightCents (room-101) → Rate.price_cents | 95000  | 95000   | No       |
+| pricePerNightCents (room-202) → Rate.price_cents | 78000  | 78000   | No       |
+| totalAmountCents (booking-1)                     | 285000 | 285000  | No       |
+| amountCents (payment-1)                          | 285000 | 285000  | No       |
+| priceCents (product-1)                           | 1500   | 1500    | No       |
+| priceCents (product-2)                           | 7500   | 7500    | No       |
 
 **Decisiones de diseño no triviales, para que quien revise las entienda sin releer el diff:**
 
@@ -156,7 +156,7 @@ Sobrevive el contrato oficial de WEB-09 (`entities/<x>/<x>.dto.ts`, snake_case, 
    equivalente exacto en el enum oficial (MINIBAR→minibar, ROOM_SERVICE→other; Wi-Fi→hotel,
    Desayuno→service); `Product.sku`/`.reorder_level` son datos inventados razonables — el mock
    original nunca los tuvo. Vale la pena que alguien del equipo revise estas dos aproximaciones.
-6. **`entities/index.ts`** vuelve a ser un barrel de *tipos* únicamente: `toDomain`/`toDTO`
+6. **`entities/index.ts`** vuelve a ser un barrel de _tipos_ únicamente: `toDomain`/`toDTO`
    colisionan de nombre entre las 11 entidades si se reexportan con `export *`, así que los
    mappers se importan siempre desde la ruta específica (`@/shared/types/entities/booking`),
    igual que ya hacía `shared/mocks/lot-b.ts` antes de este cambio.

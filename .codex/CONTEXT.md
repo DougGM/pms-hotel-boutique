@@ -127,7 +127,7 @@ No confiar en el nombre de un archivo para crear una ruta.
   solicitados.
 - Migración a centavos enteros de los contratos legacy activos (los que
   consumen realmente `src/services/*Service.ts`), todos con `currency:
-  Currency` explícita: `Payment.amount → amountCents`,
+Currency` explícita: `Payment.amount → amountCents`,
   `Room.pricePerNight → pricePerNightCents` (más `currency`, que no existía),
   `Booking.pricePerNight → pricePerNightCents` y
   `Booking.totalAmount → totalAmountCents`, `Product.price → priceCents`.
@@ -155,7 +155,7 @@ No confiar en el nombre de un archivo para crear una ruta.
   `scripts/test-money-contract.mjs` (13) — 59 pruebas, todas contra funciones
   y datos reales del repositorio (no fixtures inventados), sin dependencias
   nuevas; reutilizan el patrón de `scripts/test-auth.mjs` (esbuild + `node:
-  test`).
+test`).
 - **AC5 (alineación con la app móvil) pendiente de validación**: `mobile/`
   solo contiene `README.md`, sin código ni especificación de formato de
   moneda/fecha/hora/locale. No se afirma que web y mobile coincidan; queda

@@ -233,7 +233,11 @@ export function ComponentsCatalogPage() {
           </Card>
           <Card title="Input" description="Con etiqueta, ayuda y error">
             <div className="ui-catalog__stack">
-              <Input label="Nombre" helpText="Como aparece en el documento." placeholder="Ana López" />
+              <Input
+                label="Nombre"
+                helpText="Como aparece en el documento."
+                placeholder="Ana López"
+              />
               <Input
                 label="Correo"
                 type="email"
@@ -276,11 +280,7 @@ export function ComponentsCatalogPage() {
           </Card>
         </div>
       </section>
-      <Modal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        title="Confirmar acción"
-      >
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Confirmar acción">
         <p>Este modal usa el primitivo compartido de WEB-04.</p>
         <div className="ui-catalog__row">
           <Button variant="secondary" onClick={() => setModalOpen(false)}>

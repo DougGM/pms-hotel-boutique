@@ -1,4 +1,8 @@
-import { toDomain as toBooking, type Booking, type CreateBookingDto } from '@/shared/types/entities/booking';
+import {
+  toDomain as toBooking,
+  type Booking,
+  type CreateBookingDto,
+} from '@/shared/types/entities/booking';
 import type { ID } from '@/shared/types/common';
 import { lotBMockData } from '@/shared/mocks';
 import { mockUtils, simulateLatency } from './mockUtils';

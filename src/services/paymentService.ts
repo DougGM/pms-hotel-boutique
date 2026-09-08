@@ -1,4 +1,8 @@
-import { toDomain as toPayment, type AddPaymentDto, type Payment } from '@/shared/types/entities/payment';
+import {
+  toDomain as toPayment,
+  type AddPaymentDto,
+  type Payment,
+} from '@/shared/types/entities/payment';
 import type { ID } from '@/shared/types/common';
 import { mockPayments } from './mockData';
 import { mockUtils, simulateLatency } from './mockUtils';
