@@ -1,4 +1,4 @@
-import type { ID, RoomStatus } from '../common';
+import type { Currency, ID, RoomStatus } from '../common';
 export type { RoomDto } from './room/room.dto';
 export interface RoomDTO {
   id: ID;
@@ -6,7 +6,8 @@ export interface RoomDTO {
   type: string;
   floor: number;
   capacity: number;
-  pricePerNight: number;
+  pricePerNightCents: number;
+  currency: Currency;
   status: RoomStatus;
   amenities: string[];
   images: string[];
