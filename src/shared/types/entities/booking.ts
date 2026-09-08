@@ -13,8 +13,8 @@ export interface BookingDTO {
   guests: number;
   adults: number;
   children: number;
-  pricePerNight: number;
-  totalAmount: number;
+  pricePerNightCents: number;
+  totalAmountCents: number;
   currency: Currency;
   source: string;
   notes?: string;
