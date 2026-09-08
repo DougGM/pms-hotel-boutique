@@ -44,6 +44,7 @@
 | 2 | Integrar `feat/web-13-presentation-catalog` (WEB-07 ya venía heredado en `develop`) | `af96f51` | ✅ hecho |
 | 3+4 | Unificar el contrato de entidades y portar los montos en centavos al contrato oficial | `a2fd595` | ✅ hecho |
 | 5 | Conectar el dataset del Lote B (`lot-b.ts`) a `roomService`/`guestService`/`bookingService` | `22fdd2c` | ✅ hecho |
+| 6 | Eliminar la UI muerta de Bolt (alcance reducido, Opción A) | `e09eeb7` | ✅ hecho |
 
 ### FASE 1 — detalle del bloqueo
 
@@ -189,6 +190,37 @@ limpieza futura si el equipo quiere una sola fuente.
 Verificado: regla de oro (`grep` confirma que ningún archivo fuera de `services/` importa de
 `shared/mocks` ni de `services/mockData`), `npm run lint`, `npm run typecheck`, `npm run build`,
 `test-auth` (14/14), `test-money-contract` (13/13), `test-presentation` (8/8).
+
+### FASE 6 — eliminar la UI muerta de Bolt (alcance reducido)
+
+Re-verificación de aislamiento inmediatamente antes de borrar (el árbol había cambiado bastante
+desde la FASE 1): ningún archivo vivo importa `src/app/App.tsx` ni `src/components/*`; ningún
+`.css` colocalizado dentro de esas carpetas (toda su hoja de estilos vive en `index.css`, que
+—junto con `tokens.css`— **no se tocó**: `git diff origin/develop -- src/styles/tokens.css`
+solo muestra líneas añadidas, cero borradas, en todo el cierre de Fase 0). Se eliminó
+`src/app/App.tsx` (1.466 líneas) y `src/components/{admin,guest,reception,roomservice}/`
+(3.893 líneas): el build antes y después tiene exactamente el mismo tamaño de JS/CSS,
+confirmando que ya estaban fuera del bundle de producción.
+
+Se retiró `@supabase/supabase-js` (sin uso, remanente de la plantilla Bolt) y se resolvió
+`httpClient.ts` vs. `http-client.ts` eliminando el primero (reexport de 2 líneas, cero
+importadores) — `http-client.ts` sobrevive.
+
+**Efecto en cascada que hubo que resolver dentro del mismo commit:** `tests/presentation.test.jsx`
+tenía 2 de sus 8 pruebas ("legacy administration...", "legacy invoice...") que importaban
+`AdminContent`/`InvoiceModal` directamente para comprobar que ya usaban el `TableFrame`
+compartido de WEB-13. Al borrar esos componentes, esas 2 pruebas dejan de poder importar nada;
+se retiraron junto con sus imports (`AdminContent`, `InvoiceModal`, `TableFrame`). Las 6 pruebas
+restantes —las que ejercitan los primitivos en sí, no los consumidores heredados— no se tocaron.
+`src/shared/README.md` se actualizó para no seguir describiendo a esos componentes como
+consumidores de `TableFrame`.
+
+**Verificación completa, en el orden pedido:** `npm run build` → `npm run lint` →
+`npm run typecheck` → `test-auth` (14/14) → `test-currency` (11/11) → `test-date` (35/35) →
+`test-money-contract` (13/13) → `test-presentation` (6/6, tras el ajuste) → revisión visual en
+Chrome de `/`, `/auth/login`, `/pms` (con y sin sesión, rol ADMIN), 404 pública y privada, y
+`/components` incluido el modal de WEB-04 — las cinco vistas se ven igual que antes del borrado
+(capturas revisadas en la sesión, no adjuntas aquí).
 
 ## Decisiones tomadas
 
