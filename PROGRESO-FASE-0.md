@@ -42,6 +42,7 @@
 | 0 | Crear rama `feat/fase-0-cierre` desde `origin/develop`, línea base, esta bitácora | `74919dd` | ✅ hecho |
 | 1 | Verificación previa al borrado (aislamiento del código de Bolt) | — (sin commit, solo lectura) | ⚠️ parcial — desbloqueado por el usuario: Opción A (ver más abajo) |
 | 2 | Integrar `feat/web-13-presentation-catalog` (WEB-07 ya venía heredado en `develop`) | `af96f51` | ✅ hecho |
+| 3+4 | Unificar el contrato de entidades y portar los montos en centavos al contrato oficial | `a2fd595` | ✅ hecho |
 
 ### FASE 1 — detalle del bloqueo
 
@@ -110,6 +111,62 @@ Verificado tras el merge: `npm run lint`, `npm run typecheck`, `npm run build`,
 `node scripts/test-auth.mjs` (14/14), `scripts/test-currency.mjs` (11/11),
 `scripts/test-date.mjs` (35/35), `scripts/test-money-contract.mjs` (13/13),
 `scripts/test-presentation.mjs` (8/8) — todos en verde.
+
+### FASE 3+4 — unificación del contrato de entidades + moneda en centavos
+
+Sobrevive el contrato oficial de WEB-09 (`entities/<x>/<x>.dto.ts`, snake_case, `_cents`) en las
+6 entidades duplicadas encontradas — 6, no 5: la auditoría original no había detectado que
+`entities/catalog.ts` duplicaba **product y amenity** además de `booking.ts`/`guest.ts`/
+`payment.ts`/`room.ts`/`user.ts`. Se corrige aquí.
+
+**Tabla de montos (verificada antes del commit, ningún valor cambió de magnitud):**
+
+| Campo | Antes | Después | ¿Cambió? |
+|---|---|---|---|
+| pricePerNightCents (room-101) → Rate.price_cents | 95000 | 95000 | No |
+| pricePerNightCents (room-202) → Rate.price_cents | 78000 | 78000 | No |
+| totalAmountCents (booking-1) | 285000 | 285000 | No |
+| amountCents (payment-1) | 285000 | 285000 | No |
+| priceCents (product-1) | 1500 | 1500 | No |
+| priceCents (product-2) | 7500 | 7500 | No |
+
+**Decisiones de diseño no triviales, para que quien revise las entienda sin releer el diff:**
+
+1. **`user` no se unificó como las otras 5.** El contrato oficial `entities/user/` modela el
+   puesto de un empleado (admin/manager/frontDesk/housekeeping/maintenance, alineado con la app
+   móvil) — un concepto distinto del rol de acceso al PMS (ADMIN/RECEPTIONIST/MANAGER/STAFF) que
+   ya usa WEB-06, probado con 14 pruebas. `modules/auth/README.md` ya advertía explícitamente no
+   mezclarlos. Se creó `shared/types/entities/session/` (SessionUserDTO, LoginDTO,
+   AuthResponseDTO, AuthSession, `toAuthSession`) como contrato neutral que consumen tanto
+   `services/authService.ts` como `modules/auth/`, en vez de colgarlo de `modules/auth/`
+   (invertiría la dependencia: un servicio transversal importando de un módulo de dominio).
+2. **Room pierde precio/capacidad/amenidades.** El contrato oficial ya los modela en `RoomType`
+   (capacidad, descripción, amenidades) y `Rate` (price_cents, currency) — igual que ya hace el
+   dataset del Lote B. Se agregaron `mockRoomTypes`/`mockRates` a `mockData.ts` en vez de
+   forzar esos campos de vuelta a `Room`, que habría deshecho la normalización de WEB-09.
+3. **Campos sin equivalente en el contrato oficial, descartados (no forzados):** `Booking.guests`
+   (redundante), `Booking.source`, `Payment.type`/`.description` (pertenecen a `Charge`, entidad
+   ya separada — no se inventan datos de Charge aquí, eso es WEB-11), `Amenity.icon`. Ninguno
+   tenía consumidor vivo (verificado por grep antes de descartarlos).
+4. **Campos portados a la oficial (adición, no pérdida):** `Guest.notes?` (existía sin usar),
+   `CreateBookingDto` y `AddPaymentDto` (capacidad de creación que sí usan los servicios).
+5. **Aproximaciones sin mapeo 1 a 1:** `Product.category`/`Amenity.category` no tenían
+   equivalente exacto en el enum oficial (MINIBAR→minibar, ROOM_SERVICE→other; Wi-Fi→hotel,
+   Desayuno→service); `Product.sku`/`.reorder_level` son datos inventados razonables — el mock
+   original nunca los tuvo. Vale la pena que alguien del equipo revise estas dos aproximaciones.
+6. **`entities/index.ts`** vuelve a ser un barrel de *tipos* únicamente: `toDomain`/`toDTO`
+   colisionan de nombre entre las 11 entidades si se reexportan con `export *`, así que los
+   mappers se importan siempre desde la ruta específica (`@/shared/types/entities/booking`),
+   igual que ya hacía `shared/mocks/lot-b.ts` antes de este cambio.
+7. **`Currency`** se cerró a literal `'GTQ'` en `common.ts`; también se retiraron de ahí
+   `BookingStatus`/`RoomStatus`/`PaymentStatus`/`PaymentMethod`/`ChargeType`/`ProductCategory`
+   por quedar sin ningún consumidor tras borrar los archivos planos.
+8. **`test-money-contract.mjs`** se adaptó (no se reescribió): mismas 13 pruebas, apuntando a
+   `mockRates` en vez de `mockRooms` para el precio (ya no vive ahí) y a los nombres snake_case.
+
+Verificado: `npm run lint`, `npm run typecheck`, `npm run build`, y las 5 suites de prueba
+(`test-auth` 14/14, `test-currency` 11/11, `test-date` 35/35, `test-money-contract` 13/13,
+`test-presentation` 8/8) — 81/81 en verde.
 
 ## Decisiones tomadas
 
