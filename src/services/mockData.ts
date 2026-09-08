@@ -89,8 +89,8 @@ export const mockPayments: PaymentDTO[] = [
   {
     id: 'payment-1',
     bookingId: 'booking-1',
-    amount: 2850,
-    currency: 'USD',
+    amountCents: 285000,
+    currency: 'GTQ',
     method: 'CREDIT_CARD',
     status: 'COMPLETED',
     type: 'ROOM',

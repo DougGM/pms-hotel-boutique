@@ -10,7 +10,7 @@ export type { PaymentDto } from './payment/payment.dto';
 export interface PaymentDTO {
   id: ID;
   bookingId: ID;
-  amount: number;
+  amountCents: number;
   currency: Currency;
   method: PaymentMethod;
   status: PaymentStatus;
@@ -35,7 +35,7 @@ export const paymentMapper = {
 };
 export interface AddChargeDTO {
   bookingId: ID;
-  amount: number;
+  amountCents: number;
   currency: Currency;
   type: ChargeType;
   description: string;
