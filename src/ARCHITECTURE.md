@@ -4,57 +4,142 @@
 src/
   public/                 Vistas disponibles sin sesión
     page.tsx              Entrada pública
-    pages/                Páginas públicas adicionales
-    components/           Componentes exclusivos de la zona pública
+    pages/                Páginas públicas adicionales (incluye el catálogo de UI, /components)
   private/                Vistas autenticadas de empleados y administración
     page.tsx              Layout con menú principal
     pages/                Páginas privadas que combinan módulos
-    components/           Componentes exclusivos del layout privado
-    guards/               Protección de sesión y permisos
-    routes/               Definición de rutas privadas
+    guards/                RequireSession, RequirePermission
+    routes/                Catálogo de navegación privada por permiso
   layouts/                Layouts conectados a React Router
-  pages/                  Páginas base conectadas a las rutas
-  modules/                Lógica por dominio de negocio
-    <modulo>/
-      models/             Modelos de dominio
-      dtos/               Contratos de datos
-      mappers/            Conversión DTO/modelo
-      adapters/           Integración con fuentes externas
-      services/           Lógica y llamadas de datos
-      components/         Componentes propios del módulo
-  shared/                 Código reutilizable por todo el frontend
-    components/           Button, Input, Modal, DataTable, Pagination, etc.
-    constants/            Constantes globales
-    hooks/                Hooks reutilizables
-    lib/                  Configuración de librerías
-    types/                Tipos transversales
-    utils/                Funciones utilitarias puras
-  services/               Cliente HTTP y servicios transversales
-  assets/                 Imágenes, fuentes e iconos propios
-  styles/                 Tokens, estilos globales y temas
-  app/router.tsx          Configuración explícita de React Router
-  app/routes.ts           Catálogo tipado y constantes de rutas
+  pages/                  Páginas base conectadas a las rutas (LoginPage, OperationsHomePage, PublicHomePage)
+  modules/
+    auth/                 Sesión de personal: modelos, mappers, servicios (fachada) y componentes
+    ui-catalog/            Ejemplos asíncronos del catálogo de componentes
+  shared/
+    components/           Button, Input, Select, Modal, DatePickerRange, Card, Badge,
+                           EmptyState, LoadingState, ErrorState, DataTable (TableFrame), Pagination
+    mocks/                 lot-b.ts: dataset del Lote B (habitaciones, huéspedes, reservas, tarifas, promociones)
+    types/
+      common.ts            ID, ISODateString, Currency ('GTQ' literal), UserRole
+      entities/<entidad>/  Un DTO + Model + Mapper por entidad (ver "Contrato de datos" abajo)
+    utils/
+      currency.ts          formatCurrency — única función de formato de moneda
+      date.ts               formatDateGT/formatTimeGT/formatStayRange/calculateNights — únicas de fecha
+  services/                Cliente HTTP y servicios transversales (capa de datos, ver "Servicios" abajo)
+  assets/                  Imágenes, fuentes e iconos propios
+  styles/
+    tokens.css             Única fuente de tokens de diseño (color, tipografía, espaciado, radios)
+  index.css                Hoja de estilos global heredada del prototipo Bolt (ver nota al final)
+  app/router.tsx           Configuración explícita de React Router
+  app/routes.ts             Catálogo tipado y constantes de rutas
 ```
 
-## Reglas
+## Reglas de capas
 
 - Una vista sin sesión se crea en `public/pages/`.
 - Una vista autenticada se crea en `private/pages/`; su lógica de negocio se
   consume desde el módulo correspondiente.
 - Todo lo específico de un dominio se coloca en `modules/<modulo>/`.
 - Solo código reutilizable por dos o más áreas debe estar en `shared/`.
-- No agregar lógica nueva a `src/app/` o `src/components/`; son la capa
-  temporal heredada de Bolt que se migrará de forma gradual. Las excepciones
-  son `src/app/router.tsx` y `src/app/routes.ts`, que configuran la navegación
-  y centralizan sus URL. El router y los enlaces deben referenciar el catálogo.
 - Auth vive en `modules/auth/`; su proveedor envuelve el router desde `main.tsx`.
   El login está en `public/pages/StaffLoginPage.tsx`. Las guardas y el catálogo
   de navegación por permiso se mantienen en `private/guards/` y `private/routes/`.
-  La fachada de auth consume `services/authService.ts` y los tipos compartidos.
-  No crear otra persistencia ni duplicar DTOs de usuario. Consultar
+  La fachada de auth consume `services/authService.ts`. Consultar
   `modules/auth/README.md` para el contrato y la política de permisos.
-- El catálogo de UI está en `public/pages/ComponentsCatalogPage.tsx`; sus
-  ejemplos asíncronos viven en `modules/ui-catalog/`. Los primitivos están
-  en `shared/components/` y consumen tokens desde `styles/tokens.css`.
+- El catálogo de UI está en `public/pages/ComponentsCatalogPage.tsx` (ruta
+  `/components`); sus ejemplos asíncronos viven en `modules/ui-catalog/`. Los
+  primitivos están en `shared/components/` y consumen tokens desde
+  `styles/tokens.css`.
 - `TableFrame` en `shared/components/DataTable.tsx` es el único renderizador
-  de tablas.
+  de tablas del árbol.
+
+## Contrato de datos: DTO → Mapper → Model
+
+Cada entidad compartida vive en `shared/types/entities/<entidad>/`, con cuatro
+archivos: `<entidad>.dto.ts` (forma cruda, snake_case, tal como la devolvería
+una API real), `<entidad>.model.ts` (forma de dominio, camelCase, la que
+consume la UI), `<entidad>.mapper.ts` (`toDomain`/`toDTO`, el único punto que
+conoce ambas formas) e `index.ts` (reexporta los tres). Es **una sola
+definición por entidad** — hasta el cierre de la Fase 0 convivían un archivo
+plano (`entities/<x>.ts`, camelCase, sin distinción real DTO/Model) y esta
+carpeta oficial; el plano se eliminó.
+
+`shared/types/entities/index.ts` es un barrel de **tipos únicamente**:
+`toDomain`/`toDTO` no se reexportan ahí porque las once entidades usan
+exactamente esos dos nombres y colisionarían. Importar un mapper siempre
+desde la ruta específica de su entidad:
+
+```ts
+import { toDomain as toBooking } from '@/shared/types/entities/booking';
+```
+
+**`shared/types/entities/session/` es un caso aparte, y no se reexporta desde
+el barrel.** Modela la respuesta de login/sesión (`SessionUserDTO`,
+`AuthResponseDTO`, `AuthSession`, `LoginDTO`) con el rol de acceso al PMS
+(`UserRole` de `common.ts`: ADMIN/RECEPTIONIST/MANAGER/STAFF). Es un concepto
+distinto de `shared/types/entities/user/`, que modela el puesto de un
+empleado en el directorio de personal
+(admin/manager/frontDesk/housekeeping/maintenance, alineado con la app
+móvil). Comparten nombre por casualidad, no por ser la misma entidad; no
+fusionarlos. Ver `modules/auth/README.md`.
+
+## Moneda y fecha
+
+- **Moneda:** quetzal guatemalteco. `Currency` (`shared/types/common.ts`) es
+  el literal `'GTQ'`, no una unión de monedas. Todo campo de dinero en un DTO
+  termina en `_cents` (`total_amount_cents`, `price_cents`, `amount_cents`) y
+  es un entero — nunca un decimal. `formatCurrency` (`shared/utils/currency.ts`)
+  es la única función de formato; ninguna pantalla escribe `Q` a mano.
+- **Fecha:** `formatDateGT` da `dd-mm-aaaa`, `formatTimeGT` da `HH:mm` en 24
+  horas (`shared/utils/date.ts`). Un DTO distingue fecha civil (`"YYYY-MM-DD"`,
+  sin hora ni zona: check-in, check-out, vigencias) de timestamp (ISO 8601
+  completo: `created_at`, `updated_at`). Ninguna pantalla formatea fechas por
+  su cuenta.
+
+## Servicios y regla de oro
+
+Ningún componente ni pantalla importa `shared/mocks/` o `services/mockData.ts`
+directamente — todo pasa por un servicio en `services/`. Cada servicio es
+`async`, devuelve Models (nunca DTOs), simula una latencia de 300 a 600 ms
+(`services/mockUtils.ts`) y puede forzarse a fallar
+(`mockUtils.setForceError(true)`, o `?mockError=true`/`PMS_FORCE_MOCK_ERROR`
+en `localStorage`) para probar el manejo de errores.
+
+`bookingService`, `roomService` y `guestService` leen de
+`shared/mocks/lot-b.ts` (el dataset del Lote B: habitaciones, huéspedes,
+reservas, tarifas). `paymentService` y `catalogService` leen de
+`services/mockData.ts`, que no tiene el volumen de `lot-b.ts` porque cubre
+entidades que ningún ticket ha poblado todavía a fondo (pagos, productos,
+amenidades — WEB-11/WEB-12). `authService.ts` es el único servicio con
+persistencia (sesión en `localStorage`) y cliente HTTP
+(`services/http-client.ts`, listo para una API real pero sin uso todavía).
+
+## Pruebas
+
+`npm run test` corre siete suites (`scripts/*.mjs`), todas con el mismo
+patrón: esbuild empaqueta el módulo a probar a CommonJS y se ejecuta con
+`node --test` — sin ningún framework de pruebas externo.
+
+| Suite                     | Qué cubre                                                                                                      |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `test-auth.mjs`           | Sesión, roles, guardas de ruta, 404 por área (14 pruebas)                                                      |
+| `test-currency.mjs`       | `formatCurrency` (11 pruebas)                                                                                  |
+| `test-date.mjs`           | `formatDateGT`/`formatTimeGT`/`calculateNights`/mappers de fecha civil (35 pruebas)                            |
+| `test-money-contract.mjs` | `mockData.ts`: montos enteros, `currency: 'GTQ'`, sufijo `_cents` (13 pruebas)                                 |
+| `test-contract.mjs`       | Una sola definición por entidad; `lot-b.ts` en centavos y GTQ (17 pruebas)                                     |
+| `test-services.mjs`       | Los servicios son `async`, con latencia simulada, devuelven Models, forzado de error, regla de oro (7 pruebas) |
+| `test-presentation.mjs`   | Primitivos de `shared/components/` y el catálogo `/components` (6 pruebas)                                     |
+
+`npm run check` encadena `format:check && typecheck && lint && build && test`.
+
+## `index.css`: pendiente de separar
+
+`src/index.css` (heredado del prototipo Bolt) mezcla en un solo archivo
+estilos base que la app real usa hoy (`.button`, `.content`, `.eyebrow`,
+`.public-page-shell`, `body`) con estilos que solo aplicaban a las pantallas
+de Bolt ya eliminadas (`src/app/App.tsx` y `src/components/`, retirados en el
+cierre de la Fase 0). No se separó en ese cierre porque varias de esas reglas
+en uso real dependen de variables `--*-legacy-*` de `tokens.css`, y no hay
+forma mecánica de distinguir qué alias son solo del árbol muerto sin trazar
+selector por selector — es trabajo de análisis, no una poda. Pendiente como
+ticket aparte.

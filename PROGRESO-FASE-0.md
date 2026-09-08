@@ -37,16 +37,16 @@
 
 ## Bitácora
 
-| Fase | Descripción                                                                                 | Commit                       | Estado                                                             |
-| ---- | ------------------------------------------------------------------------------------------- | ---------------------------- | ------------------------------------------------------------------ |
-| 0    | Crear rama `feat/fase-0-cierre` desde `origin/develop`, línea base, esta bitácora           | `74919dd`                    | ✅ hecho                                                           |
-| 1    | Verificación previa al borrado (aislamiento del código de Bolt)                             | — (sin commit, solo lectura) | ⚠️ parcial — desbloqueado por el usuario: Opción A (ver más abajo) |
-| 2    | Integrar `feat/web-13-presentation-catalog` (WEB-07 ya venía heredado en `develop`)         | `af96f51`                    | ✅ hecho                                                           |
-| 3+4  | Unificar el contrato de entidades y portar los montos en centavos al contrato oficial       | `a2fd595`                    | ✅ hecho                                                           |
-| 5    | Conectar el dataset del Lote B (`lot-b.ts`) a `roomService`/`guestService`/`bookingService` | `22fdd2c`                    | ✅ hecho                                                           |
-| 6    | Eliminar la UI muerta de Bolt (alcance reducido, Opción A)                                  | `e09eeb7`                    | ✅ hecho                                                           |
+| Fase | Descripción                                                                                  | Commit                       | Estado                                                             |
+| ---- | -------------------------------------------------------------------------------------------- | ---------------------------- | ------------------------------------------------------------------ |
+| 0    | Crear rama `feat/fase-0-cierre` desde `origin/develop`, línea base, esta bitácora            | `74919dd`                    | ✅ hecho                                                           |
+| 1    | Verificación previa al borrado (aislamiento del código de Bolt)                              | — (sin commit, solo lectura) | ⚠️ parcial — desbloqueado por el usuario: Opción A (ver más abajo) |
+| 2    | Integrar `feat/web-13-presentation-catalog` (WEB-07 ya venía heredado en `develop`)          | `af96f51`                    | ✅ hecho                                                           |
+| 3+4  | Unificar el contrato de entidades y portar los montos en centavos al contrato oficial        | `a2fd595`                    | ✅ hecho                                                           |
+| 5    | Conectar el dataset del Lote B (`lot-b.ts`) a `roomService`/`guestService`/`bookingService`  | `22fdd2c`                    | ✅ hecho                                                           |
+| 6    | Eliminar la UI muerta de Bolt (alcance reducido, Opción A)                                   | `e09eeb7`                    | ✅ hecho                                                           |
 | 7a   | Pruebas nuevas (`test-contract.mjs`, `test-services.mjs`) + enganchar `npm run test`/`check` | `e71723e`                    | ✅ hecho                                                           |
-| 7b   | Formato de Prettier a todo el árbol (commit aislado, al final)                              | `0dc2707`                    | ✅ hecho                                                           |
+| 7b   | Formato de Prettier a todo el árbol (commit aislado, al final)                               | `0dc2707`                    | ✅ hecho                                                           |
 
 ### FASE 1 — detalle del bloqueo
 

@@ -2,155 +2,82 @@
 
 ## Estado actual
 
-- Base visual importada desde el proyecto Bolt `sb1-8sal4vhj`.
-- Arquitectura de directorios alineada con el taller de frontend, incluyendo
-  las capas `models`, `dtos`, `mappers`, `adapters`, `services` y `components`.
-- Zonas web definidas: `src/public/` para vistas sin sesión, `src/private/`
-  para el layout autenticado, `src/modules/` para dominios y `src/shared/`
-  para reutilizables.
-- Base de la app React Native creada en `mobile/` para empleados, con módulos
-  de autenticación, tareas, habitaciones, solicitudes y pedidos.
-- Rutas base navegables configuradas para `/`, `/login` y `/pms`, con layouts
-  separados para la web pública y privada.
-- WEB-02: router conectado al catálogo tipado de `src/app/routes.ts`, con
-  `/auth/login` y `/pms/dashboard` disponibles y las entradas anteriores
-  conservadas. Páginas 404 pública y privada con enlaces de retorno; las
-  rutas desconocidas bajo `/pms/` mantienen el menú operativo.
-- WEB-03: sistema de diseno web centralizado en `src/styles/tokens.css`, usando
-  la extraccion de WEB-08 para paleta, tipografia, espaciado, radios y colores
-  por estado de reserva/habitacion. La documentacion vive en
-  `src/styles/README.md`.
-- Cliente HTTP centralizado configurado con `VITE_API_BASE_URL` desde `.env`.
-- WEB-06 (#18): implementación en `feat/web-06-auth-role-guards`, con login
-  simulado, sesión persistente, guardas y menú por rol. El usuario confirmó
-  que sus pruebas manuales funcionan correctamente después del ajuste visual.
-  WEB-05 ya se incorporó a esta rama desde `develop` (`3efa3f7`). Se conectó
-  el servicio compartido, eliminando el adaptador aislado y usando los cuatro
-  roles actuales (adaptación `eeb22fe`). El usuario confirmó las pruebas de esta
-  versión y autorizó el merge el 2026-09-07: integrada en `develop` sin conflictos.
-  El estado de la issue no se modifica automáticamente con este merge.
-- Ajuste visual de WEB-06: formulario de login con clase y estilos propios,
-  sin el ancho fijo ni la sombra del modal heredado; campos y botón ajustados
-  al contenedor, con padding adaptable para pantallas pequeñas.
-- WEB-04 (#16): primitivos de formulario implementados en
-  `feat/web-04-form-primitives`, integrado a `develop` mediante PR #30
-  (merge `2c28e43ba15a5a36c4ac5a562924d52fde610c58`) — `Button` (variantes primary/secondary/ghost/danger,
-  tamaños, `disabled`, `loading`), `Input` y `Select` (`label`, `helpText`,
-  `error`, `disabled`, `aria-invalid`/`aria-describedby`), `Modal` (controlado,
-  cierre con Escape y clic en el overlay, gestión y restauración de foco,
-  bloqueo/restauración del scroll del body, nombre accesible obligatorio por
-  tipos) y `DatePickerRange` (rango de estadía, impide un rango invertido y una
-  estadía de cero noches, marca e impide seleccionar fechas no disponibles,
-  impide un rango que atraviese una fecha no disponible, mensajes de
-  validación internos, `disabled`, `minDate` configurable). Todos en
-  `src/shared/components/`, consumiendo los tokens de WEB-03
-  (`src/styles/tokens.css`) sin modificarlo. Sin dependencias nuevas.
-- WEB-07 (#19): utilidades de formato de moneda y fecha implementadas en
-  `feat/web-07-format-utils` (rama publicada en origin, pendiente de
-  integración a `develop`). `formatCurrency` (GTQ, `Q1,250.00`) como única
-  función de formato de moneda; `formatDateGT`/`formatTimeGT`/
-  `formatStayRange`/`calculateNights` para fecha, hora, rango de estadía y
-  noches. Contrato explícito de fecha civil (`toDomainCalendarDate`/
-  `toDtoCalendarDate`, DTO `"YYYY-MM-DD"`) frente a timestamp (`toDomainDate`/
-  `toDtoDate`, ISO 8601 completo), evitando el desplazamiento de día que
-  produciría `new Date()` sobre un string ambiguo. Migración a enteros en
-  centavos de los contratos legacy activos (`Payment.amountCents`,
-  `Room.pricePerNightCents`, `Booking.pricePerNightCents`/
-  `totalAmountCents`, `Product.priceCents`), todos con `currency: Currency`
-  explícita; normalización de las fechas mock de `lot-b.ts` al mismo
-  contrato. Cobertura de regresión dedicada (ver Verificación más reciente).
-  Detalle técnico completo en [src/shared/README.md](src/shared/README.md).
-  **AC5 (alineación con la app móvil) pendiente de validación**: el
-  repositorio no contiene todavía implementación ni especificación de
-  formato mobile con la que comparar; no se afirma cumplimiento sobre esa
-  base.
-- La UI completa heredada de Bolt permanece en `src/app/App.tsx` y sus
-  componentes de apoyo en `src/components/`, todavía sin migrar a los módulos
-  de dominio. La arquitectura activa parte de `src/main.tsx` (que arranca
-  `src/app/router.tsx` y las páginas de `src/private/`/`src/public/`);
-  `App.tsx`/`src/components/` están excluidos de `tsconfig.app.json`, no son
-  alcanzados desde `src/main.tsx` y no aparecen en el bundle de producción
-  compilado (verificado en la auditoría de WEB-07).
-- WEB-13 (#25): integrado a `feat/fase-0-cierre` desde
-  `feat/web-13-presentation-catalog` (commit `ab32a9a`, muy atrasado respecto
-  a `develop`). Catálogo `/components` con Card, Badge, EmptyState,
-  LoadingState, ErrorState, DataTable con ordenación/paginación y los
-  primitivos de WEB-04 (Button, Input, Select, Modal, DatePickerRange). Los
-  tokens `--ui-*` de `presentation.css`/`components-catalog.css` se
-  reconciliaron contra la escala real de WEB-03 dentro de `tokens.css`; el
-  archivo `presentation-tokens.css` se eliminó.
+**Fase 0 del frontend web cerrada** (issues #9 y #12), vía Pull Request desde
+`feat/fase-0-cierre` hacia `develop`. El detalle fase por fase —incluidas las
+decisiones de diseño no triviales— vive en `PROGRESO-FASE-0.md`; este
+documento resume el estado resultante, no el proceso para llegar a él.
 
-## Prioridad inmediata
+- Base visual heredada del proyecto Bolt `sb1-8sal4vhj` (`src/index.css`,
+  paleta). Las pantallas que Bolt generó (`src/app/App.tsx`,
+  `src/components/`) se eliminaron: no estaban conectadas a la aplicación
+  real (verificado antes de borrar — ver `PROGRESO-FASE-0.md`, FASE 6).
+- Zonas web: `src/public/` (sin sesión, incluye el catálogo `/components`),
+  `src/private/` (autenticado), `src/modules/` (auth, ui-catalog),
+  `src/shared/` (componentes, tipos, tokens, mocks).
+- Rutas tipadas desde `src/app/routes.ts`, consumidas por
+  `src/app/router.tsx`. 404 pública y privada; las rutas desconocidas bajo
+  `/pms/` conservan el menú operativo.
+- Sistema de diseño centralizado en `src/styles/tokens.css` — única fuente de
+  color, tipografía, espaciado y radios, incluidos los tokens de WEB-13
+  (`--ui-*`, reconciliados contra esta misma escala).
+- Primitivos de formulario (`Button`, `Input`, `Select`, `Modal`,
+  `DatePickerRange`) y de presentación (`Card`, `Badge`, `EmptyState`,
+  `LoadingState`, `ErrorState`, `DataTable`/`TableFrame`, `Pagination`) en
+  `src/shared/components/`, todos visibles y probados en `/components`.
+- Sesión de personal: login simulado, guardas de ruta por permiso, menú por
+  rol (ADMIN/RECEPTIONIST/MANAGER/STAFF), persistencia de ocho horas.
+- Contrato de datos: **una sola definición por entidad**
+  (`src/shared/types/entities/<entidad>/`, DTO snake_case → Mapper → Model
+  camelCase). Moneda en quetzal, montos como entero en centavos,
+  `formatCurrency`/`formatDateGT`/`formatTimeGT` como únicas funciones de
+  formato.
+- Servicios (`bookingService`, `roomService`, `guestService`,
+  `paymentService`, `catalogService`, `authService`) async, con latencia
+  simulada y forzado de error; `bookingService`/`roomService`/`guestService`
+  leen del dataset del Lote B (`shared/mocks/lot-b.ts`).
+- Base de la app React Native en el repositorio separado `pms-hotel-mobile`
+  (empleados: autenticación, tareas, habitaciones, solicitudes, pedidos).
 
-- WEB-13: revisión visual pendiente (no hubo navegador disponible durante la
-  implementación). No cerrar #25 hasta esa revisión.
-- WEB-06 (#18) permanece en la rama independiente `feat/web-06-auth-role-guards`:
-  demo y revisión manual completadas, commits `1ebe036`, `2082a33` y `c233d32`.
-  Pendiente de coordinar WEB-05 y permisos de WEB-09/WEB-12; no integrada.
+## Pendiente, fuera del cierre de la Fase 0
 
-- WEB-02 ([issue #14](https://github.com/DougGM/pms-hotel-boutique/issues/14)):
-  implementación integrada en `develop` desde `feat/web-02-routing-layouts`
-  mediante merge, con commit de implementación `49be302` y documentación
-  `683e05d`. El usuario confirmó que ambas páginas 404 funcionan correctamente;
-  WEB-02 cumple sus verificaciones. No se creó un PR para esta integración.
-- Fase 0 ([issue #9](https://github.com/DougGM/pms-hotel-boutique/issues/9)):
-  seguimiento conjunto; completar cuando estén terminadas las tareas que agrupa.
-
-- Migrar las vistas de recepción a `modules/reservations`, `modules/stays` y
-  `modules/billing` sin alterar la experiencia visual.
-- Extraer los tipos y datos de demostración de `src/app/App.tsx` a sus módulos.
-- Conectar las rutas nuevas con las vistas de cada módulo conforme se
-  implementen, manteniendo los layouts público y privado existentes.
+- **`src/index.css` sin separar**: mezcla estilos base en uso real con
+  estilos exclusivos del árbol de Bolt ya eliminado. Requiere trazar
+  selector por selector antes de poder podar los alias `--*-legacy-*` de
+  `tokens.css` que ya no tendrían consumidor. Candidato a ticket aparte.
+- **WEB-11 (#23) y WEB-12 (#24)** (datos mock de Caja/Lote C y
+  Catálogos-Inventario/Lote D): sin código todavía.
+- Migrar las vistas de recepción/reservas/housekeeping/room-service/huésped/
+  administración de la UI de Bolt (ya eliminada) a módulos de dominio reales:
+  no hay nada que "migrar" desde código porque ese código no existía
+  conectado; son pantallas por construir desde cero sobre la base que deja
+  la Fase 0.
 
 ## Pendiente por módulo
 
-| Módulo                    | Estado              | Próximo paso                         |
-| ------------------------- | ------------------- | ------------------------------------ |
-| Auth                      | Integrada y probada | Integrar las vistas de cada módulo   |
-| Reservaciones y recepción | UI existente        | Separar datos, lógica y vistas       |
-| Housekeeping              | UI existente        | Migrar a módulo propio               |
-| Room service              | UI existente        | Migrar pedidos y menú                |
-| Huésped                   | UI existente        | Dividir vistas por ruta              |
-| Administración            | UI existente        | Separar los dominios administrativos |
-| Módulos restantes         | Estructura creada   | Implementar según prioridad          |
+| Módulo                                                                  | Estado                           | Próximo paso                                                  |
+| ----------------------------------------------------------------------- | -------------------------------- | ------------------------------------------------------------- |
+| Auth                                                                    | Integrada y probada (14 pruebas) | Construir las pantallas que la consumen                       |
+| Base compartida (rutas, tema, primitivos, contrato de datos, servicios) | Cerrada (Fase 0)                 | —                                                             |
+| Reservaciones y recepción                                               | Sin pantallas                    | Construir sobre `bookingService`/`roomService`/`guestService` |
+| Caja (WEB-11)                                                           | Sin datos mock ni servicio       | WEB-11                                                        |
+| Catálogos e inventario (WEB-12)                                         | Sin datos mock ni servicio       | WEB-12                                                        |
+| Housekeeping / Room service / Conserjería / Huésped / Administración    | Sin pantallas                    | Implementar según prioridad del equipo                        |
 
 ## Decisiones
 
-- Se conserva Vite en vez de migrar a Next.js. El PDF se usa como contrato de
-  arquitectura y rutas, mientras que Vite permite reutilizar directamente el
-  proyecto entregado por Bolt.
-- `src/index.css` es la fuente visual que debe preservarse durante toda la
-  migración, consumiendo los tokens importados desde `src/styles/tokens.css`.
+- Se conserva Vite en vez de migrar a Next.js.
 - No introducir bibliotecas visuales adicionales sin una necesidad concreta.
 - Consultar `src/ARCHITECTURE.md` antes de crear archivos web y
   `mobile/README.md` antes de crear archivos móviles.
-- Copiar `.env.example` a `.env` para desarrollo local y ejecutar `npm run
-check` antes de publicar cambios.
+- Copiar `.env.example` a `.env` para desarrollo local y ejecutar
+  `npm run check` antes de publicar cambios.
 
 ## Verificación más reciente
 
-- `npm run check` completado correctamente: Prettier, TypeScript, ESLint y
-  compilación de producción sin errores. Vite advierte que los datos de
-  Browserslist están desactualizados.
-- `npm run test:auth`: 14 pruebas con el árbol de rutas y servicio compartido;
-  incluyen los cuatro roles, las 404, contraseña incorrecta, persistencia,
-  token HTTP, cancelación y limpieza local aunque falle el cierre remoto.
-- WEB-06: revisión manual confirmada por el usuario también después de conectar
-  WEB-05 y adaptar los cuatro roles compartidos, antes del merge a `develop`.
-  No se registró el detalle de dispositivos ni de cada caso manual. No hubo
-  navegador disponible para verificación visual automatizada del agente.
-- WEB-04: `npm run typecheck`, `npm run lint` y `npm run build` sin errores;
-  Prettier verificado únicamente sobre los 9 archivos nuevos de
-  `src/shared/components/` (todos conformes). Hallazgo preexistente y no
-  relacionado con WEB-04: `npm run format:check` falla en 123 archivos fuera
-  de su alcance; no se corrigió, queda fuera de este ticket.
-- WEB-07: `scripts/test-currency.mjs` 11/11, `scripts/test-date.mjs` 35/35,
-  `scripts/test-money-contract.mjs` 13/13 (59 pruebas en total, todas contra
-  datos y funciones reales del repositorio, sin dependencias nuevas); `npm run
-typecheck`, `npm run lint` y `npm run build` sin errores. Auditoría de
-  legacy UI (`src/app/App.tsx`, `src/components/`) confirmada como excluida
-  del typecheck, no alcanzada desde `src/main.tsx` y ausente del bundle de
-  producción compilado (`dist/`); no se modificó esa capa.
-- `npm run test:presentation`: pruebas aprobadas sobre ordenación, paginación,
-  datos vacíos, reintento, estados accesibles, catálogo y tablas heredadas de
-  administración y factura.
+`npm run check` (`format:check && typecheck && lint && build && test`) pasa
+completo: Prettier, TypeScript, ESLint, compilación de producción y las
+siete suites de `npm run test` (103 pruebas: `test-auth` 14, `test-currency`
+11, `test-date` 35, `test-money-contract` 13, `test-contract` 17,
+`test-services` 7, `test-presentation` 6). Revisión visual en navegador de
+`/`, `/auth/login`, `/pms` (con y sin sesión), 404 pública/privada y
+`/components` tras eliminar la UI de Bolt — igual que antes del borrado.
