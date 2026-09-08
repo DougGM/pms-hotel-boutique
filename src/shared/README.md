@@ -158,13 +158,14 @@ duplicadas y muestra un mensaje si la promesa falla. El consumidor actualiza
 los datos y cambia al estado de éxito. El catálogo `/components` incluye una
 demostración con servicio asíncrono y recuperación de 13 registros.
 
-### Tabla única y código heredado
+### Tabla única
 
 `TableFrame`, exportado desde `DataTable.tsx`, contiene el único elemento
-`<table>` del código TSX. DataTable lo usa para ordenar/paginar; AdminTable es
-un adaptador de sus filas existentes, y la factura también lo consume.
-Esos dos consumidores conservan sus clases y formato heredados. No se migró
-su lógica de negocio ni su estilo completo; no introducir otro renderizador.
+`<table>` del código TSX; no introducir otro renderizador. Hasta el cierre de
+la Fase 0, `AdminContent`/`ReceptionModals` (UI heredada de Bolt, nunca
+alcanzada desde `src/main.tsx`) también lo usaban para su propia tabla; se
+eliminaron junto con el resto de esa capa muerta — ver
+`PROGRESO-FASE-0.md`, FASE 6.
 
 ### Tema y dependencias
 
@@ -182,6 +183,5 @@ nativos `.ui-action` como sustituto.
 
 ### Verificación
 
-Ejecutar `npm run test:presentation`. La compilación de pruebas incluye los
-consumidores heredados aunque el chequeo TypeScript habitual los excluya. No
-sustituye una revisión visual en navegador.
+Ejecutar `npm run test:presentation`. No sustituye una revisión visual en
+navegador.

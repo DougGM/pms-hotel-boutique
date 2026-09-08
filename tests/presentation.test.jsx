@@ -2,14 +2,12 @@ import assert from 'node:assert/strict';
 import { test, afterEach } from 'node:test';
 import { create, act } from 'react-test-renderer';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
-import { DataTable, TableFrame } from '@/shared/components/DataTable';
+import { DataTable } from '@/shared/components/DataTable';
 import { Pagination } from '@/shared/components/Pagination';
 import { ErrorState } from '@/shared/components/ErrorState';
 import { LoadingState } from '@/shared/components/LoadingState';
 import { Card } from '@/shared/components/Card';
 import { Badge } from '@/shared/components/Badge';
-import { AdminContent } from '@/components/admin/AdminContent';
-import { InvoiceModal } from '@/components/reception/ReceptionModals';
 import { router as configuredRouter } from '@/app/router';
 
 let view;
@@ -146,51 +144,4 @@ test('catalog route renders variants and retry actually recovers service data', 
   assert.ok(button('Reintentar'));
   act(() => button('Mostrar tabla vacía').props.onClick());
   assert.equal(view.root.findAllByType('table').length, 0);
-});
-
-test('legacy administration uses the shared renderer with its original table styling', () => {
-  render(<AdminContent nav="Usuarios y roles" onAction={() => {}} />);
-  assert.equal(view.root.findAllByType(TableFrame).length, 1);
-  assert.equal(view.root.findByType('table').props.className, 'adm-table');
-  assert.ok(view.root.findByType('tbody').findAllByType('tr').length > 0);
-});
-
-test('legacy invoice retains active rows, amounts and totals through shared renderer', () => {
-  const reservation = {
-    code: 'TEST-1',
-    guest: { name: 'Ana', lastName: 'Pérez' },
-    checkIn: '2026-09-06',
-    checkOut: '2026-09-08',
-    folio: [
-      {
-        id: 1,
-        status: 'Activo',
-        concept: 'Estadía',
-        category: 'Habitación',
-        date: '06-09-2026',
-        type: 'Cargo',
-        amount: 100,
-      },
-      {
-        id: 2,
-        status: 'Anulado',
-        concept: 'Anulado',
-        category: '',
-        date: '',
-        type: 'Cargo',
-        amount: 1,
-      },
-    ],
-  };
-  render(
-    <InvoiceModal
-      reservation={reservation}
-      folioTotals={() => ({ charges: 100, deposits: 0, payments: 0, balance: 100 })}
-      onClose={() => {}}
-    />,
-  );
-  assert.equal(view.root.findAllByType(TableFrame).length, 1);
-  assert.equal(view.root.findByType('table').props.className, 'rc-invoice-table');
-  assert.equal(view.root.findByType('tbody').findAllByType('tr').length, 1);
-  assert.ok(JSON.stringify(view.toJSON()).includes('Saldo final'));
 });
