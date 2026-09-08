@@ -45,6 +45,8 @@
 | 3+4  | Unificar el contrato de entidades y portar los montos en centavos al contrato oficial       | `a2fd595`                    | ✅ hecho                                                           |
 | 5    | Conectar el dataset del Lote B (`lot-b.ts`) a `roomService`/`guestService`/`bookingService` | `22fdd2c`                    | ✅ hecho                                                           |
 | 6    | Eliminar la UI muerta de Bolt (alcance reducido, Opción A)                                  | `e09eeb7`                    | ✅ hecho                                                           |
+| 7a   | Pruebas nuevas (`test-contract.mjs`, `test-services.mjs`) + enganchar `npm run test`/`check` | `e71723e`                    | ✅ hecho                                                           |
+| 7b   | Formato de Prettier a todo el árbol (commit aislado, al final)                              | `0dc2707`                    | ✅ hecho                                                           |
 
 ### FASE 1 — detalle del bloqueo
 
@@ -221,6 +223,52 @@ consumidores de `TableFrame`.
 Chrome de `/`, `/auth/login`, `/pms` (con y sin sesión, rol ADMIN), 404 pública y privada, y
 `/components` incluido el modal de WEB-04 — las cinco vistas se ven igual que antes del borrado
 (capturas revisadas en la sesión, no adjuntas aquí).
+
+### FASE 7 — pruebas nuevas, `npm run test`/`check`, formato
+
+`test-currency.mjs`, `test-date.mjs` y `test-money-contract.mjs` ya existían (WEB-07); solo se
+engancharon a `package.json`, sin tocarlas. Se agregaron dos suites nuevas, sin instalar ningún
+framework de pruebas nuevo (mismo patrón esbuild → cjs → `node --test` de `test-auth.mjs`):
+
+- **`test-contract.mjs`** (17 pruebas): guarda de regresión de que no vuelva a aparecer un
+  archivo plano junto a la carpeta oficial de una entidad (el error real que motivó la FASE 3+4,
+  no una hipótesis), y que `shared/mocks/lot-b.ts` —el dataset que sirven los servicios desde la
+  FASE 5— tenga `price_cents`/`total_amount_cents` enteros y `currency: 'GTQ'`.
+- **`test-services.mjs`** (7 pruebas): `bookingService`/`roomService`/`guestService`/
+  `paymentService`/`catalogService` son `async`, su latencia cae en un rango tolerante
+  (250-900 ms; el nominal es 300-600 ms, con margen por scheduling/CI), devuelven Models
+  (camelCase) y no DTOs (snake_case), el forzado de error (`mockUtils.setForceError`) los hace
+  rechazar y se puede desactivar, y una verificación estática (recorre `src/` en JS puro, sin
+  depender de `grep`/`rg`) de que ningún archivo fuera de `services/` importa mocks. `authService`
+  no se repite: sus 14 pruebas en `test-auth.mjs` ya cubren ese mismo contrato a fondo.
+  - Detalle técnico: para que `mockUtils.setForceError(true)` afecte de verdad a los servicios,
+    el bundle de prueba se arma con un entry point `stdin` sintético que importa los cinco
+    servicios y `mockUtils` **en un solo grafo de esbuild**, para que compartan una única
+    instancia del módulo. Bundlarlos por separado (como hace `test-money-contract.mjs` con datos
+    sin estado) habría dado a cada uno su propia copia aislada de `mockUtils`, y el forzado de
+    error de una no afectaría a las demás.
+
+`package.json`: se agrega `"test"` (corre las 7 suites en orden) y se encadena al final de
+`"check"` (`format:check && typecheck && lint && build && test`).
+
+**Antes del commit de formato**, se corrió `npm run check` completo tal como estaba (sin
+formatear) para confirmar que el único paso que fallaba era `format:check` — el log no contiene
+ninguna salida de `typecheck`/`lint`/`build`/`test` porque la cadena `&&` corta ahí mismo; exit
+code 1 atribuible solo a Prettier.
+
+El commit de formato fue el último de la fase, aislado. `npm run format:check` reportaba
+137-138 archivos, casi todos de antes de esta rama (nunca tocados en el cierre de la Fase 0).
+Tras `npm run format`, `git status` solo mostró diferencias reales de contenido en **10
+archivos** — el resto eran diferencias de fin de línea (CRLF/LF) que `core.autocrlf` ya
+normalizaba de forma invisible para git en este entorno Windows. Los 10 son reenvuelto de líneas
+largas (imports, tablas Markdown), sin cambio semántico — revisado línea por línea antes de
+commitear. De paso se limpió `.prettierignore`: se quitaron las entradas a `src/app/App.tsx` y
+`src/components/` (ya no existen, eliminados en la FASE 6) y se agregó `docs/` (carpeta de
+trabajo del usuario, ajena al código fuente; se confirmó que `npm run format` no la había tocado
+antes de este cambio, comparando fecha de modificación de sus archivos).
+
+Verificado: `npm run check` completo corre y termina en verde (exit 0) después del commit de
+formato.
 
 ## Decisiones tomadas
 
