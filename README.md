@@ -109,6 +109,8 @@ de utilizarse; iniciar sesión con una cuenta de la tabla. Ver
 - [src/ARCHITECTURE.md](src/ARCHITECTURE.md): contrato de carpetas y reglas.
 - [src/styles/README.md](src/styles/README.md): tokens de diseno de WEB-03,
   extraidos desde WEB-08.
+- [src/shared/README.md](src/shared/README.md): convenciones compartidas de
+  moneda y fecha de WEB-07 (centavos enteros, GTQ, dd-mm-aaaa, HH:mm).
 - [.codex/CONTEXT.md](.codex/CONTEXT.md): instrucciones de continuidad para agentes.
 - [mobile/README.md](mobile/README.md): alcance de la futura aplicación nativa.
 - [NEXT_CONTRIBUTOR.md](NEXT_CONTRIBUTOR.md): guía de trabajo para el siguiente compañero.
