@@ -6,8 +6,16 @@ import assert from 'node:assert/strict';
 
 await mkdir('.cache', { recursive: true });
 await build({
-  entryPoints: ['src/shared/utils/date.ts'],
-  outfile: '.cache/date.cjs',
+  entryPoints: [
+    'src/shared/utils/date.ts',
+    'src/shared/types/common.ts',
+    'src/shared/types/entities/booking/booking.mapper.ts',
+    'src/shared/types/entities/rate/rate.mapper.ts',
+    'src/shared/types/entities/promotion/promotion.mapper.ts',
+  ],
+  outdir: '.cache',
+  outbase: 'src/shared',
+  outExtension: { '.js': '.cjs' },
   bundle: true,
   platform: 'node',
   format: 'cjs',
@@ -16,13 +24,17 @@ await build({
 });
 
 const require = createRequire(import.meta.url);
-delete require.cache[require.resolve('../.cache/date.cjs')];
-const {
-  formatDateGT,
-  formatTimeGT,
-  formatStayRange,
-  calculateNights,
-} = require('../.cache/date.cjs');
+const load = (relativePath) => {
+  const path = require.resolve(`../.cache/${relativePath}.cjs`);
+  delete require.cache[path];
+  return require(path);
+};
+
+const { formatDateGT, formatTimeGT, formatStayRange, calculateNights } = load('utils/date');
+const { toDomainCalendarDate, toDtoCalendarDate } = load('types/common');
+const bookingMapper = load('types/entities/booking/booking.mapper');
+const rateMapper = load('types/entities/rate/rate.mapper');
+const promotionMapper = load('types/entities/promotion/promotion.mapper');
 
 // --- formatDateGT -----------------------------------------------------
 
@@ -142,4 +154,150 @@ test('calculateNights: siempre devuelve un entero exacto, sin importar la hora d
   const nights = calculateNights(checkIn, checkOut);
   assert.equal(nights, 5);
   assert.ok(Number.isInteger(nights));
+});
+
+// --- toDomainCalendarDate / toDtoCalendarDate ------------------------------
+//
+// These check the civil-day components survive intact, not the machine's
+// timezone. They must pass the same way regardless of which timezone runs
+// them.
+
+test('toDomainCalendarDate: "2026-09-10" conserva año/mes/día locales', () => {
+  const date = toDomainCalendarDate('2026-09-10');
+  assert.equal(date.getFullYear(), 2026);
+  assert.equal(date.getMonth(), 8);
+  assert.equal(date.getDate(), 10);
+});
+
+test('toDtoCalendarDate: 10 de septiembre de 2026 -> "2026-09-10"', () => {
+  assert.equal(toDtoCalendarDate(new Date(2026, 8, 10)), '2026-09-10');
+});
+
+test('round trip: "YYYY-MM-DD" -> Date -> "YYYY-MM-DD"', () => {
+  const original = '2026-09-10';
+  assert.equal(toDtoCalendarDate(toDomainCalendarDate(original)), original);
+});
+
+test('toDomainCalendarDate: rechaza "10-09-2026" (formato de presentación, no de transporte)', () => {
+  assert.throws(() => toDomainCalendarDate('10-09-2026'), /YYYY-MM-DD/);
+});
+
+test('toDomainCalendarDate: rechaza "2026/09/10"', () => {
+  assert.throws(() => toDomainCalendarDate('2026/09/10'), /YYYY-MM-DD/);
+});
+
+test('toDomainCalendarDate: rechaza cadena vacía', () => {
+  assert.throws(() => toDomainCalendarDate(''), /YYYY-MM-DD/);
+});
+
+test('toDomainCalendarDate: rechaza "2026-02-30" (30 de febrero no existe)', () => {
+  assert.throws(() => toDomainCalendarDate('2026-02-30'), /no existe/);
+});
+
+test('toDomainCalendarDate: rechaza "2026-13-01" (mes 13 no existe)', () => {
+  assert.throws(() => toDomainCalendarDate('2026-13-01'), /no existe/);
+});
+
+test('toDomainCalendarDate: rechaza "2026-00-10" (mes 0 no existe)', () => {
+  assert.throws(() => toDomainCalendarDate('2026-00-10'), /no existe/);
+});
+
+test('toDomainCalendarDate: rechaza "2026-04-31" (abril tiene 30 días)', () => {
+  assert.throws(() => toDomainCalendarDate('2026-04-31'), /no existe/);
+});
+
+test('toDomainCalendarDate: rechaza años de dos dígitos ("0026") en vez de desplazarlos a 1926', () => {
+  // El constructor de Date interpreta new Date(26, ...) como el año 1926
+  // (regla heredada para años 0-99). La verificación de ida y vuelta de
+  // toDomainCalendarDate detecta ese desajuste (1926 !== 26) y lanza en vez
+  // de aceptar un año silenciosamente incorrecto.
+  assert.throws(() => toDomainCalendarDate('0026-09-10'), /no existe/);
+});
+
+test('toDtoCalendarDate: Date inválido -> lanza error', () => {
+  assert.throws(() => toDtoCalendarDate(new Date(NaN)), /válido/);
+});
+
+// --- Mappers: los campos civiles usan el contrato de calendario ------------
+
+test('booking.mapper: check_in/check_out en YYYY-MM-DD llegan al Model conservando el día civil', () => {
+  const dto = {
+    id: 'booking-1',
+    confirmation_code: 'AUR-1',
+    guest_id: 'guest-1',
+    room_id: 'room-1',
+    room_type_id: 'rt-1',
+    rate_id: 'rate-1',
+    check_in: '2026-09-10',
+    check_out: '2026-09-15',
+    status: 'confirmed',
+    adults: 2,
+    children: 0,
+    total_amount_cents: 100000,
+    currency: 'GTQ',
+    created_at: '2026-09-01T00:00:00.000Z',
+    updated_at: '2026-09-01T00:00:00.000Z',
+  };
+
+  const model = bookingMapper.toDomain(dto);
+  assert.equal(model.checkIn.getFullYear(), 2026);
+  assert.equal(model.checkIn.getMonth(), 8);
+  assert.equal(model.checkIn.getDate(), 10);
+  assert.equal(model.checkOut.getDate(), 15);
+
+  const roundTrip = bookingMapper.toDTO(model);
+  assert.equal(roundTrip.check_in, '2026-09-10');
+  assert.equal(roundTrip.check_out, '2026-09-15');
+});
+
+test('rate.mapper: valid_from/valid_to en YYYY-MM-DD llegan al Model conservando el día civil', () => {
+  const dto = {
+    id: 'rate-1',
+    room_type_id: 'rt-1',
+    name: 'Tarifa base',
+    valid_from: '2026-01-01',
+    valid_to: '2026-12-31',
+    price_cents: 65000,
+    currency: 'GTQ',
+    minimum_nights: 1,
+    refundable: true,
+    active: true,
+    created_at: '2026-01-01T00:00:00.000Z',
+    updated_at: '2026-01-01T00:00:00.000Z',
+  };
+
+  const model = rateMapper.toDomain(dto);
+  assert.equal(model.validFrom.getDate(), 1);
+  assert.equal(model.validFrom.getMonth(), 0);
+  assert.equal(model.validTo.getDate(), 31);
+  assert.equal(model.validTo.getMonth(), 11);
+
+  const roundTrip = rateMapper.toDTO(model);
+  assert.equal(roundTrip.valid_from, '2026-01-01');
+  assert.equal(roundTrip.valid_to, '2026-12-31');
+});
+
+test('promotion.mapper: valid_from/valid_to en YYYY-MM-DD llegan al Model conservando el día civil', () => {
+  const dto = {
+    id: 'promo-1',
+    code: 'AURORA10',
+    name: 'Escapada Aurora',
+    description: '10% de descuento',
+    discount_percent: 10,
+    valid_from: '2026-09-01',
+    valid_to: '2026-11-30',
+    active: true,
+    created_at: '2026-08-01T00:00:00.000Z',
+    updated_at: '2026-08-01T00:00:00.000Z',
+  };
+
+  const model = promotionMapper.toDomain(dto);
+  assert.equal(model.validFrom.getDate(), 1);
+  assert.equal(model.validFrom.getMonth(), 8);
+  assert.equal(model.validTo.getDate(), 30);
+  assert.equal(model.validTo.getMonth(), 10);
+
+  const roundTrip = promotionMapper.toDTO(model);
+  assert.equal(roundTrip.valid_from, '2026-09-01');
+  assert.equal(roundTrip.valid_to, '2026-11-30');
 });
