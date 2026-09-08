@@ -11,6 +11,7 @@ import { RequireSession } from '@/private/guards/RequireSession';
 import { RequirePermission } from '@/private/guards/RequirePermission';
 import { privateNavigation } from '@/private/routes/navigation';
 import { ModuleHomePage } from '@/private/pages/ModuleHomePage';
+import { ComponentsCatalogPage } from '@/public/pages/ComponentsCatalogPage';
 
 export const router = createBrowserRouter([
   {
@@ -19,6 +20,7 @@ export const router = createBrowserRouter([
       { path: routePaths.public.home, element: <PublicHomePage /> },
       { path: routePaths.public.login, element: <LoginPage /> },
       { path: routePaths.public.legacyLogin, element: <LoginPage /> },
+      { path: routePaths.public.components, element: <ComponentsCatalogPage /> },
       { path: routePaths.public.notFound, element: <PublicNotFoundPage /> },
     ],
   },

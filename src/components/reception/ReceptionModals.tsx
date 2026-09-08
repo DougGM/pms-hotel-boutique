@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { TableFrame } from '@/shared/components/DataTable';
 import { Ban, BedDouble, Check, Printer, TriangleAlert, X } from 'lucide-react';
 import type { Companion, FolioEntry, GuestInfo, PaymentMethod, RecRoom, Reservation } from '@/app/App';
 
@@ -418,14 +419,14 @@ export function InvoiceModal({ reservation, folioTotals, onClose }: { reservatio
             <div><small>Check-out</small><span>{fmt(reservation.checkOut)} {reservation.checkOutTime}</span></div>
             <div><small>Noches</small><span>{nights}</span></div>
           </div>
-          <table className="rc-invoice-table">
-            <thead><tr><th>Concepto</th><th>Categoría</th><th>Fecha</th><th className="rc-right">Monto</th></tr></thead>
-            <tbody>
+          <TableFrame className="rc-invoice-table" wrapperClassName="" headers={[
+            { id: 'concept', label: 'Concepto' }, { id: 'category', label: 'Categoría' },
+            { id: 'date', label: 'Fecha' }, { id: 'amount', label: 'Monto', className: 'rc-right' },
+          ]}>
               {reservation.folio.filter((f) => f.status === 'Activo').map((f) => (
                 <tr key={f.id}><td>{f.concept}</td><td>{f.category}</td><td>{f.date}</td><td className="rc-right">{f.type === 'Cargo' ? money(f.amount) : `−${money(f.amount)}`}</td></tr>
               ))}
-            </tbody>
-          </table>
+          </TableFrame>
           <div className="rc-invoice-totals">
             <div><span>Total cargos</span><strong>{money(t.charges)}</strong></div>
             <div><span>Pagos aplicados</span><strong>−{money(t.payments)}</strong></div>

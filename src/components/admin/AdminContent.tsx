@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { TableFrame } from '@/shared/components/DataTable';
 import {
   Activity, ArrowRight, Ban, BedDouble, Bell, CalendarDays, Check, ChevronDown, ClipboardList,
   Clock, DollarSign, Dumbbell, Download, FileText, Package, Pencil, Percent, Plus,
@@ -212,14 +213,9 @@ function AdminToolbar({ search, setSearch, filterLabel, filterValue, setFilter, 
 
 function AdminTable({ headers, children }: { headers: string[]; children: React.ReactNode }) {
   return (
-    <div className="adm-table-wrap">
-      <table className="adm-table">
-        <thead>
-          <tr>{headers.map((h) => <th key={h}>{h}</th>)}</tr>
-        </thead>
-        <tbody>{children}</tbody>
-      </table>
-    </div>
+    <TableFrame headers={headers.map((label) => ({ id: label, label }))} className="adm-table" wrapperClassName="adm-table-wrap">
+      {children}
+    </TableFrame>
   );
 }
 

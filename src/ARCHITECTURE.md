@@ -53,3 +53,8 @@ src/
   La fachada de auth consume `services/authService.ts` y los tipos compartidos.
   No crear otra persistencia ni duplicar DTOs de usuario. Consultar
   `modules/auth/README.md` para el contrato y la política de permisos.
+- El catálogo de UI está en `public/pages/ComponentsCatalogPage.tsx`; sus
+  ejemplos asíncronos viven en `modules/ui-catalog/`. Los primitivos están
+  en `shared/components/` y consumen tokens desde `styles/tokens.css`.
+- `TableFrame` en `shared/components/DataTable.tsx` es el único renderizador
+  de tablas.

@@ -12,7 +12,8 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
     "check": "npm run format:check && npm run typecheck && npm run lint && npm run build",
-    "test:auth": "node scripts/test-auth.mjs"
+    "test:auth": "node scripts/test-auth.mjs",
+    "test:presentation": "node scripts/test-presentation.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",

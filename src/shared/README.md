@@ -130,3 +130,58 @@ diferencia mediante el contrato compartido que acuerde el equipo.
 
 Además de estas pruebas, toda la superficie de WEB-07 pasa `npm run
 typecheck`, `npm run lint` y `npm run build`.
+
+## Presentación — WEB-13
+
+Componentes disponibles en `shared/components/`:
+
+| Componente   | API principal                                                                           |
+| ------------ | --------------------------------------------------------------------------------------- |
+| Card         | `title`, `description`, `children`, `footer`, `variant`: outlined / raised / muted      |
+| Badge        | `children`, `tone`: neutral / info / success / warning / danger, `size`: small / medium |
+| EmptyState   | `title`, `description`, `action` opcional                                               |
+| LoadingState | `label`, `variant`: block / inline; anuncio mediante `role=status`                      |
+| ErrorState   | `title`, `description`, `onRetry` obligatorio, síncrono o asíncrono                     |
+| DataTable    | `columns`, `data`, `getRowId`, `caption`, `pageSize` (5 por defecto), `emptyMessage`    |
+| Pagination   | `currentPage`, `totalPages`, `onPageChange`, `label` accesible                          |
+
+La columna conserva `id`, `header` y `cell`; agregar `sortValue` habilita la
+ordenación. Ordena todos los datos antes de paginar, sin mutar el arreglo
+original. Los números se comparan numéricamente; el texto usa colación española
+con orden natural. Los valores nulos quedan al final; los empates conservan su
+orden original. Cambiar la ordenación vuelve a la primera página. Al reducir
+datos se limita la página activa a un valor válido. `getRowId` recibe el índice
+original; se recomienda devolver siempre un identificador estable del dominio.
+
+`ErrorState` deshabilita el reintento mientras se resuelve, evita llamadas
+duplicadas y muestra un mensaje si la promesa falla. El consumidor actualiza
+los datos y cambia al estado de éxito. El catálogo `/components` incluye una
+demostración con servicio asíncrono y recuperación de 13 registros.
+
+### Tabla única y código heredado
+
+`TableFrame`, exportado desde `DataTable.tsx`, contiene el único elemento
+`<table>` del código TSX. DataTable lo usa para ordenar/paginar; AdminTable es
+un adaptador de sus filas existentes, y la factura también lo consume.
+Esos dos consumidores conservan sus clases y formato heredados. No se migró
+su lógica de negocio ni su estilo completo; no introducir otro renderizador.
+
+### Tema y dependencias
+
+`presentation.css` y `components-catalog.css` usan exclusivamente tokens
+`--ui-*`, definidos en `src/styles/tokens.css` (no en un archivo aparte): cada
+uno apunta a un token real de WEB-03 (`--color-*`, `--space-*`, `--font-size-*`,
+`--radius-*`) cuando existe un equivalente, y los que no tienen equivalente
+(anchos de layout, alto de control, foco, duración de motion, fondos con tinte
+para Badge/alertas vía `color-mix()`) se definen una sola vez ahí mismo. Ya no
+existe `presentation-tokens.css`.
+
+El catálogo (`/components`) incorpora Button, Input, Select, Modal y
+DatePickerRange de WEB-04 en sus variantes y estados; ya no usa controles
+nativos `.ui-action` como sustituto.
+
+### Verificación
+
+Ejecutar `npm run test:presentation`. La compilación de pruebas incluye los
+consumidores heredados aunque el chequeo TypeScript habitual los excluya. No
+sustituye una revisión visual en navegador.

@@ -160,7 +160,23 @@ No confiar en el nombre de un archivo para crear una ruta.
   solo contiene `README.md`, sin código ni especificación de formato de
   moneda/fecha/hora/locale. No se afirma que web y mobile coincidan; queda
   como acción futura verificar contra una fuente mobile real cuando exista.
-- Estado final de WEB-07: **pendiente de integración a `develop`**.
+- Estado final de WEB-07: integrado a `develop` vía PR #31 (fusionado
+  2026-09-08T08:18:18Z). Ya no está pendiente.
+
+## Continuidad de WEB-13
+
+- Rama original `feat/web-13-presentation-catalog` (commit único `ab32a9a`,
+  forkeada antes de WEB-03/04/06/07), integrada a `feat/fase-0-cierre` en el
+  cierre de la Fase 0. `/components` muestra Card, Badge, EmptyState,
+  LoadingState, ErrorState, DataTable con ordenación/paginación y los
+  primitivos de WEB-04.
+- Los tokens `--ui-*` de `presentation.css`/`components-catalog.css` ya no son
+  provisionales: se reconciliaron contra la escala real de WEB-03 dentro de
+  `tokens.css` (mismo archivo, sin `presentation-tokens.css` aparte).
+- Ejecutar `npm run test:presentation` cuando se modifiquen estos componentes.
+  Consultar `src/shared/README.md` para API y dependencias.
+- Sigue pendiente la revisión visual en navegador (no había uno disponible
+  durante la implementación). No cerrar #25 hasta esa revisión.
 
 ## Reglas de trabajo
 

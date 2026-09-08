@@ -76,6 +76,7 @@ npm install
 npm run dev
 npm run check
 npm run test:auth
+npm run test:presentation
 npm run format
 ```
 
@@ -102,6 +103,21 @@ el servicio compartido de WEB-05 y los tipos `User`, `AuthSession` y `UserRole`
 que este exporta. Las cuentas antiguas `@hotel.test` y su sesión local dejaron
 de utilizarse; iniciar sesión con una cuenta de la tabla. Ver
 [el módulo auth](src/modules/auth/README.md) para permisos, contrato y pruebas.
+
+## Catálogo de interfaz — WEB-13
+
+Abrir `/components` para revisar Card (outlined, raised, muted), Badge (cinco
+tonos y dos tamaños), EmptyState, LoadingState, ErrorState, DataTable con
+paginación y ordenación, y los primitivos de formulario de WEB-04 (Button,
+Input, Select, Modal, DatePickerRange). El ejemplo de error ejecuta una
+solicitud simulada fallida; «Reintentar» recupera los registros y permite
+reproducir el fallo.
+
+Los colores y medidas de esta entrega salen de `src/styles/tokens.css`, la
+misma hoja de tokens que consume el resto del frontend.
+
+`npm run test:presentation` verifica comportamiento y compatibilidad con las
+tablas heredadas. Ver [la guía de componentes](src/shared/README.md).
 
 ## Seguimiento y contexto
 

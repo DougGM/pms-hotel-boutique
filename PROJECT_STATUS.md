@@ -71,8 +71,22 @@
   `App.tsx`/`src/components/` están excluidos de `tsconfig.app.json`, no son
   alcanzados desde `src/main.tsx` y no aparecen en el bundle de producción
   compilado (verificado en la auditoría de WEB-07).
+- WEB-13 (#25): integrado a `feat/fase-0-cierre` desde
+  `feat/web-13-presentation-catalog` (commit `ab32a9a`, muy atrasado respecto
+  a `develop`). Catálogo `/components` con Card, Badge, EmptyState,
+  LoadingState, ErrorState, DataTable con ordenación/paginación y los
+  primitivos de WEB-04 (Button, Input, Select, Modal, DatePickerRange). Los
+  tokens `--ui-*` de `presentation.css`/`components-catalog.css` se
+  reconciliaron contra la escala real de WEB-03 dentro de `tokens.css`; el
+  archivo `presentation-tokens.css` se eliminó.
 
 ## Prioridad inmediata
+
+- WEB-13: revisión visual pendiente (no hubo navegador disponible durante la
+  implementación). No cerrar #25 hasta esa revisión.
+- WEB-06 (#18) permanece en la rama independiente `feat/web-06-auth-role-guards`:
+  demo y revisión manual completadas, commits `1ebe036`, `2082a33` y `c233d32`.
+  Pendiente de coordinar WEB-05 y permisos de WEB-09/WEB-12; no integrada.
 
 - WEB-02 ([issue #14](https://github.com/DougGM/pms-hotel-boutique/issues/14)):
   implementación integrada en `develop` desde `feat/web-02-routing-layouts`
@@ -137,3 +151,6 @@ check` antes de publicar cambios.
   legacy UI (`src/app/App.tsx`, `src/components/`) confirmada como excluida
   del typecheck, no alcanzada desde `src/main.tsx` y ausente del bundle de
   producción compilado (`dist/`); no se modificó esa capa.
+- `npm run test:presentation`: pruebas aprobadas sobre ordenación, paginación,
+  datos vacíos, reintento, estados accesibles, catálogo y tablas heredadas de
+  administración y factura.
