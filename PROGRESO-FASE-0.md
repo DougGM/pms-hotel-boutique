@@ -43,6 +43,7 @@
 | 1 | Verificación previa al borrado (aislamiento del código de Bolt) | — (sin commit, solo lectura) | ⚠️ parcial — desbloqueado por el usuario: Opción A (ver más abajo) |
 | 2 | Integrar `feat/web-13-presentation-catalog` (WEB-07 ya venía heredado en `develop`) | `af96f51` | ✅ hecho |
 | 3+4 | Unificar el contrato de entidades y portar los montos en centavos al contrato oficial | `a2fd595` | ✅ hecho |
+| 5 | Conectar el dataset del Lote B (`lot-b.ts`) a `roomService`/`guestService`/`bookingService` | `22fdd2c` | ✅ hecho |
 
 ### FASE 1 — detalle del bloqueo
 
@@ -167,6 +168,27 @@ Sobrevive el contrato oficial de WEB-09 (`entities/<x>/<x>.dto.ts`, snake_case, 
 Verificado: `npm run lint`, `npm run typecheck`, `npm run build`, y las 5 suites de prueba
 (`test-auth` 14/14, `test-currency` 11/11, `test-date` 35/35, `test-money-contract` 13/13,
 `test-presentation` 8/8) — 81/81 en verde.
+
+### FASE 5 — conectar el dataset del Lote B
+
+`roomService`, `guestService` y `bookingService` ahora leen `lotBMockData` (`shared/mocks/lot-b.ts`,
+15+ habitaciones/12 huéspedes/20 reservas) en vez de las fixtures mínimas de `mockData.ts` (que
+solo tenían 1-2 registros por entidad, creados para que WEB-05 pudiera probar el patrón de
+servicio antes de que existiera WEB-10). El dato de `lot-b.ts` ya encajaba con el contrato
+unificado de la FASE 3+4 sin ajustes — el typecheck ya venía limpio con `lot-b.ts` incluido desde
+esa fase. `paymentService`/`catalogService` siguen en `mockData.ts`: `lot-b.ts` no cubre pagos,
+productos ni amenidades (WEB-11/WEB-12, aún sin código).
+
+**Nota para seguimiento (no bloqueante):** `mockData.ts` conserva `mockRoomTypes`/`mockRates`/
+`mockRooms`/`mockGuests`/`mockBookings` sin usar por ningún servicio — sirven de fixture para
+`scripts/test-money-contract.mjs`. Hay dos datasets de las mismas entidades conviviendo (uno
+mínimo en `mockData.ts`, uno rico en `lot-b.ts`); no se consolidaron en esta fase por alcance
+(la instrucción era conectar el huérfano, no reescribir las pruebas de nuevo). Candidato a
+limpieza futura si el equipo quiere una sola fuente.
+
+Verificado: regla de oro (`grep` confirma que ningún archivo fuera de `services/` importa de
+`shared/mocks` ni de `services/mockData`), `npm run lint`, `npm run typecheck`, `npm run build`,
+`test-auth` (14/14), `test-money-contract` (13/13), `test-presentation` (8/8).
 
 ## Decisiones tomadas
 
