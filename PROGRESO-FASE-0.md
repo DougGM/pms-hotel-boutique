@@ -285,3 +285,30 @@ formato.
   esas reglas en uso real dependen de variables `--*-legacy-*` de `tokens.css`. Por decisión del
   usuario, **queda fuera de este cierre de Fase 0** — ni `tokens.css` ni `index.css` se tocan en
   la FASE 6 reducida. El usuario abrirá un ticket aparte para separar `index.css`.
+
+## Resumen final
+
+Cierre de la Fase 0 completo, 14 commits en `feat/fase-0-cierre` sobre `origin/develop`
+(`a1c07cd`). `npm run check` completo (`format:check && typecheck && lint && build && test`)
+pasa en verde: 103 pruebas en 7 suites, build de producción, lint y formato limpios. Siguiente
+paso mecánico: push de la rama y apertura del PR hacia `develop` (sin fusionar — eso lo decide
+una persona).
+
+**Los cuatro problemas del encargo original, resueltos:**
+
+1. Contrato de entidades duplicado — unificado (FASE 3+4). Alcance real: 6 entidades, no 5
+   (`catalog.ts` también duplicaba product y amenity, no detectado en la auditoría previa).
+2. Moneda `USD`/sin centavos — ya no existe en el contrato que sobrevivió; `Currency` cerrado a
+   `'GTQ'` literal (FASE 3+4).
+3. WEB-07 y WEB-13 sin integrar — WEB-07 llegó a `develop` por otra vía (PR #31) durante la
+   FASE PREVIA de este cierre; WEB-13 se integró aquí (FASE 2).
+4. Código muerto de Bolt — eliminado (FASE 6), con `tokens.css`/`index.css` intactos por decisión
+   explícita del usuario tras el bloqueo de la FASE 1.
+
+**Lo que NO se resolvió, y por qué, queda documentado en cada sección de arriba:** la separación
+de `index.css` (FASE 1/6), WEB-11 y WEB-12 sin código (fuera del alcance de este cierre — son
+tickets de datos mock de otros lotes), y la duplicación menor entre las fixtures de
+`mockData.ts` y `lot-b.ts` (FASE 5, no bloqueante).
+
+Próximo paso: revisión humana del PR y fusión a `develop` por quien corresponda — este cierre no
+se fusiona a sí mismo.
