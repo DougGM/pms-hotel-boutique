@@ -39,7 +39,39 @@
 
 | Fase | Descripción | Commit | Estado |
 |---|---|---|---|
-| 0 | Crear rama `feat/fase-0-cierre` desde `origin/develop`, línea base, esta bitácora | (este commit) | ✅ hecho |
+| 0 | Crear rama `feat/fase-0-cierre` desde `origin/develop`, línea base, esta bitácora | `74919dd` | ✅ hecho |
+| 1 | Verificación previa al borrado (aislamiento del código de Bolt) | — (sin commit, solo lectura) | ⚠️ parcial — BLOQUEADO, ver más abajo |
+
+### FASE 1 — detalle del bloqueo
+
+**TSX: aislado.** Ningún archivo vivo (`src/main.tsx`, `src/app/router.tsx`, `src/app/routes.ts`,
+`src/public/*`, `src/private/*`, `src/modules/*`, `src/shared/*`) importa `src/app/App.tsx` ni
+`src/components/{admin,guest,reception,roomservice}`. Verificado por grep transitivo desde
+`index.html`. Seguro de eliminar en la FASE 6.
+
+**CSS: NO aislado.** `src/index.css` (7.937 líneas, 1.243 selectores) se importa desde
+`src/main.tsx:5` — es decir, está vivo. La mayoría de sus selectores (`.adm-*`, etc.) parecen
+pertenecer solo al árbol muerto de Bolt, pero **al inicio del archivo hay reglas base
+genuinamente en uso por la app real**: `body` (línea 20, `min-width: var(--size-legacy-1100)`),
+`.app-shell` (línea 34), `.public-page-shell`/`.public-page-card` (líneas 39-60, usadas por
+`PublicPage.tsx` y `StaffLoginPage.tsx`), `.eyebrow`/`.workspace-label` (línea ~107, usadas por
+`StaffLoginPage.tsx`, `PublicPage.tsx`, `PrivateLayout`), `.content`/`.welcome-row` (línea 377,
+usadas por `OperationsHomePage.tsx`, `RequirePermission.tsx`), `.button`/`.button.primary`/
+`.button.secondary` (línea 407, usadas en todos lados). Esas reglas, activas hoy, referencian
+directamente variables `--*-legacy-*`: `--size-legacy-1100`, `--size-legacy-38`,
+`--color-legacy-a89c91`, `--color-legacy-91847a`, `--color-legacy-b88d5030`,
+`--color-legacy-c9a36d`, `--color-legacy-e4dcd4`, `--color-legacy-efe5d8`, `--size-legacy-31/36/42/1600/26/5`,
+entre otras.
+
+Esto contradice la premisa de la auditoría original ("los alias legacy solo los consume la UI
+muerta") y activa la cláusula de la propia FASE 1: **"si un primitivo vivo consume una variable
+legacy: DETENTE y repórtalo. No borres."** No hay forma mecánica y segura de separar, dentro de
+`index.css`, qué variables legacy son puramente del árbol muerto y cuáles sostienen el layout
+básico que sí se renderiza hoy (login, landing pública, shell operativo) sin trazar selector por
+selector — es un trabajo de análisis/repartición de `index.css` en sí mismo, no una simple poda.
+
+**Decisión:** me detuve aquí, sin tocar código, y reporté al usuario en vez de improvisar una
+forma de separar `index.css`. No se avanzó a la FASE 2.
 
 ## Decisiones tomadas
 
@@ -48,4 +80,9 @@
 
 ## Pendientes y bloqueos
 
-- Ninguno por ahora.
+- **BLOQUEO ACTIVO (FASE 1):** `src/index.css` mezcla, en un solo archivo de 7.937 líneas,
+  estilos base realmente en uso (`body`, `.app-shell`, `.public-page-shell`, `.public-page-card`,
+  `.eyebrow`, `.content`, `.button`/`.primary`/`.secondary`, `.workspace-label`, `.welcome-row`)
+  con estilos exclusivos del árbol muerto de Bolt (`.adm-*` y probablemente `.rec-*`/`.guest-*`/
+  `.rs-*`), y varias de esas reglas en uso real dependen de variables `--*-legacy-*` de
+  `tokens.css`. Pendiente de decisión del usuario antes de continuar a la FASE 2.
