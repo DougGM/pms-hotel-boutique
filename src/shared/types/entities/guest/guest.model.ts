@@ -9,6 +9,7 @@ export interface Guest {
   nationality?: string;
   documentType?: GuestDocumentType;
   documentNumber?: string;
+  notes?: string;
   createdAt: Date;
   updatedAt: Date;
 }

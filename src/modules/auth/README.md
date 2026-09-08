@@ -4,13 +4,17 @@
 
 El flujo es `StaffLoginPage` → `AuthProvider` → fachada de `modules/auth/services`
 → `services/authService.ts`. La fachada agrega permisos de navegación a
-`AuthSession`; no guarda datos ni conoce fixtures. Usuario, credenciales y
-sesión se importan del barrel `shared/types/entities`; `UserRole` viene de
-`shared/types/common` (ADMIN, RECEPTIONIST, MANAGER y STAFF).
+`AuthSession`; no guarda datos ni conoce fixtures. `SessionUserDTO`,
+`LoginDTO`, `AuthResponseDTO` y `AuthSession` viven en
+`shared/types/entities/session/` (no en el barrel general de `shared/types/entities`);
+`UserRole` viene de `shared/types/common` (ADMIN, RECEPTIONIST, MANAGER y STAFF).
 
-No usar el contrato anterior en `shared/types/entities/user/user.model.ts`
-para esta integración: el servicio WEB-05 exporta su contrato desde `user.ts`.
-Se eliminó el DTO local y el adaptador independiente de WEB-06.
+**No usar `shared/types/entities/user/`** para esta integración: ese contrato
+modela el rol de puesto de un empleado en el directorio de personal
+(admin/manager/frontDesk/housekeeping/maintenance, alineado con la app móvil),
+no el rol de acceso al PMS. Son dos conceptos distintos que comparten nombre;
+`shared/types/entities/session/` existe justamente para no confundirlos ni
+duplicar el DTO de usuario en dos formas incompatibles.
 
 ## Cuentas y permisos
 

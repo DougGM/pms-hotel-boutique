@@ -1,4 +1,4 @@
-import { paymentMapper, type AddChargeDTO, type Payment } from '@/shared/types/entities';
+import { toDomain as toPayment, type AddPaymentDto, type Payment } from '@/shared/types/entities/payment';
 import type { ID } from '@/shared/types/common';
 import { mockPayments } from './mockData';
 import { mockUtils, simulateLatency } from './mockUtils';
@@ -6,20 +6,20 @@ export const paymentService = {
   async getPaymentsByBookingId(bookingId: ID): Promise<Payment[]> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar los pagos.');
-    return mockPayments.filter((item) => item.bookingId === bookingId).map(paymentMapper.toDomain);
+    return mockPayments.filter((item) => item.booking_id === bookingId).map(toPayment);
   },
-  async addCharge(data: AddChargeDTO): Promise<Payment> {
+  async addCharge(data: AddPaymentDto): Promise<Payment> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible agregar el cargo.');
     const dto = {
       ...data,
       id: `payment-${mockPayments.length + 1}`,
-      method: 'CASH' as const,
-      status: 'PENDING' as const,
-      createdAt: new Date().toISOString(),
+      method: 'cash' as const,
+      status: 'pending' as const,
+      created_at: new Date().toISOString(),
     };
     mockPayments.push(dto);
-    return paymentMapper.toDomain(dto);
+    return toPayment(dto);
   },
 };
 export default paymentService;

@@ -1,5 +1,5 @@
 ﻿import type { UserRole } from '@/shared/types/common';
-import type { AuthSession, LoginDTO } from '@/shared/types/entities';
+import type { AuthSession, LoginDTO } from '@/shared/types/entities/session';
 
 export const roleLabels: Record<UserRole, string> = {
   ADMIN: 'Administración',

@@ -16,6 +16,7 @@ export const toDomain = (dto: GuestDto): Guest => ({
         ? 'driverLicense'
         : dto.document_type,
   documentNumber: dto.document_number,
+  notes: dto.notes,
   createdAt: toDomainDate(dto.created_at),
   updatedAt: toDomainDate(dto.updated_at),
 });
@@ -34,6 +35,7 @@ export const toDTO = (model: Guest): GuestDto => ({
         ? 'driver_license'
         : model.documentType,
   document_number: model.documentNumber,
+  notes: model.notes,
   created_at: toDtoDate(model.createdAt),
   updated_at: toDtoDate(model.updatedAt),
 });

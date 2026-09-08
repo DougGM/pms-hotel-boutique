@@ -1,9 +1,9 @@
 ﻿import {
-  authMapper,
+  toAuthSession,
   type AuthResponseDTO,
   type AuthSession,
-  type User,
-} from '@/shared/types/entities';
+  type SessionUser,
+} from '@/shared/types/entities/session';
 import { httpClient } from './http-client';
 import { mockAuthAccounts } from './authMockData';
 import { mockUtils, simulateLatency } from './mockUtils';
@@ -52,7 +52,7 @@ export const authService = {
       );
     }
     httpClient.setToken(dto.token);
-    return authMapper.toSession(dto);
+    return toAuthSession(dto);
   },
   async getCurrentSession(signal?: AbortSignal): Promise<AuthSession | null> {
     const current = revision;
@@ -94,7 +94,7 @@ export const authService = {
       return null;
     }
     // The browser does not decide the role or permissions, even in the demo.
-    const session = authMapper.toSession({
+    const session = toAuthSession({
       user: { ...account.user },
       token: value.token,
       refreshToken: value.refreshToken,
@@ -103,7 +103,7 @@ export const authService = {
     httpClient.setToken(session.token);
     return session;
   },
-  async getCurrentUser(): Promise<User | null> {
+  async getCurrentUser(): Promise<SessionUser | null> {
     return (await this.getCurrentSession())?.user ?? null;
   },
   async logout(): Promise<void> {

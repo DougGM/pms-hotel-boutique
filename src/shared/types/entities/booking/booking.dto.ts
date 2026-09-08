@@ -23,3 +23,14 @@ export interface BookingDTO {
 }
 
 export type BookingDto = BookingDTO;
+
+export interface CreateBookingDto {
+  guest_id: string;
+  room_type_id: string;
+  rate_id?: string;
+  check_in: string;
+  check_out: string;
+  adults: number;
+  children: number;
+  notes?: string;
+}
