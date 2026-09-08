@@ -59,6 +59,36 @@ No confiar en el nombre de un archivo para crear una ruta.
   provisional pendiente de la política definitiva del equipo.
 - La siguiente asignación, WEB-13 (#25), depende de WEB-03 (#15) y WEB-04 (#16).
 
+## Continuidad de WEB-04
+
+- Rama publicada: `feat/web-04-form-primitives`, creada desde `develop`
+  actualizado (WEB-03 ya integrado). Commits:
+  - `ea6b024` — Button
+  - `08a86c3` — Input y Select
+  - `be67d81` — Modal
+  - `930d038` — DatePickerRange
+- Componentes nuevos en `src/shared/components/`: `Button.tsx`/`Button.css`,
+  `Input.tsx`, `Select.tsx`, `Field.css` (compartido por Input y Select),
+  `Modal.tsx`/`Modal.css`, `DatePickerRange.tsx`/`DatePickerRange.css`.
+- Todos consumen los tokens de `src/styles/tokens.css` sin modificarlo; no se
+  tocó código heredado (`src/app/`, `src/components/`). Sin dependencias
+  nuevas: `DatePickerRange` se construyó con React y TypeScript puro, sin
+  librería de fechas ni de calendario.
+- `Modal` exige `title` o `aria-label` en tiempo de compilación (tipo unión)
+  para garantizar siempre un nombre accesible.
+- `DatePickerRange` es controlado (`value`/`onChange`); compara fechas
+  mediante una clave de calendario local (`YYYY-MM-DD`, derivada de getters
+  locales, nunca de `toISOString()`) para evitar desplazamientos de zona
+  horaria. Impide rangos invertidos y estadías de cero noches, y rechaza
+  cualquier rango que atraviese una fecha marcada como no disponible.
+- **Pendiente de integración**: la rama está publicada en origin pero todavía
+  no tiene PR abierto ni se ha fusionado a `develop`. WEB-13 (#25) sigue
+  bloqueada hasta que esta integración se complete.
+- Verificación: `npm run typecheck`, `npm run lint` y `npm run build` sin
+  errores; Prettier conforme en los 9 archivos nuevos. Hallazgo preexistente
+  no relacionado: `format:check` global falla en 123 archivos fuera de
+  alcance de WEB-04.
+
 ## Reglas de trabajo
 
 - Preservar `src/index.css`; reutilizar sus clases y variables antes de añadir
