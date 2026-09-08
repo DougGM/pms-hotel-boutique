@@ -24,9 +24,9 @@ export const bookingService = {
       code: `PMS-${String(mockBookings.length + 1).padStart(4, '0')}`,
       status: 'PENDING' as const,
       guests: data.adults + data.children,
-      pricePerNight: 0,
-      totalAmount: 0,
-      currency: 'USD' as const,
+      pricePerNightCents: 0,
+      totalAmountCents: 0,
+      currency: 'GTQ' as const,
       createdAt: now,
       updatedAt: now,
     };

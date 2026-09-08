@@ -33,8 +33,8 @@
   sin el ancho fijo ni la sombra del modal heredado; campos y botón ajustados
   al contenedor, con padding adaptable para pantallas pequeñas.
 - WEB-04 (#16): primitivos de formulario implementados en
-  `feat/web-04-form-primitives` (rama publicada en origin, pendiente de
-  integración a `develop`) — `Button` (variantes primary/secondary/ghost/danger,
+  `feat/web-04-form-primitives`, integrado a `develop` mediante PR #30
+  (merge `2c28e43ba15a5a36c4ac5a562924d52fde610c58`) — `Button` (variantes primary/secondary/ghost/danger,
   tamaños, `disabled`, `loading`), `Input` y `Select` (`label`, `helpText`,
   `error`, `disabled`, `aria-invalid`/`aria-describedby`), `Modal` (controlado,
   cierre con Escape y clic en el overlay, gestión y restauración de foco,
@@ -45,8 +45,32 @@
   validación internos, `disabled`, `minDate` configurable). Todos en
   `src/shared/components/`, consumiendo los tokens de WEB-03
   (`src/styles/tokens.css`) sin modificarlo. Sin dependencias nuevas.
-- La UI funcional sigue centralizada temporalmente en `src/app/App.tsx` y sus
-  componentes de apoyo en `src/components/`.
+- WEB-07 (#19): utilidades de formato de moneda y fecha implementadas en
+  `feat/web-07-format-utils` (rama publicada en origin, pendiente de
+  integración a `develop`). `formatCurrency` (GTQ, `Q1,250.00`) como única
+  función de formato de moneda; `formatDateGT`/`formatTimeGT`/
+  `formatStayRange`/`calculateNights` para fecha, hora, rango de estadía y
+  noches. Contrato explícito de fecha civil (`toDomainCalendarDate`/
+  `toDtoCalendarDate`, DTO `"YYYY-MM-DD"`) frente a timestamp (`toDomainDate`/
+  `toDtoDate`, ISO 8601 completo), evitando el desplazamiento de día que
+  produciría `new Date()` sobre un string ambiguo. Migración a enteros en
+  centavos de los contratos legacy activos (`Payment.amountCents`,
+  `Room.pricePerNightCents`, `Booking.pricePerNightCents`/
+  `totalAmountCents`, `Product.priceCents`), todos con `currency: Currency`
+  explícita; normalización de las fechas mock de `lot-b.ts` al mismo
+  contrato. Cobertura de regresión dedicada (ver Verificación más reciente).
+  Detalle técnico completo en [src/shared/README.md](src/shared/README.md).
+  **AC5 (alineación con la app móvil) pendiente de validación**: el
+  repositorio no contiene todavía implementación ni especificación de
+  formato mobile con la que comparar; no se afirma cumplimiento sobre esa
+  base.
+- La UI completa heredada de Bolt permanece en `src/app/App.tsx` y sus
+  componentes de apoyo en `src/components/`, todavía sin migrar a los módulos
+  de dominio. La arquitectura activa parte de `src/main.tsx` (que arranca
+  `src/app/router.tsx` y las páginas de `src/private/`/`src/public/`);
+  `App.tsx`/`src/components/` están excluidos de `tsconfig.app.json`, no son
+  alcanzados desde `src/main.tsx` y no aparecen en el bundle de producción
+  compilado (verificado en la auditoría de WEB-07).
 
 ## Prioridad inmediata
 
@@ -106,3 +130,10 @@ check` antes de publicar cambios.
   `src/shared/components/` (todos conformes). Hallazgo preexistente y no
   relacionado con WEB-04: `npm run format:check` falla en 123 archivos fuera
   de su alcance; no se corrigió, queda fuera de este ticket.
+- WEB-07: `scripts/test-currency.mjs` 11/11, `scripts/test-date.mjs` 35/35,
+  `scripts/test-money-contract.mjs` 13/13 (59 pruebas en total, todas contra
+  datos y funciones reales del repositorio, sin dependencias nuevas); `npm run
+  typecheck`, `npm run lint` y `npm run build` sin errores. Auditoría de
+  legacy UI (`src/app/App.tsx`, `src/components/`) confirmada como excluida
+  del typecheck, no alcanzada desde `src/main.tsx` y ausente del bundle de
+  producción compilado (`dist/`); no se modificó esa capa.

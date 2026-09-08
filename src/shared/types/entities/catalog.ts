@@ -6,7 +6,7 @@ export interface ProductDTO {
   name: string;
   description?: string;
   category: ProductCategory;
-  price: number;
+  priceCents: number;
   currency: Currency;
   stock: number;
   active: boolean;

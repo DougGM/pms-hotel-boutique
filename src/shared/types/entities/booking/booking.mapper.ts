@@ -1,4 +1,9 @@
-import { toDomainDate, toDtoDate } from '@/shared/types/common';
+import {
+  toDomainCalendarDate,
+  toDomainDate,
+  toDtoCalendarDate,
+  toDtoDate,
+} from '@/shared/types/common';
 import type { BookingDto } from './booking.dto';
 import type { Booking } from './booking.model';
 
@@ -9,8 +14,8 @@ export const toDomain = (dto: BookingDto): Booking => ({
   roomId: dto.room_id,
   roomTypeId: dto.room_type_id,
   rateId: dto.rate_id,
-  checkIn: toDomainDate(dto.check_in),
-  checkOut: toDomainDate(dto.check_out),
+  checkIn: toDomainCalendarDate(dto.check_in),
+  checkOut: toDomainCalendarDate(dto.check_out),
   status:
     dto.status === 'checked_in'
       ? 'checkedIn'
@@ -35,8 +40,8 @@ export const toDTO = (model: Booking): BookingDto => ({
   room_id: model.roomId,
   room_type_id: model.roomTypeId,
   rate_id: model.rateId,
-  check_in: toDtoDate(model.checkIn),
-  check_out: toDtoDate(model.checkOut),
+  check_in: toDtoCalendarDate(model.checkIn),
+  check_out: toDtoCalendarDate(model.checkOut),
   status:
     model.status === 'checkedIn'
       ? 'checked_in'

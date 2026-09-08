@@ -81,13 +81,86 @@ No confiar en el nombre de un archivo para crear una ruta.
   locales, nunca de `toISOString()`) para evitar desplazamientos de zona
   horaria. Impide rangos invertidos y estadías de cero noches, y rechaza
   cualquier rango que atraviese una fecha marcada como no disponible.
-- **Pendiente de integración**: la rama está publicada en origin pero todavía
-  no tiene PR abierto ni se ha fusionado a `develop`. WEB-13 (#25) sigue
-  bloqueada hasta que esta integración se complete.
+- **Integrado a `develop`**: fusionado mediante PR #30
+  (`feat/web-04-form-primitives` → `develop`), merge commit
+  `2c28e43ba15a5a36c4ac5a562924d52fde610c58`.
 - Verificación: `npm run typecheck`, `npm run lint` y `npm run build` sin
   errores; Prettier conforme en los 9 archivos nuevos. Hallazgo preexistente
   no relacionado: `format:check` global falla en 123 archivos fuera de
   alcance de WEB-04.
+
+## Continuidad de WEB-07
+
+- Issue #19, depende de WEB-01 (#13, ya integrado). Rama publicada:
+  `feat/web-07-format-utils`, creada desde `develop` actualizado (incluye
+  WEB-04 ya integrado). **Pendiente de integración**: la rama está publicada
+  en origin pero todavía no tiene PR abierto ni se ha fusionado a `develop`.
+- Commits (hash real, orden cronológico):
+  - `b960882` — feat(web-07): add GTQ currency formatting utility
+  - `bb32d7b` — feat(web-07): add Guatemala date and stay utilities
+  - `e09d9be` — fix(web-07): add timezone-safe calendar date contract
+  - `6c24a2a` — fix(web-07): normalize lot-b date fixtures
+  - `826b595` — refactor(web-07): migrate payment amounts to cents
+  - `9c0abd6` — refactor(web-07): migrate room prices to cents
+  - `76b391c` — refactor(web-07): migrate booking amounts to cents
+  - `bfdaf77` — refactor(web-07): migrate product prices to cents
+  - `4242fe6` — test(web-07): add money contract regression coverage
+- `formatCurrency(amountCents, currency = 'GTQ')` en
+  `src/shared/utils/currency.ts` es la única función de formato de moneda;
+  para GTQ produce `Q1,250.00` exacto (Intl inserta un espacio entre el
+  símbolo y el monto en varios locales, incluido GTQ; se elimina
+  centralmente ahí, no en cada consumidor).
+- `src/shared/utils/date.ts` aporta `formatDateGT` (dd-mm-aaaa), `formatTimeGT`
+  (HH:mm 24h), `formatStayRange` y `calculateNights`. `calculateNights` mide
+  la distancia entre dos días calendario codificados con `Date.UTC` a partir
+  de componentes locales (nunca por resta cruda de milisegundos), lo que evita
+  errores de horario de verano/zona horaria; rechaza rango invertido y `Date`
+  inválido en vez de devolver un número negativo o silenciar el error.
+- Contrato de fecha civil vs. timestamp, en `src/shared/types/common.ts`:
+  `toDomainCalendarDate`/`toDtoCalendarDate` (DTO `"YYYY-MM-DD"`, sin hora ni
+  zona) frente a `toDomainDate`/`toDtoDate` (timestamp, ISO 8601 completo).
+  `toDomainCalendarDate` nunca usa `new Date(value)` sobre el string completo:
+  separa año/mes/día y construye con el constructor local de 3 argumentos,
+  para no arrastrar el desplazamiento de día que produce un ISO de solo fecha
+  interpretado como medianoche UTC. Valida fechas imposibles (`2026-02-30`,
+  `2026-13-01`, etc.) comparando los componentes reconstruidos contra los
+  solicitados.
+- Migración a centavos enteros de los contratos legacy activos (los que
+  consumen realmente `src/services/*Service.ts`), todos con `currency:
+  Currency` explícita: `Payment.amount → amountCents`,
+  `Room.pricePerNight → pricePerNightCents` (más `currency`, que no existía),
+  `Booking.pricePerNight → pricePerNightCents` y
+  `Booking.totalAmount → totalAmountCents`, `Product.price → priceCents`.
+  Monedas de `mockData.ts` normalizadas de `'USD'` a `'GTQ'` en los cuatro
+  contratos. Los tipos nuevos por carpeta (`payment/`, `charge/`, `rate/`,
+  `booking/`, `product/`) ya usaban centavos desde antes de WEB-07 y no se
+  modificaron; tampoco se consolidaron ambas generaciones de tipos, ni se creó
+  ningún adapter temporal — decisión explícita para mantener el alcance del
+  ticket acotado al contrato de formato, no a la arquitectura de entidades.
+  La posible redundancia entre `Room.pricePerNightCents` y `Rate.priceCents`
+  queda documentada como deuda/decisión arquitectónica posterior, sin
+  resolver en WEB-07.
+- `src/shared/mocks/lot-b.ts` normalizado al mismo contrato: fechas de
+  calendario (`check_in`/`check_out`/`valid_from`/`valid_to`) a
+  `"YYYY-MM-DD"`, timestamps (`created_at`/`updated_at`) a ISO 8601 completo;
+  antes usaba `dd-mm-aaaa` en ambos casos, lo que producía `Invalid Date` o
+  una fecha equivocada al pasar por `new Date(string)` (comprobado
+  exhaustivamente: 36 de 68 valores únicos daban `Invalid Date`).
+- `src/app/App.tsx` y `src/components/` conservan su propio formato de
+  moneda/fecha (decimales, `$`, `toLocaleString` manual), sin tocar. Se
+  verificó que están excluidos de `tsconfig.app.json`, que no son alcanzados
+  desde `src/main.tsx` (único entry point real, vía `src/app/router.tsx`), y
+  que no aparecen en el bundle de producción compilado (`dist/assets/*.js`).
+- Cobertura: `scripts/test-currency.mjs` (11), `scripts/test-date.mjs` (35) y
+  `scripts/test-money-contract.mjs` (13) — 59 pruebas, todas contra funciones
+  y datos reales del repositorio (no fixtures inventados), sin dependencias
+  nuevas; reutilizan el patrón de `scripts/test-auth.mjs` (esbuild + `node:
+  test`).
+- **AC5 (alineación con la app móvil) pendiente de validación**: `mobile/`
+  solo contiene `README.md`, sin código ni especificación de formato de
+  moneda/fecha/hora/locale. No se afirma que web y mobile coincidan; queda
+  como acción futura verificar contra una fuente mobile real cuando exista.
+- Estado final de WEB-07: **pendiente de integración a `develop`**.
 
 ## Reglas de trabajo
 
