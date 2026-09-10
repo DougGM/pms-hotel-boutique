@@ -14,6 +14,8 @@ export interface ChargeDTO {
   status: ChargeStatusDto;
   charged_at: string;
   created_by_user_id?: string;
+  /** Motivo de la anulación — solo cuando `status === 'voided'` (Lote C, WEB-11). */
+  void_reason?: string;
   created_at: string;
 }
 

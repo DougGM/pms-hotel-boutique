@@ -17,8 +17,12 @@ const ENTITIES_DIR = 'src/shared/types/entities';
 const ENTITIES_WITH_FOLDER = [
   'amenity',
   'booking',
+  'cash-movement',
+  'cash-session',
   'charge',
+  'deposit',
   'guest',
+  'guest-account',
   'order',
   'payment',
   'product',

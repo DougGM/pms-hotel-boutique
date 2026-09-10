@@ -14,5 +14,6 @@ export interface Charge {
   status: ChargeStatus;
   chargedAt: Date;
   createdByUserId?: string;
+  voidReason?: string;
   createdAt: Date;
 }

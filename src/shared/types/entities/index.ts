@@ -18,8 +18,38 @@ export type {
   Booking,
   BookingStatus,
 } from './booking';
+export type {
+  CashMovementDTO,
+  CashMovementDto,
+  CashMovementTypeDto,
+  CashMovement,
+  CashMovementType,
+} from './cash-movement';
+export type {
+  CashSessionDTO,
+  CashSessionDto,
+  CashSessionStatusDto,
+  CashSession,
+  CashSessionStatus,
+} from './cash-session';
 export type { ChargeDTO, ChargeDto, ChargeStatusDto, Charge, ChargeStatus } from './charge';
+export type {
+  DepositDTO,
+  DepositDto,
+  DepositMethodDto,
+  DepositStatusDto,
+  Deposit,
+  DepositMethod,
+  DepositStatus,
+} from './deposit';
 export type { GuestDTO, GuestDto, GuestDocumentTypeDto, Guest, GuestDocumentType } from './guest';
+export type {
+  GuestAccountDTO,
+  GuestAccountDto,
+  GuestAccountStatusDto,
+  GuestAccount,
+  GuestAccountStatus,
+} from './guest-account';
 export type {
   OrderDTO,
   OrderDto,
