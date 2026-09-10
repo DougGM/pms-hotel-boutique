@@ -10,7 +10,12 @@ import assert from 'node:assert/strict';
 
 await mkdir('.cache', { recursive: true });
 await build({
-  entryPoints: ['src/services/mockData.ts', 'src/shared/mocks/lot-b.ts'],
+  entryPoints: [
+    'src/services/mockData.ts',
+    'src/shared/mocks/lot-b.ts',
+    'src/shared/mocks/lot-c.ts',
+    'src/shared/mocks/lot-d.ts',
+  ],
   outdir: '.cache',
   outbase: 'src',
   outExtension: { '.js': '.cjs' },
@@ -40,6 +45,8 @@ const {
   mockProducts,
 } = load('services/mockData');
 const { lotBMockData } = load('shared/mocks/lot-b');
+const { lotCMockData } = load('shared/mocks/lot-c');
+const { lotDMockData } = load('shared/mocks/lot-d');
 
 const idsOf = (records) => new Set(records.map((record) => record.id));
 
@@ -164,6 +171,148 @@ const FK_CHECKS = [
     target: idsOf(lotBMockData.rates),
     optional: true,
   },
+  // -- shared/mocks/lot-c.ts (WEB-11): cuentas, cargos, pagos, depósitos y
+  // caja, construidos sobre las reservas/huéspedes reales del Lote B --
+  {
+    dataset: 'lot-c',
+    label: 'guestAccount.booking_id -> lot-b.booking',
+    records: lotCMockData.guestAccounts,
+    field: 'booking_id',
+    target: idsOf(lotBMockData.bookings),
+  },
+  {
+    dataset: 'lot-c',
+    label: 'guestAccount.guest_id -> lot-b.guest',
+    records: lotCMockData.guestAccounts,
+    field: 'guest_id',
+    target: idsOf(lotBMockData.guests),
+  },
+  {
+    dataset: 'lot-c',
+    label: 'charge.booking_id -> lot-b.booking',
+    records: lotCMockData.charges,
+    field: 'booking_id',
+    target: idsOf(lotBMockData.bookings),
+  },
+  {
+    dataset: 'lot-c',
+    label: 'charge.created_by_user_id -> lot-d.user',
+    records: lotCMockData.charges,
+    field: 'created_by_user_id',
+    target: idsOf(lotDMockData.users),
+    optional: true,
+  },
+  {
+    dataset: 'lot-c',
+    label: 'payment.booking_id -> lot-b.booking',
+    records: lotCMockData.payments,
+    field: 'booking_id',
+    target: idsOf(lotBMockData.bookings),
+  },
+  {
+    dataset: 'lot-c',
+    label: 'payment.processed_by_user_id -> lot-d.user',
+    records: lotCMockData.payments,
+    field: 'processed_by_user_id',
+    target: idsOf(lotDMockData.users),
+    optional: true,
+  },
+  {
+    dataset: 'lot-c',
+    label: 'deposit.booking_id -> lot-b.booking',
+    records: lotCMockData.deposits,
+    field: 'booking_id',
+    target: idsOf(lotBMockData.bookings),
+  },
+  {
+    dataset: 'lot-c',
+    label: 'deposit.guest_id -> lot-b.guest',
+    records: lotCMockData.deposits,
+    field: 'guest_id',
+    target: idsOf(lotBMockData.guests),
+  },
+  {
+    dataset: 'lot-c',
+    label: 'cashSession.opened_by_user_id -> lot-d.user',
+    records: lotCMockData.cashSessions,
+    field: 'opened_by_user_id',
+    target: idsOf(lotDMockData.users),
+  },
+  {
+    dataset: 'lot-c',
+    label: 'cashSession.closed_by_user_id -> lot-d.user',
+    records: lotCMockData.cashSessions,
+    field: 'closed_by_user_id',
+    target: idsOf(lotDMockData.users),
+    optional: true,
+  },
+  {
+    dataset: 'lot-c',
+    label: 'cashMovement.cash_session_id -> cashSession',
+    records: lotCMockData.cashMovements,
+    field: 'cash_session_id',
+    target: idsOf(lotCMockData.cashSessions),
+  },
+  {
+    dataset: 'lot-c',
+    label: 'cashMovement.responsible_user_id -> lot-d.user',
+    records: lotCMockData.cashMovements,
+    field: 'responsible_user_id',
+    target: idsOf(lotDMockData.users),
+  },
+  {
+    dataset: 'lot-c',
+    label: 'cashMovement.payment_id -> payment',
+    records: lotCMockData.cashMovements,
+    field: 'payment_id',
+    target: idsOf(lotCMockData.payments),
+    optional: true,
+  },
+  // -- shared/mocks/lot-d.ts (WEB-12): personal, catálogos e inventario --
+  {
+    dataset: 'lot-d',
+    label: 'role.permission_ids -> permission',
+    records: lotDMockData.roles,
+    field: 'permission_ids',
+    target: idsOf(lotDMockData.permissions),
+    multi: true,
+  },
+  {
+    dataset: 'lot-d',
+    label: 'user.role -> role.code (correspondencia por valor, no FK — D-003)',
+    records: lotDMockData.users,
+    field: 'role',
+    target: new Set(lotDMockData.roles.map((role) => role.code)),
+  },
+  {
+    dataset: 'lot-d',
+    label: 'inventoryItem.product_id -> product',
+    records: lotDMockData.inventoryItems,
+    field: 'product_id',
+    target: idsOf(lotDMockData.products),
+    optional: true,
+  },
+  {
+    dataset: 'lot-d',
+    label: 'inventoryMovement.inventory_item_id -> inventoryItem',
+    records: lotDMockData.inventoryMovements,
+    field: 'inventory_item_id',
+    target: idsOf(lotDMockData.inventoryItems),
+  },
+  {
+    dataset: 'lot-d',
+    label: 'inventoryMovement.responsible_user_id -> user',
+    records: lotDMockData.inventoryMovements,
+    field: 'responsible_user_id',
+    target: idsOf(lotDMockData.users),
+  },
+  {
+    dataset: 'lot-d',
+    label: 'auditLog.user_id -> user',
+    records: lotDMockData.auditLogs,
+    field: 'user_id',
+    target: idsOf(lotDMockData.users),
+  },
 ];
 
 for (const check of FK_CHECKS) {
@@ -204,6 +353,20 @@ const CATALOGS = [
   { dataset: 'lot-b', label: 'rate', records: lotBMockData.rates },
   { dataset: 'lot-b', label: 'booking', records: lotBMockData.bookings },
   { dataset: 'lot-b', label: 'promotion', records: lotBMockData.promotions },
+  { dataset: 'lot-c', label: 'guestAccount', records: lotCMockData.guestAccounts },
+  { dataset: 'lot-c', label: 'charge', records: lotCMockData.charges },
+  { dataset: 'lot-c', label: 'payment', records: lotCMockData.payments },
+  { dataset: 'lot-c', label: 'deposit', records: lotCMockData.deposits },
+  { dataset: 'lot-c', label: 'cashSession', records: lotCMockData.cashSessions },
+  { dataset: 'lot-c', label: 'cashMovement', records: lotCMockData.cashMovements },
+  { dataset: 'lot-d', label: 'user', records: lotDMockData.users },
+  { dataset: 'lot-d', label: 'role', records: lotDMockData.roles },
+  { dataset: 'lot-d', label: 'permission', records: lotDMockData.permissions },
+  { dataset: 'lot-d', label: 'amenity', records: lotDMockData.amenities },
+  { dataset: 'lot-d', label: 'product', records: lotDMockData.products },
+  { dataset: 'lot-d', label: 'inventoryItem', records: lotDMockData.inventoryItems },
+  { dataset: 'lot-d', label: 'inventoryMovement', records: lotDMockData.inventoryMovements },
+  { dataset: 'lot-d', label: 'auditLog', records: lotDMockData.auditLogs },
 ];
 
 for (const catalog of CATALOGS) {

@@ -14,16 +14,27 @@ await build({
   entryPoints: [
     'src/services/mockData.ts',
     'src/shared/mocks/lot-b.ts',
+    'src/shared/mocks/lot-c.ts',
+    'src/shared/mocks/lot-d.ts',
     'src/shared/constants/statuses.ts',
     'src/shared/types/entities/amenity/index.ts',
+    'src/shared/types/entities/audit-log/index.ts',
     'src/shared/types/entities/booking/index.ts',
+    'src/shared/types/entities/cash-movement/index.ts',
+    'src/shared/types/entities/cash-session/index.ts',
     'src/shared/types/entities/charge/index.ts',
+    'src/shared/types/entities/deposit/index.ts',
     'src/shared/types/entities/guest/index.ts',
+    'src/shared/types/entities/guest-account/index.ts',
+    'src/shared/types/entities/inventory-item/index.ts',
+    'src/shared/types/entities/inventory-movement/index.ts',
     'src/shared/types/entities/order/index.ts',
     'src/shared/types/entities/payment/index.ts',
+    'src/shared/types/entities/permission/index.ts',
     'src/shared/types/entities/product/index.ts',
     'src/shared/types/entities/promotion/index.ts',
     'src/shared/types/entities/rate/index.ts',
+    'src/shared/types/entities/role/index.ts',
     'src/shared/types/entities/room/index.ts',
     'src/shared/types/entities/room-feature/index.ts',
     'src/shared/types/entities/room-type/index.ts',
@@ -59,18 +70,29 @@ const {
   mockProducts,
 } = load('services/mockData');
 const { lotBMockData } = load('shared/mocks/lot-b');
+const { lotCMockData } = load('shared/mocks/lot-c');
+const { lotDMockData } = load('shared/mocks/lot-d');
 const { ROOM_STATUSES, BOOKING_STATUSES, ORDER_STATUSES, SERVICE_REQUEST_STATUSES } = load(
   'shared/constants/statuses',
 );
 const amenityMapper = load('shared/types/entities/amenity/index');
+const auditLogMapper = load('shared/types/entities/audit-log/index');
 const bookingMapper = load('shared/types/entities/booking/index');
+const cashMovementMapper = load('shared/types/entities/cash-movement/index');
+const cashSessionMapper = load('shared/types/entities/cash-session/index');
 const chargeMapper = load('shared/types/entities/charge/index');
+const depositMapper = load('shared/types/entities/deposit/index');
 const guestMapper = load('shared/types/entities/guest/index');
+const guestAccountMapper = load('shared/types/entities/guest-account/index');
+const inventoryItemMapper = load('shared/types/entities/inventory-item/index');
+const inventoryMovementMapper = load('shared/types/entities/inventory-movement/index');
 const orderMapper = load('shared/types/entities/order/index');
 const paymentMapper = load('shared/types/entities/payment/index');
+const permissionMapper = load('shared/types/entities/permission/index');
 const productMapper = load('shared/types/entities/product/index');
 const promotionMapper = load('shared/types/entities/promotion/index');
 const rateMapper = load('shared/types/entities/rate/index');
+const roleMapper = load('shared/types/entities/role/index');
 const roomMapper = load('shared/types/entities/room/index');
 const roomFeatureMapper = load('shared/types/entities/room-feature/index');
 const roomTypeMapper = load('shared/types/entities/room-type/index');
@@ -97,7 +119,18 @@ const assertRoundTrip = (label, dto, mapper) => {
 
 // --- A. Fechas ISO 8601 válidas ---------------------------------------
 
-const TIMESTAMP_FIELDS = ['created_at', 'updated_at', 'charged_at', 'paid_at', 'requested_at'];
+const TIMESTAMP_FIELDS = [
+  'created_at',
+  'updated_at',
+  'charged_at',
+  'paid_at',
+  'requested_at',
+  'opened_at',
+  'closed_at',
+  'collected_at',
+  'refunded_at',
+  'occurred_at',
+];
 const CALENDAR_FIELDS = ['check_in', 'check_out', 'valid_from', 'valid_to'];
 
 function collectDatasets() {
@@ -118,6 +151,20 @@ function collectDatasets() {
     ...lotBMockData.rates,
     ...lotBMockData.bookings,
     ...lotBMockData.promotions,
+    ...lotCMockData.guestAccounts,
+    ...lotCMockData.charges,
+    ...lotCMockData.payments,
+    ...lotCMockData.deposits,
+    ...lotCMockData.cashSessions,
+    ...lotCMockData.cashMovements,
+    ...lotDMockData.users,
+    ...lotDMockData.roles,
+    ...lotDMockData.permissions,
+    ...lotDMockData.amenities,
+    ...lotDMockData.products,
+    ...lotDMockData.inventoryItems,
+    ...lotDMockData.inventoryMovements,
+    ...lotDMockData.auditLogs,
   ];
 }
 
@@ -359,4 +406,76 @@ test('mapper service_request: round-trip sin pérdida (contrato nuevo, DTO sint�
     updated_at: '2026-09-10T09:10:00.000Z',
   };
   assertRoundTrip('service_request sintético', dto, serviceRequestMapper);
+});
+
+// --- F. Lotes C y D (WEB-11/WEB-12): round-trip con datos reales -------
+
+test('mapper guest-account: round-trip sin pérdida', () => {
+  for (const dto of lotCMockData.guestAccounts) {
+    assertRoundTrip(`guest-account ${dto.id}`, dto, guestAccountMapper);
+  }
+});
+
+test('mapper charge (lot-c, datos reales): round-trip sin pérdida', () => {
+  for (const dto of lotCMockData.charges) assertRoundTrip(`charge ${dto.id}`, dto, chargeMapper);
+});
+
+test('mapper payment (lot-c, datos reales): round-trip sin pérdida', () => {
+  for (const dto of lotCMockData.payments) assertRoundTrip(`payment ${dto.id}`, dto, paymentMapper);
+});
+
+test('mapper deposit: round-trip sin pérdida', () => {
+  for (const dto of lotCMockData.deposits) assertRoundTrip(`deposit ${dto.id}`, dto, depositMapper);
+});
+
+test('mapper cash-session: round-trip sin pérdida', () => {
+  for (const dto of lotCMockData.cashSessions) {
+    assertRoundTrip(`cash-session ${dto.id}`, dto, cashSessionMapper);
+  }
+});
+
+test('mapper cash-movement: round-trip sin pérdida', () => {
+  for (const dto of lotCMockData.cashMovements) {
+    assertRoundTrip(`cash-movement ${dto.id}`, dto, cashMovementMapper);
+  }
+});
+
+test('mapper user (lot-d, datos reales): round-trip sin pérdida', () => {
+  for (const dto of lotDMockData.users) assertRoundTrip(`user ${dto.id}`, dto, userMapper);
+});
+
+test('mapper role: round-trip sin pérdida', () => {
+  for (const dto of lotDMockData.roles) assertRoundTrip(`role ${dto.id}`, dto, roleMapper);
+});
+
+test('mapper permission: round-trip sin pérdida', () => {
+  for (const dto of lotDMockData.permissions) {
+    assertRoundTrip(`permission ${dto.id}`, dto, permissionMapper);
+  }
+});
+
+test('mapper amenity (lot-d, con horario): round-trip sin pérdida', () => {
+  for (const dto of lotDMockData.amenities)
+    assertRoundTrip(`amenity ${dto.id}`, dto, amenityMapper);
+});
+
+test('mapper product (lot-d, 25 productos): round-trip sin pérdida', () => {
+  for (const dto of lotDMockData.products) assertRoundTrip(`product ${dto.id}`, dto, productMapper);
+});
+
+test('mapper inventory-item: round-trip sin pérdida', () => {
+  for (const dto of lotDMockData.inventoryItems) {
+    assertRoundTrip(`inventory-item ${dto.id}`, dto, inventoryItemMapper);
+  }
+});
+
+test('mapper inventory-movement: round-trip sin pérdida', () => {
+  for (const dto of lotDMockData.inventoryMovements) {
+    assertRoundTrip(`inventory-movement ${dto.id}`, dto, inventoryMovementMapper);
+  }
+});
+
+test('mapper audit-log: round-trip sin pérdida', () => {
+  for (const dto of lotDMockData.auditLogs)
+    assertRoundTrip(`audit-log ${dto.id}`, dto, auditLogMapper);
 });
