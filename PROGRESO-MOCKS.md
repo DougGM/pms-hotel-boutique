@@ -129,3 +129,43 @@ catálogo — sin necesidad de una FK real ni de tocar el tipo de `user`.
 
 **No se encontró ninguna entidad adicional inesperada ni ninguna divergencia
 más allá de lo ya previsto.** Se procede a la FASE 2.
+
+## FASE 2 — WEB-11 · Lote C: cuentas, pagos y caja
+
+Commit `7945cd0`.
+
+- Entidades nuevas: `guest-account`, `deposit`, `cash-session`,
+  `cash-movement`. `charge` gana `void_reason?` (aditivo).
+- `statuses.ts`: `GUEST_ACCOUNT_STATUSES`, `DEPOSIT_STATUSES`,
+  `CASH_SESSION_STATUSES` con transiciones.
+- `shared/mocks/lot-c.ts`, construido sobre `BKG-*`/`GST-*` del Lote B:
+
+| Cuenta   | Reserva | Cargos (no anulados) | Pagos  | Saldo      | Caso                                |
+| -------- | ------- | -------------------- | ------ | ---------- | ----------------------------------- |
+| GACC-001 | BKG-003 | 305500               | 200000 | **105500** | Saldo pendiente                     |
+| GACC-002 | BKG-009 | 300000               | 300000 | **0**      | Saldo saldado en cero               |
+| GACC-003 | BKG-002 | 255000               | 280000 | **-25000** | Sobrepago                           |
+| GACC-004 | BKG-004 | 452000               | 452000 | **0**      | Cerrada, con comprobante `RCB-0004` |
+
+| Jornada | Apertura | Ingresos | Egresos | Esperado              | Contado | Diferencia |
+| ------- | -------- | -------- | ------- | --------------------- | ------- | ---------- |
+| CS-001  | 500000   | 200000   | 15000   | 685000                | 685000  | **0**      |
+| CS-002  | 685000   | 580000   | 8000    | 1257000               | 1253000 | **-4000**  |
+| CS-003  | 1253000  | —        | —       | (abierta, sin cerrar) | —       | —          |
+
+Aritmética verificada con un script de una línea antes de comitear (ver
+comando en el historial de esta sesión) — todos los valores anteriores
+coinciden exactamente con lo escrito en `lot-c.ts`.
+
+- Servicios nuevos: `guestAccountService.ts`, `cashService.ts` — ningún
+  dataset queda huérfano.
+- **Referencia pendiente hasta la FASE 3:** `USR-001`/`USR-002` (usados en
+  `created_by_user_id`, `processed_by_user_id`, `opened_by_user_id`,
+  `closed_by_user_id`, `responsible_user_id`) se crean en el catálogo de
+  personal del Lote D. No resuelven hasta que ese commit aterrice — dentro
+  del mismo PR quedan consistentes antes de abrir el PR.
+
+`npm run typecheck`/`lint`/`build` verdes; `npm run test:contract` 24/24
+(incluye las 4 entidades nuevas). No se corre `npm run check` completo
+todavía — las referencias a `USR-*` harían fallar la integridad
+referencial hasta que la FASE 3 las complete.
