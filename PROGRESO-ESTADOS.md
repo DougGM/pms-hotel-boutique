@@ -153,3 +153,27 @@ Commit `fcf1404`.
   misma variable con significados distintos.
 
 `npm run check` completo: **verde** (9 suites, 160 pruebas, 0 fallos).
+
+## FASE 4 — Pruebas
+
+Commit `7f61a07`. `scripts/test-room-status.mjs` (9 pruebas nuevas):
+
+- Toda habitación de ambos datasets tiene `status`/`housekeeping_status`
+  válidos; ninguna sigue usando `'cleaning'` como ocupación.
+- `isRoomAssignable`: las 6 combinaciones de la FASE 3 (incluida la crítica
+  — libre y sucia → no asignable) y, exhaustivamente, las 16 combinaciones
+  posibles de ambas máquinas, más una verificación contra cada registro
+  real de los datasets.
+- Transiciones inválidas rechazadas en ambas máquinas (p. ej. `maintenance
+→ occupied`, `dirty → clean` saltándose `cleaning`, `inspected → clean`).
+- El mapper conserva ambos campos en el round-trip DTO → Model → DTO.
+- **Verificación estática**: ningún archivo fuera de
+  `shared/constants/statuses.ts` combina una comparación real
+  `status === 'available'` con una mención a `housekeepingStatus`/
+  `housekeeping_status` — la primera versión de esta prueba daba falso
+  positivo contra `room.model.ts` porque su propio comentario JSDoc describe
+  la regla en prosa; se ajustó la heurística a una comparación real (regex
+  sobre `===`) en vez de la mera coexistencia de los literales, y se
+  añadió `room.model.ts` a la lista de archivos permitidos por ese motivo.
+
+`npm run check` completo: **verde** (10 suites, 169 pruebas, 0 fallos).
