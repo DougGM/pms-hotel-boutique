@@ -6,6 +6,8 @@ export interface Amenity {
   description?: string;
   category: AmenityCategory;
   location?: string;
+  opensAt?: string;
+  closesAt?: string;
   active: boolean;
   createdAt: Date;
   updatedAt: Date;

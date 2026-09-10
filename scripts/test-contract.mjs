@@ -16,6 +16,7 @@ import assert from 'node:assert/strict';
 const ENTITIES_DIR = 'src/shared/types/entities';
 const ENTITIES_WITH_FOLDER = [
   'amenity',
+  'audit-log',
   'booking',
   'cash-movement',
   'cash-session',
@@ -23,11 +24,15 @@ const ENTITIES_WITH_FOLDER = [
   'deposit',
   'guest',
   'guest-account',
+  'inventory-item',
+  'inventory-movement',
   'order',
   'payment',
+  'permission',
   'product',
   'promotion',
   'rate',
+  'role',
   'room',
   'room-feature',
   'room-type',
