@@ -1,0 +1,101 @@
+# Progreso — Contrato de datos compartido (web como fuente de verdad)
+
+**Rama:** `feat/contrato-compartido`
+**Base:** `origin/develop` @ `5d86514` (Merge pull request #32 from DougGM/feat/fase-0-cierre)
+**Iniciado:** 2026-09-09
+
+> Nota de arranque: la rama local `develop` de este checkout estaba desactualizada
+> (apuntaba a `a1c07cd`, antes del PR #32). Se ramificó directamente desde
+> `origin/develop`, que sí tiene el PR #32 fusionado, tal como exige la regla 2.
+> No se movió ni se tocó la rama local `develop`.
+>
+> Al ramificar había cambios sin commit en `feat/fase-0-cierre` (una
+> reorganización de `PROGRESO-FASE-0.md`/`PROJECT_STATUS.md` hacia `docs/`) que
+> no pertenecen a esta tarea. Se guardaron con `git stash -u` en esa rama antes
+> de crear esta, para no perderlos ni arrastrarlos aquí.
+
+## FASE 1 — Inventario del contrato actual
+
+### Entidades existentes en `src/shared/types/entities/`
+
+Las once entidades de la barrel (`amenity`, `booking`, `charge`, `guest`,
+`payment`, `product`, `promotion`, `rate`, `room`, `room-type`, `user`) más
+`session/` (aparte, no reexportada). Todas siguen el patrón
+DTO (snake_case) → Mapper → Model (camelCase). Resumen:
+
+| Entidad            | Campos DTO relevantes                                                                                                                                                            | Campos Model (diffs de nombre)                                                                    | Nota del mapper                                                                                                                                                                                        |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `amenity`          | `id, name, description?, category(room\|hotel\|service), location?, active, created_at, updated_at`                                                                              | igual, camelCase; `createdAt/updatedAt: Date`                                                     | 1:1, solo fechas                                                                                                                                                                                       |
+| `booking`          | `id, confirmation_code, guest_id, room_id?, room_type_id, rate_id?, check_in, check_out, status, adults, children, total_amount_cents, currency, notes?, created_at, updated_at` | `confirmationCode, guestId, roomId, roomTypeId, rateId, checkIn/checkOut: Date, totalAmountCents` | traduce `status` (`checked_in→checkedIn`, `checked_out→checkedOut`, `no_show→noShow`); `check_in/check_out` con `toDomainCalendarDate` (civil, no timestamp)                                           |
+| `charge`           | `id, booking_id, product_id?, description, quantity, unit_price_cents, amount_cents, currency, status(pending\|posted\|voided), charged_at, created_by_user_id?, created_at`     | `bookingId, productId, unitPriceCents, amountCents, chargedAt: Date, createdByUserId`             | **sin servicio ni dataset mock todavía** — contrato listo, sin consumidor (igual que antes de WEB-11/12)                                                                                               |
+| `guest`            | `id, first_name, last_name, email?, phone?, nationality?, document_type?, document_number?, notes?, created_at, updated_at`                                                      | `firstName, lastName, documentType, documentNumber`                                               | traduce `document_type` (`national_id→nationalId`, `driver_license→driverLicense`)                                                                                                                     |
+| `payment`          | `id, booking_id, amount_cents, currency, method, status, transaction_reference?, paid_at?, processed_by_user_id?, created_at`                                                    | `bookingId, amountCents, transactionReference, paidAt?: Date, processedByUserId`                  | traduce `method` (`credit_card→creditCard`, etc.)                                                                                                                                                      |
+| `product`          | `id, sku, name, description?, category(minibar\|shop\|food_and_beverage\|other), price_cents, currency, stock_quantity, reorder_level, active, created_at, updated_at`           | `priceCents, stockQuantity, reorderLevel`                                                         | traduce `category` (`food_and_beverage→foodAndBeverage`)                                                                                                                                               |
+| `promotion`        | `id, code, name, description, discount_percent, valid_from, valid_to, active, created_at, updated_at`                                                                            | `discountPercent, validFrom/validTo: Date`                                                        | `valid_from/valid_to` civiles vía `toDomainCalendarDate`                                                                                                                                               |
+| `rate`             | `id, room_type_id, name, valid_from, valid_to, price_cents, currency, minimum_nights, refundable, active, created_at, updated_at`                                                | `roomTypeId, validFrom/validTo, priceCents, minimumNights`                                        | igual patrón de fecha civil                                                                                                                                                                            |
+| `room`             | `id, room_number, room_type_id, floor, status(available\|occupied\|cleaning\|maintenance\|out_of_service), notes?, created_at, updated_at`                                       | `roomNumber, roomTypeId, status: outOfService`                                                    | traduce solo `out_of_service→outOfService`                                                                                                                                                             |
+| `room-type`        | `id, code, name, description?, capacity, bed_configuration, amenity_ids[], active, created_at, updated_at`                                                                       | `bedConfiguration, amenityIds`                                                                    | 1:1                                                                                                                                                                                                    |
+| `user`             | `id, first_name, last_name, email, role(admin\|manager\|front_desk\|housekeeping\|maintenance), status(active\|inactive), created_at, updated_at`                                | `firstName, lastName, role: frontDesk`                                                            | modela **puesto de personal**, no rol de acceso                                                                                                                                                        |
+| `session` (aparte) | `SessionUserDTO{id,email,name,role:UserRole,avatarUrl?,createdAt}`, `LoginDTO`, `AuthResponseDTO{user,token,refreshToken,expiresAt}`                                             | `AuthSession{user,token,refreshToken,expiresAt:Date}`                                             | modela **rol de acceso al PMS** (`UserRole` de `common.ts`: `ADMIN\|RECEPTIONIST\|MANAGER\|STAFF`); ya en camelCase en el propio DTO (no hay forma snake_case porque no viene de una API real todavía) |
+
+`common.ts`: `Currency = 'GTQ'` (literal, no unión), `ID = string`, `ISODateString = string`,
+`UserRole` (rol de acceso). `toDomainDate/toDtoDate` (timestamp completo, `Date.toISOString`)
+vs. `toDomainCalendarDate/toDtoCalendarDate` (fecha civil `YYYY-MM-DD`, construida con
+getters locales para no desplazar el día por zona horaria).
+
+### Datasets de mock
+
+- `services/mockData.ts`: sesión demo, `amenity-1/2`, `room-type-suite-jardin/deluxe`,
+  `rate-suite-jardin/deluxe`, `room-101/202`, `guest-1`, `booking-1`, `payment-1`,
+  `product-1/2`. IDs con prefijo legible (`room-101`, `booking-1`).
+- `shared/mocks/lot-b.ts`: 5 `roomTypes` (`RT-01..05`), 14 `rooms` (`RM-101..503`),
+  12 `guests` (`GST-001..012`), 10 `rates` (`RATE-01..10`), 20 `bookings`
+  (`BKG-001..020`, código de confirmación `AUR-260NN`), 3 `promotions` (`PROMO-01..03`).
+  IDs con prefijo en mayúsculas y numeración con cero a la izquierda.
+- **Todas las fechas de ambos datasets ya están en ISO 8601** (`YYYY-MM-DD` para
+  fecha civil, timestamp completo con `Z` para `created_at/updated_at`). No se
+  encontró ningún literal `dd-mm-aaaa` en un DTO ni en un dataset — ver FASE 2.1.
+- **Inconsistencia encontrada (no es uno de los huecos a resolver en este plan,
+  se reporta y no se toca):** `lot-b.ts` referencia `amenity_ids: ['AM-01', ...,
+'AM-06']` en sus `roomTypes`, pero ningún dataset define amenidades con esos
+  IDs — `mockData.ts` solo tiene `amenity-1`/`amenity-2`. Es una referencia rota
+  preexistente (ningún servicio sirve amenidades desde `lot-b.ts` hoy, así que no
+  falla en runtime), pero es relevante para la FASE 3.2 (catálogo de amenidades)
+  y para cuando alguien conecte `catalogService` a `lot-b.ts`. Se documenta en
+  `docs/CONTRATO-DATOS.md` como pendiente separado, no se corrige aquí.
+
+### Qué necesita móvil (MOV-04) vs. qué tiene la web — tabla de huecos
+
+| Entidad que móvil necesita  | ¿Existe en la web?                    | Hueco                                                                                                                                                | Se resuelve en                                                            |
+| --------------------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `user` (puesto de personal) | Sí, `entities/user/`                  | Ninguno                                                                                                                                              | —                                                                         |
+| `room`                      | Sí, `entities/room/`                  | Literales de estado no alineados con el flujo de limpieza que móvil necesita (`dirty/cleaning/clean/inspected/blocked`)                              | Documentado como conflicto en FASE 2.2, **no se cambia en silencio**      |
+| `guest`                     | Sí, `entities/guest/`                 | Ninguno                                                                                                                                              | —                                                                         |
+| `booking`                   | Sí, `entities/booking/`               | Falta el código de vinculación que el huésped teclea en la app (MOV-14)                                                                              | FASE 2.3                                                                  |
+| `service_request`           | **No existe**                         | Entidad completa                                                                                                                                     | FASE 2.4                                                                  |
+| `order`                     | **No existe**                         | Entidad completa                                                                                                                                     | FASE 2.4                                                                  |
+| `product`                   | Sí, `entities/product/`               | Catálogo de categorías sin mapeo exacto para agrupar el menú de Room Service                                                                         | Documentado como decisión de equipo, FASE 3.2                             |
+| `amenity`                   | Sí, `entities/amenity/`               | Mismo problema de catálogo de categorías; además la referencia rota `AM-0N` en `lot-b.ts`                                                            | Decisión de equipo FASE 3.2 (catálogo); referencia rota solo reportada    |
+| `notification`              | No existe, **y no debe existir aquí** | No es un hueco del contrato web — es una entidad exclusiva de móvil (según la tabla de la consigna, "Solo móvil"). Móvil la define en su propio repo | Se documenta en el contrato como "fuera de alcance de la web", no se crea |
+
+Adicional, no pedido por móvil pero cruzado por `order`/`service_request`:
+
+- `charge`: ya existe como entidad de la web (contrato listo, sin dataset/servicio).
+  `order`/`service_request` necesitan enlazar ahí el consumo — se referencia por
+  `chargeId?` opcional, sin forzar a wire-earlo en este PR (fuera de alcance).
+
+## FASE 2 — Huecos conocidos (verificación y resolución)
+
+| #   | Hueco                                    | ¿Seguía presente?                                                                   | Resolución                                                                                            |
+| --- | ---------------------------------------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| 2.1 | Fechas `dd-mm-aaaa` en DTO               | **No** — ya resuelto en un cierre anterior (Fase 0). Todo DTO usa ISO 8601          | Sin cambios de código; se documenta que ya cumple                                                     |
+| 2.2 | Máquinas de estado compartidas           | Sí — no existía `shared/constants/statuses.ts`                                      | Ver commit "feat: extraer las máquinas de estado a un contrato compartido"                            |
+| 2.3 | Código de vinculación de reserva         | Sí — `BookingDTO` no lo tenía                                                       | Ver commit "feat: agregar código de vinculación de reserva"                                           |
+| 2.4 | `order`/`service_request` como entidades | Sí — no existían                                                                    | Ver commit "feat: incorporar order y service_request al contrato"                                     |
+| 2.5 | `session/` vs `user/`                    | Ya estaba bien separado y documentado (`modules/auth/README.md`, `ARCHITECTURE.md`) | Se traslada esa explicación a `docs/CONTRATO-DATOS.md` para que móvil no tenga que leer el código web |
+
+## Bitácora de commits
+
+| Fase | Descripción                                                                | Commit        | Estado |
+| ---- | -------------------------------------------------------------------------- | ------------- | ------ |
+| 1    | Rama creada desde `origin/develop`; inventario de contrato, mocks y huecos | (este commit) | hecho  |
