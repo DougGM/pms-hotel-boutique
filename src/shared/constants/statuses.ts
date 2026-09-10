@@ -146,3 +146,51 @@ export const SERVICE_REQUEST_STATUS_TRANSITIONS: Record<
   completed: [],
   rejected: [],
 };
+
+// --- guest_account (Lote C, WEB-11) -------------------------------------
+//
+// Folio de una estadía. `open` mientras la reserva sigue en curso y puede
+// recibir cargos/pagos nuevos; `closed` al hacer check-out, con el saldo ya
+// definitivo. No se reabre — un ajuste posterior es un cargo/pago nuevo,
+// no reabrir el folio.
+export const GUEST_ACCOUNT_STATUSES = ['open', 'closed'] as const;
+export type GuestAccountStatus = (typeof GUEST_ACCOUNT_STATUSES)[number];
+
+export const GUEST_ACCOUNT_STATUS_TRANSITIONS: Record<
+  GuestAccountStatus,
+  readonly GuestAccountStatus[]
+> = {
+  open: ['closed'],
+  closed: [],
+};
+
+// --- deposit (Lote C, WEB-11) --------------------------------------------
+//
+// Depósito o garantía entregado al check-in. `held` mientras la estadía
+// sigue activa; al check-out se decide si se `refund`ea de vuelta al
+// huésped o se `apply`ica contra un cargo pendiente.
+export const DEPOSIT_STATUSES = ['held', 'refunded', 'applied'] as const;
+export type DepositStatus = (typeof DEPOSIT_STATUSES)[number];
+
+export const DEPOSIT_STATUS_TRANSITIONS: Record<DepositStatus, readonly DepositStatus[]> = {
+  held: ['refunded', 'applied'],
+  refunded: [],
+  applied: [],
+};
+
+// --- cash_session (Lote C, WEB-11) ---------------------------------------
+//
+// Jornada de caja: `open` desde que se cuenta el saldo inicial hasta el
+// cierre; `closed` cuando se cuenta el saldo final y se registra la
+// diferencia contra lo esperado. No se reabre — un ajuste posterior es un
+// movimiento en la siguiente jornada.
+export const CASH_SESSION_STATUSES = ['open', 'closed'] as const;
+export type CashSessionStatus = (typeof CASH_SESSION_STATUSES)[number];
+
+export const CASH_SESSION_STATUS_TRANSITIONS: Record<
+  CashSessionStatus,
+  readonly CashSessionStatus[]
+> = {
+  open: ['closed'],
+  closed: [],
+};

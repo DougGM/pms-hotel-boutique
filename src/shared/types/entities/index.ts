@@ -11,6 +11,15 @@ export type {
   AmenityCategory,
 } from './amenity';
 export type {
+  AuditLogDTO,
+  AuditLogDto,
+  AuditModuleDto,
+  AuditActionDto,
+  AuditLog,
+  AuditModule,
+  AuditAction,
+} from './audit-log';
+export type {
   BookingDTO,
   BookingDto,
   BookingStatusDto,
@@ -18,8 +27,56 @@ export type {
   Booking,
   BookingStatus,
 } from './booking';
+export type {
+  CashMovementDTO,
+  CashMovementDto,
+  CashMovementTypeDto,
+  CashMovement,
+  CashMovementType,
+} from './cash-movement';
+export type {
+  CashSessionDTO,
+  CashSessionDto,
+  CashSessionStatusDto,
+  CashSession,
+  CashSessionStatus,
+} from './cash-session';
 export type { ChargeDTO, ChargeDto, ChargeStatusDto, Charge, ChargeStatus } from './charge';
+export type {
+  DepositDTO,
+  DepositDto,
+  DepositMethodDto,
+  DepositStatusDto,
+  Deposit,
+  DepositMethod,
+  DepositStatus,
+} from './deposit';
 export type { GuestDTO, GuestDto, GuestDocumentTypeDto, Guest, GuestDocumentType } from './guest';
+export type {
+  GuestAccountDTO,
+  GuestAccountDto,
+  GuestAccountStatusDto,
+  GuestAccount,
+  GuestAccountStatus,
+} from './guest-account';
+export type {
+  InventoryItemDTO,
+  InventoryItemDto,
+  InventoryItemCategoryDto,
+  InventoryUnitDto,
+  InventoryItem,
+  InventoryItemCategory,
+  InventoryUnit,
+} from './inventory-item';
+export type {
+  InventoryMovementDTO,
+  InventoryMovementDto,
+  InventoryMovementTypeDto,
+  InventoryMovementReasonDto,
+  InventoryMovement,
+  InventoryMovementType,
+  InventoryMovementReason,
+} from './inventory-movement';
 export type {
   OrderDTO,
   OrderDto,
@@ -40,6 +97,7 @@ export type {
   PaymentMethod,
   PaymentStatus,
 } from './payment';
+export type { PermissionDTO, PermissionDto, Permission } from './permission';
 export type {
   ProductDTO,
   ProductDto,
@@ -49,6 +107,7 @@ export type {
 } from './product';
 export type { PromotionDto, Promotion } from './promotion';
 export type { RateDTO, RateDto, Rate } from './rate';
+export type { RoleDTO, RoleDto, Role } from './role';
 export type {
   RoomDTO,
   RoomDto,

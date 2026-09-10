@@ -168,6 +168,145 @@ Dos campos independientes en la entidad `room`:
   check-out y bloqueo por mantenimiento son operación de recepción, en la
   web. Móvil solo lee `status`.
 
+## D-003 · El catálogo `role`/`permission` no es una FK desde `user.role`
+
+**Fecha:** 2026-09-10 · **Estado:** aceptada e implementada.
+
+### Contexto
+
+WEB-12 (Lote D) pide "roles con su conjunto de permisos, de forma que se
+pueda probar que un rol ve unas opciones y otro no". `user.role` ya existe
+como literal de puesto (`UserRoleDto`, contrato publicado desde el trabajo
+del contrato compartido) y no se puede cambiar de tipo sin aviso — ver
+sección 7 de `docs/CONTRATO-DATOS.md`. Se necesitaba un catálogo nuevo
+(`role` con su lista de `permission`) sin romper eso.
+
+### Decisión
+
+`role.code` usa exactamente los mismos literales que `UserRoleDto`
+(incluidos los dos nuevos de este PR: `room_service`, `concierge`), pero
+**no es una FK real** desde `user.role` — es una correspondencia por
+valor. `user.role` sigue siendo el literal que ya era; `role` es un
+catálogo aparte que describe qué puede hacer cada puesto.
+`scripts/test-referential-integrity.mjs` verifica la correspondencia
+(todo `user.role` tiene un `role.code` igual) sin necesitar un `role_id`
+en `user`.
+
+### Consecuencias
+
+- **Gana** el proyecto: WEB-12 puede modelar permisos por rol sin abrir
+  una migración de tipo sobre `user`, que ya estaba en uso por WEB-06
+  (guardas de ruta) y por el contrato compartido con móvil.
+- **Cuesta**: la correspondencia es por valor, no por FK — si `role.code`
+  y `UserRoleDto` alguna vez divergen (alguien agrega un rol nuevo en uno
+  y no en el otro), no hay una restricción de base de datos que lo impida,
+  solo la prueba de integridad referencial.
+- **A quién afecta**: a quien construya la pantalla de "roles y permisos"
+  del Lote D — debe leer `role.permission_ids` para decidir qué mostrar,
+  nunca inferir permisos a partir del literal `user.role` directamente.
+
+### Qué NO hacer
+
+- **No agregar un `role_id` a `user`** para forzar una FK real. Es un
+  cambio de tipo sobre una entidad ya publicada — necesita coordinarse
+  con el equipo y con móvil antes, no decidirse dentro de un PR de datos
+  mock.
+- **No usar la sesión de acceso al PMS (`UserRole` de `common.ts`:
+  `ADMIN`/`RECEPTIONIST`/`MANAGER`/`STAFF`) como si fuera lo mismo que
+  `role`.** Son tres conceptos ya deliberadamente separados: sesión de
+  acceso, puesto de personal (`user.role`) y este catálogo de
+  configuración (`role`/`permission`). Ver también la separación
+  `session`/`user` en `docs/CONTRATO-DATOS.md` sección 3.12.
+
+### Alternativas consideradas
+
+1. **FK real (`user.role_id` → `role.id`)** — descartada por lo ya dicho:
+   cambiaría el tipo de un campo publicado sin el aviso que exige la
+   sección 7 del contrato.
+2. **No crear `role`/`permission` y resolver permisos con un `switch`
+   sobre `user.role` en cada pantalla** — descartada: es exactamente el
+   antipatrón que WEB-12 pide evitar ("se pueda probar que un rol ve unas
+   opciones y otro no" implica un catálogo consultable, no lógica
+   dispersa).
+
+## D-004 · Formato de SKU de inventario (PENDIENTE — decisión de equipo)
+
+**Fecha:** 2026-09-10 · **Estado:** pendiente — valor provisional en uso.
+
+### Contexto
+
+El Lote C/D necesitaba poblar `product.sku` (25 productos) e
+`inventory_item.sku` (10 artículos, catálogo separado del de producto) sin
+frenar el resto del trabajo. `docs/CONTRATO-DATOS.md` sección 6.1 ya
+documentaba esta decisión como pendiente desde el contrato compartido,
+con tres opciones y una recomendación — este PR **no la decide**, solo
+aplica esa recomendación de forma provisional para tener datos con los que
+trabajar.
+
+### Decisión (provisional, no definitiva)
+
+Prefijo por categoría + secuencia: `MIN-0001`…`MIN-0008` (minibar),
+`FYB-0001`…`FYB-0010` (comida y bebida), `SHP-0001`…`SHP-0005` (tienda),
+`OTH-0001`…`OTH-0002` (otro) para `product`; `INV-0001`…`INV-0010` para
+`inventory_item` (catálogo de SKU aparte, no comparte numeración con
+producto). Marcado como provisional en el comentario de
+`shared/mocks/lot-d.ts`.
+
+### Consecuencias
+
+- Si el equipo elige otra opción (texto libre, o código opaco con
+  `display_name` aparte — sección 6.1), **hay que migrar los 35 SKU de
+  este dataset**, no son estables todavía.
+- Ningún test de contrato valida el formato del SKU con una expresión
+  regular — a propósito, para no congelar una decisión que no se ha
+  tomado.
+
+### Qué NO hacer
+
+- **No asumir que `MIN-0001`/`INV-0001` son el formato final.** Cualquier
+  pantalla o servicio que valide el formato de un SKU con una expresión
+  regular estaría congelando una decisión pendiente.
+- **No decidir esto sin la sesión de equipo** solo porque ya hay datos
+  con este formato — los datos son de prueba, la decisión sigue abierta.
+
+## D-005 · Catálogo de categorías: producto, amenidad e inventario (PENDIENTE — decisión de equipo)
+
+**Fecha:** 2026-09-10 · **Estado:** pendiente.
+
+### Contexto
+
+`docs/CONTRATO-DATOS.md` sección 6.2 ya documentaba la falta de mapeo
+entre `ProductCategoryDto`/`AmenityCategoryDto` y las secciones de menú
+que necesita móvil. Este PR agregó una **tercera** taxonomía,
+`InventoryItemCategoryDto` (`room_service | housekeeping | maintenance |
+office`), para `inventory_item` — necesaria para agrupar el inventario,
+pero que tampoco se reconcilia con las otras dos.
+
+### Decisión (provisional, no definitiva)
+
+Se mantienen las tres taxonomías **independientes** por ahora: cada una
+resuelve el problema inmediato de su propia entidad (facturación para
+`product`, agrupación de horarios para `amenity`, tipo de insumo para
+`inventory_item`), sin intentar unificarlas.
+
+### Consecuencias
+
+- Un producto de Room Service que también es un artículo de inventario
+  (la mayoría de `INV-001`…`INV-005`) tiene **dos categorías
+  independientes** (`product.category` y `inventory_item.category`) que
+  pueden decir cosas distintas del mismo objeto — es correcto mientras no
+  se decida una taxonomía única, pero hay que explicarlo así en cualquier
+  pantalla que muestre ambas.
+
+### Qué NO hacer
+
+- **No agregar una cuarta taxonomía** para resolver un caso puntual sin
+  antes revisar las tres existentes en la misma sesión de equipo.
+- **No asumir que `InventoryItemCategoryDto` y `ProductCategoryDto` se
+  corresponden 1 a 1** (p. ej. `room_service` de inventario no es lo mismo
+  que ningún valor de `ProductCategoryDto`) — son taxonomías distintas
+  hasta que el equipo decida lo contrario.
+
 ## Cómo agregar una nueva decisión
 
 Copiar la estructura de D-001: **Contexto** (qué problema había y qué

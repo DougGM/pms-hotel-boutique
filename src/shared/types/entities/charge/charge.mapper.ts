@@ -14,6 +14,7 @@ export const toDomain = (dto: ChargeDto): Charge => ({
   status: dto.status,
   chargedAt: toDomainDate(dto.charged_at),
   createdByUserId: dto.created_by_user_id,
+  voidReason: dto.void_reason,
   createdAt: toDomainDate(dto.created_at),
 });
 
@@ -29,5 +30,6 @@ export const toDTO = (model: Charge): ChargeDto => ({
   status: model.status,
   charged_at: toDtoDate(model.chargedAt),
   created_by_user_id: model.createdByUserId,
+  void_reason: model.voidReason,
   created_at: toDtoDate(model.createdAt),
 });

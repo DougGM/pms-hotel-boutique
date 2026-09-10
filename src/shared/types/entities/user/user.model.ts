@@ -1,4 +1,5 @@
-export type UserRole = 'admin' | 'manager' | 'frontDesk' | 'housekeeping' | 'maintenance';
+export type UserRole =
+  'admin' | 'manager' | 'frontDesk' | 'housekeeping' | 'maintenance' | 'roomService' | 'concierge';
 export type UserStatus = 'active' | 'inactive';
 
 export interface User {
