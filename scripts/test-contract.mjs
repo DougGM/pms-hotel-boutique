@@ -25,6 +25,7 @@ const ENTITIES_WITH_FOLDER = [
   'promotion',
   'rate',
   'room',
+  'room-feature',
   'room-type',
   'service-request',
   'session',

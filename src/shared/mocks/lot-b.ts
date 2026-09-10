@@ -3,9 +3,11 @@ import type { GuestDto } from '@/shared/types/entities/guest';
 import type { PromotionDto } from '@/shared/types/entities/promotion';
 import type { RateDto } from '@/shared/types/entities/rate';
 import type { RoomDto } from '@/shared/types/entities/room';
+import type { RoomFeatureDto } from '@/shared/types/entities/room-feature';
 import type { RoomTypeDto } from '@/shared/types/entities/room-type';
 
 export interface LotBMockData {
+  roomFeatures: RoomFeatureDto[];
   roomTypes: RoomTypeDto[];
   rooms: RoomDto[];
   guests: GuestDto[];
@@ -15,6 +17,56 @@ export interface LotBMockData {
 }
 
 export const lotBMockData: LotBMockData = {
+  // Características de habitación, no amenidades del hotel (ver
+  // room-type.dto.ts y docs/CONTRATO-DATOS.md sección 3.2). Antes de este
+  // catálogo, roomTypes.amenity_ids referenciaba 'AM-01'..'AM-06', que no
+  // existían en ningún dataset — referencia rota, corregida junto con este
+  // catálogo.
+  roomFeatures: [
+    {
+      id: 'RF-01',
+      name: 'Aire acondicionado',
+      description: 'Climatización individual controlable desde la habitación.',
+      created_at: '2026-01-01T00:00:00.000Z',
+      updated_at: '2026-01-01T00:00:00.000Z',
+    },
+    {
+      id: 'RF-02',
+      name: 'Balcón privado',
+      description: 'Acceso directo desde la habitación, con mobiliario exterior.',
+      created_at: '2026-01-01T00:00:00.000Z',
+      updated_at: '2026-01-01T00:00:00.000Z',
+    },
+    {
+      id: 'RF-03',
+      name: 'Vista al jardín',
+      description: 'Ventanal orientado hacia las áreas verdes del hotel.',
+      created_at: '2026-01-01T00:00:00.000Z',
+      updated_at: '2026-01-01T00:00:00.000Z',
+    },
+    {
+      id: 'RF-04',
+      name: 'Minibar',
+      description: 'Refrigerador con bebidas y snacks de cortesía.',
+      created_at: '2026-01-01T00:00:00.000Z',
+      updated_at: '2026-01-01T00:00:00.000Z',
+    },
+    {
+      id: 'RF-05',
+      name: 'Bañera de hidromasaje',
+      description: 'Tina con sistema de hidromasaje en el baño de la habitación.',
+      created_at: '2026-01-01T00:00:00.000Z',
+      updated_at: '2026-01-01T00:00:00.000Z',
+    },
+    {
+      id: 'RF-06',
+      name: 'Sala de estar independiente',
+      description: 'Área de estar separada del dormitorio, con sofá y mesa de centro.',
+      created_at: '2026-01-01T00:00:00.000Z',
+      updated_at: '2026-01-01T00:00:00.000Z',
+    },
+  ],
+
   roomTypes: [
     {
       id: 'RT-01',
@@ -23,7 +75,7 @@ export const lotBMockData: LotBMockData = {
       description: 'Habitación acogedora para una estancia práctica y tranquila.',
       capacity: 2,
       bed_configuration: '1 cama matrimonial',
-      amenity_ids: ['AM-01', 'AM-02', 'AM-03'],
+      room_feature_ids: ['RF-01', 'RF-02', 'RF-03'],
       active: true,
       created_at: '2026-01-01T00:00:00.000Z',
       updated_at: '2026-01-01T00:00:00.000Z',
@@ -35,7 +87,7 @@ export const lotBMockData: LotBMockData = {
       description: 'Habitación amplia con área de descanso y vista al jardín.',
       capacity: 2,
       bed_configuration: '1 cama king',
-      amenity_ids: ['AM-01', 'AM-02', 'AM-03', 'AM-04'],
+      room_feature_ids: ['RF-01', 'RF-02', 'RF-03', 'RF-04'],
       active: true,
       created_at: '2026-01-01T00:00:00.000Z',
       updated_at: '2026-01-01T00:00:00.000Z',
@@ -47,7 +99,7 @@ export const lotBMockData: LotBMockData = {
       description: 'Suite con sala integrada, ideal para estancias prolongadas.',
       capacity: 3,
       bed_configuration: '1 cama king y sofá cama',
-      amenity_ids: ['AM-01', 'AM-02', 'AM-03', 'AM-04', 'AM-05'],
+      room_feature_ids: ['RF-01', 'RF-02', 'RF-03', 'RF-04', 'RF-05'],
       active: true,
       created_at: '2026-01-01T00:00:00.000Z',
       updated_at: '2026-01-01T00:00:00.000Z',
@@ -59,7 +111,7 @@ export const lotBMockData: LotBMockData = {
       description: 'Espacio cómodo para familias o grupos pequeños.',
       capacity: 4,
       bed_configuration: '2 camas matrimoniales',
-      amenity_ids: ['AM-01', 'AM-02', 'AM-03', 'AM-05'],
+      room_feature_ids: ['RF-01', 'RF-02', 'RF-03', 'RF-05'],
       active: true,
       created_at: '2026-01-01T00:00:00.000Z',
       updated_at: '2026-01-01T00:00:00.000Z',
@@ -71,7 +123,7 @@ export const lotBMockData: LotBMockData = {
       description: 'Suite exclusiva con sala, terraza privada y servicio personalizado.',
       capacity: 4,
       bed_configuration: '1 cama king y sala independiente',
-      amenity_ids: ['AM-01', 'AM-02', 'AM-03', 'AM-04', 'AM-05', 'AM-06'],
+      room_feature_ids: ['RF-01', 'RF-02', 'RF-03', 'RF-04', 'RF-05', 'RF-06'],
       active: true,
       created_at: '2026-01-01T00:00:00.000Z',
       updated_at: '2026-01-01T00:00:00.000Z',

@@ -6,6 +6,7 @@ import type { PaymentDto } from '@/shared/types/entities/payment';
 import type { ProductDto } from '@/shared/types/entities/product';
 import type { RateDto } from '@/shared/types/entities/rate';
 import type { RoomDto } from '@/shared/types/entities/room';
+import type { RoomFeatureDto } from '@/shared/types/entities/room-feature';
 import type { RoomTypeDto } from '@/shared/types/entities/room-type';
 
 const createdAt = '2026-01-10T12:00:00.000Z';
@@ -45,6 +46,36 @@ export const mockAmenities: AmenityDto[] = [
   },
 ];
 
+// Características de habitación, no amenidades del hotel (ver
+// room-type.dto.ts y docs/CONTRATO-DATOS.md sección 3.2). Antes de este
+// catálogo, mockRoomTypes.amenity_ids referenciaba mockAmenities
+// directamente (Wi-Fi/Desayuno colgando de un tipo de habitación
+// específico) — resuelve sin romper la referencia, pero es la misma
+// confusión conceptual que rompía room_feature_ids en lot-b.ts.
+export const mockRoomFeatures: RoomFeatureDto[] = [
+  {
+    id: 'room-feature-1',
+    name: 'Aire acondicionado',
+    description: 'Climatización individual controlable desde la habitación.',
+    created_at: createdAt,
+    updated_at: createdAt,
+  },
+  {
+    id: 'room-feature-2',
+    name: 'Vista al jardín',
+    description: 'Ventanal orientado hacia las áreas verdes del hotel.',
+    created_at: createdAt,
+    updated_at: createdAt,
+  },
+  {
+    id: 'room-feature-3',
+    name: 'Minibar',
+    description: 'Refrigerador con bebidas y snacks de cortesía.',
+    created_at: createdAt,
+    updated_at: createdAt,
+  },
+];
+
 // Price now lives on Rate and capacity/description on RoomType (the official
 // WEB-09 contract), not on Room: a real availability response would not
 // inline them on the physical room. `bed_configuration` is placeholder data
@@ -57,7 +88,7 @@ export const mockRoomTypes: RoomTypeDto[] = [
     description: 'Suite con vista al jardín.',
     capacity: 2,
     bed_configuration: '1 cama king',
-    amenity_ids: ['amenity-1', 'amenity-2'],
+    room_feature_ids: ['room-feature-1', 'room-feature-2'],
     active: true,
     created_at: createdAt,
     updated_at: createdAt,
@@ -69,7 +100,7 @@ export const mockRoomTypes: RoomTypeDto[] = [
     description: 'Habitación amplia y luminosa.',
     capacity: 3,
     bed_configuration: '1 cama king y 1 individual',
-    amenity_ids: ['amenity-1'],
+    room_feature_ids: ['room-feature-1', 'room-feature-3'],
     active: true,
     created_at: createdAt,
     updated_at: createdAt,
