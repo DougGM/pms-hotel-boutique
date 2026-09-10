@@ -1,6 +1,7 @@
 import { build } from 'esbuild';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, readFile, readdir } from 'node:fs/promises';
 import { createRequire } from 'node:module';
+import path from 'node:path';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -18,6 +19,9 @@ await build({
     'src/shared/mocks/lot-c.ts',
     'src/shared/mocks/lot-d.ts',
     'src/shared/utils/amenitySchedule.ts',
+    'src/shared/utils/inventoryConsumption.ts',
+    'src/shared/types/entities/product/index.ts',
+    'src/shared/constants/catalog-categories.ts',
   ],
   outdir: '.cache',
   outbase: 'src',
@@ -39,6 +43,8 @@ const load = (relativePath) => {
 const { lotCMockData } = load('shared/mocks/lot-c');
 const { lotDMockData } = load('shared/mocks/lot-d');
 const { isAmenityOpenAt } = load('shared/utils/amenitySchedule');
+const { calculateInventoryConsumption } = load('shared/utils/inventoryConsumption');
+const productMapper = load('shared/types/entities/product/index');
 
 // --- A. Cuentas del huésped: cargos - pagos = saldo -----------------------
 
@@ -261,4 +267,122 @@ test('product: al menos 25 productos de Room Service, al menos uno desactivado',
   assert.ok(lotDMockData.products.length >= 25, 'se esperaban al menos 25 productos');
   const inactive = lotDMockData.products.filter((product) => !product.active);
   assert.ok(inactive.length > 0, 'debía existir al menos un producto desactivado');
+});
+
+// --- F. Consumo de inventario por producto (PR #36, D-006) ----------------
+//
+// El vínculo producto <-> inventario ya no es una FK 1 a 1
+// (`inventory_item.product_id`, retirado) sino una lista de consumo con
+// cantidad en `product.inventory_consumption`, resuelta por la única
+// función compartida `calculateInventoryConsumption`. Cubre los 4 casos
+// pedidos: un artículo, varios artículos, ninguno, y unidad de venta
+// distinta de la de almacén.
+
+const productModel = (id) => productMapper.toDomain(lotDMockData.products.find((p) => p.id === id));
+
+test('calculateInventoryConsumption: producto que consume exactamente un artículo (botella de agua)', () => {
+  const result = calculateInventoryConsumption(productModel('PRD-001'), 3);
+  assert.deepEqual(result, [{ inventoryItemId: 'INV-001', quantity: 3 }]);
+});
+
+test('calculateInventoryConsumption: producto que consume varios artículos (club sandwich)', () => {
+  const result = calculateInventoryConsumption(productModel('PRD-010'), 2);
+  assert.deepEqual(result, [
+    { inventoryItemId: 'INV-011', quantity: 4 },
+    { inventoryItemId: 'INV-012', quantity: 0.1 },
+    { inventoryItemId: 'INV-013', quantity: 0.06 },
+  ]);
+});
+
+test('calculateInventoryConsumption: producto que no consume ningún artículo (servicio de planchado)', () => {
+  const result = calculateInventoryConsumption(productModel('PRD-024'), 5);
+  assert.deepEqual(result, []);
+});
+
+test('calculateInventoryConsumption: unidad de venta distinta de la de almacén (café por taza, almacenado en kg)', () => {
+  const cafeItem = lotDMockData.inventoryItems.find((item) => item.id === 'INV-014');
+  assert.equal(cafeItem.unit, 'kg', 'el café en grano se almacena en kg, no "por taza"');
+  const result = calculateInventoryConsumption(productModel('PRD-017'), 1);
+  assert.deepEqual(result, [{ inventoryItemId: 'INV-014', quantity: 0.018 }]);
+});
+
+test('product.inventory_consumption: toda cantidad es positiva', () => {
+  for (const product of lotDMockData.products) {
+    for (const line of product.inventory_consumption ?? []) {
+      assert.ok(
+        line.quantity > 0,
+        `${product.id}: inventory_consumption de "${line.inventory_item_id}" debe ser positivo`,
+      );
+    }
+  }
+});
+
+// --- G. Taxonomía de categorías compartida (D-006) -------------------------
+
+const { CATALOG_CATEGORY_DTOS } = load('shared/constants/catalog-categories');
+const VALID_CATEGORIES = new Set(CATALOG_CATEGORY_DTOS);
+
+test('product.category y inventoryItem.category pertenecen a la taxonomía compartida', () => {
+  for (const product of lotDMockData.products) {
+    assert.ok(
+      VALID_CATEGORIES.has(product.category),
+      `${product.id}: categoría "${product.category}" no pertenece a la taxonomía compartida`,
+    );
+  }
+  for (const item of lotDMockData.inventoryItems) {
+    assert.ok(
+      VALID_CATEGORIES.has(item.category),
+      `${item.id}: categoría "${item.category}" no pertenece a la taxonomía compartida`,
+    );
+  }
+});
+
+test('inventoryItem: un artículo vinculado a un producto usa la misma categoría que ese producto', () => {
+  for (const product of lotDMockData.products) {
+    for (const line of product.inventory_consumption ?? []) {
+      const item = lotDMockData.inventoryItems.find((entry) => entry.id === line.inventory_item_id);
+      assert.equal(
+        item.category,
+        product.category,
+        `${item.id} (${item.category}) debía compartir categoría con ${product.id} (${product.category})`,
+      );
+    }
+  }
+});
+
+// --- H. Verificación estática: nadie reimplementa el cálculo de consumo ----
+
+async function collectSourceFiles(dir) {
+  const entries = await readdir(dir, { withFileTypes: true });
+  const files = [];
+  for (const entry of entries) {
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...(await collectSourceFiles(fullPath)));
+    } else if (/\.(ts|tsx)$/.test(entry.name)) {
+      files.push(fullPath);
+    }
+  }
+  return files;
+}
+
+// Heurística: alguien que reimplemente el descuento tiene que leer
+// `inventoryConsumption` y multiplicar por una cantidad — si aparece fuera
+// de la única función compartida, esta prueba lo atrapa.
+const CONSUMPTION_CALCULATION = /inventoryConsumption[\s\S]{0,120}quantity\s*\*/;
+
+test('verificación estática: ninguna pantalla reimplementa el cálculo de consumo de inventario', async () => {
+  const ALLOWED = [path.normalize('src/shared/utils/inventoryConsumption.ts')];
+  const files = await collectSourceFiles('src');
+  const offenders = [];
+  for (const file of files) {
+    if (ALLOWED.includes(path.normalize(file))) continue;
+    const content = await readFile(file, 'utf8');
+    if (CONSUMPTION_CALCULATION.test(content)) offenders.push(file);
+  }
+  assert.deepStrictEqual(
+    offenders,
+    [],
+    `estos archivos reimplementan el cálculo de consumo fuera de shared/utils/inventoryConsumption.ts: ${offenders.join(', ')}`,
+  );
 });

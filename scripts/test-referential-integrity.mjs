@@ -286,14 +286,6 @@ const FK_CHECKS = [
   },
   {
     dataset: 'lot-d',
-    label: 'inventoryItem.product_id -> product',
-    records: lotDMockData.inventoryItems,
-    field: 'product_id',
-    target: idsOf(lotDMockData.products),
-    optional: true,
-  },
-  {
-    dataset: 'lot-d',
     label: 'inventoryMovement.inventory_item_id -> inventoryItem',
     records: lotDMockData.inventoryMovements,
     field: 'inventory_item_id',
@@ -333,6 +325,22 @@ for (const check of FK_CHECKS) {
     }
   });
 }
+
+// `product.inventory_consumption[].inventory_item_id -> inventoryItem`
+// queda fuera de FK_CHECKS: no es un campo con un solo ID ni un array de
+// IDs (`multi`), es un array de objetos `{ inventory_item_id, quantity }`
+// (Lote D, WEB-12, ver docs/DECISIONES.md D-006).
+test('integridad referencial (lot-d): product.inventory_consumption[].inventory_item_id -> inventoryItem', () => {
+  const inventoryItemIds = idsOf(lotDMockData.inventoryItems);
+  for (const product of lotDMockData.products) {
+    for (const line of product.inventory_consumption ?? []) {
+      assert.ok(
+        inventoryItemIds.has(line.inventory_item_id),
+        `${product.id}: inventory_consumption -> "${line.inventory_item_id}" no existe en inventoryItem`,
+      );
+    }
+  }
+});
 
 // --- B. Ningún catálogo tiene IDs duplicados -----------------------------
 
