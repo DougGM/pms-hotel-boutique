@@ -100,3 +100,24 @@ todavía.
 
 **No se encontraron usos inesperados ni definiciones divergentes.** Se procede
 a la FASE 2.
+
+## FASE 2 — Las dos máquinas de estado
+
+Commit `9bdbed9`. `src/shared/constants/statuses.ts`:
+
+- `ROOM_STATUSES` (ocupación, dueño web): `available | occupied | maintenance |
+outOfService` — los mismos 4 literales que ya existían; solo se retiró
+  `cleaning`.
+- `ROOM_HOUSEKEEPING_STATUSES` (limpieza, dueño móvil, **nueva**):
+  `dirty | cleaning | clean | inspected`, con sus transiciones tal como las
+  pedía el plan (`dirty→cleaning→clean→inspected`, `inspected→dirty`,
+  `clean→dirty`).
+- `isRoomAssignable(room)`: `status === 'available' && housekeepingStatus in
+('clean', 'inspected')`. Toma un tipo estructural (`RoomAssignabilityInput`)
+  en vez de importar `Room` del Model, para no crear un import circular entre
+  `shared/constants` y `shared/types/entities/room`.
+
+**Commit deliberadamente rompe el typecheck** en `room.mapper.ts` (todavía
+referencia el `RoomStatusDto` viejo, con `cleaning` incluido) — se corrige en
+la FASE 3, que es la que migra la entidad. No se corre `npm run check` hasta
+el final de la FASE 3.
