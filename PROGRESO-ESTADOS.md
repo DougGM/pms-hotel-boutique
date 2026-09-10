@@ -121,3 +121,35 @@ outOfService` — los mismos 4 literales que ya existían; solo se retiró
 referencia el `RoomStatusDto` viejo, con `cleaning` incluido) — se corrige en
 la FASE 3, que es la que migra la entidad. No se corre `npm run check` hasta
 el final de la FASE 3.
+
+## FASE 3 — Entidad, mappers y datos
+
+Commit `fcf1404`.
+
+- **DTO** (`room.dto.ts`): `status: RoomStatusDto` (ocupación, sin `cleaning`)
+  - `housekeeping_status: RoomHousekeepingStatusDto` (limpieza, nueva).
+- **Model** (`room.model.ts`): `status`, `housekeepingStatus` y
+  `isAssignable: boolean` — este último **no existe en el DTO**, lo calcula
+  el mapper.
+- **Mapper** (`room.mapper.ts`): convierte los dos campos reales y calcula
+  `isAssignable` con `isRoomAssignable()` de `statuses.ts`.
+- **Datasets**: las 15 habitaciones de `lot-b.ts` y las 2 de `mockData.ts`
+  (17 en total) tienen ahora ambos campos. Las dos que eran `status:
+'cleaning'` (`RM-103`, `RM-503`) pasaron a `available` +
+  `housekeeping_status: 'cleaning'`, conservando el significado original.
+  Cubre las 6 combinaciones pedidas — la crítica (libre y sucia, no
+  asignable) está en `RM-201` y `RM-502`.
+- **Consumidores**: barrels de entidades actualizados
+  (`shared/types/entities/index.ts`, `room/index.ts`). `roomService.ts` no
+  necesitó cambios — solo pasa por el mapper. Cero componentes `.tsx`
+  consumían `RoomStatus` (confirmado en la FASE 1), así que no hubo
+  pantallas que migrar — **no hubo ningún sitio donde no estuviera claro
+  qué estado aplicaba.**
+- **Tema**: `tokens.css` gana `--room-status-out-of-service` y
+  `--room-housekeeping-{dirty,cleaning,clean,inspected}`. Los tokens
+  `--room-status-cleaning`/`--room-status-blocked` quedan intactos (CSS
+  muerto de la recepción de Bolt en `index.css`, sin consumidor vivo) —
+  deliberadamente no se reutilizan para evitar que dos máquinas comparen la
+  misma variable con significados distintos.
+
+`npm run check` completo: **verde** (9 suites, 160 pruebas, 0 fallos).
