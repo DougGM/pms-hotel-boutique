@@ -162,8 +162,24 @@ datos) — se procede con la separación que pedía la consigna para este caso.
 
 ### Bitácora de commits
 
-| Commit                                                                | Descripción                                                                                                                                                                                      | Hash      | Estado |
-| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------- | ------ |
-| `fix: separar caracteristicas de habitacion de amenidades de hotel`   | Entidad `room_feature` nueva; `room-type` pasa de `amenity_ids` a `room_feature_ids`; catálogos corregidos en ambos datasets                                                                     | `6ac1383` | hecho  |
-| `docs: actualizar la bitacora con el diagnostico y el commit del fix` | —                                                                                                                                                                                                | `c6f16f9` | hecho  |
-| `test: verificar la integridad referencial de los datasets`           | `scripts/test-referential-integrity.mjs` (31 pruebas): toda referencia entre entidades de ambos datasets, sin IDs duplicados. No se encontró ninguna otra referencia rota además de la reportada | `723e599` | hecho  |
+| Commit                                                                 | Descripción                                                                                                                                                                                      | Hash      | Estado |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------- | ------ |
+| `fix: separar caracteristicas de habitacion de amenidades de hotel`    | Entidad `room_feature` nueva; `room-type` pasa de `amenity_ids` a `room_feature_ids`; catálogos corregidos en ambos datasets                                                                     | `6ac1383` | hecho  |
+| `docs: actualizar la bitacora con el diagnostico y el commit del fix`  | —                                                                                                                                                                                                | `c6f16f9` | hecho  |
+| `test: verificar la integridad referencial de los datasets`            | `scripts/test-referential-integrity.mjs` (31 pruebas): toda referencia entre entidades de ambos datasets, sin IDs duplicados. No se encontró ninguna otra referencia rota además de la reportada | `723e599` | hecho  |
+| `docs: actualizar la bitacora con el commit de la suite de integridad` | —                                                                                                                                                                                                | `d38db1c` | hecho  |
+| `docs: registrar la distincion entre caracteristica y amenidad`        | `docs/DECISIONES.md` (D-001, nuevo archivo); `docs/CONTRATO-DATOS.md` secciones 3.2/3.2b/3.6/5/6.5; línea corta en `ARCHITECTURE.md` y `CLAUDE.md`                                               | `345434f` | hecho  |
+
+### Cierre de este seguimiento
+
+- `npm run check` completo (9 suites) pasa en verde sobre el estado final.
+- No se fusionó nada, no se cerró ninguna issue, no se creó rama nueva — todo en
+  `feat/contrato-compartido` (PR #33), según las reglas de este encargo.
+- `docs/DECISIONES.md` no existía en ningún punto del historial del repo antes de
+  este seguimiento — se creó desde cero con esta como entrada D-001; no había un
+  D-001 real que "igualar en formato", se diseñó un formato ADR razonable
+  (Contexto/Decisión/Qué NO hacer/Alternativas) para que el usuario lo ajuste si
+  esperaba algo distinto.
+- Pendiente, fuera de alcance de este seguimiento: `amenity` sigue sin campo de
+  horario (la premisa del encargo asumía que ya lo tenía); agregarlo es trabajo
+  futuro si el equipo lo decide.
