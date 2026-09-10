@@ -1,4 +1,6 @@
-export type InventoryItemCategory = 'roomService' | 'housekeeping' | 'maintenance' | 'office';
+import type { CatalogCategory } from '@/shared/constants/catalog-categories';
+
+export type InventoryItemCategory = CatalogCategory;
 export type InventoryUnit = 'unit' | 'box' | 'bottle' | 'kg' | 'liter' | 'roll';
 
 export interface InventoryItem {

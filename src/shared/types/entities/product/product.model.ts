@@ -1,6 +1,7 @@
 import type { Currency } from '@/shared/types/common';
+import type { CatalogCategory } from '@/shared/constants/catalog-categories';
 
-export type ProductCategory = 'minibar' | 'shop' | 'foodAndBeverage' | 'other';
+export type ProductCategory = CatalogCategory;
 
 export interface ProductInventoryConsumption {
   inventoryItemId: string;

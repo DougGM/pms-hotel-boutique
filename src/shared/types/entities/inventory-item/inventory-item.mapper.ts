@@ -1,19 +1,17 @@
 import { toDomainDate, toDtoDate } from '@/shared/types/common';
+import {
+  toDomainCatalogCategory,
+  toDtoCatalogCategory,
+} from '@/shared/constants/catalog-categories';
 import type { InventoryItemDto } from './inventory-item.dto';
 import type { InventoryItem } from './inventory-item.model';
-
-const toDomainCategory = (category: InventoryItemDto['category']): InventoryItem['category'] =>
-  category === 'room_service' ? 'roomService' : category;
-
-const toDtoCategory = (category: InventoryItem['category']): InventoryItemDto['category'] =>
-  category === 'roomService' ? 'room_service' : category;
 
 export const toDomain = (dto: InventoryItemDto): InventoryItem => ({
   id: dto.id,
   sku: dto.sku,
   name: dto.name,
   description: dto.description,
-  category: toDomainCategory(dto.category),
+  category: toDomainCatalogCategory(dto.category),
   unit: dto.unit,
   currentQuantity: dto.current_quantity,
   minimumQuantity: dto.minimum_quantity,
@@ -28,7 +26,7 @@ export const toDTO = (model: InventoryItem): InventoryItemDto => ({
   sku: model.sku,
   name: model.name,
   description: model.description,
-  category: toDtoCategory(model.category),
+  category: toDtoCatalogCategory(model.category),
   unit: model.unit,
   current_quantity: model.currentQuantity,
   minimum_quantity: model.minimumQuantity,

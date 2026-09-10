@@ -1,6 +1,7 @@
 import type { Currency } from '@/shared/types/common';
+import type { CatalogCategoryDto } from '@/shared/constants/catalog-categories';
 
-export type ProductCategoryDto = 'minibar' | 'shop' | 'food_and_beverage' | 'other';
+export type ProductCategoryDto = CatalogCategoryDto;
 
 /**
  * Un artículo de inventario que se descuenta cuando se entrega este

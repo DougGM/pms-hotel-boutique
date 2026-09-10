@@ -1,4 +1,8 @@
 import { toDomainDate, toDtoDate } from '@/shared/types/common';
+import {
+  toDomainCatalogCategory,
+  toDtoCatalogCategory,
+} from '@/shared/constants/catalog-categories';
 import type { ProductDto } from './product.dto';
 import type { Product } from './product.model';
 
@@ -7,7 +11,7 @@ export const toDomain = (dto: ProductDto): Product => ({
   sku: dto.sku,
   name: dto.name,
   description: dto.description,
-  category: dto.category === 'food_and_beverage' ? 'foodAndBeverage' : dto.category,
+  category: toDomainCatalogCategory(dto.category),
   priceCents: dto.price_cents,
   currency: dto.currency,
   stockQuantity: dto.stock_quantity,
@@ -26,7 +30,7 @@ export const toDTO = (model: Product): ProductDto => ({
   sku: model.sku,
   name: model.name,
   description: model.description,
-  category: model.category === 'foodAndBeverage' ? 'food_and_beverage' : model.category,
+  category: toDtoCatalogCategory(model.category),
   price_cents: model.priceCents,
   currency: model.currency,
   stock_quantity: model.stockQuantity,

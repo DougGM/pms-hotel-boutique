@@ -746,20 +746,26 @@ export const lotDMockData: LotDMockData = {
   // INV-001..005 son insumos que además son productos de Room Service
   // vendibles: el vínculo con el producto ya no es su propio `product_id`
   // (retirado) sino `product.inventory_consumption`, que apunta hacia acá
-  // con cantidad (D-006, docs/DECISIONES.md). INV-006 en adelante son
-  // insumos operativos sin equivalente vendible. INV-011..014 son
-  // ingredientes (no se venden sueltos, los consume un plato/bebida
-  // preparado): cubren el caso de varios artículos por producto (Club
-  // sandwich) y el de unidad de venta distinta de la de almacén (Café
-  // americano, vendido por taza, almacenado en kg). `current_quantity` es
-  // la suma de sus `inventory_movement` (ver más abajo) — INV-003 queda
-  // por debajo de su mínimo (5 < 10), el caso que dispara la alerta.
+  // con cantidad (D-006, docs/DECISIONES.md). Su categoría es ahora la
+  // MISMA que la del producto que consumen (`minibar`/`shop`), no la
+  // genérica `room_service` que traían antes — categoría de producto e
+  // inventario comparten una sola taxonomía (D-005/D-006,
+  // shared/constants/catalog-categories.ts). INV-006 en adelante son
+  // insumos operativos sin equivalente vendible, con las categorías que ya
+  // tenían (`housekeeping`/`maintenance`). INV-011..014 son ingredientes
+  // (no se venden sueltos, los consume un plato/bebida preparado, por eso
+  // su categoría es `food_and_beverage`): cubren el caso de varios
+  // artículos por producto (Club sandwich) y el de unidad de venta
+  // distinta de la de almacén (Café americano, vendido por taza,
+  // almacenado en kg). `current_quantity` es la suma de sus
+  // `inventory_movement` (ver más abajo) — INV-003 queda por debajo de su
+  // mínimo (5 < 10), el caso que dispara la alerta.
   inventoryItems: [
     {
       id: 'INV-001',
       sku: 'INV-0001',
       name: 'Agua mineral 600ml',
-      category: 'room_service',
+      category: 'minibar',
       unit: 'bottle',
       current_quantity: 25,
       minimum_quantity: 10,
@@ -771,7 +777,7 @@ export const lotDMockData: LotDMockData = {
       id: 'INV-002',
       sku: 'INV-0002',
       name: 'Cerveza nacional',
-      category: 'room_service',
+      category: 'minibar',
       unit: 'bottle',
       current_quantity: 14,
       minimum_quantity: 8,
@@ -783,7 +789,7 @@ export const lotDMockData: LotDMockData = {
       id: 'INV-003',
       sku: 'INV-0003',
       name: 'Papas fritas',
-      category: 'room_service',
+      category: 'minibar',
       unit: 'box',
       current_quantity: 5,
       minimum_quantity: 10,
@@ -795,7 +801,7 @@ export const lotDMockData: LotDMockData = {
       id: 'INV-004',
       sku: 'INV-0004',
       name: 'Café de grano local',
-      category: 'room_service',
+      category: 'shop',
       unit: 'box',
       current_quantity: 8,
       minimum_quantity: 4,
@@ -807,7 +813,7 @@ export const lotDMockData: LotDMockData = {
       id: 'INV-005',
       sku: 'INV-0005',
       name: 'Playera del hotel',
-      category: 'room_service',
+      category: 'shop',
       unit: 'unit',
       current_quantity: 9,
       minimum_quantity: 5,
@@ -879,7 +885,7 @@ export const lotDMockData: LotDMockData = {
       id: 'INV-011',
       sku: 'INV-0011',
       name: 'Pan para sándwich',
-      category: 'room_service',
+      category: 'food_and_beverage',
       unit: 'unit',
       current_quantity: 60,
       minimum_quantity: 20,
@@ -891,7 +897,7 @@ export const lotDMockData: LotDMockData = {
       id: 'INV-012',
       sku: 'INV-0012',
       name: 'Jamón',
-      category: 'room_service',
+      category: 'food_and_beverage',
       unit: 'kg',
       current_quantity: 3.5,
       minimum_quantity: 1,
@@ -903,7 +909,7 @@ export const lotDMockData: LotDMockData = {
       id: 'INV-013',
       sku: 'INV-0013',
       name: 'Queso',
-      category: 'room_service',
+      category: 'food_and_beverage',
       unit: 'kg',
       current_quantity: 2.8,
       minimum_quantity: 1,
@@ -915,7 +921,7 @@ export const lotDMockData: LotDMockData = {
       id: 'INV-014',
       sku: 'INV-0014',
       name: 'Café en grano (a granel)',
-      category: 'room_service',
+      category: 'food_and_beverage',
       unit: 'kg',
       current_quantity: 3.2,
       minimum_quantity: 1,
