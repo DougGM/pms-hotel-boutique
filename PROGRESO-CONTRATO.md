@@ -122,3 +122,46 @@ check` quedara limpio de punta a punta antes del PR.
 - Pregunta abierta que este contrato **no resuelve** (fuera de alcance de datos):
   cómo se autentica el personal en la app móvil — ver sección 3.12 de
   `docs/CONTRATO-DATOS.md`.
+
+## Seguimiento — separar `room_feature` de `amenity` (post-cierre)
+
+**Iniciado:** 2026-09-10. Sigue en `feat/contrato-compartido` (PR #33, sin fusionar),
+por indicación explícita — no se abre rama nueva.
+
+### Diagnóstico (antes de tocar código)
+
+- `amenity` hoy: `id, name, description?, category('room'|'hotel'|'service'), location?,
+active, created_at, updated_at`. **No tiene horario de funcionamiento** — la premisa
+  de que ya lo tenía no se cumplía; es un campo que habría que agregar si el equipo
+  decide modelar horarios más adelante, fuera de alcance de este arreglo.
+- Catálogo real de amenidades en todo el repo: solo 2 registros (`amenity-1` Wi-Fi/hotel,
+  `amenity-2` Desayuno/service, ambos en `mockData.ts`). `lot-b.ts` no define ningún
+  catálogo de amenidades.
+- El campo roto vive en **`room-type`** (`RoomTypeDTO.amenity_ids`), no en `room`
+  directamente — `room` solo llega a él indirectamente vía `room_type_id`.
+- Escaneo completo de ambos datasets (no solo la referencia reportada): la única
+  referencia rota en todo el repo es `room-type.amenity_ids` en `lot-b.ts` — 21
+  referencias (`AM-01`..`AM-06` en los 5 tipos de habitación), ninguna resuelve porque
+  ese catálogo no existe ahí. El resto de relaciones (`room→room-type`, `rate→room-type`,
+  `booking→guest/room/room-type/rate`, `payment→booking`) resuelve correctamente en
+  ambos datasets.
+- `mockData.ts` también referencia `amenity_ids` desde sus 2 room-types, y esas
+  referencias sí resuelven (apuntan a `amenity-1`/`amenity-2`, que existen) — pero
+  cuelgan amenidades de hotel (Wi-Fi, Desayuno) de un tipo de habitación específico,
+  el mismo sinsentido de dominio que la consigna describe.
+- El patrón acumulativo de `lot-b.ts` (Estándar = 3 IDs → Suite Presidencial = 6 IDs,
+  creciendo con la categoría) es el comportamiento de una **característica de
+  habitación** (A/C, balcón, jacuzzi), no de una amenidad compartida (una piscina no
+  "crece" por tipo de habitación).
+- Cero consumidores en runtime: no existe `roomTypeService`; `catalogService.getAmenities()`
+  lee únicamente `mockData.ts:mockAmenities`, nunca toca `room-type.amenityIds`. Ningún
+  componente ni prueba lo usaba antes de este arreglo.
+
+**Conclusión: dos conceptos mezclados bajo la misma entidad** (no un simple hueco de
+datos) — se procede con la separación que pedía la consigna para este caso.
+
+### Bitácora de commits
+
+| Commit                                                              | Descripción                                                                                                                  | Hash      | Estado |
+| ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | --------- | ------ |
+| `fix: separar caracteristicas de habitacion de amenidades de hotel` | Entidad `room_feature` nueva; `room-type` pasa de `amenity_ids` a `room_feature_ids`; catálogos corregidos en ambos datasets | `6ac1383` | hecho  |
