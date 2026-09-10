@@ -169,3 +169,69 @@ coinciden exactamente con lo escrito en `lot-c.ts`.
 (incluye las 4 entidades nuevas). No se corre `npm run check` completo
 todavía — las referencias a `USR-*` harían fallar la integridad
 referencial hasta que la FASE 3 las complete.
+
+## FASE 3 — WEB-12 · Lote D: catálogos e inventario
+
+Commit `152788a`.
+
+- Entidades nuevas: `role`, `permission`, `inventory-item`,
+  `inventory-movement`, `audit-log`. `user` gana `'room_service'` y
+  `'concierge'` (aditivo). `amenity` gana `opens_at?`/`closes_at?` +
+  `isAmenityOpenAt()` en `shared/utils/amenitySchedule.ts` (determinista,
+  toma la fecha de referencia como parámetro — nunca `Date.now()` por su
+  cuenta).
+- `shared/mocks/lot-d.ts`: 11 usuarios (2+ activos por cada uno de los 5
+  roles pedidos, 1 desactivado), 7 roles × 9 permisos (`role.code`
+  corresponde por valor a `UserRoleDto`, no es FK — D-003), 9 amenidades
+  (una con ventana angosta 06:00–09:00 para el indicador, una
+  desactivada), 25 productos (uno desactivado), 10 artículos de
+  inventario (5 ligados a un producto, 5 insumos operativos; uno por
+  debajo del mínimo, uno desactivado) y sus 20 movimientos, 10 registros
+  de auditoría.
+- `USR-001`/`USR-002` coinciden con los IDs que ya usaba `lot-c.ts` — la
+  referencia pendiente de la FASE 2 queda resuelta.
+- `catalogService.getProducts`/`getAmenities` redirigido de
+  `services/mockData.ts` a `shared/mocks/lot-d.ts`.
+- Servicios nuevos: `personnelService.ts`, `inventoryService.ts`,
+  `auditService.ts`.
+- **SKU provisional** (FASE 4): prefijo por categoría + secuencia
+  (`MIN-0001`, `FYB-0001`, `SHP-0001`, `OTH-0001` para producto;
+  `INV-0001`… para inventario, catálogo separado) — marcado en el código
+  y pendiente como decisión de equipo D-004 en `docs/DECISIONES.md`
+  (FASE 6).
+
+`npm run typecheck`/`lint`/`build` verdes; `npm run test` completo (10
+suites, 178 pruebas) verde — la referencia a `USR-*` ya resuelve, así que
+esta vez sí corre limpio de punta a punta.
+
+## FASE 5 — Pruebas
+
+Commit `81b7423`.
+
+- **Integridad referencial**: se extendió
+  `scripts/test-referential-integrity.mjs` (no se creó una suite
+  paralela) con 22 verificaciones nuevas — cargos/pagos/depósitos/cuentas
+  del Lote C contra las reservas y huéspedes reales del Lote B;
+  movimientos de caja contra jornadas y pagos; `role.permission_ids`
+  contra `permission`; `user.role` contra `role.code` (por valor);
+  movimientos de inventario contra artículos; auditoría contra usuarios.
+  64/64, sin ninguna referencia colgando en los 4 datasets.
+- **Contrato genérico**: se extendió `scripts/test-shared-contract.mjs`
+  (`collectDatasets()` suma lot-c/lot-d, así que las pruebas ya
+  existentes de fechas ISO y `_cents` enteros los cubren sin duplicar
+  lógica) más round-trip de mapper para las 9 entidades nuevas con datos
+  reales.
+- **Aritmética y lógica** (`scripts/test-lot-c-d.mjs`, nueva — no había
+  una suite genérica que cubriera esto): `balance_cents` de cada cuenta
+  recalculado desde cargos/pagos reales; los 4 casos pedidos; el cargo
+  anulado conserva su motivo; `expected_balance_cents`/`difference_cents`
+  de cada jornada recalculados; cobertura de las 3 jornadas pedidas;
+  `current_quantity` de cada artículo recalculada desde sus movimientos;
+  alerta de stock bajo disparada; `isAmenityOpenAt` (ventana angosta,
+  cruce de medianoche, servicio continuo); cobertura de usuarios por rol
+  y de productos.
+- **Regla de oro**: ya cubría `lot-c.ts`/`lot-d.ts` sin cambios — la
+  prueba existente en `test-services.mjs` es genérica sobre cualquier
+  ruta bajo `shared/mocks`.
+
+`npm run check` completo: **verde** (12 suites, 240 pruebas, 0 fallos).
