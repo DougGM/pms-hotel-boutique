@@ -8,33 +8,68 @@
 // anuncia a ambos lados antes de tocar el código (ver "Cómo se cambia este
 // contrato" en docs/CONTRATO-DATOS.md).
 
-// --- room --------------------------------------------------------------
+// --- room: ocupación (dueño: web) ---------------------------------------
 //
-// Estos son los literales que la web usa HOY (RoomStatus en
-// shared/types/entities/room/). Modelan disponibilidad/servicio de la
-// habitación, no un flujo de limpieza. El plan de móvil (MOV-04) esperaba
-// un flujo distinto — dirty → cleaning → clean → inspected, cualquiera →
-// blocked — pensado para que el personal de limpieza reporte el avance de
-// una tarea. Son dos máquinas de estado distintas que responden preguntas
-// distintas ("¿se puede vender la habitación?" vs. "¿en qué paso de la
-// limpieza está?"); no se unifican en este PR — ver la decisión pendiente
-// de equipo en docs/CONTRATO-DATOS.md.
-export const ROOM_STATUSES = [
-  'available',
-  'occupied',
-  'cleaning',
-  'maintenance',
-  'outOfService',
-] as const;
+// Responde "¿se puede vender la habitación?". Decisión D-002
+// (docs/DECISIONES.md): es una máquina distinta de la limpieza — antes
+// convivían en un solo campo `status`, que por eso incluía `cleaning`
+// (retirado de aquí: ese concepto es ahora un valor de
+// ROOM_HOUSEKEEPING_STATUSES, no de ocupación). Los 4 literales que quedan
+// son exactamente los que ya usaba la web; no se renombró ninguno.
+export const ROOM_STATUSES = ['available', 'occupied', 'maintenance', 'outOfService'] as const;
 export type RoomStatus = (typeof ROOM_STATUSES)[number];
 
 export const ROOM_STATUS_TRANSITIONS: Record<RoomStatus, readonly RoomStatus[]> = {
-  available: ['occupied', 'cleaning', 'maintenance', 'outOfService'],
-  occupied: ['cleaning', 'maintenance', 'outOfService'],
-  cleaning: ['available', 'maintenance', 'outOfService'],
+  available: ['occupied', 'maintenance', 'outOfService'],
+  occupied: ['available', 'maintenance', 'outOfService'],
   maintenance: ['available', 'outOfService'],
   outOfService: ['available', 'maintenance'],
 };
+
+// --- room: limpieza (dueño: móvil) --------------------------------------
+//
+// Responde "¿en qué paso de la limpieza está?". El personal de limpieza
+// (app móvil) es quien transiciona este estado; la web solo lo lee. Ver
+// D-002 (docs/DECISIONES.md) y docs/CONTRATO-DATOS.md sección 3.1.
+export const ROOM_HOUSEKEEPING_STATUSES = ['dirty', 'cleaning', 'clean', 'inspected'] as const;
+export type RoomHousekeepingStatus = (typeof ROOM_HOUSEKEEPING_STATUSES)[number];
+
+export const ROOM_HOUSEKEEPING_STATUS_TRANSITIONS: Record<
+  RoomHousekeepingStatus,
+  readonly RoomHousekeepingStatus[]
+> = {
+  dirty: ['cleaning'],
+  cleaning: ['clean'],
+  clean: ['inspected', 'dirty'],
+  inspected: ['dirty'],
+};
+
+// --- room: regla de asignabilidad ---------------------------------------
+//
+// Una habitación es asignable solo si está libre (ocupación `available`) Y
+// su limpieza está en un estado apto (`clean` o `inspected`). Vive aquí,
+// junto a las dos máquinas que la definen, para que ninguna pantalla la
+// reimplemente con condicionales sueltos (`scripts/test-shared-contract.mjs`
+// vigila esto de forma estática). Toma un objeto estructural en vez del
+// tipo `Room` del Model para no crear un import circular entre
+// `shared/constants` y `shared/types/entities/room` — cualquier objeto con
+// estos dos campos (incluido un `Room` real) sirve.
+export const ASSIGNABLE_HOUSEKEEPING_STATUSES: readonly RoomHousekeepingStatus[] = [
+  'clean',
+  'inspected',
+];
+
+export interface RoomAssignabilityInput {
+  status: RoomStatus;
+  housekeepingStatus: RoomHousekeepingStatus;
+}
+
+export function isRoomAssignable(room: RoomAssignabilityInput): boolean {
+  return (
+    room.status === 'available' &&
+    ASSIGNABLE_HOUSEKEEPING_STATUSES.includes(room.housekeepingStatus)
+  );
+}
 
 // --- booking -------------------------------------------------------------
 //
