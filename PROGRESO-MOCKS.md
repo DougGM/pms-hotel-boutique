@@ -369,3 +369,35 @@ Commit `726ca42`.
   completo todavía — las pruebas de integridad referencial/aritmética de
   este vínculo llegan en la FASE 4, junto con la unificación de categorías
   de la FASE 3.
+
+## FASE 3 — Taxonomía de categorías
+
+Commit `e6e2101`.
+
+- `product.category` (`minibar|shop|food_and_beverage|other`) e
+  `inventory_item.category` (`room_service|housekeeping|maintenance|
+office`, con `office` sin usar) no compartían ni un solo valor —
+  confirmado en la FASE 1. Se unifican en una sola fuente,
+  `shared/constants/catalog-categories.ts` (`CATALOG_CATEGORY_DTOS`/
+  `CATALOG_CATEGORIES`, con su par `toDomainCatalogCategory`/
+  `toDtoCatalogCategory`), **sin renombrar ningún valor que ya usaban los
+  datasets**: la taxonomía final es la unión de las dos
+  (`minibar|food_and_beverage|shop|other|housekeeping|maintenance|
+office`). No es un archivo de `statuses.ts` — no hay transiciones, es una
+  clasificación simple, el mismo criterio que ya separaba ambos archivos.
+- `amenity.category` (`room|hotel|service`) **no participa** de esta
+  unificación — a propósito, son servicios del hotel, no artículos; sigue
+  con su propia taxonomía, sin tocar.
+- Los 5 artículos vinculados a un producto (`INV-001`/`002`/`003`/`004`/
+  `005`) dejan la categoría genérica `room_service` (que ya no existe en
+  la taxonomía unificada) y toman la categoría real del producto que
+  consumen: `minibar` (agua, cerveza, papas), `shop` (café en bolsa,
+  playera). Los 4 ingredientes nuevos de la FASE 2 (`INV-011`..`014`,
+  provisionalmente `room_service`) pasan a `food_and_beverage`, la misma
+  categoría de los productos preparados que los consumen.
+- `product.dto.ts`/`.model.ts` e `inventory-item.dto.ts`/`.model.ts` ahora
+  reexportan el tipo compartido (`ProductCategoryDto = CatalogCategoryDto`,
+  etc.) en vez de declarar su propia unión — los nombres públicos
+  (`ProductCategoryDto`, `InventoryItemCategory`, …) no cambian, así que
+  el barrel no necesita tocarse.
+- `npm run typecheck`/`lint`/`build`: verdes.
