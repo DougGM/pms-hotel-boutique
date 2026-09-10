@@ -177,3 +177,33 @@ Commit `7f61a07`. `scripts/test-room-status.mjs` (9 pruebas nuevas):
   añadió `room.model.ts` a la lista de archivos permitidos por ese motivo.
 
 `npm run check` completo: **verde** (10 suites, 169 pruebas, 0 fallos).
+
+## FASE 5 — Documentación
+
+Commit `208b6cf`.
+
+- `docs/CONTRATO-DATOS.md`: sección 3.1 (`room`) con los dos campos y el
+  derivado `isAssignable`; sección 4 con las dos máquinas nuevas y la regla;
+  sección 5 (qué replica móvil) con el punto explícito de quién escribe qué
+  campo; sección 6.4 marcada **resuelta**, ya no es una decisión pendiente.
+- `docs/DECISIONES.md`: entrada **D-002** (no D-001 — ver nota en la FASE 1).
+- `src/ARCHITECTURE.md`, `CLAUDE.md` y `.codex/CONTEXT.md`: línea corta
+  remitiendo a D-002 en cada uno.
+
+## FASE 6 — Cierre
+
+- `npm run check` completo (10 suites, 169 pruebas) pasa en verde sobre el
+  estado final de la rama.
+- No se fusionó nada, no se cerró ninguna issue — todo en
+  `feat/estados-habitacion`, según las reglas de este encargo.
+- **Discrepancia con la plantilla**, ya avisada en la FASE 1: esta decisión
+  se registró como **D-002**, no D-001, porque D-001 ya existía
+  (`room_feature` vs. `amenity`, trabajo anterior).
+- **Ningún sitio donde no estuviera claro qué estado aplicaba** — cero
+  consumidores de UI antes de este trabajo, así que no hubo ambigüedad que
+  resolver en la migración (FASE 3).
+- Pendiente para la app móvil: implementar el flujo
+  `dirty → cleaning → clean → inspected` en su propia UI, escribiendo
+  `housekeeping_status` vía el servicio que integre contra la web; y no
+  escribir nunca `status` (ocupación) — eso es de recepción. Detalle
+  completo en `docs/CONTRATO-DATOS.md` sección 5, punto 5.
