@@ -234,4 +234,46 @@ Commit `81b7423`.
   prueba existente en `test-services.mjs` es genérica sobre cualquier
   ruta bajo `shared/mocks`.
 
-`npm run check` completo: **verde** (12 suites, 240 pruebas, 0 fallos).
+`npm run check` completo: **verde** (11 suites, 240 pruebas, 0 fallos).
+
+## FASE 6 — Documentación y cierre
+
+- **`docs/CONTRATO-DATOS.md`**: nuevas secciones `3.10b` (Lote C:
+  `guest_account`, `deposit`, `cash_session`, `cash_movement`, cada una con
+  tabla de campos + ejemplo JSON real) y `3.10c` (Lote D: `role`/
+  `permission`, `inventory_item`/`inventory_movement`, `audit_log`,
+  ídem). Numeradas `3.10b`/`3.10c` (no `3.13`/`3.14` como se intentó al
+  principio) siguiendo el precedente ya establecido de `3.2b` para
+  insertar una entidad junto a la relacionada sin renumerar todo lo
+  siguiente. Sección 5.2 ("entidades que NO debe crear móvil") extendida
+  con las 9 nuevas. Sección 6.1 (SKU) y 6.2 (categorías) marcadas
+  explícitamente como resueltas-de-forma-provisional, con referencia a
+  D-004/D-005. Nueva sección 6.6 documentando `role`/`permission` como
+  resuelta (D-003). Nueva subsección de máquinas de estado para
+  `guest_account`/`deposit`/`cash_session`.
+- **`docs/DECISIONES.md`**: tres entradas nuevas, formato ADR igual a
+  D-001/D-002 (Contexto/Decisión/Consecuencias/Qué NO hacer/Alternativas
+  consideradas):
+  - **D-003** (aceptada e implementada): `role.code` corresponde por valor
+    con `user.role`, no es FK — no se toca el tipo publicado de `user`.
+  - **D-004** (**pendiente** — decisión de equipo, valor provisional ya en
+    uso en el código): formato de SKU de `product`/`inventory_item`.
+  - **D-005** (**pendiente** — decisión de equipo): unificación de las
+    tres taxonomías de categoría (`product`, `amenity`,
+    `inventory_item`).
+- **`src/ARCHITECTURE.md`**/**`CLAUDE.md`**: conteos actualizados (14 → 23
+  entidades en el barrel, 8/9 → 11 suites, 240 pruebas totales); apuntan a
+  D-003/D-004/D-005 y a los servicios nuevos de los Lotes C/D.
+- `npx prettier --write` sobre los cuatro documentos tocados; `npx prettier
+--check` limpio.
+
+`npm run check` completo tras la documentación: **verde** (11 suites, 240
+pruebas, 0 fallos) — ningún cambio de código en esta fase, solo
+documentación, así que el resultado no debía cambiar y no cambió.
+
+**Cierre de la bitácora.** WEB-11 y WEB-12 quedan cubiertos con datasets
+completos, aritméticamente verificados, expuestos por servicios (ningún
+dataset huérfano) y documentados. Quedan **D-004** y **D-005** como
+decisiones de equipo pendientes, con valor provisional claramente
+señalado en código y documentación — no se decidieron aquí, se
+documentaron con recomendación para que el equipo las resuelva.

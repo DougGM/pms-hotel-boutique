@@ -1,6 +1,6 @@
 # Contrato de datos — PMS Hotel Boutique
 
-**Última actualización:** 2026-09-10 · rama `feat/estados-habitacion`.
+**Última actualización:** 2026-09-10 · rama `feat/mocks-lotes-c-d`.
 
 ## 1. Propósito y regla de gobierno
 
@@ -419,14 +419,267 @@ No las necesita móvil. Se listan solo por completitud del inventario:
 - **`rate`**: tarifa por tipo de habitación y vigencia (`room_type_id`,
   `valid_from`/`valid_to`, `price_cents`, `minimum_nights`, `refundable`).
 - **`charge`**: cargo a la cuenta de una reserva (`booking_id`,
-  `product_id?`, `quantity`, `unit_price_cents`, `amount_cents`, `status`).
-  Es el destino de `order.charge_id`/`service_request.charge_id`. Definida
-  en el contrato desde antes de este PR, todavía sin servicio ni dataset
-  propio — igual que `order`/`service_request` hasta ahora.
+  `product_id?`, `quantity`, `unit_price_cents`, `amount_cents`, `status`,
+  `void_reason?` — **nuevo**, el motivo cuando `status === 'voided'`; el
+  registro original se conserva, nunca se borra). Es el destino de
+  `order.charge_id`/`service_request.charge_id`. Ya tiene dataset real y
+  servicio propio (`guestAccountService.ts`, sección 3.13).
 - **`payment`**: pago aplicado a una reserva (`booking_id`, `amount_cents`,
-  `method`, `status`).
+  `method`, `status`). Dataset real en `shared/mocks/lot-c.ts`, servido por
+  `guestAccountService.ts` — distinto del dataset pequeño de
+  `services/mockData.ts` que sigue sirviendo `paymentService.ts` (dos
+  fuentes de la misma entidad, mismo patrón ya existente entre
+  `lot-b.ts`/`mockData.ts` para `booking`/`room`/`guest`).
 - **`promotion`**: código de descuento para el motor de reservas
   (`code`, `discount_percent`, `valid_from`/`valid_to`).
+
+### 3.10b Lote C (WEB-11) — cuentas, pagos y caja, exclusivas de la web
+
+`guest_account`, `deposit`, `cash_session` y `cash_movement` son nuevas en
+este PR. Ninguna la necesita móvil — son recepción y dinero, operación
+exclusiva de la web. Servidas por `guestAccountService.ts` (cuenta, cargo,
+pago, depósito) y `cashService.ts` (jornada, movimiento).
+
+#### `guest_account`
+
+Folio de una estadía: agrega los cargos y pagos de una reserva. Una cuenta
+por reserva (1:1) — `charge`/`payment` siguen referenciando `booking_id`
+directamente, no un `account_id` nuevo.
+
+| Campo DTO | Tipo | Descripción |
+| --- | --- | --- |
+| `id` | `string` | |
+| `booking_id` | `string` | FK a `booking` |
+| `guest_id` | `string` | FK a `guest` |
+| `status` | `'open' \| 'closed'` | Ver sección 4 |
+| `balance_cents` | `number` (entero) | **Guardado**, no derivado — cargos (no anulados) menos pagos completados de la misma reserva |
+| `currency` | `'GTQ'` | |
+| `opened_at` | `string` (timestamp) | |
+| `closed_at?` | `string` (timestamp) | Solo si `status === 'closed'` |
+| `created_at` / `updated_at` | `string` | |
+
+```json
+{
+  "id": "GACC-001",
+  "booking_id": "BKG-003",
+  "guest_id": "GST-003",
+  "status": "open",
+  "balance_cents": 105500,
+  "currency": "GTQ",
+  "opened_at": "2026-09-07T14:00:00.000Z",
+  "created_at": "2026-09-07T14:00:00.000Z",
+  "updated_at": "2026-09-08T18:00:00.000Z"
+}
+```
+
+#### `deposit`
+
+Depósito o garantía entregado al check-in.
+
+| Campo DTO | Tipo | Descripción |
+| --- | --- | --- |
+| `id` | `string` | |
+| `booking_id` / `guest_id` | `string` | FKs |
+| `amount_cents` | `number` (entero) | |
+| `currency` | `'GTQ'` | |
+| `method` | `'cash' \| 'credit_card' \| 'debit_card' \| 'bank_transfer'` | |
+| `status` | `'held' \| 'refunded' \| 'applied'` | Ver sección 4 |
+| `collected_at` | `string` (timestamp) | |
+| `refunded_at?` | `string` (timestamp) | |
+| `notes?` | `string` | |
+| `created_at` / `updated_at` | `string` | |
+
+```json
+{
+  "id": "DEP-002",
+  "booking_id": "BKG-004",
+  "guest_id": "GST-004",
+  "amount_cents": 100000,
+  "currency": "GTQ",
+  "method": "credit_card",
+  "status": "refunded",
+  "collected_at": "2026-08-20T14:00:00.000Z",
+  "refunded_at": "2026-08-23T11:00:00.000Z",
+  "created_at": "2026-08-20T14:00:00.000Z",
+  "updated_at": "2026-08-23T11:00:00.000Z"
+}
+```
+
+#### `cash_session`
+
+Jornada de caja: apertura, movimientos, cierre con saldo contado.
+
+| Campo DTO | Tipo | Descripción |
+| --- | --- | --- |
+| `id` | `string` | |
+| `opened_by_user_id` | `string` | FK a `user` |
+| `opened_at` | `string` (timestamp) | |
+| `opening_balance_cents` | `number` (entero) | |
+| `currency` | `'GTQ'` | |
+| `status` | `'open' \| 'closed'` | Ver sección 4 |
+| `closed_by_user_id?` / `closed_at?` | `string` | Solo si `status === 'closed'` |
+| `expected_balance_cents?` | `number` (entero) | **Guardado** — apertura + ingresos - egresos de sus `cash_movement` |
+| `counted_balance_cents?` | `number` (entero) | Lo que se contó físicamente |
+| `difference_cents?` | `number` (entero) | **Guardado** — `counted - expected` |
+| `notes?` | `string` | |
+| `created_at` / `updated_at` | `string` | |
+
+```json
+{
+  "id": "CS-002",
+  "opened_by_user_id": "USR-001",
+  "opened_at": "2026-09-09T08:00:00.000Z",
+  "opening_balance_cents": 685000,
+  "currency": "GTQ",
+  "status": "closed",
+  "closed_by_user_id": "USR-002",
+  "closed_at": "2026-09-09T20:00:00.000Z",
+  "expected_balance_cents": 1257000,
+  "counted_balance_cents": 1253000,
+  "difference_cents": -4000,
+  "notes": "Faltante sin explicar; se reportó a administración.",
+  "created_at": "2026-09-09T08:00:00.000Z",
+  "updated_at": "2026-09-09T20:00:00.000Z"
+}
+```
+
+#### `cash_movement`
+
+Ingreso o egreso dentro de una jornada.
+
+| Campo DTO | Tipo | Descripción |
+| --- | --- | --- |
+| `id` | `string` | |
+| `cash_session_id` | `string` | FK a `cash_session` |
+| `type` | `'income' \| 'expense'` | Clasificación, no un estado — declarado localmente |
+| `concept` | `string` | |
+| `amount_cents` | `number` (entero) | |
+| `currency` | `'GTQ'` | |
+| `responsible_user_id` | `string` | FK a `user` |
+| `occurred_at` | `string` (timestamp) | |
+| `payment_id?` | `string` | FK a `payment`, cuando el ingreso viene de un pago de huésped |
+| `created_at` | `string` | |
+
+```json
+{
+  "id": "CMV-003",
+  "cash_session_id": "CS-002",
+  "type": "income",
+  "concept": "Pago total anticipado — reserva BKG-009",
+  "amount_cents": 300000,
+  "currency": "GTQ",
+  "responsible_user_id": "USR-001",
+  "occurred_at": "2026-09-09T10:00:00.000Z",
+  "payment_id": "PAY-201",
+  "created_at": "2026-09-09T10:00:00.000Z"
+}
+```
+
+### 3.10c Lote D (WEB-12) — personal, catálogos e inventario, exclusivas de la web
+
+`role`, `permission`, `inventory_item`, `inventory_movement` y `audit_log`
+son nuevas en este PR. Ninguna la necesita móvil. Servidas por
+`personnelService.ts`, `inventoryService.ts` y `auditService.ts`.
+
+#### `role` y `permission`
+
+| Campo DTO (`role`) | Tipo | Descripción |
+| --- | --- | --- |
+| `id` | `string` | |
+| `code` | `string` | **No es una FK real** — corresponde por valor a `UserRoleDto` (D-003) |
+| `name` | `string` | |
+| `permission_ids` | `string[]` | FKs a `permission` |
+| `active` | `boolean` | |
+| `created_at` / `updated_at` | `string` | |
+
+`permission`: `id, key, name, description?, created_at, updated_at` — sin
+campo `active` (un permiso no se desactiva, se quita de un rol).
+
+```json
+{
+  "id": "ROLE-004",
+  "code": "housekeeping",
+  "name": "Limpieza",
+  "permission_ids": ["PERM-005", "PERM-009"],
+  "active": true,
+  "created_at": "2026-08-01T00:00:00.000Z",
+  "updated_at": "2026-08-01T00:00:00.000Z"
+}
+```
+
+#### `inventory_item` y `inventory_movement`
+
+`inventory_item` es **más amplio que `product`**: cubre también insumos
+operativos (blancos, químicos de limpieza) que nunca se venden al
+huésped. `product_id?` enlaza el subconjunto de artículos que sí son
+productos de Room Service vendibles.
+
+| Campo DTO (`inventory_item`) | Tipo | Descripción |
+| --- | --- | --- |
+| `id` | `string` | |
+| `sku` | `string` | Catálogo de SKU **separado** del de `product` — ver decisión pendiente 6.1/D-004 |
+| `name` / `description?` | `string` | |
+| `category` | `'room_service' \| 'housekeeping' \| 'maintenance' \| 'office'` | Taxonomía propia, distinta de `ProductCategoryDto` — ver decisión pendiente 6.2/D-005 |
+| `unit` | `'unit' \| 'box' \| 'bottle' \| 'kg' \| 'liter' \| 'roll'` | |
+| `current_quantity` | `number` (entero) | **Guardado** — entradas menos salidas de sus `inventory_movement` |
+| `minimum_quantity` | `number` (entero) | |
+| `product_id?` | `string` | FK a `product`, cuando aplica |
+| `active` | `boolean` | |
+| `created_at` / `updated_at` | `string` | |
+
+Model: agrega `isAssignable`-style `isBelowMinimum: boolean` (calculado
+por el mapper — `currentQuantity < minimumQuantity`, **no existe en el
+DTO**; ninguna pantalla debe recalcularlo).
+
+`inventory_movement`: `id, inventory_item_id, type('in'|'out'),
+reason('purchase'|'restock'|'consumption'|'sale'|'shrinkage'),
+quantity, responsible_user_id, occurred_at, notes?, created_at`.
+
+```json
+{
+  "id": "INV-003",
+  "sku": "INV-0003",
+  "name": "Papas fritas",
+  "category": "room_service",
+  "unit": "box",
+  "current_quantity": 5,
+  "minimum_quantity": 10,
+  "product_id": "PRD-007",
+  "active": true,
+  "created_at": "2026-08-01T00:00:00.000Z",
+  "updated_at": "2026-09-06T00:00:00.000Z"
+}
+```
+
+#### `audit_log`
+
+Registro de auditoría: quién, cuándo, qué módulo, qué acción, sobre qué
+entidad.
+
+| Campo DTO | Tipo | Descripción |
+| --- | --- | --- |
+| `id` | `string` | |
+| `user_id` | `string` | FK a `user` |
+| `module` | `'guest_accounts' \| 'cash' \| 'inventory' \| 'catalog' \| 'users' \| 'bookings'` | |
+| `action` | `'create' \| 'update' \| 'delete' \| 'void' \| 'open' \| 'close'` | |
+| `entity_type` / `entity_id` | `string` | La entidad afectada, sin FK tipado (cualquier entidad del contrato) |
+| `occurred_at` | `string` (timestamp) | |
+| `details?` | `string` | |
+| `created_at` | `string` | |
+
+```json
+{
+  "id": "AUD-004",
+  "user_id": "USR-002",
+  "module": "cash",
+  "action": "close",
+  "entity_type": "cash_session",
+  "entity_id": "CS-002",
+  "occurred_at": "2026-09-09T20:00:00.000Z",
+  "details": "Diferencia de -4000 centavos registrada.",
+  "created_at": "2026-09-09T20:00:00.000Z"
+}
+```
 
 ### 3.11 `notification`, `cart_item` — exclusivas de móvil
 
@@ -540,6 +793,17 @@ completed→ (terminal)
 rejected → (terminal)
 ```
 
+### `guest_account` (`GuestAccountStatus`), `deposit` (`DepositStatus`), `cash_session` (`CashSessionStatus`) — nuevos (Lote C, WEB-11)
+
+```
+guest_account: open → closed (terminal)
+deposit:       held → refunded | applied (ambos terminales)
+cash_session:  open → closed (terminal)
+```
+
+Ninguna se reabre — un ajuste posterior es un registro nuevo (cargo, pago,
+movimiento), no una transición de vuelta.
+
 ## 5. Qué debe replicar la app móvil (MOV-04)
 
 Lista explícita, sin necesidad de leer código web:
@@ -553,7 +817,10 @@ Lista explícita, sin necesidad de leer código web:
    `room_feature` y `amenity` son catálogos distintos con ciclos de vida
    distintos (D-001) — no colapsarlos en uno solo del lado de móvil.
 2. **Entidades que NO debe crear:** `rate`, `charge`, `payment`,
-   `promotion`, `session` — no aplican al lado de móvil.
+   `promotion`, `session`, y las del Lote C/D (`guest_account`, `deposit`,
+   `cash_session`, `cash_movement`, `role`, `permission`, `inventory_item`,
+   `inventory_movement`, `audit_log`) — todas exclusivas de la operación
+   de recepción/administración en la web; ninguna aplica al lado de móvil.
 3. **Entidades propias de móvil, fuera de este contrato:** `notification`,
    `cart_item`.
 4. **Literales de estado exactos** (sección 4): `RoomStatus`,
@@ -584,7 +851,15 @@ Lista explícita, sin necesidad de leer código web:
 
 Documentadas con recomendación, **no implementadas** en este PR.
 
-### 6.1 Formato de SKU de inventario
+### 6.1 Formato de SKU de inventario — **provisional en uso, sigue sin decidirse formalmente** (D-004)
+
+**Estado:** el Lote C/D (este PR) ya tuvo que elegir algo para poblar
+`product.sku` (25 registros) e `inventory_item.sku` (10 registros, catálogo
+**separado** del de producto) — se usó la opción **B** de abajo,
+explícitamente marcada como provisional en el código
+(`shared/mocks/lot-d.ts`) y en `docs/DECISIONES.md` D-004. **Esto no es una
+decisión tomada** — es el valor que había que escribir para no bloquear el
+resto del trabajo; el equipo puede cambiarlo.
 
 **Problema:** los SKU actuales (`AGUA-600ML`, `SERV-EXPRESS`) son
 inventados para el mock, sin esquema formal. El Lote D va a construir el
@@ -609,12 +884,17 @@ sobreingeniería de C para un inventario de este tamaño. Decidir antes de
 que el Lote D cargue datos reales — retrocorregir SKUs después de la carga
 es más costoso que decidir el esquema ahora.
 
-### 6.2 Catálogo de categorías de producto y amenidad
+### 6.2 Catálogo de categorías de producto, amenidad e inventario (D-005)
 
 **Problema:** `ProductCategoryDto` (`minibar | shop | food_and_beverage |
 other`) y `AmenityCategoryDto` (`room | hotel | service`) no tienen un
 mapeo exacto a las secciones de menú que móvil necesita para agrupar Room
-Service (p. ej. "Bebidas", "Snacks", "Postres" no existen hoy).
+Service (p. ej. "Bebidas", "Snacks", "Postres" no existen hoy). El Lote D
+(este PR) agregó una **tercera** taxonomía —
+`InventoryItemCategoryDto` (`room_service | housekeeping | maintenance |
+office`), para `inventory_item` — que tampoco se reconcilia con las otras
+dos. Cuando el equipo resuelva esta decisión, conviene resolver las tres
+categorías juntas, no una a la vez.
 
 **Opciones:**
 
@@ -682,6 +962,14 @@ habitación y amenidades de hotel) bajo una sola entidad. Se separó en
 `room_feature` (nueva, sin horario) y `amenity` (sin cambios en su
 contrato, pero ya no referenciada desde `room-type`). Sección 3.2b tiene el
 contrato de `room_feature`.
+
+### 6.6 Catálogo `role`/`permission` y su relación con `user.role` — **resuelta**
+
+**Estado: resuelta e implementada** (ver
+[`docs/DECISIONES.md`, D-003](./DECISIONES.md#d-003--el-catálogo-rolepermission-no-es-una-fk-desde-userrole)).
+`role.code` corresponde por **valor** a los literales de `UserRoleDto`,
+no por una FK real — `user.role` no cambia de tipo. Sección 3.10c tiene el
+contrato completo.
 
 ## 7. Cómo se cambia este contrato
 

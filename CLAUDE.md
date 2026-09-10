@@ -34,8 +34,8 @@ falla si aparece uno.
 
 Los mappers se importan siempre desde la ruta de su propia entidad
 (`@/shared/types/entities/booking`), nunca del barrel `entities/index.ts`:
-`toDomain`/`toDTO` se llaman igual en las catorce entidades y colisionarían
-si el barrel las reexportara.
+`toDomain`/`toDTO` se llaman igual en las veintitrés entidades del barrel
+y colisionarían si lo reexportara.
 
 `shared/types/entities/session/` (login/sesión, rol de acceso al PMS) y
 `shared/types/entities/user/` (puesto de un empleado) son conceptos
@@ -52,6 +52,13 @@ escribe la web) y `housekeepingStatus` (limpieza, la escribe la app
 móvil). La asignabilidad se consulta con `isRoomAssignable()`
 (`shared/constants/statuses.ts`), nunca con un condicional propio. Ver
 `docs/DECISIONES.md`, D-002.
+
+`role.code` (catálogo de roles/permisos, WEB-12) corresponde por **valor**
+con `user.role` — no es una FK y no cambia el tipo de `user.role`. Ver
+`docs/DECISIONES.md`, D-003. El formato de SKU de `product`/
+`inventory-item` y el catálogo unificado de categorías siguen sin decidir
+en equipo — valor provisional en uso, ver D-004 y D-005 en el mismo
+documento antes de asumir que son definitivos.
 
 ## Moneda y fecha
 
@@ -82,7 +89,7 @@ en el archivo que lo consume.
 
 ## Pruebas
 
-Mismo patrón en las nueve suites de `scripts/*.mjs`: esbuild empaqueta el
+Mismo patrón en las once suites de `scripts/*.mjs`: esbuild empaqueta el
 módulo a CommonJS y se corre con `node --test`. No instalar un framework de
 pruebas nuevo (Jest, Vitest, etc.) — extender este patrón. `npm run test`
 las corre todas; `npm run check` las incluye al final.

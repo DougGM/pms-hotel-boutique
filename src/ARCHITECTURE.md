@@ -21,7 +21,10 @@ src/
     constants/
       statuses.ts          Literales y transiciones de estado compartidos con la app móvil
                            (room, booking, order, service_request) — ver "Contrato de datos" abajo
-    mocks/                 lot-b.ts: dataset del Lote B (habitaciones, huéspedes, reservas, tarifas, promociones)
+    mocks/                 lot-b.ts (habitaciones, huéspedes, reservas, tarifas, promociones),
+                           lot-c.ts (cuentas, cargos, pagos, depósitos, caja — WEB-11),
+                           lot-d.ts (personal, roles/permisos, amenidades, productos,
+                           inventario, auditoría — WEB-12)
     types/
       common.ts            ID, ISODateString, Currency ('GTQ' literal), UserRole
       entities/<entidad>/  Un DTO + Model + Mapper por entidad (ver "Contrato de datos" abajo)
@@ -61,13 +64,20 @@ src/
 **Este contrato es compartido con la app móvil (`pms-hotel-mobile`): la web
 es la fuente de verdad, móvil lo consume y no lo redefine.** El documento de
 referencia — pensado para leerse sin abrir este código — es
-[`docs/CONTRATO-DATOS.md`](../docs/CONTRATO-DATOS.md): ahí están las catorce
-entidades con su DTO/Model/ejemplo JSON, las máquinas de estado, qué debe
-replicar móvil (MOV-04) y las decisiones de equipo pendientes (formato de
-SKU, catálogo de categorías, tipo de ID, la máquina de estado de `room` vs.
-el flujo de limpieza que móvil necesita). Cualquier cambio a una entidad
-compartida se anuncia a ambos equipos antes de tocar código — ver la
-sección 7 de ese documento.
+[`docs/CONTRATO-DATOS.md`](../docs/CONTRATO-DATOS.md): ahí están las
+veintitrés entidades del barrel con su DTO/Model/ejemplo JSON, las máquinas
+de estado, qué debe replicar móvil (MOV-04) y las decisiones de equipo
+pendientes (formato de SKU — [D-004](../docs/DECISIONES.md), catálogo de
+categorías — [D-005](../docs/DECISIONES.md), tipo de ID, la máquina de
+estado de `room` vs. el flujo de limpieza que móvil necesita). Cualquier
+cambio a una entidad compartida se anuncia a ambos equipos antes de tocar
+código — ver la sección 7 de ese documento.
+
+Nueve de esas entidades llegaron con los Lotes C (WEB-11: `guest-account`,
+`deposit`, `cash-session`, `cash-movement`) y D (WEB-12: `role`,
+`permission`, `inventory-item`, `inventory-movement`, `audit-log`) — ver
+`PROGRESO-MOCKS.md`. `role.code` corresponde por valor (no por FK) con
+`user.role`, ver [D-003](../docs/DECISIONES.md), ya aceptada.
 
 Cada entidad vive en `shared/types/entities/<entidad>/`, con cuatro
 archivos: `<entidad>.dto.ts` (forma cruda, snake_case, tal como la devolvería
@@ -96,9 +106,9 @@ la controla la app móvil). La asignabilidad se consulta con
 esto pasa por una entrada nueva en ese documento.
 
 `shared/types/entities/index.ts` es un barrel de **tipos únicamente**:
-`toDomain`/`toDTO` no se reexportan ahí porque las catorce entidades usan
-exactamente esos dos nombres y colisionarían. Importar un mapper siempre
-desde la ruta específica de su entidad:
+`toDomain`/`toDTO` no se reexportan ahí porque las veintitrés entidades
+usan exactamente esos dos nombres y colisionarían. Importar un mapper
+siempre desde la ruta específica de su entidad:
 
 ```ts
 import { toDomain as toBooking } from '@/shared/types/entities/booking';
@@ -138,31 +148,39 @@ en `localStorage`) para probar el manejo de errores.
 
 `bookingService`, `roomService` y `guestService` leen de
 `shared/mocks/lot-b.ts` (el dataset del Lote B: habitaciones, huéspedes,
-reservas, tarifas). `paymentService` y `catalogService` leen de
-`services/mockData.ts`, que no tiene el volumen de `lot-b.ts` porque cubre
-entidades que ningún ticket ha poblado todavía a fondo (pagos, productos,
-amenidades — WEB-11/WEB-12). `authService.ts` es el único servicio con
-persistencia (sesión en `localStorage`) y cliente HTTP
+reservas, tarifas). `guestAccountService` y `cashService` leen de
+`shared/mocks/lot-c.ts` (cuentas, cargos, pagos, depósitos y caja — WEB-11).
+`personnelService`, `inventoryService` y `auditService` leen de
+`shared/mocks/lot-d.ts` (personal, roles/permisos, inventario y
+auditoría — WEB-12); `catalogService` también fue redirigido a `lot-d.ts`
+para amenidades y productos. `paymentService` sigue leyendo de
+`services/mockData.ts`, el mundo de demo pequeño original, distinto del
+dataset real de pagos en `lot-c.ts`. `authService.ts` es el único servicio
+con persistencia (sesión en `localStorage`) y cliente HTTP
 (`services/http-client.ts`, listo para una API real pero sin uso todavía).
 
 ## Pruebas
 
-`npm run test` corre ocho suites (`scripts/*.mjs`), todas con el mismo
+`npm run test` corre once suites (`scripts/*.mjs`), todas con el mismo
 patrón: esbuild empaqueta el módulo a probar a CommonJS y se ejecuta con
 `node --test` — sin ningún framework de pruebas externo.
 
-| Suite                      | Qué cubre                                                                                                        |
-| -------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `test-auth.mjs`            | Sesión, roles, guardas de ruta, 404 por área (14 pruebas)                                                        |
-| `test-currency.mjs`        | `formatCurrency` (11 pruebas)                                                                                    |
-| `test-date.mjs`            | `formatDateGT`/`formatTimeGT`/`calculateNights`/mappers de fecha civil (35 pruebas)                              |
-| `test-money-contract.mjs`  | `mockData.ts`: montos enteros, `currency: 'GTQ'`, sufijo `_cents` (13 pruebas)                                   |
-| `test-contract.mjs`        | Una sola definición por entidad (incluye `order`/`service-request`); `lot-b.ts` en centavos y GTQ (19 pruebas)   |
-| `test-shared-contract.mjs` | Fechas ISO, `_cents`, estados dentro de `statuses.ts`, `guest_link_code` único, mappers sin pérdida (22 pruebas) |
-| `test-services.mjs`        | Los servicios son `async`, con latencia simulada, devuelven Models, forzado de error, regla de oro (7 pruebas)   |
-| `test-presentation.mjs`    | Primitivos de `shared/components/` y el catálogo `/components` (6 pruebas)                                       |
+| Suite                            | Qué cubre                                                                                                        |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `test-auth.mjs`                  | Sesión, roles, guardas de ruta, 404 por área (14 pruebas)                                                        |
+| `test-currency.mjs`              | `formatCurrency` (11 pruebas)                                                                                    |
+| `test-date.mjs`                  | `formatDateGT`/`formatTimeGT`/`calculateNights`/mappers de fecha civil (35 pruebas)                              |
+| `test-money-contract.mjs`        | `mockData.ts`: montos enteros, `currency: 'GTQ'`, sufijo `_cents` (13 pruebas)                                   |
+| `test-contract.mjs`              | Una sola definición por entidad, incluidas las nueve de los Lotes C/D (29 pruebas)                               |
+| `test-shared-contract.mjs`       | Fechas ISO, `_cents`, estados dentro de `statuses.ts`, `guest_link_code` único, mappers sin pérdida (37 pruebas) |
+| `test-referential-integrity.mjs` | Ninguna referencia queda colgada entre lotes (bookings, guests, users, cuentas, caja, inventario) (64 pruebas)   |
+| `test-room-status.mjs`           | Separación `status`/`housekeepingStatus` de `room`, `isRoomAssignable()` (9 pruebas)                             |
+| `test-lot-c-d.mjs`               | Aritmética de cuentas/caja/inventario, horario de amenidades, cobertura de casos (WEB-11/WEB-12) (15 pruebas)    |
+| `test-services.mjs`              | Los servicios son `async`, con latencia simulada, devuelven Models, forzado de error, regla de oro (7 pruebas)   |
+| `test-presentation.mjs`          | Primitivos de `shared/components/` y el catálogo `/components` (6 pruebas)                                       |
 
-`npm run check` encadena `format:check && typecheck && lint && build && test`.
+Total: 240 pruebas. `npm run check` encadena
+`format:check && typecheck && lint && build && test`.
 
 ## `index.css`: pendiente de separar
 
