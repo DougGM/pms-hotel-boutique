@@ -162,6 +162,8 @@ datos) — se procede con la separación que pedía la consigna para este caso.
 
 ### Bitácora de commits
 
-| Commit                                                              | Descripción                                                                                                                  | Hash      | Estado |
-| ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | --------- | ------ |
-| `fix: separar caracteristicas de habitacion de amenidades de hotel` | Entidad `room_feature` nueva; `room-type` pasa de `amenity_ids` a `room_feature_ids`; catálogos corregidos en ambos datasets | `6ac1383` | hecho  |
+| Commit                                                                | Descripción                                                                                                                                                                                      | Hash      | Estado |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------- | ------ |
+| `fix: separar caracteristicas de habitacion de amenidades de hotel`   | Entidad `room_feature` nueva; `room-type` pasa de `amenity_ids` a `room_feature_ids`; catálogos corregidos en ambos datasets                                                                     | `6ac1383` | hecho  |
+| `docs: actualizar la bitacora con el diagnostico y el commit del fix` | —                                                                                                                                                                                                | `c6f16f9` | hecho  |
+| `test: verificar la integridad referencial de los datasets`           | `scripts/test-referential-integrity.mjs` (31 pruebas): toda referencia entre entidades de ambos datasets, sin IDs duplicados. No se encontró ninguna otra referencia rota además de la reportada | `723e599` | hecho  |
