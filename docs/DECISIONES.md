@@ -95,6 +95,79 @@ Separar en dos entidades:
    mover solo las características a `room` habría creado una inconsistencia
    nueva entre dónde vive cada atributo de una habitación.
 
+## D-002 · El estado de habitación son dos campos, no uno
+
+**Fecha:** 2026-09-10 · **Estado:** aceptada e implementada.
+
+> Nota: la plantilla que originó esta entrada la pedía como "D-001", pero
+> ese número ya lo ocupa la decisión de `room_feature` vs. `amenity` (más
+> arriba en este documento, del trabajo anterior). Se registra como
+> **D-002** para no pisar la entrada existente.
+
+### Contexto
+
+La web modelaba el estado de la habitación como **disponibilidad**: libre,
+ocupada, bloqueada por mantenimiento o fuera de servicio (`RoomStatus`,
+único campo `status`). La app móvil necesita el **flujo operativo de
+limpieza**: `dirty → cleaning → clean → inspected`, que el personal de
+limpieza reporta desde su turno.
+
+No son la misma cosa ni son alternativas entre sí: una habitación puede
+estar ocupada y sucia a la vez, o libre y todavía sin limpiar — y ese
+último caso es precisamente el que recepción no debe poder vender. Antes
+de esta decisión, el campo único ya incluía un valor `cleaning` que
+intentaba cubrir parte del flujo de limpieza dentro del campo de
+disponibilidad — la mezcla que esta decisión separa. Documentado como
+decisión pendiente en `docs/CONTRATO-DATOS.md` sección 6.4 desde el
+trabajo del contrato compartido (PR #33); nunca se implementó hasta ahora.
+
+### Decisión
+
+Dos campos independientes en la entidad `room`:
+
+- **`status`/`RoomStatus`** — ocupación. La controla la web (recepción:
+  check-in, check-out, bloqueo por mantenimiento). Literales:
+  `available | occupied | maintenance | outOfService` (los mismos 4 que ya
+  existían; se retiró `cleaning`, que pasa por completo a la otra máquina).
+- **`housekeeping_status`/`RoomHousekeepingStatus`** (nuevo) — limpieza. La
+  controla la app móvil (personal de limpieza), y la web solo la lee.
+  Literales: `dirty | cleaning | clean | inspected`.
+- **Regla de asignabilidad derivada** — `isRoomAssignable()` en
+  `shared/constants/statuses.ts`: una habitación es asignable solo si
+  `status === 'available'` **y** `housekeepingStatus` es `'clean'` o
+  `'inspected'`. Vive junto a las dos máquinas, no en cada pantalla; el
+  Model expone el resultado ya calculado como `isAssignable` (no existe en
+  el DTO).
+
+### Consecuencias
+
+- **Gana** el proyecto: recepción puede distinguir "libre pero sucia" (no
+  vendible) de "libre y lista" (vendible) — el caso que el campo único no
+  podía expresar. Móvil gana su propio flujo de limpieza sin pisar la
+  semántica de ocupación de la web, y sin que la web tenga que interpretar
+  literales que no le pertenecen.
+- **Cuesta**: un campo más en el contrato de `room` (`housekeeping_status`)
+  que todo consumidor futuro debe poblar; los datasets mock necesitan
+  cubrir combinaciones realistas de ambos campos, no solo un estado.
+- **A quién afecta**: al Lote B (recepción/Gantt de habitaciones — cuando
+  se construya la pantalla de calendario, debe leer `isAssignable`, no
+  reimplementar la regla) y a la experiencia de limpieza de la app móvil
+  (MOV-04), que es quien escribe `housekeeping_status`.
+
+### Qué NO hacer
+
+- **Fusionar ambos campos en uno.** Es exactamente el error que esta
+  decisión corrige — vuelve a obligar a inventar estados combinados
+  (`"ocupada-y-sucia"`, `"libre-y-inspeccionada"`...) en vez de dos
+  campos ortogonales.
+- **Reimplementar la regla de asignabilidad fuera de `statuses.ts`.**
+  `scripts/test-room-status.mjs` tiene una prueba estática que falla si
+  algún archivo fuera de `shared/constants/statuses.ts` compara
+  `status === 'available'` junto con `housekeepingStatus`.
+- **Permitir que móvil escriba el estado de ocupación.** Check-in,
+  check-out y bloqueo por mantenimiento son operación de recepción, en la
+  web. Móvil solo lee `status`.
+
 ## Cómo agregar una nueva decisión
 
 Copiar la estructura de D-001: **Contexto** (qué problema había y qué

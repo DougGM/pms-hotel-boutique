@@ -32,6 +32,13 @@ inicial del repositorio.
   `src/modules/auth/README.md` antes de tocar cualquiera de los dos.
 - `src/shared/components/`: piezas genéricas reutilizables, con `tokens.css`
   como única fuente de valores de diseño.
+- `src/shared/constants/statuses.ts`: literales y transiciones de estado
+  compartidos con la app móvil. **`room` tiene dos campos de estado, no
+  uno:** `status` (ocupación, la escribe la web) y `housekeepingStatus`
+  (limpieza, la escribe la app móvil). La asignabilidad se consulta con
+  `isRoomAssignable()`, nunca con un condicional propio en una pantalla —
+  ver `docs/DECISIONES.md`, D-002, antes de tocar cualquiera de los dos
+  campos.
 - `src/shared/mocks/lot-b.ts`: dataset del Lote B; lo sirven
   `bookingService`/`roomService`/`guestService`.
 - `src/services/`: capa de datos. Cada servicio es `async`, devuelve Models,

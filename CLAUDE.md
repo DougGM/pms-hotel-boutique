@@ -47,6 +47,12 @@ tercer contrato de usuario.
 horario) son igual de distintos — no colgar una amenidad de `room`/
 `room-type`. Ver `docs/DECISIONES.md`, D-001.
 
+El estado de `room` son dos campos, no uno: `status` (ocupación, la
+escribe la web) y `housekeepingStatus` (limpieza, la escribe la app
+móvil). La asignabilidad se consulta con `isRoomAssignable()`
+(`shared/constants/statuses.ts`), nunca con un condicional propio. Ver
+`docs/DECISIONES.md`, D-002.
+
 ## Moneda y fecha
 
 - Quetzal guatemalteco. Todo campo de dinero en un DTO termina en `_cents`

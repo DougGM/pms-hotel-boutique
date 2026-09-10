@@ -23,12 +23,23 @@
   --reservation-status-cancelled: var(--color-terracotta);
   --reservation-status-voided: var(--color-terracotta);
 
-  /* Status colors: rooms */
+  /* Status colors: rooms — ocupación (dueño web). --room-status-cleaning y
+     --room-status-blocked quedan tal cual (CSS muerto de la recepción de
+     Bolt en index.css, sin consumidor vivo — ver docs/DECISIONES.md, D-002);
+     no se reutilizan aquí para evitar que dos máquinas distintas compartan
+     la misma variable con significados distintos. */
   --room-status-available: var(--color-brand-gold);
   --room-status-occupied: var(--color-success);
-  --room-status-cleaning: var(--color-info);
   --room-status-maintenance: var(--color-terracotta);
+  --room-status-out-of-service: var(--color-text-muted);
+  --room-status-cleaning: var(--color-info);
   --room-status-blocked: var(--color-terracotta);
+
+  /* Status colors: rooms — limpieza (dueño móvil). Ver D-002. */
+  --room-housekeeping-dirty: var(--color-warning);
+  --room-housekeeping-cleaning: var(--color-info);
+  --room-housekeeping-clean: var(--color-success);
+  --room-housekeeping-inspected: var(--color-brand-gold-dark);
 
   /* Typography */
   --font-family-sans: 'DM Sans', sans-serif;
