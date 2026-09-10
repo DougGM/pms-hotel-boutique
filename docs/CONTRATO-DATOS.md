@@ -1,6 +1,6 @@
 # Contrato de datos — PMS Hotel Boutique
 
-**Última actualización:** 2026-09-10 · rama `feat/contrato-compartido`.
+**Última actualización:** 2026-09-10 · rama `feat/estados-habitacion`.
 
 ## 1. Propósito y regla de gobierno
 
@@ -60,21 +60,28 @@ un lado, los campos del DTO, la forma del Model, y un ejemplo real.
 
 ### 3.1 `room` — compartida
 
-Habitación física del hotel.
+Habitación física del hotel. **Dos campos de estado independientes, con
+dueños distintos** — ver decisión D-002 en `docs/DECISIONES.md`:
 
-| Campo DTO       | Tipo                                                                                | Descripción                                            |
-| --------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------- |
-| `id`            | `string`                                                                            | Identificador opaco                                     |
-| `room_number`   | `string`                                                                            | Número visible al personal (`"101"`)                    |
-| `room_type_id`  | `string`                                                                            | FK a `room-type`                                        |
-| `floor`         | `number`                                                                            | Piso                                                     |
-| `status`        | `'available' \| 'occupied' \| 'cleaning' \| 'maintenance' \| 'out_of_service'`      | Disponibilidad/servicio — ver sección 4 y decisión 6.4  |
-| `notes?`        | `string`                                                                            | Nota libre                                               |
-| `created_at`    | `string` (timestamp)                                                                |                                                           |
-| `updated_at`    | `string` (timestamp)                                                                |                                                           |
+| Campo DTO             | Tipo                                                          | Descripción                                                    |
+| ----------------------- | ---------------------------------------------------------------- | ----------------------------------------------------------------- |
+| `id`                    | `string`                                                          | Identificador opaco                                                |
+| `room_number`           | `string`                                                          | Número visible al personal (`"101"`)                              |
+| `room_type_id`          | `string`                                                          | FK a `room-type`                                                   |
+| `floor`                 | `number`                                                          | Piso                                                               |
+| `status`                | `'available' \| 'occupied' \| 'maintenance' \| 'out_of_service'` | **Ocupación.** Dueña: la web (recepción). Ver sección 4.           |
+| `housekeeping_status`   | `'dirty' \| 'cleaning' \| 'clean' \| 'inspected'`                 | **Limpieza.** Dueña: la app móvil; la web solo la lee. Ver sección 4. |
+| `notes?`                | `string`                                                          | Nota libre                                                         |
+| `created_at`            | `string` (timestamp)                                              |                                                                     |
+| `updated_at`            | `string` (timestamp)                                              |                                                                     |
 
-Model: igual en camelCase (`roomNumber`, `roomTypeId`), `status` con
-`out_of_service → outOfService`, fechas como `Date`.
+Model: igual en camelCase (`roomNumber`, `roomTypeId`, `housekeepingStatus`),
+`status` con `out_of_service → outOfService`, fechas como `Date`, más un
+campo **calculado por el mapper, que no existe en el DTO**:
+
+| Campo Model     | Tipo      | Descripción                                                                                                    |
+| ---------------- | --------- | ----------------------------------------------------------------------------------------------------------------- |
+| `isAssignable`   | `boolean` | `true` solo si `status === 'available'` y `housekeepingStatus` es `'clean'` o `'inspected'`. Calculado con `isRoomAssignable()` (`shared/constants/statuses.ts`) — **ninguna pantalla lo reimplementa**. |
 
 ```json
 {
@@ -83,6 +90,7 @@ Model: igual en camelCase (`roomNumber`, `roomTypeId`), `status` con
   "room_type_id": "RT-01",
   "floor": 1,
   "status": "available",
+  "housekeeping_status": "clean",
   "created_at": "2026-01-01T00:00:00.000Z",
   "updated_at": "2026-09-07T00:00:00.000Z"
 }
@@ -455,18 +463,42 @@ Definidas en `src/shared/constants/statuses.ts` (única fuente). Los
 literales son los del **Model** (camelCase); el DTO los traduce a
 snake_case en su mapper, igual que el resto del contrato.
 
-### `room` (`RoomStatus`)
+### `room`: ocupación (`RoomStatus`) — dueña la web
 
-Literales tal cual los usa la web hoy — modelan disponibilidad/servicio,
-no un flujo de limpieza (ver decisión pendiente 6.4).
+Responde "¿se puede vender la habitación?". Decisión tomada, D-002 en
+`docs/DECISIONES.md` — ya no es una decisión pendiente. Los 4 literales son
+los mismos que ya usaba la web; el único cambio es que `cleaning` se retiró
+de aquí porque pertenece a la otra máquina.
 
 ```
-available   → occupied | cleaning | maintenance | outOfService
-occupied    → cleaning | maintenance | outOfService
-cleaning    → available | maintenance | outOfService
-maintenance → available | outOfService
-outOfService→ available | maintenance
+available    → occupied | maintenance | outOfService
+occupied     → available | maintenance | outOfService
+maintenance  → available | outOfService
+outOfService → available | maintenance
 ```
+
+### `room`: limpieza (`RoomHousekeepingStatus`) — dueña la app móvil
+
+Responde "¿en qué paso de la limpieza está?". Campo nuevo
+(`housekeeping_status` en el DTO). **Móvil es quien transiciona este
+estado — la web solo lo lee**, nunca lo escribe.
+
+```
+dirty     → cleaning
+cleaning  → clean
+clean     → inspected | dirty
+inspected → dirty
+```
+
+### `room`: regla de asignabilidad derivada
+
+Una habitación es asignable solo si `status === 'available'` **y**
+`housekeepingStatus` es `'clean'` o `'inspected'`. La función
+`isRoomAssignable()` (`shared/constants/statuses.ts`) es la única
+implementación — ninguna pantalla, de ningún lado, debe repetir esta
+comparación con condicionales sueltos. Ejemplo del caso que motivó separar
+los dos campos: una habitación `available` con `housekeeping_status:
+'dirty'` **no es asignable**, aunque su ocupación diga que está libre.
 
 ### `booking` (`BookingStatus`)
 
@@ -525,18 +557,25 @@ Lista explícita, sin necesidad de leer código web:
 3. **Entidades propias de móvil, fuera de este contrato:** `notification`,
    `cart_item`.
 4. **Literales de estado exactos** (sección 4): `RoomStatus`,
-   `BookingStatus`, `OrderStatus`, `ServiceRequestStatus` — mismo naming
-   camelCase, ninguna variante.
-5. **Campos de dinero:** siempre `*_cents` entero en el transporte;
+   `RoomHousekeepingStatus`, `BookingStatus`, `OrderStatus`,
+   `ServiceRequestStatus` — mismo naming camelCase, ninguna variante.
+5. **`room`: quién escribe qué campo (D-002).** Móvil **escribe**
+   `housekeepingStatus` (el personal de limpieza transiciona
+   `dirty → cleaning → clean → inspected`) y **solo lee** `status`
+   (ocupación) — nunca lo modifica; el check-in/check-out y el bloqueo por
+   mantenimiento son operación de recepción, en la web. Si móvil necesita
+   saber si puede ofrecer una habitación para algo, consulta
+   `isAssignable` (ya calculado en el Model), no reimplementa la regla.
+6. **Campos de dinero:** siempre `*_cents` entero en el transporte;
    `currency` siempre `'GTQ'`.
-6. **Fechas:** ISO 8601 en el transporte (civil `YYYY-MM-DD` vs. timestamp
+7. **Fechas:** ISO 8601 en el transporte (civil `YYYY-MM-DD` vs. timestamp
    completo, sección 2); la presentación al huésped/personal en pantalla es
    decisión de UI de móvil, no de este contrato — pero debe usar el mismo
    criterio civil-vs-timestamp para no desplazar días.
-7. **Vinculación del huésped:** el flujo de "ingresar código" en la
+8. **Vinculación del huésped:** el flujo de "ingresar código" en la
    pantalla de bienvenida de la app usa `booking.guest_link_code` — móvil
    nunca lo genera, solo lo valida contra lo que la web emitió.
-8. **Cierre del círculo de cobro:** cuando móvil marca un `order` o
+9. **Cierre del círculo de cobro:** cuando móvil marca un `order` o
    `service_request` como `delivered`/`completed`, la web es quien crea el
    `charge` correspondiente y llena `charge_id` — móvil no calcula montos,
    solo reporta el evento de estado.
@@ -623,35 +662,15 @@ claves opacas en su estado local — no hay beneficio funcional en migrar a
 entero, solo costo de reescritura. Se recomienda declarar esto **cerrado**
 salvo que el backend real fuerce lo contrario.
 
-### 6.4 Máquina de estado de `room`: disponibilidad vs. flujo de limpieza
+### 6.4 Máquina de estado de `room`: disponibilidad vs. flujo de limpieza — **resuelta, ya no es una decisión pendiente**
 
-**Problema** (ya reportado en la sección 4 y en `statuses.ts`): el
-`RoomStatus` actual de la web (`available/occupied/cleaning/maintenance/
-outOfService`) responde "¿se puede vender la habitación?". El plan de
-móvil (MOV-04) esperaba un flujo de limpieza (`dirty → cleaning → clean →
-inspected`, cualquiera `→ blocked`) que responde "¿en qué paso de la
-limpieza está?". Son preguntas distintas que pueden ser ciertas a la vez
-(una habitación puede estar `occupied` y `dirty` simultáneamente).
-
-**Opciones:**
-
-- **A. Forzar un solo campo** con los literales de móvil: pierde la
-  semántica de disponibilidad que ya usa la web (reportes de ocupación,
-  bloqueo de venta).
-- **B. Forzar un solo campo** con los literales actuales de la web: móvil
-  pierde la granularidad del flujo de limpieza que necesita el personal de
-  housekeeping.
-- **C. Dos campos ortogonales**: `status` (disponibilidad, el actual) +
-  `housekeepingStatus` nuevo (`dirty | cleaning | clean | inspected`, con
-  `blocked` ya cubierto por `maintenance`/`outOfService` del campo
-  existente).
-
-**Recomendación:** **C**. Es la única opción que no le quita información a
-ningún lado. Implica un ticket propio para agregar `housekeeping_status` a
-`RoomDTO`/`Room` (con su mapper y su entrada en `statuses.ts`) — no se
-implementa en este PR porque cambia el contrato de `room` más allá de lo
-que pedía la FASE 2, y su diseño (¿quién transiciona `inspected`, con qué
-permiso?) necesita la sesión de equipo.
+**Estado: resuelta e implementada** (ver
+[`docs/DECISIONES.md`, D-002](./DECISIONES.md#d-002--el-estado-de-habitación-son-dos-campos-no-uno)).
+El equipo eligió la opción C que este documento recomendaba: dos campos
+ortogonales, `status` (ocupación, dueña la web) + `housekeeping_status`
+(limpieza, dueña la app móvil), con `isRoomAssignable()` como regla
+derivada. Ver sección 3.1 (contrato de `room`) y sección 4 (las dos
+máquinas) para el detalle ya implementado.
 
 ### 6.5 Referencia rota: `amenity_ids` de `lot-b.ts` — **resuelta**
 

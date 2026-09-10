@@ -88,6 +88,13 @@ Los literales de estado y sus transiciones válidas (`room`, `booking`,
 `order`, `service_request`) viven en `shared/constants/statuses.ts`, para
 que móvil use exactamente los mismos nombres.
 
+**El estado de `room` son dos campos con dueños distintos, no uno:**
+`status` (ocupación, la controla la web) y `housekeepingStatus` (limpieza,
+la controla la app móvil). La asignabilidad se consulta con
+`isRoomAssignable()`, nunca reimplementada en una pantalla — ver
+[`docs/DECISIONES.md`, D-002](../docs/DECISIONES.md). Cualquier cambio a
+esto pasa por una entrada nueva en ese documento.
+
 `shared/types/entities/index.ts` es un barrel de **tipos únicamente**:
 `toDomain`/`toDTO` no se reexportan ahí porque las catorce entidades usan
 exactamente esos dos nombres y colisionarían. Importar un mapper siempre
