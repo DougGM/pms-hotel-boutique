@@ -277,3 +277,95 @@ dataset huérfano) y documentados. Quedan **D-004** y **D-005** como
 decisiones de equipo pendientes, con valor provisional claramente
 señalado en código y documentación — no se decidieron aquí, se
 documentaron con recomendación para que el equipo las resuelva.
+
+---
+
+# Adenda — Vínculo producto ↔ inventario (PR #36, sin fusionar)
+
+**Rama:** `feat/mocks-lotes-c-d` (misma, PR #36 sigue abierto).
+**Iniciado:** 2026-09-10 (continuación de la bitácora de arriba).
+
+Motivo: el PR #36 dejó `product` e `inventory_item` como catálogos sin
+ninguna relación — al entregar un pedido de Room Service, el inventario no
+sabía qué descontar. Este trabajo agrega ese vínculo, sin fusionar las
+entidades.
+
+## FASE 1 — Inventario (solo lectura)
+
+- `product` ya tenía `stock_quantity`/`reorder_level` **propios** (de antes
+  del Lote D) — un segundo conteo de existencias, no relacionado con
+  `inventory_item.current_quantity`. Sigue existiendo, es un catálogo
+  distinto (control de stock de venta directa vs. control de inventario
+  operativo); no es el bug que este trabajo resuelve, así que no se toca.
+- `inventory_item.product_id?` **ya existía** como FK opcional 1 a 1 hacia
+  `product` (5 de los 10 artículos del Lote D la usaban: agua mineral,
+  cerveza, papas, café de grano, playera). Insuficiente para lo pedido: no
+  carga cantidad (no distingue "1 botella" de "20 g de café por taza") y
+  solo permite un artículo por producto (rompe con "varios insumos por
+  plato"). Confirmado el hallazgo del encargo, con el matiz de que no
+  partía de "cero relación" sino de una relación demasiado simple.
+- Taxonomías de categoría confirmadas divergentes en tres direcciones,
+  documentado ya en D-005 (`docs/DECISIONES.md`): `product.category`
+  (`minibar|shop|food_and_beverage|other`), `amenity.category`
+  (`room|hotel|service`), `inventory_item.category`
+  (`room_service|housekeeping|maintenance|office`, con `office` sin usar en
+  ningún registro). `product` e `inventory_item` no comparten ni un solo
+  valor.
+- Consumidores actuales: `catalogService.getProducts()` (pantallas de
+  catálogo Room Service, cuando existan) e `inventoryService.getItems()`
+  (pantallas de inventario) — ninguna pantalla real todavía, así que el
+  cambio de forma no rompe consumidores.
+
+**Decisión ya tomada (no mía):** siguen siendo dos entidades, con un
+vínculo explícito con cantidad — ver D-006 en `docs/DECISIONES.md`.
+
+## FASE 2 — El vínculo
+
+Commit `726ca42`.
+
+- **Modelado elegido:** una colección dentro de `product`
+  (`product.inventory_consumption: { inventory_item_id, quantity }[]`), no
+  una entidad propia. Justificación: es configuración que pertenece al
+  producto (qué consume, no un evento con su propia identidad temporal
+  como `charge`/`inventory_movement`), no necesita CRUD ni timestamps
+  propios, y el precedente ya existente en el contrato
+  (`role.permission_ids: string[]`) es el mismo patrón — aquí extendido
+  con cantidad porque, a diferencia de permisos, no basta con saber
+  _cuáles_ artículos, hace falta _cuánto_ de cada uno.
+- `inventory_item.product_id?` **se retira** (reemplazado por el vínculo
+  con cantidad, que además soporta varios artículos por producto — algo
+  que la FK 1 a 1 nunca pudo cubrir).
+- `calculateInventoryConsumption(product, requestedQuantity)`
+  (`shared/utils/inventoryConsumption.ts`): única función que calcula el
+  descuento — determinista, sin acceso a datos, igual en espíritu a
+  `isAmenityOpenAt`/`isRoomAssignable`. **No se engancha al flujo de
+  entrega de un pedido** — deliberadamente, es decisión de negocio del
+  Lote D todavía sin tomar.
+- Datos: `PRD-001`→`INV-001` (agua, 1:1), `PRD-003`→`INV-002` (cerveza,
+  1:1), `PRD-007`→`INV-003` (papas, 1:1), `PRD-019`→`INV-005` (playera,
+  1:1), `PRD-022`→`INV-004` (café en bolsa, 1:1) — los 5 vínculos que antes
+  eran `product_id`, ahora con `quantity: 1`. Nuevos: `PRD-010` (Club
+  sandwich) consume 3 artículos (`INV-011` pan ×2, `INV-012` jamón
+  0.05 kg, `INV-013` queso 0.03 kg) — caso de varios artículos. `PRD-017`
+  (Café americano, vendido "por taza") consume `INV-014` (café en grano,
+  almacenado en **kg**) 0.018 kg por taza — caso de unidad de venta
+  distinta de la de almacén. `PRD-024` (servicio de planchado) queda con
+  `inventory_consumption: []` explícito — caso de cero consumo, un
+  servicio sin insumo almacenado. Los 17 productos restantes también
+  llevan `[]` explícito (no se omite el campo en ninguno: así el "cero" es
+  un hecho registrado, no una ausencia — necesario para que el round-trip
+  del mapper no pierda la distinción entre "no consume nada" y "no se
+  registró todavía").
+- Nuevos artículos de inventario: `INV-011` (pan), `INV-012` (jamón, kg),
+  `INV-013` (queso, kg), `INV-014` (café en grano, kg), con sus 8
+  movimientos (`IMV-021`..`028`) — aritmética verificada igual que en la
+  FASE 5 original (`current_quantity` = entradas − salidas).
+- Categoría de `INV-011`..`014` queda temporalmente en `room_service`
+  (placeholder) en este commit — la categoría real (`food_and_beverage`,
+  compartida con el producto que consume cada artículo) llega en la FASE
+  3, para que este commit type-check/build en verde por sí solo sin
+  adelantar el refactor de taxonomía.
+- `npm run typecheck`/`lint`/`build`: verdes. No se corre `npm run check`
+  completo todavía — las pruebas de integridad referencial/aritmética de
+  este vínculo llegan en la FASE 4, junto con la unificación de categorías
+  de la FASE 3.
