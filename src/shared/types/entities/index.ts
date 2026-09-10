@@ -49,7 +49,15 @@ export type {
 } from './product';
 export type { PromotionDto, Promotion } from './promotion';
 export type { RateDTO, RateDto, Rate } from './rate';
-export type { RoomDTO, RoomDto, RoomStatusDto, Room, RoomStatus } from './room';
+export type {
+  RoomDTO,
+  RoomDto,
+  RoomStatusDto,
+  RoomHousekeepingStatusDto,
+  Room,
+  RoomStatus,
+  RoomHousekeepingStatus,
+} from './room';
 export type { RoomFeatureDTO, RoomFeatureDto, RoomFeature } from './room-feature';
 export type { RoomTypeDto, RoomType } from './room-type';
 export type {
