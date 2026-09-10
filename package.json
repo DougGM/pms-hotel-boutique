@@ -11,11 +11,17 @@
     "format:check": "prettier --check .",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
-    "check": "npm run format:check && npm run typecheck && npm run lint && npm run build",
-    "test:auth": "node scripts/test-auth.mjs"
+    "check": "npm run format:check && npm run typecheck && npm run lint && npm run build && npm run test",
+    "test": "npm run test:auth && npm run test:currency && npm run test:date && npm run test:money-contract && npm run test:contract && npm run test:services && npm run test:presentation",
+    "test:auth": "node scripts/test-auth.mjs",
+    "test:currency": "node scripts/test-currency.mjs",
+    "test:date": "node scripts/test-date.mjs",
+    "test:money-contract": "node scripts/test-money-contract.mjs",
+    "test:contract": "node scripts/test-contract.mjs",
+    "test:services": "node scripts/test-services.mjs",
+    "test:presentation": "node scripts/test-presentation.mjs"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.57.4",
     "lucide-react": "^0.446.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

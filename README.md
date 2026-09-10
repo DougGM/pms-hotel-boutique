@@ -3,6 +3,10 @@
 Frontend del sistema de gestión hotelera (PMS) para Hotel Aurora. Incluye una
 web pública para reservas y una web privada para la operación y administración.
 
+> **El trabajo vive en `develop`, no en `main`.** `main` solo tiene el commit
+> inicial del repositorio; clonar y trabajar siempre sobre `develop` (o una
+> rama creada a partir de ella).
+
 ## Objetivo
 
 Ofrecer rutas base para el motor de reservas público y el panel operativo
@@ -27,6 +31,7 @@ privado, dejando una estructura lista para que el equipo implemente módulos.
 ```bash
 git clone <URL_DEL_REPOSITORIO>
 cd pms-hotel-boutique
+git checkout develop
 npm install
 copy .env.example .env
 npm run dev
@@ -66,8 +71,11 @@ referenciarla desde `src/app/router.tsx`. Las vistas pendientes aún muestran
 la 404 de su área, excepto las entradas del menú por rol, que muestran una
 página provisional hasta integrar cada módulo.
 
-El código heredado de Bolt se conserva temporalmente fuera de los chequeos
-mientras se migra a esta estructura.
+Las pantallas que generó Bolt (`src/app/App.tsx`, `src/components/`) se
+eliminaron al cerrar la Fase 0: no estaban conectadas a esta estructura. Su
+hoja de estilos global, `src/index.css`, se conserva porque el layout actual
+todavía depende de reglas base definidas ahí (ver
+[src/ARCHITECTURE.md](src/ARCHITECTURE.md)).
 
 ## Comandos
 
@@ -75,11 +83,15 @@ mientras se migra a esta estructura.
 npm install
 npm run dev
 npm run check
-npm run test:auth
+npm run test
 npm run format
 ```
 
-`npm run check` ejecuta formato, TypeScript, ESLint y compilación de producción.
+`npm run check` ejecuta formato, TypeScript, ESLint, compilación de
+producción y `npm run test` (siete suites, 103 pruebas — ver
+[src/ARCHITECTURE.md](src/ARCHITECTURE.md)). Cada suite también se puede
+correr por separado: `npm run test:auth`, `test:currency`, `test:date`,
+`test:money-contract`, `test:contract`, `test:services`, `test:presentation`.
 
 ## Acceso de demostración (WEB-06)
 
@@ -97,11 +109,30 @@ La sesión dura ocho horas y se conserva al recargar. El menú depende del rol;
 abrir directamente una sección ajena muestra acceso restringido. «Cerrar
 sesión» elimina la persistencia y sincroniza el cierre con otras pestañas.
 
-La autenticación es simulada y no protege datos de producción. WEB-06 consume
-el servicio compartido de WEB-05 y los tipos `User`, `AuthSession` y `UserRole`
-que este exporta. Las cuentas antiguas `@hotel.test` y su sesión local dejaron
-de utilizarse; iniciar sesión con una cuenta de la tabla. Ver
-[el módulo auth](src/modules/auth/README.md) para permisos, contrato y pruebas.
+La autenticación es simulada y no protege datos de producción. Consume el
+servicio compartido `services/authService.ts` y los tipos `SessionUser`/
+`AuthSession`/`UserRole` de `shared/types/entities/session/` — un contrato
+separado del `User` de `shared/types/entities/user/` (ese modela el puesto de
+un empleado, no el rol de acceso al PMS; ver
+[src/ARCHITECTURE.md](src/ARCHITECTURE.md)). Las cuentas antiguas
+`@hotel.test` y su sesión local dejaron de utilizarse; iniciar sesión con una
+cuenta de la tabla. Ver [el módulo auth](src/modules/auth/README.md) para
+permisos, contrato y pruebas.
+
+## Catálogo de interfaz — WEB-13
+
+Abrir `/components` para revisar Card (outlined, raised, muted), Badge (cinco
+tonos y dos tamaños), EmptyState, LoadingState, ErrorState, DataTable con
+paginación y ordenación, y los primitivos de formulario de WEB-04 (Button,
+Input, Select, Modal, DatePickerRange). El ejemplo de error ejecuta una
+solicitud simulada fallida; «Reintentar» recupera los registros y permite
+reproducir el fallo.
+
+Los colores y medidas de esta entrega salen de `src/styles/tokens.css`, la
+misma hoja de tokens que consume el resto del frontend.
+
+`npm run test:presentation` verifica comportamiento y compatibilidad con las
+tablas heredadas. Ver [la guía de componentes](src/shared/README.md).
 
 ## Seguimiento y contexto
 

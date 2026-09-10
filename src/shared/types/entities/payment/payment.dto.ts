@@ -17,3 +17,9 @@ export interface PaymentDTO {
 }
 
 export type PaymentDto = PaymentDTO;
+
+export interface AddPaymentDto {
+  booking_id: string;
+  amount_cents: number;
+  currency: Currency;
+}

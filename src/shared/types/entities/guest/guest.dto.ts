@@ -9,6 +9,7 @@ export interface GuestDTO {
   nationality?: string;
   document_type?: GuestDocumentTypeDto;
   document_number?: string;
+  notes?: string;
   created_at: string;
   updated_at: string;
 }

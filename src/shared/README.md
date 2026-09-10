@@ -22,11 +22,11 @@ Convención de nombre: sufijo `Cents` (`amountCents`, `priceCents`,
 
 Ejemplos de conversión:
 
-| Quetzales  | Centavos almacenados |
-| ---------- | --------------------- |
-| Q15.00     | `1500`                |
-| Q950.00    | `95000`               |
-| Q2,850.00  | `285000`               |
+| Quetzales | Centavos almacenados |
+| --------- | -------------------- |
+| Q15.00    | `1500`               |
+| Q950.00   | `95000`              |
+| Q2,850.00 | `285000`             |
 
 `formatCurrency(amountCents, currency = 'GTQ')` (`src/shared/utils/currency.ts`)
 es la **única** función de formato de moneda autorizada. Para GTQ produce
@@ -75,13 +75,13 @@ UTC y puede desplazar el día según la zona horaria de ejecución.
 
 ### Migración de contratos activos
 
-| Entidad  | Campo legacy      | Campo actual            |
-| -------- | ----------------- | ------------------------ |
-| Payment  | `amount`          | `amountCents`            |
-| Room     | `pricePerNight`   | `pricePerNightCents`     |
-| Booking  | `pricePerNight`   | `pricePerNightCents`     |
-| Booking  | `totalAmount`     | `totalAmountCents`       |
-| Product  | `price`           | `priceCents`             |
+| Entidad | Campo legacy    | Campo actual         |
+| ------- | --------------- | -------------------- |
+| Payment | `amount`        | `amountCents`        |
+| Room    | `pricePerNight` | `pricePerNightCents` |
+| Booking | `pricePerNight` | `pricePerNightCents` |
+| Booking | `totalAmount`   | `totalAmountCents`   |
+| Product | `price`         | `priceCents`         |
 
 Los cuatro contratos mantienen `currency: Currency` explícita. Este es un
 cambio de contrato del **frontend** (tipos y datos simulados); no hay
@@ -121,12 +121,67 @@ diferencia mediante el contrato compartido que acuerde el equipo.
 
 ### Pruebas
 
-| Script                              | Pruebas |
-| ------------------------------------ | ------- |
-| `scripts/test-currency.mjs`          | 11      |
-| `scripts/test-date.mjs`              | 35      |
-| `scripts/test-money-contract.mjs`    | 13      |
-| **Total**                             | **59**  |
+| Script                            | Pruebas |
+| --------------------------------- | ------- |
+| `scripts/test-currency.mjs`       | 11      |
+| `scripts/test-date.mjs`           | 35      |
+| `scripts/test-money-contract.mjs` | 13      |
+| **Total**                         | **59**  |
 
 Además de estas pruebas, toda la superficie de WEB-07 pasa `npm run
 typecheck`, `npm run lint` y `npm run build`.
+
+## Presentación — WEB-13
+
+Componentes disponibles en `shared/components/`:
+
+| Componente   | API principal                                                                           |
+| ------------ | --------------------------------------------------------------------------------------- |
+| Card         | `title`, `description`, `children`, `footer`, `variant`: outlined / raised / muted      |
+| Badge        | `children`, `tone`: neutral / info / success / warning / danger, `size`: small / medium |
+| EmptyState   | `title`, `description`, `action` opcional                                               |
+| LoadingState | `label`, `variant`: block / inline; anuncio mediante `role=status`                      |
+| ErrorState   | `title`, `description`, `onRetry` obligatorio, síncrono o asíncrono                     |
+| DataTable    | `columns`, `data`, `getRowId`, `caption`, `pageSize` (5 por defecto), `emptyMessage`    |
+| Pagination   | `currentPage`, `totalPages`, `onPageChange`, `label` accesible                          |
+
+La columna conserva `id`, `header` y `cell`; agregar `sortValue` habilita la
+ordenación. Ordena todos los datos antes de paginar, sin mutar el arreglo
+original. Los números se comparan numéricamente; el texto usa colación española
+con orden natural. Los valores nulos quedan al final; los empates conservan su
+orden original. Cambiar la ordenación vuelve a la primera página. Al reducir
+datos se limita la página activa a un valor válido. `getRowId` recibe el índice
+original; se recomienda devolver siempre un identificador estable del dominio.
+
+`ErrorState` deshabilita el reintento mientras se resuelve, evita llamadas
+duplicadas y muestra un mensaje si la promesa falla. El consumidor actualiza
+los datos y cambia al estado de éxito. El catálogo `/components` incluye una
+demostración con servicio asíncrono y recuperación de 13 registros.
+
+### Tabla única
+
+`TableFrame`, exportado desde `DataTable.tsx`, contiene el único elemento
+`<table>` del código TSX; no introducir otro renderizador. Hasta el cierre de
+la Fase 0, `AdminContent`/`ReceptionModals` (UI heredada de Bolt, nunca
+alcanzada desde `src/main.tsx`) también lo usaban para su propia tabla; se
+eliminaron junto con el resto de esa capa muerta — ver
+`PROGRESO-FASE-0.md`, FASE 6.
+
+### Tema y dependencias
+
+`presentation.css` y `components-catalog.css` usan exclusivamente tokens
+`--ui-*`, definidos en `src/styles/tokens.css` (no en un archivo aparte): cada
+uno apunta a un token real de WEB-03 (`--color-*`, `--space-*`, `--font-size-*`,
+`--radius-*`) cuando existe un equivalente, y los que no tienen equivalente
+(anchos de layout, alto de control, foco, duración de motion, fondos con tinte
+para Badge/alertas vía `color-mix()`) se definen una sola vez ahí mismo. Ya no
+existe `presentation-tokens.css`.
+
+El catálogo (`/components`) incorpora Button, Input, Select, Modal y
+DatePickerRange de WEB-04 en sus variantes y estados; ya no usa controles
+nativos `.ui-action` como sustituto.
+
+### Verificación
+
+Ejecutar `npm run test:presentation`. No sustituye una revisión visual en
+navegador.

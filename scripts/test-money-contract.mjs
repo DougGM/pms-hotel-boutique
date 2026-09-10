@@ -24,7 +24,7 @@ const load = (relativePath) => {
   return require(path);
 };
 
-const { mockPayments, mockRooms, mockBookings, mockProducts } = load('services/mockData');
+const { mockPayments, mockRates, mockBookings, mockProducts } = load('services/mockData');
 const { formatCurrency } = load('shared/utils/currency');
 
 // --- A. mockPayments --------------------------------------------------
@@ -33,11 +33,11 @@ test('mockPayments: existen registros', () => {
   assert.ok(Array.isArray(mockPayments) && mockPayments.length > 0);
 });
 
-test('mockPayments: amountCents es entero en cada registro', () => {
+test('mockPayments: amount_cents es entero en cada registro', () => {
   for (const payment of mockPayments) {
     assert.ok(
-      Number.isInteger(payment.amountCents),
-      `payment ${payment.id}: amountCents no es entero (${payment.amountCents})`,
+      Number.isInteger(payment.amount_cents),
+      `payment ${payment.id}: amount_cents no es entero (${payment.amount_cents})`,
     );
   }
 });
@@ -48,34 +48,33 @@ test('mockPayments: currency es GTQ en cada registro', () => {
   }
 });
 
-// --- B. mockRooms -------------------------------------------------------
+// --- B. mockRates ---------------------------------------------------------
+//
+// El precio por noche ya no vive en Room (WEB-09 lo mueve a Rate, ligada a
+// RoomType): un Room real no trae el precio embebido.
 
-test('mockRooms: pricePerNightCents es entero en cada registro', () => {
-  for (const room of mockRooms) {
+test('mockRates: price_cents es entero en cada registro', () => {
+  for (const rate of mockRates) {
     assert.ok(
-      Number.isInteger(room.pricePerNightCents),
-      `room ${room.id}: pricePerNightCents no es entero (${room.pricePerNightCents})`,
+      Number.isInteger(rate.price_cents),
+      `rate ${rate.id}: price_cents no es entero (${rate.price_cents})`,
     );
   }
 });
 
-test('mockRooms: currency es GTQ en cada registro', () => {
-  for (const room of mockRooms) {
-    assert.equal(room.currency, 'GTQ', `room ${room.id}: currency no es GTQ`);
+test('mockRates: currency es GTQ en cada registro', () => {
+  for (const rate of mockRates) {
+    assert.equal(rate.currency, 'GTQ', `rate ${rate.id}: currency no es GTQ`);
   }
 });
 
 // --- C. mockBookings ------------------------------------------------------
 
-test('mockBookings: pricePerNightCents y totalAmountCents son enteros en cada registro', () => {
+test('mockBookings: total_amount_cents es entero en cada registro', () => {
   for (const booking of mockBookings) {
     assert.ok(
-      Number.isInteger(booking.pricePerNightCents),
-      `booking ${booking.id}: pricePerNightCents no es entero (${booking.pricePerNightCents})`,
-    );
-    assert.ok(
-      Number.isInteger(booking.totalAmountCents),
-      `booking ${booking.id}: totalAmountCents no es entero (${booking.totalAmountCents})`,
+      Number.isInteger(booking.total_amount_cents),
+      `booking ${booking.id}: total_amount_cents no es entero (${booking.total_amount_cents})`,
     );
   }
 });
@@ -88,11 +87,11 @@ test('mockBookings: currency es GTQ en cada registro', () => {
 
 // --- D. mockProducts --------------------------------------------------
 
-test('mockProducts: priceCents es entero en cada registro', () => {
+test('mockProducts: price_cents es entero en cada registro', () => {
   for (const product of mockProducts) {
     assert.ok(
-      Number.isInteger(product.priceCents),
-      `product ${product.id}: priceCents no es entero (${product.priceCents})`,
+      Number.isInteger(product.price_cents),
+      `product ${product.id}: price_cents no es entero (${product.price_cents})`,
     );
   }
 });
@@ -111,7 +110,7 @@ test('formatCurrency: 125000 centavos -> Q1,250.00', () => {
 
 test('formatCurrency: formatea el monto real del primer mockPayment sin lanzar', () => {
   const [payment] = mockPayments;
-  const formatted = formatCurrency(payment.amountCents, payment.currency);
+  const formatted = formatCurrency(payment.amount_cents, payment.currency);
   assert.match(formatted, /^Q[\d,]+\.\d{2}$/);
 });
 
@@ -119,29 +118,34 @@ test('formatCurrency: rechaza centavos no enteros (guarda de regresión de la ET
   assert.throws(() => formatCurrency(1.5));
 });
 
-// --- F. Contrato de nombres *Cents -----------------------------------------
+// --- F. Contrato de nombres *_cents -----------------------------------------
 //
 // Se valida sobre las claves reales de los mocks activos (no con una regex
 // sobre el código fuente) para no duplicar la fuente de verdad ni depender
-// de detalles de formato del archivo.
+// de detalles de formato del archivo. Nombres en snake_case: son los DTO
+// oficiales de WEB-09 (contrato único desde el cierre de Fase 0), no el
+// contrato plano en camelCase que existía antes.
 
-test('contrato: los campos monetarios activos usan sufijo Cents, no los nombres legacy en decimal', () => {
+test('contrato: los campos monetarios activos usan sufijo _cents, no los nombres legacy en decimal', () => {
   const [payment] = mockPayments;
-  const [room] = mockRooms;
+  const [rate] = mockRates;
   const [booking] = mockBookings;
   const [product] = mockProducts;
 
-  assert.ok('amountCents' in payment, 'Payment debe tener amountCents');
+  assert.ok('amount_cents' in payment, 'Payment debe tener amount_cents');
   assert.ok(!('amount' in payment), 'Payment ya no debe tener amount decimal');
+  assert.ok(!('amountCents' in payment), 'Payment ya no debe tener el nombre camelCase legacy');
 
-  assert.ok('pricePerNightCents' in room, 'Room debe tener pricePerNightCents');
-  assert.ok(!('pricePerNight' in room), 'Room ya no debe tener pricePerNight decimal');
+  assert.ok('price_cents' in rate, 'Rate debe tener price_cents');
+  assert.ok(!('price' in rate), 'Rate ya no debe tener price decimal');
 
-  assert.ok('pricePerNightCents' in booking, 'Booking debe tener pricePerNightCents');
-  assert.ok(!('pricePerNight' in booking), 'Booking ya no debe tener pricePerNight decimal');
-  assert.ok('totalAmountCents' in booking, 'Booking debe tener totalAmountCents');
+  assert.ok('total_amount_cents' in booking, 'Booking debe tener total_amount_cents');
   assert.ok(!('totalAmount' in booking), 'Booking ya no debe tener totalAmount decimal');
+  assert.ok(
+    !('totalAmountCents' in booking),
+    'Booking ya no debe tener el nombre camelCase legacy',
+  );
 
-  assert.ok('priceCents' in product, 'Product debe tener priceCents');
+  assert.ok('price_cents' in product, 'Product debe tener price_cents');
   assert.ok(!('price' in product), 'Product ya no debe tener price decimal');
 });

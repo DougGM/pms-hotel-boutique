@@ -1,16 +1,14 @@
 import type { Currency } from '@/shared/types/common';
 
 /**
- * Locale used to format each currency. GTQ ("es-GT") is the standard currency
- * of the PMS and the only format the product currently guarantees end to end;
- * the rest follow Intl's own convention for that currency (symbol position,
- * decimal/group separators) as a best-effort until the product requires them.
+ * Locale used to format each currency. `Currency` is closed to the literal
+ * `'GTQ'` (team agreement, FASE 3+4 of the Fase 0 close-out): this record
+ * stays keyed by `Currency` rather than a hardcoded `'GTQ'` string so it
+ * still fails to compile if that type ever grows a second currency without
+ * this locale table growing with it.
  */
 const CURRENCY_LOCALES: Record<Currency, string> = {
   GTQ: 'es-GT',
-  USD: 'en-US',
-  MXN: 'es-MX',
-  EUR: 'es-ES',
 };
 
 /**

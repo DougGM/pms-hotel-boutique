@@ -1,8 +1,8 @@
-﻿import type { UserDTO } from '@/shared/types/entities';
+﻿import type { SessionUserDTO } from '@/shared/types/entities/session';
 import { mockUser } from './mockData';
 
 // Public demo credentials, never production accounts.
-export const mockAuthAccounts: { user: UserDTO; password: string }[] = [
+export const mockAuthAccounts: { user: SessionUserDTO; password: string }[] = [
   { user: mockUser, password: 'AuroraDemo2026!' },
   {
     user: {

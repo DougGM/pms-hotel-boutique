@@ -413,4 +413,58 @@
   --color-accent: var(--color-brand-gold);
   --font-sans: var(--font-family-sans);
   --font-heading: var(--font-family-heading);
+
+  /* WEB-13 presentation layer (Card, Badge, EmptyState, LoadingState, ErrorState,
+     DataTable, Pagination, catalog). Reconciled onto this scale instead of the
+     provisional `presentation-tokens.css` the branch shipped with: every value that
+     has an equivalent above points at it; the few that don't (layout widths, control
+     height, focus ring, motion duration, tinted badge backgrounds) are defined once
+     here so `components-catalog.css` and `presentation.css` stay the only consumers
+     and never hardcode a color or size themselves. */
+  --ui-font: var(--font-family-sans);
+  --ui-ink: var(--color-text-primary);
+  --ui-surface: var(--color-surface);
+  --ui-background: var(--color-background);
+  --ui-accent: var(--color-brand-gold);
+  --ui-border: var(--color-border);
+  --ui-muted: var(--color-text-muted);
+  --ui-neutral: var(--color-text-secondary);
+  --ui-neutral-bg: var(--color-surface-secondary);
+  --ui-info: var(--color-info);
+  --ui-info-bg: color-mix(in srgb, var(--color-info) 12%, var(--color-surface));
+  --ui-success: var(--color-success);
+  --ui-success-bg: color-mix(in srgb, var(--color-success) 12%, var(--color-surface));
+  --ui-warning: var(--color-warning);
+  --ui-warning-bg: color-mix(in srgb, var(--color-warning) 14%, var(--color-surface));
+  --ui-danger: var(--color-error);
+  --ui-danger-bg: color-mix(in srgb, var(--color-error) 12%, var(--color-surface));
+  --ui-radius-sm: var(--radius-md);
+  --ui-radius: var(--radius-2xl);
+  --ui-pill: var(--radius-pill);
+  --ui-space-1: var(--space-1);
+  --ui-space-2: var(--space-3);
+  --ui-space-3: var(--space-5);
+  --ui-space-4: var(--space-7);
+  --ui-space-6: var(--space-10);
+  --ui-space-8: var(--space-11);
+  --ui-space-12: var(--space-12);
+  --ui-text-sm: var(--font-size-lg);
+  --ui-text-base: var(--font-size-xl);
+  --ui-text-lg: var(--font-size-2xl);
+  --ui-title: var(--font-size-page-title);
+  --ui-leading: var(--line-height-normal);
+  --ui-heading-leading: var(--line-height-tight);
+  --ui-weight: var(--font-weight-semibold);
+  --ui-border-width: 1px;
+  --ui-focus-width: 2px;
+  --ui-focus-offset: 3px;
+  --ui-control-height: var(--space-12);
+  --ui-spinner-size: var(--space-9);
+  --ui-shadow: 0 var(--space-6) var(--space-11)
+    color-mix(in srgb, var(--color-text-primary) 4%, transparent);
+  --ui-content-width: 72rem;
+  --ui-column-width: 16rem;
+  --ui-table-width: 32rem;
+  --ui-motion-duration: 0.8s;
+  --ui-disabled-opacity: 0.55;
 }
