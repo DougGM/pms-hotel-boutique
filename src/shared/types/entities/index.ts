@@ -21,6 +21,16 @@ export type {
 export type { ChargeDTO, ChargeDto, ChargeStatusDto, Charge, ChargeStatus } from './charge';
 export type { GuestDTO, GuestDto, GuestDocumentTypeDto, Guest, GuestDocumentType } from './guest';
 export type {
+  OrderDTO,
+  OrderDto,
+  OrderStatusDto,
+  OrderItemDto,
+  CreateOrderDto,
+  Order,
+  OrderStatus,
+  OrderItem,
+} from './order';
+export type {
   AddPaymentDto,
   PaymentDTO,
   PaymentDto,
@@ -40,7 +50,18 @@ export type {
 export type { PromotionDto, Promotion } from './promotion';
 export type { RateDTO, RateDto, Rate } from './rate';
 export type { RoomDTO, RoomDto, RoomStatusDto, Room, RoomStatus } from './room';
+export type { RoomFeatureDTO, RoomFeatureDto, RoomFeature } from './room-feature';
 export type { RoomTypeDto, RoomType } from './room-type';
+export type {
+  ServiceRequestDTO,
+  ServiceRequestDto,
+  ServiceRequestStatusDto,
+  ServiceRequestTypeDto,
+  CreateServiceRequestDto,
+  ServiceRequest,
+  ServiceRequestStatus,
+  ServiceRequestType,
+} from './service-request';
 export type {
   UserDTO,
   UserDto,

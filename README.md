@@ -39,6 +39,10 @@ npm run dev
 
 En macOS o Linux, usar `cp .env.example .env`.
 
+El repositorio normaliza los finales de línea a LF vía `.gitattributes`; no
+cambiar `core.autocrlf` a mano localmente, no hace falta y puede generar
+diffs espurios.
+
 ## Variables de entorno
 
 Crear `.env` a partir de `.env.example`. Nunca incluir credenciales reales en

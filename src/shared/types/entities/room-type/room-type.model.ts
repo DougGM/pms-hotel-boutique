@@ -5,7 +5,7 @@ export interface RoomType {
   description?: string;
   capacity: number;
   bedConfiguration: string;
-  amenityIds: string[];
+  roomFeatureIds: string[];
   active: boolean;
   createdAt: Date;
   updatedAt: Date;

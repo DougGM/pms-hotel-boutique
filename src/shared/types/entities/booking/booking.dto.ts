@@ -6,6 +6,13 @@ export type BookingStatusDto =
 export interface BookingDTO {
   id: string;
   confirmation_code: string;
+  /**
+   * Código que el huésped teclea en la app móvil para vincularse a esta
+   * reserva (MOV-14). La web lo genera al confirmar la reserva; distinto de
+   * `confirmation_code` (identifica la reserva ante recepción/el huésped en
+   * general), este es específicamente el secreto de vinculación de móvil.
+   */
+  guest_link_code: string;
   guest_id: string;
   room_id?: string;
   room_type_id: string;
