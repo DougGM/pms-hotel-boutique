@@ -433,3 +433,40 @@ Commit `a740396`.
   pantalla.
 
 `npm run check` completo: **verde** (11 suites, 248 pruebas, 0 fallos).
+
+## FASE 5 — Documentación
+
+- **`docs/CONTRATO-DATOS.md`**: sección 3.5 (`product`) documenta
+  `inventory_consumption?` con ejemplo real (Club sandwich, 3 líneas);
+  sección 3.10c (`inventory_item`) retira la fila `product_id?` y explica
+  el vínculo inverso; nueva sección 6.7 "Vínculo `product` ↔
+  `inventory_item` — resuelta" (apunta a D-006); sección 6.2 actualizada
+  a "parcialmente resuelta" (la parte producto/inventario ya no está
+  pendiente, `amenity` y la agrupación de menú de móvil siguen abiertas);
+  sección 5 (MOV-04) gana el punto 10: móvil **lee** `product.category`
+  para agrupar su menú, `inventory_consumption`/`inventory_item`/
+  `inventory_movement` no le conciernen.
+- **`docs/DECISIONES.md`**: **D-006** (aceptada e implementada) con el
+  formato ADR completo — Contexto/Decisión/Consecuencias/Qué NO
+  hacer/Alternativas consideradas. **D-005** actualizada de "pendiente" a
+  "parcialmente resuelta" (ya no dice que las tres taxonomías siguen
+  independientes, porque ya no es cierto) — la que queda pendiente es la
+  parte `amenity`/agrupación de menú. **D-004** no cambia de estado (sigue
+  pendiente), solo se anota que la numeración de SKU provisional se
+  extendió hasta `INV-0014` sin cambiar el esquema.
+- **`src/ARCHITECTURE.md`**/**`CLAUDE.md`**: una línea cada uno apuntando
+  a D-006 (el vínculo con cantidad, no FK 1 a 1, y la taxonomía
+  compartida).
+- `npm run check` tras la documentación: **verde** (11 suites, 248
+  pruebas, 0 fallos) — sin cambios de código en esta fase.
+
+**Cierre de la adenda.** El vínculo producto ↔ inventario queda resuelto:
+dos entidades separadas, unidas por `product.inventory_consumption` con
+cantidad, cubriendo los 4 casos pedidos (un artículo, varios, ninguno,
+unidad de venta distinta de la de almacén) y con su único cálculo
+compartido (`calculateInventoryConsumption`) probado y sin enganchar
+todavía al flujo de entrega — eso es decisión de negocio del Lote D,
+deliberadamente fuera de este PR. La taxonomía de categoría de
+`product`/`inventory_item` queda unificada como parte necesaria de ese
+mismo trabajo. Queda pendiente **D-004** (SKU) sin cambios, y la porción
+de **D-005** que toca `amenity`/agrupación de menú en móvil.

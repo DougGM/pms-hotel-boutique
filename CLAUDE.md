@@ -56,9 +56,14 @@ móvil). La asignabilidad se consulta con `isRoomAssignable()`
 `role.code` (catálogo de roles/permisos, WEB-12) corresponde por **valor**
 con `user.role` — no es una FK y no cambia el tipo de `user.role`. Ver
 `docs/DECISIONES.md`, D-003. El formato de SKU de `product`/
-`inventory-item` y el catálogo unificado de categorías siguen sin decidir
-en equipo — valor provisional en uso, ver D-004 y D-005 en el mismo
-documento antes de asumir que son definitivos.
+`inventory-item` sigue sin decidir en equipo — valor provisional en uso,
+ver D-004 antes de asumir que es definitivo.
+
+`product` e `inventory_item` siguen siendo dos entidades — el vínculo es
+`product.inventory_consumption` (cantidad, no una FK 1 a 1) y comparten
+taxonomía de categoría (`shared/constants/catalog-categories.ts`); nunca
+reimplementar `calculateInventoryConsumption` en una pantalla. Ver
+`docs/DECISIONES.md`, D-006.
 
 ## Moneda y fecha
 

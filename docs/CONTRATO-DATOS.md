@@ -241,35 +241,45 @@ ante recepción.
 
 ### 3.5 `product` — compartida
 
-| Campo DTO         | Tipo                                                            | Descripción              |
-| ------------------ | ------------------------------------------------------------------ | -------------------------- |
-| `id`               | `string`                                                            |                             |
-| `sku`               | `string`                                                            | Ver decisión pendiente 6.1 |
-| `name`              | `string`                                                            |                             |
-| `description?`      | `string`                                                            |                             |
-| `category`          | `'minibar' \| 'shop' \| 'food_and_beverage' \| 'other'`             | Ver decisión pendiente 6.2 |
-| `price_cents`       | `number` (entero)                                                   |                             |
-| `currency`          | `'GTQ'`                                                             |                             |
-| `stock_quantity`    | `number`                                                            |                             |
-| `reorder_level`     | `number`                                                            |                             |
-| `active`            | `boolean`                                                           |                             |
-| `created_at`        | `string`                                                            |                             |
-| `updated_at`        | `string`                                                            |                             |
+`category` comparte taxonomía con `inventory_item.category` desde el
+vínculo de consumo de más abajo — ver
+[`docs/DECISIONES.md`, D-006](./DECISIONES.md#d-006--producto-e-inventario-un-vínculo-con-cantidad-no-una-fk-11).
+El formato de `sku` sigue sin decidirse en equipo (6.1/D-004).
+
+| Campo DTO                | Tipo                                                                             | Descripción                          |
+| -------------------------- | ------------------------------------------------------------------------------------- | --------------------------------------- |
+| `id`                      | `string`                                                                               |                                          |
+| `sku`                      | `string`                                                                               | Ver decisión pendiente 6.1              |
+| `name`                     | `string`                                                                               |                                          |
+| `description?`             | `string`                                                                               |                                          |
+| `category`                 | `'minibar' \| 'food_and_beverage' \| 'shop' \| 'other' \| 'housekeeping' \| 'maintenance' \| 'office'` | Compartida con `inventory_item.category` — D-006 |
+| `price_cents`              | `number` (entero)                                                                      |                                          |
+| `currency`                 | `'GTQ'`                                                                                |                                          |
+| `stock_quantity`           | `number`                                                                               | Control de stock de venta directa, no confundir con el inventario operativo (3.10c) |
+| `reorder_level`            | `number`                                                                               |                                          |
+| `inventory_consumption?`   | `{ inventory_item_id: string, quantity: number }[]`                                    | Qué artículos de inventario descuenta entregar este producto, y cuánto de cada uno (0, 1 o varios) — ver D-006. Ausente o `[]` cuando el producto no consume inventario (un servicio). `quantity` está en la unidad del `inventory_item`, no en una unidad propia del producto |
+| `active`                   | `boolean`                                                                               |                                          |
+| `created_at`               | `string`                                                                               |                                          |
+| `updated_at`               | `string`                                                                               |                                          |
 
 ```json
 {
-  "id": "product-1",
-  "sku": "AGUA-600ML",
-  "name": "Agua mineral",
-  "description": "Botella de 600 ml",
-  "category": "minibar",
-  "price_cents": 1500,
+  "id": "PRD-010",
+  "sku": "FYB-0002",
+  "name": "Club sandwich",
+  "category": "food_and_beverage",
+  "price_cents": 5500,
   "currency": "GTQ",
-  "stock_quantity": 24,
-  "reorder_level": 6,
+  "stock_quantity": 999,
+  "reorder_level": 0,
+  "inventory_consumption": [
+    { "inventory_item_id": "INV-011", "quantity": 2 },
+    { "inventory_item_id": "INV-012", "quantity": 0.05 },
+    { "inventory_item_id": "INV-013", "quantity": 0.03 }
+  ],
   "active": true,
-  "created_at": "2026-01-10T12:00:00.000Z",
-  "updated_at": "2026-01-10T12:00:00.000Z"
+  "created_at": "2026-08-01T00:00:00.000Z",
+  "updated_at": "2026-08-01T00:00:00.000Z"
 }
 ```
 
@@ -610,20 +620,23 @@ campo `active` (un permiso no se desactiva, se quita de un rol).
 #### `inventory_item` y `inventory_movement`
 
 `inventory_item` es **más amplio que `product`**: cubre también insumos
-operativos (blancos, químicos de limpieza) que nunca se venden al
-huésped. `product_id?` enlaza el subconjunto de artículos que sí son
-productos de Room Service vendibles.
+operativos (blancos, químicos de limpieza, ingredientes de cocina) que
+nunca se venden al huésped sueltos. El vínculo con `product` **no es una
+FK propia de este DTO** — es `product.inventory_consumption`, que apunta
+hacia acá con cantidad; un artículo puede ser consumido por cero, uno o
+varios productos (antes era `inventory_item.product_id?`, una FK 1 a 1
+retirada por insuficiente — ver
+[`docs/DECISIONES.md`, D-006](./DECISIONES.md#d-006--producto-e-inventario-un-vínculo-con-cantidad-no-una-fk-11)).
 
 | Campo DTO (`inventory_item`) | Tipo | Descripción |
 | --- | --- | --- |
 | `id` | `string` | |
 | `sku` | `string` | Catálogo de SKU **separado** del de `product` — ver decisión pendiente 6.1/D-004 |
 | `name` / `description?` | `string` | |
-| `category` | `'room_service' \| 'housekeeping' \| 'maintenance' \| 'office'` | Taxonomía propia, distinta de `ProductCategoryDto` — ver decisión pendiente 6.2/D-005 |
+| `category` | `'minibar' \| 'food_and_beverage' \| 'shop' \| 'other' \| 'housekeeping' \| 'maintenance' \| 'office'` | Comparte taxonomía con `ProductCategoryDto` (D-006) — un artículo vinculado a un producto usa la misma categoría que ese producto |
 | `unit` | `'unit' \| 'box' \| 'bottle' \| 'kg' \| 'liter' \| 'roll'` | |
 | `current_quantity` | `number` (entero) | **Guardado** — entradas menos salidas de sus `inventory_movement` |
 | `minimum_quantity` | `number` (entero) | |
-| `product_id?` | `string` | FK a `product`, cuando aplica |
 | `active` | `boolean` | |
 | `created_at` / `updated_at` | `string` | |
 
@@ -640,16 +653,23 @@ quantity, responsible_user_id, occurred_at, notes?, created_at`.
   "id": "INV-003",
   "sku": "INV-0003",
   "name": "Papas fritas",
-  "category": "room_service",
+  "category": "minibar",
   "unit": "box",
   "current_quantity": 5,
   "minimum_quantity": 10,
-  "product_id": "PRD-007",
   "active": true,
   "created_at": "2026-08-01T00:00:00.000Z",
   "updated_at": "2026-09-06T00:00:00.000Z"
 }
 ```
+
+`calculateInventoryConsumption(product, requestedQuantity)`
+(`shared/utils/inventoryConsumption.ts`) es la única función que resuelve
+qué artículos descuenta un producto y en qué cantidad — ninguna pantalla
+debe reimplementar este cálculo (verificado estáticamente en
+`scripts/test-lot-c-d.mjs`). **No aplica el descuento** — solo lo
+calcula; enganchar esto al flujo real de entrega de un pedido sigue sin
+decidirse (ver D-006, "Qué NO hacer").
 
 #### `audit_log`
 
@@ -846,6 +866,12 @@ Lista explícita, sin necesidad de leer código web:
    `service_request` como `delivered`/`completed`, la web es quien crea el
    `charge` correspondiente y llena `charge_id` — móvil no calcula montos,
    solo reporta el evento de estado.
+10. **`product.category` es la taxonomía que móvil usa para agrupar el menú
+    de Room Service** (D-006) — móvil **lee** `product` y su `category`
+    tal cual, sin inventar una agrupación propia. `product.inventory_consumption`
+    y todo `inventory_item`/`inventory_movement` son **exclusivos de la
+    web**: no le conciernen a móvil — es la web (recepción/cocina) quien
+    controla el inventario, móvil solo pide y consume productos.
 
 ## 6. Decisiones pendientes de equipo
 
@@ -884,19 +910,32 @@ sobreingeniería de C para un inventario de este tamaño. Decidir antes de
 que el Lote D cargue datos reales — retrocorregir SKUs después de la carga
 es más costoso que decidir el esquema ahora.
 
-### 6.2 Catálogo de categorías de producto, amenidad e inventario (D-005)
+### 6.2 Catálogo de categorías de producto, amenidad e inventario (D-005) — **parcialmente resuelta**
 
-**Problema:** `ProductCategoryDto` (`minibar | shop | food_and_beverage |
-other`) y `AmenityCategoryDto` (`room | hotel | service`) no tienen un
-mapeo exacto a las secciones de menú que móvil necesita para agrupar Room
-Service (p. ej. "Bebidas", "Snacks", "Postres" no existen hoy). El Lote D
-(este PR) agregó una **tercera** taxonomía —
-`InventoryItemCategoryDto` (`room_service | housekeeping | maintenance |
-office`), para `inventory_item` — que tampoco se reconcilia con las otras
-dos. Cuando el equipo resuelva esta decisión, conviene resolver las tres
-categorías juntas, no una a la vez.
+**Estado:** la parte `product` ↔ `inventory_item` de este problema queda
+**resuelta e implementada** (ver
+[`docs/DECISIONES.md`, D-006](./DECISIONES.md#d-006--producto-e-inventario-un-vínculo-con-cantidad-no-una-fk-11)):
+ambas comparten una sola taxonomía
+(`shared/constants/catalog-categories.ts`), sin renombrar los valores que
+ya usaban los datasets. Lo que **sigue pendiente** es la parte de
+`amenity` y, sobre todo, si esta taxonomía compartida alcanza para agrupar
+visualmente el menú de Room Service en móvil, o si hace falta la
+`menu_section` independiente de la opción C de abajo — ninguna de las dos
+se decidió en este PR.
 
-**Opciones:**
+**Problema original:** `ProductCategoryDto` (`minibar | shop |
+food_and_beverage | other`) y `AmenityCategoryDto` (`room | hotel |
+service`) no tenían un mapeo exacto a las secciones de menú que móvil
+necesita para agrupar Room Service (p. ej. "Bebidas", "Snacks", "Postres"
+no existen hoy). El Lote D había agregado además una **tercera**
+taxonomía — `InventoryItemCategoryDto` (`room_service | housekeeping |
+maintenance | office`), para `inventory_item` — que no se reconciliaba
+con `product`. Esa tercera taxonomía ya se unificó con la de `product`
+(D-006); `amenity` sigue aparte a propósito — son servicios del hotel,
+nada que ver con artículos de inventario o productos vendibles.
+
+**Opciones** (para lo que sigue pendiente: `amenity` y la agrupación de
+menú en móvil):
 
 - **A. Mantener las categorías actuales** y que móvil las agrupe del lado
   cliente con etiquetas estáticas propias: cero cambios en la web; riesgo
@@ -970,6 +1009,20 @@ contrato de `room_feature`.
 `role.code` corresponde por **valor** a los literales de `UserRoleDto`,
 no por una FK real — `user.role` no cambia de tipo. Sección 3.10c tiene el
 contrato completo.
+
+### 6.7 Vínculo `product` ↔ `inventory_item` — **resuelta**
+
+**Estado: resuelta e implementada** (ver
+[`docs/DECISIONES.md`, D-006](./DECISIONES.md#d-006--producto-e-inventario-un-vínculo-con-cantidad-no-una-fk-11)).
+Siguen siendo dos entidades — un producto puede consumir cero, uno o
+varios artículos de inventario, con la cantidad expresada en la unidad del
+artículo, no la del producto (`product.inventory_consumption`, sección
+3.5). Reemplaza la FK 1 a 1 que traía `inventory_item.product_id`
+(retirada), insuficiente para el caso de varios insumos por producto o de
+unidad de venta distinta de la de almacén. `calculateInventoryConsumption`
+(`shared/utils/inventoryConsumption.ts`) es el único cálculo del
+descuento — no está enganchado todavía al flujo real de entrega de un
+pedido, eso sigue siendo una decisión de negocio del Lote D sin tomar.
 
 ## 7. Cómo se cambia este contrato
 

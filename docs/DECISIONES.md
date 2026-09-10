@@ -247,9 +247,11 @@ trabajar.
 
 Prefijo por categoría + secuencia: `MIN-0001`…`MIN-0008` (minibar),
 `FYB-0001`…`FYB-0010` (comida y bebida), `SHP-0001`…`SHP-0005` (tienda),
-`OTH-0001`…`OTH-0002` (otro) para `product`; `INV-0001`…`INV-0010` para
+`OTH-0001`…`OTH-0002` (otro) para `product`; `INV-0001`…`INV-0014` para
 `inventory_item` (catálogo de SKU aparte, no comparte numeración con
-producto). Marcado como provisional en el comentario de
+producto — el PR #36 que agregó el vínculo de consumo con inventario
+extendió esta misma numeración provisional hasta `INV-0014`, sin cambiar
+el esquema). Marcado como provisional en el comentario de
 `shared/mocks/lot-d.ts`.
 
 ### Consecuencias
@@ -269,43 +271,143 @@ producto). Marcado como provisional en el comentario de
 - **No decidir esto sin la sesión de equipo** solo porque ya hay datos
   con este formato — los datos son de prueba, la decisión sigue abierta.
 
-## D-005 · Catálogo de categorías: producto, amenidad e inventario (PENDIENTE — decisión de equipo)
+## D-005 · Catálogo de categorías: producto, amenidad e inventario (PARCIALMENTE RESUELTA — ver D-006)
 
-**Fecha:** 2026-09-10 · **Estado:** pendiente.
+**Fecha:** 2026-09-10 · actualizada 2026-09-10 (PR #36). **Estado:** la
+parte `product`/`inventory_item` queda resuelta e implementada (ver
+[D-006](#d-006--producto-e-inventario-un-vínculo-con-cantidad-no-una-fk-11));
+`amenity` y la agrupación de menú en móvil siguen **pendientes**.
 
 ### Contexto
 
 `docs/CONTRATO-DATOS.md` sección 6.2 ya documentaba la falta de mapeo
 entre `ProductCategoryDto`/`AmenityCategoryDto` y las secciones de menú
-que necesita móvil. Este PR agregó una **tercera** taxonomía,
-`InventoryItemCategoryDto` (`room_service | housekeeping | maintenance |
-office`), para `inventory_item` — necesaria para agrupar el inventario,
-pero que tampoco se reconcilia con las otras dos.
+que necesita móvil. Un PR posterior (#36, "vincular productos con
+inventario") agregó una **tercera** taxonomía, `InventoryItemCategoryDto`
+(`room_service | housekeeping | maintenance | office`), para
+`inventory_item` — necesaria para agrupar el inventario, pero que
+tampoco se reconciliaba con las otras dos.
 
-### Decisión (provisional, no definitiva)
+### Decisión
 
-Se mantienen las tres taxonomías **independientes** por ahora: cada una
-resuelve el problema inmediato de su propia entidad (facturación para
-`product`, agrupación de horarios para `amenity`, tipo de insumo para
-`inventory_item`), sin intentar unificarlas.
+Al construir el vínculo de consumo entre `product` e `inventory_item`
+(D-006) quedó claro que sus dos taxonomías **debían** unificarse — un
+artículo vinculado a un producto necesita poder compartir su categoría
+(ver D-006). Se unificaron en una sola fuente
+(`shared/constants/catalog-categories.ts`), conservando los valores que
+ya usaban ambos datasets, sin renombrar ninguno. **`amenity` no participa
+de esta unificación** — sigue con su propia taxonomía (`room | hotel |
+service`), a propósito: son servicios del hotel, no artículos. La
+pregunta original de si esta taxonomía compartida alcanza para agrupar
+visualmente el menú de Room Service en móvil (o si hace falta un
+`menu_section` independiente, opción C del documento de contrato) **sigue
+sin decidirse** — no se resolvió en este PR.
 
 ### Consecuencias
 
 - Un producto de Room Service que también es un artículo de inventario
-  (la mayoría de `INV-001`…`INV-005`) tiene **dos categorías
-  independientes** (`product.category` y `inventory_item.category`) que
-  pueden decir cosas distintas del mismo objeto — es correcto mientras no
-  se decida una taxonomía única, pero hay que explicarlo así en cualquier
-  pantalla que muestre ambas.
+  (`INV-001`…`INV-005`) ahora tiene **la misma categoría** en ambos lados
+  (p. ej. "Agua mineral" es `minibar` en `product` y en `inventory_item`)
+  — ya no hay dos categorías independientes que puedan contradecirse.
+- `amenity.category` sigue siendo una taxonomía aparte — una pantalla que
+  muestre producto/inventario/amenidad juntos sigue necesitando tratar
+  `amenity.category` distinto de las otras dos.
+- Si el equipo más adelante decide que la taxonomía compartida no alcanza
+  para la UX del menú móvil, la opción `menu_section` independiente
+  (sección 6.2 de `docs/CONTRATO-DATOS.md`) sigue disponible sin conflicto
+  con esta unificación — son capas distintas (clasificación interna vs.
+  agrupación visual).
 
 ### Qué NO hacer
 
 - **No agregar una cuarta taxonomía** para resolver un caso puntual sin
-  antes revisar las tres existentes en la misma sesión de equipo.
-- **No asumir que `InventoryItemCategoryDto` y `ProductCategoryDto` se
-  corresponden 1 a 1** (p. ej. `room_service` de inventario no es lo mismo
-  que ningún valor de `ProductCategoryDto`) — son taxonomías distintas
-  hasta que el equipo decida lo contrario.
+  antes revisar si encaja en la ya unificada de `product`/`inventory_item`.
+- **No asumir que `amenity.category` se corresponde con la de
+  `product`/`inventory_item`** — siguen siendo taxonomías distintas a
+  propósito.
+- **No decidir la agrupación de menú de móvil sin el equipo** solo porque
+  la taxonomía interna ya está unificada — son preguntas distintas.
+
+### Alternativas consideradas
+
+Ver D-006 para las alternativas consideradas en la unificación
+`product`/`inventory_item` en sí.
+
+## D-006 · Producto e inventario: un vínculo con cantidad, no una FK 1:1
+
+**Fecha:** 2026-09-10 · **Estado:** aceptada e implementada (PR #36).
+
+### Contexto
+
+WEB-12 dejó `product` (lo que el huésped pide) e `inventory_item` (lo que
+el hotel almacena) como catálogos prácticamente sin relación:
+`inventory_item.product_id?` era una FK opcional 1 a 1. Insuficiente en
+la práctica: no carga cantidad (no distingue "1 botella" de "20 g de café
+por taza") y solo permite un artículo por producto — un sándwich que
+consume pan, jamón y queso, o un café que se vende "por taza" pero se
+almacena en kg, no se pueden modelar así. Consecuencia concreta: al
+entregar un pedido de Room Service, el inventario no sabía qué descontar.
+
+### Decisión
+
+Siguen siendo **dos entidades separadas** — no se fusionan, porque no
+siempre hay correspondencia 1 a 1 (un insumo simple sí, una receta con
+varios ingredientes no). Se agrega `product.inventory_consumption: {
+inventory_item_id, quantity }[]` — una colección dentro de `product`, no
+una entidad propia, porque es configuración que pertenece al producto (qué
+consume), no un evento con identidad temporal propia como `charge`; el
+precedente ya existente en el contrato es `role.permission_ids: string[]`,
+aquí extendido con cantidad. Un producto puede consumir cero, uno o varios
+artículos; `quantity` está expresada en la unidad del `inventory_item`, no
+en una unidad propia del producto. `inventory_item.product_id?` se
+retira. `calculateInventoryConsumption(product, requestedQuantity)`
+(`shared/utils/inventoryConsumption.ts`) es la única función que resuelve
+el descuento — determinista, sin acceso a datos, mismo espíritu que
+`isAmenityOpenAt`/`isRoomAssignable`.
+
+### Consecuencias
+
+- Ganado: un producto preparado (sándwich, café) puede modelar su receta
+  completa; el caso simple (1 botella = 1 artículo) sigue siendo trivial
+  (`quantity: 1`).
+- `product.category` e `inventory_item.category` quedaron unificadas como
+  efecto colateral necesario (ver D-005 actualizada): un artículo vinculado
+  a un producto ahora comparte su categoría.
+- **No se aplica el descuento automático al entregar un pedido** — el
+  cálculo existe y está probado, pero engancharlo al flujo real de
+  `order`/`service_request` es una decisión de negocio del Lote D que
+  todavía no se tomó (¿se descuenta al crear el pedido o al entregarlo?
+  ¿qué pasa si no hay suficiente stock? ¿quién lo autoriza?).
+
+### Qué NO hacer
+
+- **No fusionar `product` e `inventory_item` en una sola entidad** — el
+  caso de varios insumos por producto (o ningún insumo) rompe la
+  correspondencia 1 a 1 que una fusión asumiría.
+- **No enganchar `calculateInventoryConsumption` al flujo de entrega de un
+  pedido sin decisión de negocio del Lote D** — quién autoriza el
+  descuento, qué pasa sin stock suficiente, y si se descuenta al crear o
+  al entregar el pedido, siguen sin decidirse.
+- **No reimplementar el cálculo de descuento en una pantalla** — usar
+  siempre `calculateInventoryConsumption`; `scripts/test-lot-c-d.mjs` lo
+  verifica estáticamente.
+- **No duplicar la taxonomía de categoría** entre `product` e
+  `inventory_item` — comparten una sola fuente
+  (`shared/constants/catalog-categories.ts`), ver D-005.
+
+### Alternativas consideradas
+
+1. **Mantener `inventory_item.product_id?` (FK 1 a 1)** — descartada: es
+   exactamente la limitación que motivó este trabajo, no soporta varios
+   insumos por producto.
+2. **Entidad propia `product_inventory_consumption`** (con su propio `id`,
+   `created_at`, etc.) — descartada: es configuración estática del
+   producto, no un evento con historia propia; una entidad completa para
+   esto sería sobreingeniería, igual que ya se evitó con `role.permission_ids`.
+3. **Aplicar el descuento automáticamente en este mismo PR** — descartada
+   por instrucción explícita: es una decisión de negocio del Lote D
+   (cuándo descontar, qué hacer sin stock) que no corresponde tomar al
+   construir el dataset mock.
 
 ## Cómo agregar una nueva decisión
 

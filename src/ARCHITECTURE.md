@@ -78,6 +78,9 @@ Nueve de esas entidades llegaron con los Lotes C (WEB-11: `guest-account`,
 `permission`, `inventory-item`, `inventory-movement`, `audit-log`) — ver
 `PROGRESO-MOCKS.md`. `role.code` corresponde por valor (no por FK) con
 `user.role`, ver [D-003](../docs/DECISIONES.md), ya aceptada.
+`product` e `inventory_item` siguen siendo dos entidades, vinculadas por
+`product.inventory_consumption` (cantidad, no una FK 1 a 1) y una
+taxonomía de categoría compartida — ver [D-006](../docs/DECISIONES.md).
 
 Cada entidad vive en `shared/types/entities/<entidad>/`, con cuatro
 archivos: `<entidad>.dto.ts` (forma cruda, snake_case, tal como la devolvería
