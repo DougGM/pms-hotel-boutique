@@ -18,6 +18,9 @@ src/
   shared/
     components/           Button, Input, Select, Modal, DatePickerRange, Card, Badge,
                            EmptyState, LoadingState, ErrorState, DataTable (TableFrame), Pagination
+    constants/
+      statuses.ts          Literales y transiciones de estado compartidos con la app móvil
+                           (room, booking, order, service_request) — ver "Contrato de datos" abajo
     mocks/                 lot-b.ts: dataset del Lote B (habitaciones, huéspedes, reservas, tarifas, promociones)
     types/
       common.ts            ID, ISODateString, Currency ('GTQ' literal), UserRole
@@ -55,17 +58,34 @@ src/
 
 ## Contrato de datos: DTO → Mapper → Model
 
-Cada entidad compartida vive en `shared/types/entities/<entidad>/`, con cuatro
+**Este contrato es compartido con la app móvil (`pms-hotel-mobile`): la web
+es la fuente de verdad, móvil lo consume y no lo redefine.** El documento de
+referencia — pensado para leerse sin abrir este código — es
+[`docs/CONTRATO-DATOS.md`](../docs/CONTRATO-DATOS.md): ahí están las trece
+entidades con su DTO/Model/ejemplo JSON, las máquinas de estado, qué debe
+replicar móvil (MOV-04) y las decisiones de equipo pendientes (formato de
+SKU, catálogo de categorías, tipo de ID, la máquina de estado de `room` vs.
+el flujo de limpieza que móvil necesita). Cualquier cambio a una entidad
+compartida se anuncia a ambos equipos antes de tocar código — ver la
+sección 7 de ese documento.
+
+Cada entidad vive en `shared/types/entities/<entidad>/`, con cuatro
 archivos: `<entidad>.dto.ts` (forma cruda, snake_case, tal como la devolvería
 una API real), `<entidad>.model.ts` (forma de dominio, camelCase, la que
 consume la UI), `<entidad>.mapper.ts` (`toDomain`/`toDTO`, el único punto que
 conoce ambas formas) e `index.ts` (reexporta los tres). Es **una sola
 definición por entidad** — hasta el cierre de la Fase 0 convivían un archivo
 plano (`entities/<x>.ts`, camelCase, sin distinción real DTO/Model) y esta
-carpeta oficial; el plano se eliminó.
+carpeta oficial; el plano se eliminó. `order` y `service-request` (Room
+Service y limpieza/conserjería, las entidades que móvil opera y la web
+cobra) siguen el mismo patrón.
+
+Los literales de estado y sus transiciones válidas (`room`, `booking`,
+`order`, `service_request`) viven en `shared/constants/statuses.ts`, para
+que móvil use exactamente los mismos nombres.
 
 `shared/types/entities/index.ts` es un barrel de **tipos únicamente**:
-`toDomain`/`toDTO` no se reexportan ahí porque las once entidades usan
+`toDomain`/`toDTO` no se reexportan ahí porque las trece entidades usan
 exactamente esos dos nombres y colisionarían. Importar un mapper siempre
 desde la ruta específica de su entidad:
 
@@ -116,19 +136,20 @@ persistencia (sesión en `localStorage`) y cliente HTTP
 
 ## Pruebas
 
-`npm run test` corre siete suites (`scripts/*.mjs`), todas con el mismo
+`npm run test` corre ocho suites (`scripts/*.mjs`), todas con el mismo
 patrón: esbuild empaqueta el módulo a probar a CommonJS y se ejecuta con
 `node --test` — sin ningún framework de pruebas externo.
 
-| Suite                     | Qué cubre                                                                                                      |
-| ------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `test-auth.mjs`           | Sesión, roles, guardas de ruta, 404 por área (14 pruebas)                                                      |
-| `test-currency.mjs`       | `formatCurrency` (11 pruebas)                                                                                  |
-| `test-date.mjs`           | `formatDateGT`/`formatTimeGT`/`calculateNights`/mappers de fecha civil (35 pruebas)                            |
-| `test-money-contract.mjs` | `mockData.ts`: montos enteros, `currency: 'GTQ'`, sufijo `_cents` (13 pruebas)                                 |
-| `test-contract.mjs`       | Una sola definición por entidad; `lot-b.ts` en centavos y GTQ (17 pruebas)                                     |
-| `test-services.mjs`       | Los servicios son `async`, con latencia simulada, devuelven Models, forzado de error, regla de oro (7 pruebas) |
-| `test-presentation.mjs`   | Primitivos de `shared/components/` y el catálogo `/components` (6 pruebas)                                     |
+| Suite                      | Qué cubre                                                                                                        |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `test-auth.mjs`            | Sesión, roles, guardas de ruta, 404 por área (14 pruebas)                                                        |
+| `test-currency.mjs`        | `formatCurrency` (11 pruebas)                                                                                    |
+| `test-date.mjs`            | `formatDateGT`/`formatTimeGT`/`calculateNights`/mappers de fecha civil (35 pruebas)                              |
+| `test-money-contract.mjs`  | `mockData.ts`: montos enteros, `currency: 'GTQ'`, sufijo `_cents` (13 pruebas)                                   |
+| `test-contract.mjs`        | Una sola definición por entidad (incluye `order`/`service-request`); `lot-b.ts` en centavos y GTQ (19 pruebas)   |
+| `test-shared-contract.mjs` | Fechas ISO, `_cents`, estados dentro de `statuses.ts`, `guest_link_code` único, mappers sin pérdida (22 pruebas) |
+| `test-services.mjs`        | Los servicios son `async`, con latencia simulada, devuelven Models, forzado de error, regla de oro (7 pruebas)   |
+| `test-presentation.mjs`    | Primitivos de `shared/components/` y el catálogo `/components` (6 pruebas)                                       |
 
 `npm run check` encadena `format:check && typecheck && lint && build && test`.
 

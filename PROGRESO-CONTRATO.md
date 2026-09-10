@@ -96,10 +96,29 @@ Adicional, no pedido por móvil pero cruzado por `order`/`service_request`:
 
 ## Bitácora de commits
 
-| Fase | Descripción                                                                                                | Commit    | Estado |
-| ---- | ---------------------------------------------------------------------------------------------------------- | --------- | ------ |
-| 1    | Rama creada desde `origin/develop`; inventario de contrato, mocks y huecos                                 | `a0223cf` | hecho  |
-| 2.2  | `shared/constants/statuses.ts`; `RoomStatus`/`BookingStatus` derivados de ahí; conflicto de room reportado | `5e4f997` | hecho  |
-| 2.3  | `guest_link_code`/`guestLinkCode` en `booking`, datasets y `bookingService.createBooking`                  | `82eb17c` | hecho  |
-| 2.4  | Entidades `order` y `service-request` (DTO → Mapper → Model), sin servicio ni dataset propio todavía       | `fb49e4b` | hecho  |
-| 5    | `scripts/test-shared-contract.mjs`: fechas, `_cents`, estados, `guest_link_code`, round-trip de mappers    | `fecab16` | hecho  |
+| Fase | Descripción                                                                                                      | Commit        | Estado |
+| ---- | ---------------------------------------------------------------------------------------------------------------- | ------------- | ------ |
+| 1    | Rama creada desde `origin/develop`; inventario de contrato, mocks y huecos                                       | `a0223cf`     | hecho  |
+| 2.2  | `shared/constants/statuses.ts`; `RoomStatus`/`BookingStatus` derivados de ahí; conflicto de room reportado       | `5e4f997`     | hecho  |
+| 2.3  | `guest_link_code`/`guestLinkCode` en `booking`, datasets y `bookingService.createBooking`                        | `82eb17c`     | hecho  |
+| 2.4  | Entidades `order` y `service-request` (DTO → Mapper → Model), sin servicio ni dataset propio todavía             | `fb49e4b`     | hecho  |
+| 5    | `scripts/test-shared-contract.mjs`: fechas, `_cents`, estados, `guest_link_code`, round-trip de mappers          | `fecab16`     | hecho  |
+| 3+4  | `docs/CONTRATO-DATOS.md`: contrato completo + cinco decisiones de equipo (FASE 3) documentadas, no implementadas | `ba0d38b`     | hecho  |
+| 6    | `src/ARCHITECTURE.md` remite a `docs/CONTRATO-DATOS.md`; cierre de esta bitácora                                 | (este commit) | hecho  |
+
+## FASE 6 — Cierre
+
+- `npm run check` completo (`format:check && typecheck && lint && build && test`,
+  8 suites, 123 pruebas) pasa en verde sobre el estado final de la rama.
+- Se corrigió el formato de Prettier de `PROGRESO-FASE-0.md`/`PROJECT_STATUS.md`
+  (heredado de `develop`, no relacionado con este contrato) para que `npm run
+check` quedara limpio de punta a punta antes del PR.
+- No se fusiona nada ni se cierran issues, según la regla 4 del encargo.
+- El PR se abre contra `develop` (regla 3), no contra `main`.
+- Decisiones de equipo (sección 6 de `docs/CONTRATO-DATOS.md`), sin implementar:
+  formato de SKU, catálogo de categorías de producto/amenidad, tipo de ID,
+  conflicto de `RoomStatus` vs. flujo de limpieza de móvil, y la referencia
+  rota `amenity_ids` de `lot-b.ts`.
+- Pregunta abierta que este contrato **no resuelve** (fuera de alcance de datos):
+  cómo se autentica el personal en la app móvil — ver sección 3.12 de
+  `docs/CONTRATO-DATOS.md`.
