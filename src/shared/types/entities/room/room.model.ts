@@ -1,4 +1,6 @@
-export type RoomStatus = 'available' | 'occupied' | 'cleaning' | 'maintenance' | 'outOfService';
+import type { RoomStatus } from '@/shared/constants/statuses';
+
+export type { RoomStatus };
 
 export interface Room {
   id: string;

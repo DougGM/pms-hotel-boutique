@@ -1,7 +1,7 @@
 import type { Currency } from '@/shared/types/common';
+import type { BookingStatus } from '@/shared/constants/statuses';
 
-export type BookingStatus =
-  'pending' | 'confirmed' | 'checkedIn' | 'checkedOut' | 'cancelled' | 'noShow';
+export type { BookingStatus };
 
 export interface Booking {
   id: string;
