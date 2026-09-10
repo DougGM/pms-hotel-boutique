@@ -10,7 +10,6 @@ export interface InventoryItem {
   unit: InventoryUnit;
   currentQuantity: number;
   minimumQuantity: number;
-  productId?: string;
   active: boolean;
   /** `true` si `currentQuantity < minimumQuantity` — calculado por el mapper. */
   isBelowMinimum: boolean;

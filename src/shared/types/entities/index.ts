@@ -102,8 +102,10 @@ export type {
   ProductDTO,
   ProductDto,
   ProductCategoryDto,
+  ProductInventoryConsumptionDto,
   Product,
   ProductCategory,
+  ProductInventoryConsumption,
 } from './product';
 export type { PromotionDto, Promotion } from './promotion';
 export type { RateDTO, RateDto, Rate } from './rate';
