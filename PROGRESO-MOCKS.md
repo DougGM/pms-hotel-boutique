@@ -401,3 +401,35 @@ office`). No es un archivo de `statuses.ts` — no hay transiciones, es una
   (`ProductCategoryDto`, `InventoryItemCategory`, …) no cambian, así que
   el barrel no necesita tocarse.
 - `npm run typecheck`/`lint`/`build`: verdes.
+
+## FASE 4 — Pruebas
+
+Commit `a740396`.
+
+- **Integridad referencial** (`test-referential-integrity.mjs`, extendida):
+  se retira la verificación de `inventoryItem.product_id -> product` (el
+  campo ya no existe) y se agrega
+  `product.inventory_consumption[].inventory_item_id -> inventoryItem` —
+  no encaja en el arnés genérico `FK_CHECKS` (es un array de objetos, no
+  de IDs sueltos ni con `multi: true`), así que es una prueba dedicada en
+  la misma suite, no una paralela. 64/64, sin cambio neto en el conteo
+  (una prueba retirada, una agregada).
+- **Cálculo de consumo** (`test-lot-c-d.mjs`, sección F, nueva): los 4
+  casos de la FASE 2 verificados exactos —
+  `calculateInventoryConsumption('PRD-001', 3)` → 1 línea; `'PRD-010'`
+  (Club sandwich) ×2 → 3 líneas escaladas; `'PRD-024'` (planchado) → `[]`;
+  `'PRD-017'` (café por taza) → `0.018` kg, confirmando que la unidad del
+  artículo (`kg`) no es la del producto ("taza"). Más: toda cantidad de
+  `inventory_consumption` es positiva en el dataset completo.
+- **Taxonomía** (`test-lot-c-d.mjs`, sección G, nueva): todo
+  `product.category`/`inventoryItem.category` pertenece a
+  `CATALOG_CATEGORY_DTOS`; todo artículo vinculado a un producto comparte
+  su categoría con él.
+- **Verificación estática** (`test-lot-c-d.mjs`, sección H, nueva, mismo
+  patrón que la de `isRoomAssignable` en `test-room-status.mjs`): ningún
+  archivo fuera de `shared/utils/inventoryConsumption.ts` combina
+  `inventoryConsumption` con una multiplicación por `quantity` — la
+  heurística que atraparía una reimplementación del descuento en una
+  pantalla.
+
+`npm run check` completo: **verde** (11 suites, 248 pruebas, 0 fallos).
