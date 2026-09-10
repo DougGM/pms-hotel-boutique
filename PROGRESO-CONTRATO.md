@@ -102,3 +102,4 @@ Adicional, no pedido por móvil pero cruzado por `order`/`service_request`:
 | 2.2  | `shared/constants/statuses.ts`; `RoomStatus`/`BookingStatus` derivados de ahí; conflicto de room reportado | `5e4f997` | hecho  |
 | 2.3  | `guest_link_code`/`guestLinkCode` en `booking`, datasets y `bookingService.createBooking`                  | `82eb17c` | hecho  |
 | 2.4  | Entidades `order` y `service-request` (DTO → Mapper → Model), sin servicio ni dataset propio todavía       | `fb49e4b` | hecho  |
+| 5    | `scripts/test-shared-contract.mjs`: fechas, `_cents`, estados, `guest_link_code`, round-trip de mappers    | `fecab16` | hecho  |
