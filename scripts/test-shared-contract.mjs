@@ -25,6 +25,7 @@ await build({
     'src/shared/types/entities/promotion/index.ts',
     'src/shared/types/entities/rate/index.ts',
     'src/shared/types/entities/room/index.ts',
+    'src/shared/types/entities/room-feature/index.ts',
     'src/shared/types/entities/room-type/index.ts',
     'src/shared/types/entities/service-request/index.ts',
     'src/shared/types/entities/user/index.ts',
@@ -48,6 +49,7 @@ const load = (relativePath) => {
 
 const {
   mockAmenities,
+  mockRoomFeatures,
   mockRoomTypes,
   mockRates,
   mockRooms,
@@ -70,6 +72,7 @@ const productMapper = load('shared/types/entities/product/index');
 const promotionMapper = load('shared/types/entities/promotion/index');
 const rateMapper = load('shared/types/entities/rate/index');
 const roomMapper = load('shared/types/entities/room/index');
+const roomFeatureMapper = load('shared/types/entities/room-feature/index');
 const roomTypeMapper = load('shared/types/entities/room-type/index');
 const serviceRequestMapper = load('shared/types/entities/service-request/index');
 const userMapper = load('shared/types/entities/user/index');
@@ -100,6 +103,7 @@ const CALENDAR_FIELDS = ['check_in', 'check_out', 'valid_from', 'valid_to'];
 function collectDatasets() {
   return [
     ...mockAmenities,
+    ...mockRoomFeatures,
     ...mockRoomTypes,
     ...mockRates,
     ...mockRooms,
@@ -107,6 +111,7 @@ function collectDatasets() {
     ...mockBookings,
     ...mockPayments,
     ...mockProducts,
+    ...lotBMockData.roomFeatures,
     ...lotBMockData.roomTypes,
     ...lotBMockData.rooms,
     ...lotBMockData.guests,
@@ -270,6 +275,12 @@ test('mapper rate: round-trip sin pérdida', () => {
 test('mapper room: round-trip sin pérdida', () => {
   for (const dto of [...mockRooms, ...lotBMockData.rooms]) {
     assertRoundTrip(`room ${dto.id}`, dto, roomMapper);
+  }
+});
+
+test('mapper room-feature: round-trip sin pérdida', () => {
+  for (const dto of [...mockRoomFeatures, ...lotBMockData.roomFeatures]) {
+    assertRoundTrip(`room-feature ${dto.id}`, dto, roomFeatureMapper);
   }
 });
 
