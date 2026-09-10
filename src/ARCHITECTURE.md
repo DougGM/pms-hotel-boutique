@@ -61,7 +61,7 @@ src/
 **Este contrato es compartido con la app móvil (`pms-hotel-mobile`): la web
 es la fuente de verdad, móvil lo consume y no lo redefine.** El documento de
 referencia — pensado para leerse sin abrir este código — es
-[`docs/CONTRATO-DATOS.md`](../docs/CONTRATO-DATOS.md): ahí están las trece
+[`docs/CONTRATO-DATOS.md`](../docs/CONTRATO-DATOS.md): ahí están las catorce
 entidades con su DTO/Model/ejemplo JSON, las máquinas de estado, qué debe
 replicar móvil (MOV-04) y las decisiones de equipo pendientes (formato de
 SKU, catálogo de categorías, tipo de ID, la máquina de estado de `room` vs.
@@ -80,12 +80,16 @@ carpeta oficial; el plano se eliminó. `order` y `service-request` (Room
 Service y limpieza/conserjería, las entidades que móvil opera y la web
 cobra) siguen el mismo patrón.
 
+`room-type` referencia `room_feature` (características de habitación, sin
+horario), nunca `amenity` (servicios del hotel, con horario): son entidades
+distintas a propósito — ver [`docs/DECISIONES.md`, D-001](../docs/DECISIONES.md).
+
 Los literales de estado y sus transiciones válidas (`room`, `booking`,
 `order`, `service_request`) viven en `shared/constants/statuses.ts`, para
 que móvil use exactamente los mismos nombres.
 
 `shared/types/entities/index.ts` es un barrel de **tipos únicamente**:
-`toDomain`/`toDTO` no se reexportan ahí porque las trece entidades usan
+`toDomain`/`toDTO` no se reexportan ahí porque las catorce entidades usan
 exactamente esos dos nombres y colisionarían. Importar un mapper siempre
 desde la ruta específica de su entidad:
 

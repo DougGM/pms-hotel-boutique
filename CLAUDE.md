@@ -42,6 +42,11 @@ el barrel las reexportara.
 distintos que comparten nombre por casualidad. No fusionarlos, no crear un
 tercer contrato de usuario.
 
+`shared/types/entities/room_feature/` (características de habitación) y
+`shared/types/entities/amenity/` (servicios compartidos del hotel, con
+horario) son igual de distintos — no colgar una amenidad de `room`/
+`room-type`. Ver `docs/DECISIONES.md`, D-001.
+
 ## Moneda y fecha
 
 - Quetzal guatemalteco. Todo campo de dinero en un DTO termina en `_cents`

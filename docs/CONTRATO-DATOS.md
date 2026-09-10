@@ -1,6 +1,6 @@
 # Contrato de datos — PMS Hotel Boutique
 
-**Última actualización:** 2026-09-09 · rama `feat/contrato-compartido`.
+**Última actualización:** 2026-09-10 · rama `feat/contrato-compartido`.
 
 ## 1. Propósito y regla de gobierno
 
@@ -95,18 +95,18 @@ No estaba en la lista original de entidades cruzadas de la consigna, pero
 móvil las necesita para mostrarle al huésped el tipo de su habitación. Se
 recomienda tratarla como compartida.
 
-| Campo DTO           | Tipo       | Descripción                          |
-| -------------------- | ---------- | ------------------------------------- |
-| `id`                 | `string`   |                                        |
-| `code`               | `string`   | Código corto (`"EST"`, `"DLX"`)       |
-| `name`               | `string`   |                                        |
-| `description?`       | `string`   |                                        |
-| `capacity`           | `number`   | Huéspedes máximos                     |
-| `bed_configuration`  | `string`   | Texto libre                           |
-| `amenity_ids`        | `string[]` | FKs a `amenity` — ver decisión 6.5    |
-| `active`             | `boolean`  |                                        |
-| `created_at`         | `string`   |                                        |
-| `updated_at`         | `string`   |                                        |
+| Campo DTO           | Tipo       | Descripción                                    |
+| -------------------- | ---------- | ------------------------------------------------ |
+| `id`                 | `string`   |                                                   |
+| `code`               | `string`   | Código corto (`"EST"`, `"DLX"`)                 |
+| `name`               | `string`   |                                                   |
+| `description?`       | `string`   |                                                   |
+| `capacity`           | `number`   | Huéspedes máximos                               |
+| `bed_configuration`  | `string`   | Texto libre                                      |
+| `room_feature_ids`   | `string[]` | FKs a `room_feature` — **no** a `amenity` (D-001) |
+| `active`             | `boolean`  |                                                   |
+| `created_at`         | `string`   |                                                   |
+| `updated_at`         | `string`   |                                                   |
 
 ```json
 {
@@ -116,8 +116,35 @@ recomienda tratarla como compartida.
   "description": "Habitación acogedora para una estancia práctica y tranquila.",
   "capacity": 2,
   "bed_configuration": "1 cama matrimonial",
-  "amenity_ids": ["AM-01", "AM-02", "AM-03"],
+  "room_feature_ids": ["RF-01", "RF-02", "RF-03"],
   "active": true,
+  "created_at": "2026-01-01T00:00:00.000Z",
+  "updated_at": "2026-01-01T00:00:00.000Z"
+}
+```
+
+### 3.2b `room_feature` — compartida (**nueva**, separada de `amenity`)
+
+Característica de la habitación (aire acondicionado, balcón, vista al
+jardín, jacuzzi...): lo que el cliente compra al elegir un tipo de
+habitación. Antes vivía mezclada con `amenity` bajo `room-type.amenity_ids`
+— ver [`docs/DECISIONES.md`, D-001](./DECISIONES.md#d-001--room_feature-es-una-entidad-distinta-de-amenity)
+para el porqué de la separación. Sin horario ni `active`/`inactive`: a
+diferencia de una amenidad, una característica no se "abre" ni se "cierra".
+
+| Campo DTO       | Tipo     | Descripción |
+| ---------------- | -------- | ------------ |
+| `id`              | `string` |              |
+| `name`            | `string` |              |
+| `description?`    | `string` |              |
+| `created_at`      | `string` |              |
+| `updated_at`      | `string` |              |
+
+```json
+{
+  "id": "RF-01",
+  "name": "Aire acondicionado",
+  "description": "Climatización individual controlable desde la habitación.",
   "created_at": "2026-01-01T00:00:00.000Z",
   "updated_at": "2026-01-01T00:00:00.000Z"
 }
@@ -239,6 +266,15 @@ ante recepción.
 ```
 
 ### 3.6 `amenity` — compartida
+
+Servicio compartido del hotel (piscina, spa, Wi-Fi general, desayuno) —
+**no pertenece a una habitación ni a un tipo de habitación.** Antes
+`room-type.amenity_ids` la referenciaba, mezclando este concepto con
+características de habitación; ver [`docs/DECISIONES.md`, D-001](./DECISIONES.md#d-001--room_feature-es-una-entidad-distinta-de-amenity).
+**No agregar de nuevo una referencia desde `room`/`room-type` a `amenity`.**
+No tiene horario de funcionamiento todavía a pesar de ser un servicio
+compartido — es una limitación conocida, no algo que este documento
+resuelva (agregarlo es trabajo futuro del equipo, no una decisión tomada).
 
 | Campo DTO       | Tipo                                        | Descripción              |
 | ---------------- | --------------------------------------------- | -------------------------- |
@@ -476,12 +512,14 @@ rejected → (terminal)
 
 Lista explícita, sin necesidad de leer código web:
 
-1. **Entidades a replicar tal cual:** `room`, `room-type`, `guest`,
-   `booking` (incluyendo `guest_link_code`), `product`, `amenity`, `user`,
-   `order`, `service_request`. Todas con la forma de **Model** (camelCase)
-   descrita en la sección 3 — móvil no necesita replicar la forma DTO si su
-   propia capa de red ya hace su propia traducción snake_case → camelCase
-   con la misma tabla de campos.
+1. **Entidades a replicar tal cual:** `room`, `room-type`, `room_feature`,
+   `guest`, `booking` (incluyendo `guest_link_code`), `product`, `amenity`,
+   `user`, `order`, `service_request`. Todas con la forma de **Model**
+   (camelCase) descrita en la sección 3 — móvil no necesita replicar la
+   forma DTO si su propia capa de red ya hace su propia traducción
+   snake_case → camelCase con la misma tabla de campos. **Importante:**
+   `room_feature` y `amenity` son catálogos distintos con ciclos de vida
+   distintos (D-001) — no colapsarlos en uno solo del lado de móvil.
 2. **Entidades que NO debe crear:** `rate`, `charge`, `payment`,
    `promotion`, `session` — no aplican al lado de móvil.
 3. **Entidades propias de móvil, fuera de este contrato:** `notification`,
@@ -615,28 +653,16 @@ implementa en este PR porque cambia el contrato de `room` más allá de lo
 que pedía la FASE 2, y su diseño (¿quién transiciona `inspected`, con qué
 permiso?) necesita la sesión de equipo.
 
-### 6.5 Referencia rota: `amenity_ids` de `lot-b.ts`
+### 6.5 Referencia rota: `amenity_ids` de `lot-b.ts` — **resuelta**
 
-**Problema** (hallazgo de la FASE 1, no un hueco de la consigna): los
-`roomTypes` de `lot-b.ts` referencian `AM-01`…`AM-06`, pero ningún dataset
-define amenidades con esos IDs (`mockData.ts` solo tiene `amenity-1`/`-2`).
-No falla en runtime porque ningún servicio sirve amenidades desde
-`lot-b.ts` todavía, pero es una fuga de datos esperando a un ticket que
-conecte `catalogService` al dataset del Lote B.
-
-**Opciones:**
-
-- **A. Agregar un array `amenities` a `lot-b.ts`** con los seis IDs
-  `AM-01`…`AM-06` que ya se referencian — es lo que el Lote B claramente
-  intentó hacer.
-- **B. Migrar las referencias de `lot-b.ts`** para usar `amenity-1`/`-2`
-  de `mockData.ts`, consolidando en una sola fuente de amenidades.
-
-**Recomendación:** **A** — más fiel a la intención original del Lote B (seis
-amenidades, no dos) y no reduce el catálogo de amenidades ya modelado en
-los `roomTypes`. Bloqueado por la decisión 6.2 (categorías), porque las seis
-amenidades nuevas deberían nacer ya con la categoría/mapeo que el equipo
-decida ahí.
+**Estado: resuelta e implementada** (ver
+[`docs/DECISIONES.md`, D-001](./DECISIONES.md#d-001--room_feature-es-una-entidad-distinta-de-amenity)).
+El diagnóstico encontró que la referencia rota no era solo un hueco de
+datos: `room-type.amenity_ids` mezclaba dos conceptos (características de
+habitación y amenidades de hotel) bajo una sola entidad. Se separó en
+`room_feature` (nueva, sin horario) y `amenity` (sin cambios en su
+contrato, pero ya no referenciada desde `room-type`). Sección 3.2b tiene el
+contrato de `room_feature`.
 
 ## 7. Cómo se cambia este contrato
 
