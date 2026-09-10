@@ -26,6 +26,7 @@ export const bookingService = {
       ...data,
       id: `booking-${lotBMockData.bookings.length + 1}`,
       confirmation_code: `PMS-${String(lotBMockData.bookings.length + 1).padStart(4, '0')}`,
+      guest_link_code: `LNK-${String(lotBMockData.bookings.length + 1).padStart(4, '0')}`,
       status: 'pending' as const,
       total_amount_cents: 0,
       currency: 'GTQ' as const,

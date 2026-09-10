@@ -144,6 +144,7 @@ export const mockBookings: BookingDto[] = [
   {
     id: 'booking-1',
     confirmation_code: 'PMS-0001',
+    guest_link_code: 'LNK-7Q3F2K',
     guest_id: 'guest-1',
     room_id: 'room-101',
     room_type_id: 'room-type-suite-jardin',

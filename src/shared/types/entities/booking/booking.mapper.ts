@@ -10,6 +10,7 @@ import type { Booking } from './booking.model';
 export const toDomain = (dto: BookingDto): Booking => ({
   id: dto.id,
   confirmationCode: dto.confirmation_code,
+  guestLinkCode: dto.guest_link_code,
   guestId: dto.guest_id,
   roomId: dto.room_id,
   roomTypeId: dto.room_type_id,
@@ -36,6 +37,7 @@ export const toDomain = (dto: BookingDto): Booking => ({
 export const toDTO = (model: Booking): BookingDto => ({
   id: model.id,
   confirmation_code: model.confirmationCode,
+  guest_link_code: model.guestLinkCode,
   guest_id: model.guestId,
   room_id: model.roomId,
   room_type_id: model.roomTypeId,

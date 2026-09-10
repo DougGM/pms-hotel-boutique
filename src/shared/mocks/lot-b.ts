@@ -512,6 +512,7 @@ export const lotBMockData: LotBMockData = {
     {
       id: 'BKG-001',
       confirmation_code: 'AUR-26001',
+      guest_link_code: 'LNK-26001',
       guest_id: 'GST-001',
       room_id: 'RM-101',
       room_type_id: 'RT-01',
@@ -530,6 +531,7 @@ export const lotBMockData: LotBMockData = {
     {
       id: 'BKG-002',
       confirmation_code: 'AUR-26002',
+      guest_link_code: 'LNK-26002',
       guest_id: 'GST-002',
       room_id: 'RM-201',
       room_type_id: 'RT-02',
@@ -547,6 +549,7 @@ export const lotBMockData: LotBMockData = {
     {
       id: 'BKG-003',
       confirmation_code: 'AUR-26003',
+      guest_link_code: 'LNK-26003',
       guest_id: 'GST-003',
       room_id: 'RM-301',
       room_type_id: 'RT-03',
@@ -564,6 +567,7 @@ export const lotBMockData: LotBMockData = {
     {
       id: 'BKG-004',
       confirmation_code: 'AUR-26004',
+      guest_link_code: 'LNK-26004',
       guest_id: 'GST-004',
       room_id: 'RM-401',
       room_type_id: 'RT-04',
@@ -581,6 +585,7 @@ export const lotBMockData: LotBMockData = {
     {
       id: 'BKG-005',
       confirmation_code: 'AUR-26005',
+      guest_link_code: 'LNK-26005',
       guest_id: 'GST-005',
       room_id: 'RM-501',
       room_type_id: 'RT-05',
@@ -599,6 +604,7 @@ export const lotBMockData: LotBMockData = {
     {
       id: 'BKG-006',
       confirmation_code: 'AUR-26006',
+      guest_link_code: 'LNK-26006',
       guest_id: 'GST-006',
       room_id: 'RM-102',
       room_type_id: 'RT-01',
@@ -617,6 +623,7 @@ export const lotBMockData: LotBMockData = {
     {
       id: 'BKG-007',
       confirmation_code: 'AUR-26007',
+      guest_link_code: 'LNK-26007',
       guest_id: 'GST-007',
       room_id: 'RM-203',
       room_type_id: 'RT-02',
@@ -634,6 +641,7 @@ export const lotBMockData: LotBMockData = {
     {
       id: 'BKG-008',
       confirmation_code: 'AUR-26008',
+      guest_link_code: 'LNK-26008',
       guest_id: 'GST-008',
       room_id: 'RM-302',
       room_type_id: 'RT-03',
@@ -651,6 +659,7 @@ export const lotBMockData: LotBMockData = {
     {
       id: 'BKG-009',
       confirmation_code: 'AUR-26009',
+      guest_link_code: 'LNK-26009',
       guest_id: 'GST-009',
       room_id: 'RM-402',
       room_type_id: 'RT-04',
@@ -668,6 +677,7 @@ export const lotBMockData: LotBMockData = {
     {
       id: 'BKG-010',
       confirmation_code: 'AUR-26010',
+      guest_link_code: 'LNK-26010',
       guest_id: 'GST-010',
       room_id: 'RM-502',
       room_type_id: 'RT-05',
@@ -685,6 +695,7 @@ export const lotBMockData: LotBMockData = {
     {
       id: 'BKG-011',
       confirmation_code: 'AUR-26011',
+      guest_link_code: 'LNK-26011',
       guest_id: 'GST-011',
       room_id: 'RM-103',
       room_type_id: 'RT-01',
@@ -702,6 +713,7 @@ export const lotBMockData: LotBMockData = {
     {
       id: 'BKG-012',
       confirmation_code: 'AUR-26012',
+      guest_link_code: 'LNK-26012',
       guest_id: 'GST-012',
       room_id: 'RM-202',
       room_type_id: 'RT-02',
@@ -719,6 +731,7 @@ export const lotBMockData: LotBMockData = {
     {
       id: 'BKG-013',
       confirmation_code: 'AUR-26013',
+      guest_link_code: 'LNK-26013',
       guest_id: 'GST-001',
       room_id: 'RM-303',
       room_type_id: 'RT-03',
@@ -736,6 +749,7 @@ export const lotBMockData: LotBMockData = {
     {
       id: 'BKG-014',
       confirmation_code: 'AUR-26014',
+      guest_link_code: 'LNK-26014',
       guest_id: 'GST-002',
       room_id: 'RM-403',
       room_type_id: 'RT-04',
@@ -753,6 +767,7 @@ export const lotBMockData: LotBMockData = {
     {
       id: 'BKG-015',
       confirmation_code: 'AUR-26015',
+      guest_link_code: 'LNK-26015',
       guest_id: 'GST-003',
       room_id: 'RM-503',
       room_type_id: 'RT-05',
@@ -770,6 +785,7 @@ export const lotBMockData: LotBMockData = {
     {
       id: 'BKG-016',
       confirmation_code: 'AUR-26016',
+      guest_link_code: 'LNK-26016',
       guest_id: 'GST-004',
       room_id: 'RM-101',
       room_type_id: 'RT-01',
@@ -787,6 +803,7 @@ export const lotBMockData: LotBMockData = {
     {
       id: 'BKG-017',
       confirmation_code: 'AUR-26017',
+      guest_link_code: 'LNK-26017',
       guest_id: 'GST-005',
       room_id: 'RM-201',
       room_type_id: 'RT-02',
@@ -804,6 +821,7 @@ export const lotBMockData: LotBMockData = {
     {
       id: 'BKG-018',
       confirmation_code: 'AUR-26018',
+      guest_link_code: 'LNK-26018',
       guest_id: 'GST-006',
       room_id: 'RM-302',
       room_type_id: 'RT-03',
@@ -821,6 +839,7 @@ export const lotBMockData: LotBMockData = {
     {
       id: 'BKG-019',
       confirmation_code: 'AUR-26019',
+      guest_link_code: 'LNK-26019',
       guest_id: 'GST-007',
       room_id: 'RM-401',
       room_type_id: 'RT-04',
@@ -838,6 +857,7 @@ export const lotBMockData: LotBMockData = {
     {
       id: 'BKG-020',
       confirmation_code: 'AUR-26020',
+      guest_link_code: 'LNK-26020',
       guest_id: 'GST-008',
       room_id: 'RM-501',
       room_type_id: 'RT-05',

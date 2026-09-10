@@ -6,6 +6,7 @@ export type { BookingStatus };
 export interface Booking {
   id: string;
   confirmationCode: string;
+  guestLinkCode: string;
   guestId: string;
   roomId?: string;
   roomTypeId: string;
