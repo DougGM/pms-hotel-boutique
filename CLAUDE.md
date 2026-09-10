@@ -34,15 +34,15 @@ falla si aparece uno.
 
 Los mappers se importan siempre desde la ruta de su propia entidad
 (`@/shared/types/entities/booking`), nunca del barrel `entities/index.ts`:
-`toDomain`/`toDTO` se llaman igual en las once entidades y colisionarían si
-el barrel las reexportara.
+`toDomain`/`toDTO` se llaman igual en las catorce entidades y colisionarían
+si el barrel las reexportara.
 
 `shared/types/entities/session/` (login/sesión, rol de acceso al PMS) y
 `shared/types/entities/user/` (puesto de un empleado) son conceptos
 distintos que comparten nombre por casualidad. No fusionarlos, no crear un
 tercer contrato de usuario.
 
-`shared/types/entities/room_feature/` (características de habitación) y
+`shared/types/entities/room-feature/` (características de habitación) y
 `shared/types/entities/amenity/` (servicios compartidos del hotel, con
 horario) son igual de distintos — no colgar una amenidad de `room`/
 `room-type`. Ver `docs/DECISIONES.md`, D-001.
@@ -76,7 +76,7 @@ en el archivo que lo consume.
 
 ## Pruebas
 
-Mismo patrón en las siete suites de `scripts/*.mjs`: esbuild empaqueta el
+Mismo patrón en las nueve suites de `scripts/*.mjs`: esbuild empaqueta el
 módulo a CommonJS y se corre con `node --test`. No instalar un framework de
 pruebas nuevo (Jest, Vitest, etc.) — extender este patrón. `npm run test`
 las corre todas; `npm run check` las incluye al final.
