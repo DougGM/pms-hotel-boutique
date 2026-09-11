@@ -4,18 +4,16 @@ import { createRequire } from 'node:module';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-// Verifica que TODA referencia entre entidades de los datasets resuelva —no
-// solo room-type.room_feature_ids, que fue el hallazgo original (ver
+// Verifica que TODA referencia entre entidades del dataset resuelva —no solo
+// room-type.room_feature_ids, que fue el hallazgo original (ver
 // docs/DECISIONES.md, D-002)— y que ningún catálogo tenga IDs duplicados.
+// Desde la consolidación en src/data/db.ts hay un solo dataset por entidad
+// (antes había dos mundos paralelos, mockData.ts y los lotes, con IDs que no
+// se cruzaban entre sí).
 
 await mkdir('.cache', { recursive: true });
 await build({
-  entryPoints: [
-    'src/services/mockData.ts',
-    'src/shared/mocks/lot-b.ts',
-    'src/shared/mocks/lot-c.ts',
-    'src/shared/mocks/lot-d.ts',
-  ],
+  entryPoints: ['src/data/db.ts'],
   outdir: '.cache',
   outbase: 'src',
   outExtension: { '.js': '.cjs' },
@@ -34,19 +32,30 @@ const load = (relativePath) => {
 };
 
 const {
-  mockAmenities,
-  mockRoomFeatures,
-  mockRoomTypes,
-  mockRates,
-  mockRooms,
-  mockGuests,
-  mockBookings,
-  mockPayments,
-  mockProducts,
-} = load('services/mockData');
-const { lotBMockData } = load('shared/mocks/lot-b');
-const { lotCMockData } = load('shared/mocks/lot-c');
-const { lotDMockData } = load('shared/mocks/lot-d');
+  roomFeaturesDB,
+  roomTypesDB,
+  roomsDB,
+  guestsDB,
+  ratesDB,
+  bookingsDB,
+  promotionsDB,
+  guestAccountsDB,
+  chargesDB,
+  paymentsDB,
+  depositsDB,
+  cashSessionsDB,
+  cashMovementsDB,
+  usersDB,
+  rolesDB,
+  permissionsDB,
+  amenitiesDB,
+  productsDB,
+  inventoryItemsDB,
+  inventoryMovementsDB,
+  auditLogsDB,
+  ordersDB,
+  serviceRequestsDB,
+} = load('data/db');
 
 const idsOf = (records) => new Set(records.map((record) => record.id));
 
@@ -58,265 +67,216 @@ const idsOf = (records) => new Set(records.map((record) => record.id));
 // `optional: true` si el campo puede faltar en un registro dado.
 
 const FK_CHECKS = [
-  // -- services/mockData.ts --
   {
-    dataset: 'mockData',
     label: 'roomType.room_feature_ids -> roomFeature',
-    records: mockRoomTypes,
+    records: roomTypesDB,
     field: 'room_feature_ids',
-    target: idsOf(mockRoomFeatures),
+    target: idsOf(roomFeaturesDB),
     multi: true,
   },
   {
-    dataset: 'mockData',
     label: 'room.room_type_id -> roomType',
-    records: mockRooms,
+    records: roomsDB,
     field: 'room_type_id',
-    target: idsOf(mockRoomTypes),
+    target: idsOf(roomTypesDB),
   },
   {
-    dataset: 'mockData',
     label: 'rate.room_type_id -> roomType',
-    records: mockRates,
+    records: ratesDB,
     field: 'room_type_id',
-    target: idsOf(mockRoomTypes),
+    target: idsOf(roomTypesDB),
   },
   {
-    dataset: 'mockData',
     label: 'booking.guest_id -> guest',
-    records: mockBookings,
+    records: bookingsDB,
     field: 'guest_id',
-    target: idsOf(mockGuests),
+    target: idsOf(guestsDB),
   },
   {
-    dataset: 'mockData',
     label: 'booking.room_id -> room',
-    records: mockBookings,
+    records: bookingsDB,
     field: 'room_id',
-    target: idsOf(mockRooms),
+    target: idsOf(roomsDB),
     optional: true,
   },
   {
-    dataset: 'mockData',
     label: 'booking.room_type_id -> roomType',
-    records: mockBookings,
+    records: bookingsDB,
     field: 'room_type_id',
-    target: idsOf(mockRoomTypes),
+    target: idsOf(roomTypesDB),
   },
   {
-    dataset: 'mockData',
     label: 'booking.rate_id -> rate',
-    records: mockBookings,
+    records: bookingsDB,
     field: 'rate_id',
-    target: idsOf(mockRates),
+    target: idsOf(ratesDB),
     optional: true,
   },
+  // -- Lote C (WEB-11): cuentas, cargos, pagos, depósitos y caja --
   {
-    dataset: 'mockData',
-    label: 'payment.booking_id -> booking',
-    records: mockPayments,
+    label: 'guestAccount.booking_id -> booking',
+    records: guestAccountsDB,
     field: 'booking_id',
-    target: idsOf(mockBookings),
-  },
-  // -- shared/mocks/lot-b.ts --
-  {
-    dataset: 'lot-b',
-    label: 'roomType.room_feature_ids -> roomFeature',
-    records: lotBMockData.roomTypes,
-    field: 'room_feature_ids',
-    target: idsOf(lotBMockData.roomFeatures),
-    multi: true,
+    target: idsOf(bookingsDB),
   },
   {
-    dataset: 'lot-b',
-    label: 'room.room_type_id -> roomType',
-    records: lotBMockData.rooms,
-    field: 'room_type_id',
-    target: idsOf(lotBMockData.roomTypes),
-  },
-  {
-    dataset: 'lot-b',
-    label: 'rate.room_type_id -> roomType',
-    records: lotBMockData.rates,
-    field: 'room_type_id',
-    target: idsOf(lotBMockData.roomTypes),
-  },
-  {
-    dataset: 'lot-b',
-    label: 'booking.guest_id -> guest',
-    records: lotBMockData.bookings,
+    label: 'guestAccount.guest_id -> guest',
+    records: guestAccountsDB,
     field: 'guest_id',
-    target: idsOf(lotBMockData.guests),
+    target: idsOf(guestsDB),
   },
   {
-    dataset: 'lot-b',
-    label: 'booking.room_id -> room',
-    records: lotBMockData.bookings,
-    field: 'room_id',
-    target: idsOf(lotBMockData.rooms),
-    optional: true,
-  },
-  {
-    dataset: 'lot-b',
-    label: 'booking.room_type_id -> roomType',
-    records: lotBMockData.bookings,
-    field: 'room_type_id',
-    target: idsOf(lotBMockData.roomTypes),
-  },
-  {
-    dataset: 'lot-b',
-    label: 'booking.rate_id -> rate',
-    records: lotBMockData.bookings,
-    field: 'rate_id',
-    target: idsOf(lotBMockData.rates),
-    optional: true,
-  },
-  // -- shared/mocks/lot-c.ts (WEB-11): cuentas, cargos, pagos, depósitos y
-  // caja, construidos sobre las reservas/huéspedes reales del Lote B --
-  {
-    dataset: 'lot-c',
-    label: 'guestAccount.booking_id -> lot-b.booking',
-    records: lotCMockData.guestAccounts,
+    label: 'charge.booking_id -> booking',
+    records: chargesDB,
     field: 'booking_id',
-    target: idsOf(lotBMockData.bookings),
+    target: idsOf(bookingsDB),
   },
   {
-    dataset: 'lot-c',
-    label: 'guestAccount.guest_id -> lot-b.guest',
-    records: lotCMockData.guestAccounts,
-    field: 'guest_id',
-    target: idsOf(lotBMockData.guests),
-  },
-  {
-    dataset: 'lot-c',
-    label: 'charge.booking_id -> lot-b.booking',
-    records: lotCMockData.charges,
-    field: 'booking_id',
-    target: idsOf(lotBMockData.bookings),
-  },
-  {
-    dataset: 'lot-c',
-    label: 'charge.created_by_user_id -> lot-d.user',
-    records: lotCMockData.charges,
+    label: 'charge.created_by_user_id -> user',
+    records: chargesDB,
     field: 'created_by_user_id',
-    target: idsOf(lotDMockData.users),
+    target: idsOf(usersDB),
     optional: true,
   },
   {
-    dataset: 'lot-c',
-    label: 'payment.booking_id -> lot-b.booking',
-    records: lotCMockData.payments,
+    label: 'payment.booking_id -> booking',
+    records: paymentsDB,
     field: 'booking_id',
-    target: idsOf(lotBMockData.bookings),
+    target: idsOf(bookingsDB),
   },
   {
-    dataset: 'lot-c',
-    label: 'payment.processed_by_user_id -> lot-d.user',
-    records: lotCMockData.payments,
+    label: 'payment.processed_by_user_id -> user',
+    records: paymentsDB,
     field: 'processed_by_user_id',
-    target: idsOf(lotDMockData.users),
+    target: idsOf(usersDB),
     optional: true,
   },
   {
-    dataset: 'lot-c',
-    label: 'deposit.booking_id -> lot-b.booking',
-    records: lotCMockData.deposits,
+    label: 'deposit.booking_id -> booking',
+    records: depositsDB,
     field: 'booking_id',
-    target: idsOf(lotBMockData.bookings),
+    target: idsOf(bookingsDB),
   },
   {
-    dataset: 'lot-c',
-    label: 'deposit.guest_id -> lot-b.guest',
-    records: lotCMockData.deposits,
+    label: 'deposit.guest_id -> guest',
+    records: depositsDB,
     field: 'guest_id',
-    target: idsOf(lotBMockData.guests),
+    target: idsOf(guestsDB),
   },
   {
-    dataset: 'lot-c',
-    label: 'cashSession.opened_by_user_id -> lot-d.user',
-    records: lotCMockData.cashSessions,
+    label: 'cashSession.opened_by_user_id -> user',
+    records: cashSessionsDB,
     field: 'opened_by_user_id',
-    target: idsOf(lotDMockData.users),
+    target: idsOf(usersDB),
   },
   {
-    dataset: 'lot-c',
-    label: 'cashSession.closed_by_user_id -> lot-d.user',
-    records: lotCMockData.cashSessions,
+    label: 'cashSession.closed_by_user_id -> user',
+    records: cashSessionsDB,
     field: 'closed_by_user_id',
-    target: idsOf(lotDMockData.users),
+    target: idsOf(usersDB),
     optional: true,
   },
   {
-    dataset: 'lot-c',
     label: 'cashMovement.cash_session_id -> cashSession',
-    records: lotCMockData.cashMovements,
+    records: cashMovementsDB,
     field: 'cash_session_id',
-    target: idsOf(lotCMockData.cashSessions),
+    target: idsOf(cashSessionsDB),
   },
   {
-    dataset: 'lot-c',
-    label: 'cashMovement.responsible_user_id -> lot-d.user',
-    records: lotCMockData.cashMovements,
+    label: 'cashMovement.responsible_user_id -> user',
+    records: cashMovementsDB,
     field: 'responsible_user_id',
-    target: idsOf(lotDMockData.users),
+    target: idsOf(usersDB),
   },
   {
-    dataset: 'lot-c',
     label: 'cashMovement.payment_id -> payment',
-    records: lotCMockData.cashMovements,
+    records: cashMovementsDB,
     field: 'payment_id',
-    target: idsOf(lotCMockData.payments),
+    target: idsOf(paymentsDB),
     optional: true,
   },
-  // -- shared/mocks/lot-d.ts (WEB-12): personal, catálogos e inventario --
+  // -- Lote D (WEB-12): personal, catálogos e inventario --
   {
-    dataset: 'lot-d',
     label: 'role.permission_ids -> permission',
-    records: lotDMockData.roles,
+    records: rolesDB,
     field: 'permission_ids',
-    target: idsOf(lotDMockData.permissions),
+    target: idsOf(permissionsDB),
     multi: true,
   },
   {
-    dataset: 'lot-d',
     label: 'user.role -> role.code (correspondencia por valor, no FK — D-003)',
-    records: lotDMockData.users,
+    records: usersDB,
     field: 'role',
-    target: new Set(lotDMockData.roles.map((role) => role.code)),
+    target: new Set(rolesDB.map((role) => role.code)),
   },
   {
-    dataset: 'lot-d',
     label: 'inventoryItem.product_id -> product',
-    records: lotDMockData.inventoryItems,
+    records: inventoryItemsDB,
     field: 'product_id',
-    target: idsOf(lotDMockData.products),
+    target: idsOf(productsDB),
     optional: true,
   },
   {
-    dataset: 'lot-d',
     label: 'inventoryMovement.inventory_item_id -> inventoryItem',
-    records: lotDMockData.inventoryMovements,
+    records: inventoryMovementsDB,
     field: 'inventory_item_id',
-    target: idsOf(lotDMockData.inventoryItems),
+    target: idsOf(inventoryItemsDB),
   },
   {
-    dataset: 'lot-d',
     label: 'inventoryMovement.responsible_user_id -> user',
-    records: lotDMockData.inventoryMovements,
+    records: inventoryMovementsDB,
     field: 'responsible_user_id',
-    target: idsOf(lotDMockData.users),
+    target: idsOf(usersDB),
   },
   {
-    dataset: 'lot-d',
     label: 'auditLog.user_id -> user',
-    records: lotDMockData.auditLogs,
+    records: auditLogsDB,
     field: 'user_id',
-    target: idsOf(lotDMockData.users),
+    target: idsOf(usersDB),
+  },
+  // -- order y service_request: construidos sobre estadías reales del Lote B --
+  {
+    label: 'order.booking_id -> booking',
+    records: ordersDB,
+    field: 'booking_id',
+    target: idsOf(bookingsDB),
+  },
+  {
+    label: 'order.room_id -> room',
+    records: ordersDB,
+    field: 'room_id',
+    target: idsOf(roomsDB),
+  },
+  {
+    label: 'order.guest_id -> guest',
+    records: ordersDB,
+    field: 'guest_id',
+    target: idsOf(guestsDB),
+    optional: true,
+  },
+  {
+    label: 'serviceRequest.booking_id -> booking',
+    records: serviceRequestsDB,
+    field: 'booking_id',
+    target: idsOf(bookingsDB),
+  },
+  {
+    label: 'serviceRequest.room_id -> room',
+    records: serviceRequestsDB,
+    field: 'room_id',
+    target: idsOf(roomsDB),
+  },
+  {
+    label: 'serviceRequest.guest_id -> guest',
+    records: serviceRequestsDB,
+    field: 'guest_id',
+    target: idsOf(guestsDB),
+    optional: true,
   },
 ];
 
 for (const check of FK_CHECKS) {
-  test(`integridad referencial (${check.dataset}): ${check.label}`, () => {
+  test(`integridad referencial: ${check.label}`, () => {
     for (const record of check.records) {
       const value = record[check.field];
       if (value === undefined) {
@@ -334,48 +294,55 @@ for (const check of FK_CHECKS) {
   });
 }
 
-// --- B. Ningún catálogo tiene IDs duplicados -----------------------------
+// --- B. order.items[].product_id -> product (array de objetos, no de IDs) --
+//
+// No encaja en el arnés genérico de arriba (multi/optional trabajan sobre
+// arrays de IDs sueltos, no de objetos) — prueba dedicada, mismo criterio
+// que product.inventory_consumption en la adenda del PR #36.
+
+test('integridad referencial: order.items[].product_id -> product', () => {
+  const productIds = idsOf(productsDB);
+  for (const order of ordersDB) {
+    for (const item of order.items) {
+      assert.ok(
+        productIds.has(item.product_id),
+        `${order.id}: items[].product_id -> "${item.product_id}" no existe en el catálogo de productos`,
+      );
+    }
+  }
+});
+
+// --- C. Ningún catálogo tiene IDs duplicados -----------------------------
 
 const CATALOGS = [
-  { dataset: 'mockData', label: 'amenity', records: mockAmenities },
-  { dataset: 'mockData', label: 'roomFeature', records: mockRoomFeatures },
-  { dataset: 'mockData', label: 'roomType', records: mockRoomTypes },
-  { dataset: 'mockData', label: 'rate', records: mockRates },
-  { dataset: 'mockData', label: 'room', records: mockRooms },
-  { dataset: 'mockData', label: 'guest', records: mockGuests },
-  { dataset: 'mockData', label: 'booking', records: mockBookings },
-  { dataset: 'mockData', label: 'payment', records: mockPayments },
-  { dataset: 'mockData', label: 'product', records: mockProducts },
-  { dataset: 'lot-b', label: 'roomFeature', records: lotBMockData.roomFeatures },
-  { dataset: 'lot-b', label: 'roomType', records: lotBMockData.roomTypes },
-  { dataset: 'lot-b', label: 'room', records: lotBMockData.rooms },
-  { dataset: 'lot-b', label: 'guest', records: lotBMockData.guests },
-  { dataset: 'lot-b', label: 'rate', records: lotBMockData.rates },
-  { dataset: 'lot-b', label: 'booking', records: lotBMockData.bookings },
-  { dataset: 'lot-b', label: 'promotion', records: lotBMockData.promotions },
-  { dataset: 'lot-c', label: 'guestAccount', records: lotCMockData.guestAccounts },
-  { dataset: 'lot-c', label: 'charge', records: lotCMockData.charges },
-  { dataset: 'lot-c', label: 'payment', records: lotCMockData.payments },
-  { dataset: 'lot-c', label: 'deposit', records: lotCMockData.deposits },
-  { dataset: 'lot-c', label: 'cashSession', records: lotCMockData.cashSessions },
-  { dataset: 'lot-c', label: 'cashMovement', records: lotCMockData.cashMovements },
-  { dataset: 'lot-d', label: 'user', records: lotDMockData.users },
-  { dataset: 'lot-d', label: 'role', records: lotDMockData.roles },
-  { dataset: 'lot-d', label: 'permission', records: lotDMockData.permissions },
-  { dataset: 'lot-d', label: 'amenity', records: lotDMockData.amenities },
-  { dataset: 'lot-d', label: 'product', records: lotDMockData.products },
-  { dataset: 'lot-d', label: 'inventoryItem', records: lotDMockData.inventoryItems },
-  { dataset: 'lot-d', label: 'inventoryMovement', records: lotDMockData.inventoryMovements },
-  { dataset: 'lot-d', label: 'auditLog', records: lotDMockData.auditLogs },
+  { label: 'roomFeature', records: roomFeaturesDB },
+  { label: 'roomType', records: roomTypesDB },
+  { label: 'room', records: roomsDB },
+  { label: 'guest', records: guestsDB },
+  { label: 'rate', records: ratesDB },
+  { label: 'booking', records: bookingsDB },
+  { label: 'promotion', records: promotionsDB },
+  { label: 'guestAccount', records: guestAccountsDB },
+  { label: 'charge', records: chargesDB },
+  { label: 'payment', records: paymentsDB },
+  { label: 'deposit', records: depositsDB },
+  { label: 'cashSession', records: cashSessionsDB },
+  { label: 'cashMovement', records: cashMovementsDB },
+  { label: 'user', records: usersDB },
+  { label: 'role', records: rolesDB },
+  { label: 'permission', records: permissionsDB },
+  { label: 'amenity', records: amenitiesDB },
+  { label: 'product', records: productsDB },
+  { label: 'inventoryItem', records: inventoryItemsDB },
+  { label: 'inventoryMovement', records: inventoryMovementsDB },
+  { label: 'auditLog', records: auditLogsDB },
+  { label: 'order', records: ordersDB },
+  { label: 'serviceRequest', records: serviceRequestsDB },
 ];
 
 for (const catalog of CATALOGS) {
-  test(`sin IDs duplicados (${catalog.dataset}): ${catalog.label}`, () => {
+  test(`sin IDs duplicados: ${catalog.label}`, () => {
     const ids = catalog.records.map((record) => record.id);
-    assert.equal(
-      new Set(ids).size,
-      ids.length,
-      `${catalog.label} (${catalog.dataset}) tiene IDs duplicados`,
-    );
+    assert.equal(new Set(ids).size, ids.length, `${catalog.label} tiene IDs duplicados`);
   });
 }

@@ -5,7 +5,7 @@
   type SessionUser,
 } from '@/shared/types/entities/session';
 import { httpClient } from './http-client';
-import { mockAuthAccounts } from './authMockData';
+import { sessionAccountsDB } from '@/data/db';
 import { mockUtils, simulateLatency } from './mockUtils';
 
 export const sessionStorageKey = 'PMS_AUTH_SESSION';
@@ -33,7 +33,9 @@ export const authService = {
     await simulateLatency();
     checkRequest(current, signal);
     mockUtils.throwIfSimulatingError('No fue posible iniciar sesión. Intenta nuevamente.');
-    const account = mockAuthAccounts.find((item) => item.user.email === email.trim().toLowerCase());
+    const account = sessionAccountsDB.find(
+      (item) => item.user.email === email.trim().toLowerCase(),
+    );
     if (!account || account.password !== password)
       throw new Error('Correo o contraseña incorrectos.');
     const dto: AuthResponseDTO = {
@@ -80,7 +82,7 @@ export const authService = {
       return null;
     }
     const value = stored as Partial<AuthResponseDTO>;
-    const account = mockAuthAccounts.find((item) => item.user.id === value.user?.id);
+    const account = sessionAccountsDB.find((item) => item.user.id === value.user?.id);
     const expiresAt = typeof value.expiresAt === 'string' ? Date.parse(value.expiresAt) : NaN;
     if (
       !account ||

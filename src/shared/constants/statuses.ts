@@ -73,7 +73,7 @@ export function isRoomAssignable(room: RoomAssignabilityInput): boolean {
 
 // --- booking -------------------------------------------------------------
 //
-// Literales tal cual los usa hoy el dataset del Lote B (shared/mocks/lot-b.ts)
+// Literales tal cual los usa hoy el dataset (src/data/db.ts, bookingsDB)
 // y BookingStatus en shared/types/entities/booking/. Ninguna capa de código
 // impone hoy estas transiciones (no había máquina de estado explícita antes
 // de este archivo); se documentan como la interpretación de dominio más

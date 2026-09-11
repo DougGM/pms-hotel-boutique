@@ -425,11 +425,12 @@ No las necesita móvil. Se listan solo por completitud del inventario:
   `order.charge_id`/`service_request.charge_id`. Ya tiene dataset real y
   servicio propio (`guestAccountService.ts`, sección 3.13).
 - **`payment`**: pago aplicado a una reserva (`booking_id`, `amount_cents`,
-  `method`, `status`). Dataset real en `shared/mocks/lot-c.ts`, servido por
-  `guestAccountService.ts` — distinto del dataset pequeño de
-  `services/mockData.ts` que sigue sirviendo `paymentService.ts` (dos
-  fuentes de la misma entidad, mismo patrón ya existente entre
-  `lot-b.ts`/`mockData.ts` para `booking`/`room`/`guest`).
+  `method`, `status`). Dataset único en `src/data/db.ts` (`paymentsDB`),
+  servido tanto por `guestAccountService.ts` como por `paymentService.ts`.
+  **Resuelto:** hasta la consolidación en `src/data/db.ts`, `paymentService`
+  leía un dataset pequeño distinto (`services/mockData.ts`) del que servía
+  `guestAccountService.ts` (`shared/mocks/lot-c.ts`) — dos fuentes de la
+  misma entidad, con IDs que no se cruzaban. Ya no existen esos dos mundos.
 - **`promotion`**: código de descuento para el motor de reservas
   (`code`, `discount_percent`, `valid_from`/`valid_to`).
 
@@ -857,7 +858,7 @@ Documentadas con recomendación, **no implementadas** en este PR.
 `product.sku` (25 registros) e `inventory_item.sku` (10 registros, catálogo
 **separado** del de producto) — se usó la opción **B** de abajo,
 explícitamente marcada como provisional en el código
-(`shared/mocks/lot-d.ts`) y en `docs/DECISIONES.md` D-004. **Esto no es una
+(`src/data/db.ts`) y en `docs/DECISIONES.md` D-004. **Esto no es una
 decisión tomada** — es el valor que había que escribir para no bloquear el
 resto del trabajo; el equipo puede cambiarlo.
 
