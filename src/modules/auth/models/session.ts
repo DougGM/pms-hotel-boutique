@@ -15,7 +15,10 @@ export type Permission =
   | 'room-service:view'
   | 'concierge:view'
   | 'cash:view'
-  | 'users:view';
+  | 'users:view'
+  | 'rooms:manage'
+  | 'occupancy:view'
+  | 'front-desk:operate';
 
 export const rolePermissions: Record<UserRole, readonly Permission[]> = {
   ADMIN: [
@@ -26,8 +29,11 @@ export const rolePermissions: Record<UserRole, readonly Permission[]> = {
     'concierge:view',
     'cash:view',
     'users:view',
+    'rooms:manage',
+    'occupancy:view',
+    'front-desk:operate',
   ],
-  RECEPTIONIST: ['dashboard:view', 'reception:view'],
+  RECEPTIONIST: ['dashboard:view', 'reception:view', 'occupancy:view', 'front-desk:operate'],
   MANAGER: [
     'dashboard:view',
     'reception:view',
@@ -35,6 +41,9 @@ export const rolePermissions: Record<UserRole, readonly Permission[]> = {
     'room-service:view',
     'concierge:view',
     'cash:view',
+    'rooms:manage',
+    'occupancy:view',
+    'front-desk:operate',
   ],
   STAFF: ['dashboard:view', 'housekeeping:view', 'room-service:view', 'concierge:view'],
 };

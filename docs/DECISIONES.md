@@ -307,6 +307,70 @@ resuelve el problema inmediato de su propia entidad (facturación para
   que ningún valor de `ProductCategoryDto`) — son taxonomías distintas
   hasta que el equipo decida lo contrario.
 
+## D-006 · Ronda 1: `routes.ts`/`router.tsx` y `Permission` (WEB-06) se congelan
+
+**Fecha:** 2026-09-11 · **Estado:** aceptada e implementada.
+
+### Contexto
+
+La Ronda 1 arranca con cuatro lotes en paralelo (`rooms`, `booking-engine`,
+`occupancy`, `front-desk`) que necesitan registrar rutas el mismo día. Si
+cada lote edita `src/app/routes.ts`/`src/app/router.tsx` en su propia
+rama, los cuatro colisionan de inmediato en esos dos archivos. Además, la
+unión `Permission` de WEB-06 (`src/modules/auth/models/session.ts`) solo
+cubría siete valores (`dashboard|reception|housekeeping|room-service|
+concierge|cash|users:view`) — ninguno cubre rooms, occupancy o front-desk.
+
+### Decisión
+
+Se registran las 14 rutas de la Ronda 1 de una sola vez (PR #39,
+andamiaje) y `routes.ts`/`router.tsx` quedan **congelados**: una ruta
+nueva se pide por PR a JEPG321. Se extiende `Permission` con tres valores
+— `rooms:manage` (ADMIN, MANAGER), `occupancy:view` y `front-desk:operate`
+(ADMIN, MANAGER, RECEPTIONIST) — y ese archivo queda congelado con el
+mismo procedimiento, mismo dueño.
+
+### Consecuencias
+
+- **Gana**: los cuatro lotes ramifican el mismo día sin conflicto de
+  merge en el ruteo ni en el contrato de permisos de sesión.
+- **Cuesta**: coexisten dos vocabularios de permisos sin sincronizar — la
+  unión `Permission` de `session.ts` (la que aplica `RequirePermission`,
+  WEB-06) y `permissionsDB`/`rolesDB` de `db.ts` (catálogo WEB-12, D-003).
+  Ninguno de los tres permisos nuevos tiene equivalente en `permissionsDB`
+  (9 registros: `manage_users`, `view_reports`, `manage_bookings`,
+  `manage_cash`, `manage_housekeeping_tasks`,
+  `manage_room_service_orders`, `manage_concierge_requests`,
+  `manage_inventory`, `view_own_tasks`) — no se tocó ese catálogo.
+- **A quién afecta**: al Lote D cuando construya la pantalla de "roles y
+  permisos" — necesita decidir si unifica los dos vocabularios, los
+  mapea explícitamente, o los documenta como capas deliberadamente
+  separadas (en la línea de D-003). No resolver esto antes de esa
+  pantalla arriesga que la pantalla de roles/permisos mienta sobre lo que
+  de verdad controla el acceso.
+
+### Qué NO hacer
+
+- **No agregar rutas ni permisos ad hoc** desde la rama de un lote — se
+  piden por PR a JEPG321.
+- **No inferir el permiso de una ruta nueva desde `permissionsDB`** — ese
+  catálogo no está conectado al guarda de rutas (`RequirePermission` solo
+  conoce `Permission` de `session.ts`).
+
+### Alternativas consideradas
+
+1. **Que cada lote registre sus propias rutas en su rama** — descartada:
+   conflicto de merge garantizado en `routes.ts`/`router.tsx` el primer
+   día.
+2. **Reutilizar un permiso existente** (p. ej. `reception:view`) para
+   rooms/occupancy/front-desk en vez de crear tres nuevos — descartada:
+   mezclaría el control de acceso de configuración de habitaciones
+   (ADMIN/MANAGER) con el de recepción (que hoy alcanza a RECEPTIONIST),
+   perdiendo la distinción que pedía WEB-06.
+
+Ver también `docs/ronda-1-scaffold.md` para la tabla completa de rutas y
+permisos.
+
 ## Cómo agregar una nueva decisión
 
 Copiar la estructura de D-001: **Contexto** (qué problema había y qué

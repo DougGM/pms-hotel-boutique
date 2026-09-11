@@ -2,10 +2,16 @@
  * Contract of routes defined in the frontend architecture workshop.
  * Source of truth for URL paths. The router connects implemented pages below;
  * the remaining module routes are reserved until their views are ready.
+ *
+ * Frozen for Round 1 (see docs/ronda-1-scaffold.md): a new route is requested
+ * by PR to JEPG321, not added ad hoc from a module branch.
  */
 export const routePaths = {
   public: {
     home: '/',
+    roomTypeDetail: '/rooms/:roomTypeId',
+    bookingNew: '/booking/new',
+    bookingConfirmation: '/booking/:bookingId/done',
     login: '/auth/login',
     legacyLogin: '/login',
     components: '/components',
@@ -20,6 +26,16 @@ export const routePaths = {
     concierge: '/pms/concierge',
     cash: '/pms/cash',
     users: '/pms/users',
+    rooms: '/pms/rooms',
+    roomNew: '/pms/rooms/new',
+    roomEdit: '/pms/rooms/:roomId/edit',
+    roomTypes: '/pms/room-types',
+    roomTypeNew: '/pms/room-types/new',
+    occupancy: '/pms/occupancy',
+    manualBookingNew: '/pms/bookings/new',
+    checkIn: '/pms/check-in/:bookingId',
+    guestAccount: '/pms/accounts/:accountId',
+    checkOut: '/pms/check-out/:bookingId',
     notFound: '*',
   },
 } as const;
