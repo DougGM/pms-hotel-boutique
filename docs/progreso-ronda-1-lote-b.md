@@ -21,3 +21,27 @@ Verificacion:
 - `npm run test`: OK.
 - `npm run check`: bloqueado en `format:check` por archivos preexistentes fuera de esta issue
   (`src/index.css`, `NEXT_CONTRIBUTOR.md`, archivos de `shared/types`, configs, etc.).
+
+## WEB-21 / Issue #47 - RoomDetailScreen
+
+Estado: implementado en rama `booking-engine`.
+
+Cambios realizados:
+
+- `RoomDetailScreen` carga todos los tipos con `roomService.getRoomTypes()` y filtra por `roomTypeId` de la ruta.
+- La pantalla muestra descripcion, capacidad, configuracion de cama, codigo y caracteristicas del tipo de habitacion.
+- Se agregaron paneles visuales para las fotografias, porque `roomType.model.ts` no tiene campos de imagen en esta rama.
+- La tarifa se resuelve contra las fechas recibidas por query string (`checkIn`, `checkOut`) y se muestra con `formatCurrency`.
+- El resumen usa `formatDateGT` para las fechas y calcula noches con `calculateNights`.
+- El boton de reserva navega a `/booking/new` llevando `roomTypeId`, `checkIn` y `checkOut` cuando vienen desde WEB-20.
+- La pantalla cubre carga, error con reintento y el caso de `roomTypeId` inexistente.
+- Se agregaron `roomService.getRoomFeatures()` y `roomService.getRates()` para mantener la regla de no importar `src/data/` desde pantallas.
+
+Verificacion:
+
+- `npm run typecheck`: OK.
+- `npm run lint`: OK.
+- `npm run build`: OK.
+- `npm run test`: OK.
+- `npm run check`: bloqueado en `format:check` por los mismos archivos preexistentes fuera de esta issue
+  (`src/index.css`, `NEXT_CONTRIBUTOR.md`, archivos de `shared/types`, configs, etc.).
