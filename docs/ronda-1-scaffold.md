@@ -9,8 +9,8 @@ módulos de la Ronda 1 y registra sus 14 rutas de una sola vez, para que los
 cuatro lotes puedan ramificar sin pisarse el primer día en `routes.ts` /
 `router.tsx`.
 
-**Actualización posterior (#51/#52, rama `web-51-52-occupancy-manual`):** el
-módulo `occupancy` ya dejó de ser stub. `#51` (`OccupancyScreen`) carga
+**Actualización posterior (#50/#51/#52, rama `web-50-51-52-occupancy-manual`):**
+el módulo `occupancy` ya dejó de ser stub. `#51` (`OccupancyScreen`) carga
 habitaciones, reservas y tipos de habitación para mostrar ocupación por fecha;
 también lista reservas activas sin habitación asignada. `#52`
 (`ManualBookingScreen`) carga huéspedes y tipos de habitación activos, valida

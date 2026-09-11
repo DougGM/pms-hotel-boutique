@@ -66,7 +66,7 @@ documento resume el estado resultante, no el proceso para llegar a él.
 | ----------------------------------------------------------------------- | -------------------------------- | ------------------------------------------------------------- |
 | Auth                                                                    | Integrada y probada (14 pruebas) | Construir las pantallas que la consumen                       |
 | Base compartida (rutas, tema, primitivos, contrato de datos, servicios) | Cerrada (Fase 0)                 | —                                                             |
-| Reservaciones y recepción                                               | Lote A implementado              | Revisar/mergear #51/#52; seguir con lotes B/C/D               |
+| Reservaciones y recepción                                               | Lote A implementado              | Revisar/mergear #50/#51/#52; seguir con lotes B/C/D           |
 | Caja (WEB-11)                                                           | Dataset y servicios base listos  | Construir pantallas                                           |
 | Catálogos e inventario (WEB-12)                                         | Dataset y servicios base listos  | Construir pantallas                                           |
 | Housekeeping / Room service / Conserjería / Huésped / Administración    | Sin pantallas                    | Implementar según prioridad del equipo                        |
@@ -85,6 +85,6 @@ documento resume el estado resultante, no el proceso para llegar a él.
 `npm run check` (`format:check && typecheck && lint && build && test`) es la
 verificación requerida antes de publicar cambios. La suite actual tiene once
 scripts y 238 pruebas; `test-services` cubre 16 casos, incluidos los siete
-métodos de WEB-14. Para #51/#52 también se validan `typecheck`, `lint`,
+métodos de WEB-14. Para #50/#51/#52 también se validan `typecheck`, `lint`,
 `build` y respuesta HTTP 200 en dev server para `/pms/occupancy` y
 `/pms/bookings/new`.
