@@ -65,16 +65,23 @@ presentation 6.
 | Padre | Estado final | Motivo |
 | --- | --- | --- |
 | **#9** — Base compartida | **CERRADO** (por esta auditoría) | Las 8 sub-issues (#13–#19, #25) están cerradas |
-| **#12** — Definición compartida | **ABIERTO** | #23 y #24 siguen abiertas y sin código |
+| **#12** — Definición compartida | **CERRADO** (ver adenda 7bis) | Las 5 sub-issues (#20–#24) están cerradas |
 
-## 5. Qué falta para que la Fase 0 esté cerrada de verdad
+## 5. Estado corregido de la Fase 0
 
-Ordenado por cuánta gente bloquea:
+La Fase 0 está cerrada. Esta sección se escribió originalmente antes de la
+adenda 7bis, cuando #23 (WEB-11) y #24 (WEB-12) todavía no tenían evidencia en
+`develop`; la adenda posterior verificó el PR #36, cerró #23/#24 y cerró el
+padre #12. Se conserva el contexto original solo como historial de auditoría.
 
-1. **#23 (WEB-11) y #24 (WEB-12) — bloquean al Lote C y al Lote D directamente**, y al Lote B indirectamente en lo que dependa de catálogos (WEB-12 alimenta tipos de habitación que WEB-10 ya usa). Son los dos únicos tickets sin ningún código — no hay nada que verificar porque no hay nada escrito. Bloquean también el cierre del padre #12.
-2. **#21 (WEB-09) — bloquea la coordinación con la app móvil de forma indocumentada.** El contrato funciona en código, pero nadie puede señalar dónde consta que los cuatro integrantes lo revisaron o que se contrastó con MOV-04. Esto no bloquea a nadie técnicamente hoy (el contrato ya se usa), pero es exactamente el tipo de hueco de proceso que originó la auditoría que dio pie a este PR #32/#33. Recomiendo pedir esa constancia por escrito (un comentario en la issue basta) antes de considerar cerrada la Fase 0 "de verdad".
-3. **#20 (WEB-08) — pendiente de una persona, no del código.** Aunque está cerrada en GitHub, sigue siendo un entregable de diseño que este repositorio no puede verificar. No bloquea nada técnico ahora mismo (WEB-03 ya consumió sus valores), pero conviene que alguien confirme que el prototipo real (Figma/Bolt) está efectivamente al día con lo que `tokens.css` terminó usando.
-4. **Nota sobre #22 (WEB-10):** el criterio 4 pide fechas "verosímiles en formato `dd-mm-aaaa`". El dato crudo en `lot-b.ts` está en ISO 8601 (correcto según el contrato de WEB-09, que congeló `dd-mm-aaaa` como formato de *presentación*, no de transporte). Lo marqué cumplido bajo esa lectura, pero si alguien interpretó el criterio literalmente sobre el dato crudo, hay una divergencia a resolver — no bloquea a nadie, es una aclaración de criterio.
+Notas que siguen siendo útiles, pero ya no bloquean el cierre:
+
+1. **#21 (WEB-09):** el código cumple; la observación era de constancia humana
+   de revisión/contraste con MOV-04.
+2. **#20 (WEB-08):** entregable de diseño externo al repositorio; no bloquea
+   nada técnico después de WEB-03.
+3. **#22 (WEB-10):** el criterio de fechas se interpreta como presentación
+   (`dd-mm-aaaa`), mientras los DTOs/datasets usan ISO 8601 según contrato.
 
 ## 6. Deuda técnica que sigo viendo
 
