@@ -139,25 +139,31 @@ fusionarlos. Ver `modules/auth/README.md`.
 
 ## Servicios y regla de oro
 
-Ningún componente ni pantalla importa `shared/mocks/` o `services/mockData.ts`
-directamente — todo pasa por un servicio en `services/`. Cada servicio es
-`async`, devuelve Models (nunca DTOs), simula una latencia de 300 a 600 ms
+Ningún componente ni pantalla importa `src/data/db.ts` directamente — todo
+pasa por un servicio en `services/`. Cada servicio es `async`, devuelve
+Models (nunca DTOs), simula una latencia de 300 a 600 ms
 (`services/mockUtils.ts`) y puede forzarse a fallar
 (`mockUtils.setForceError(true)`, o `?mockError=true`/`PMS_FORCE_MOCK_ERROR`
 en `localStorage`) para probar el manejo de errores.
 
-`bookingService`, `roomService` y `guestService` leen de
-`shared/mocks/lot-b.ts` (el dataset del Lote B: habitaciones, huéspedes,
-reservas, tarifas). `guestAccountService` y `cashService` leen de
-`shared/mocks/lot-c.ts` (cuentas, cargos, pagos, depósitos y caja — WEB-11).
-`personnelService`, `inventoryService` y `auditService` leen de
-`shared/mocks/lot-d.ts` (personal, roles/permisos, inventario y
-auditoría — WEB-12); `catalogService` también fue redirigido a `lot-d.ts`
-para amenidades y productos. `paymentService` sigue leyendo de
-`services/mockData.ts`, el mundo de demo pequeño original, distinto del
-dataset real de pagos en `lot-c.ts`. `authService.ts` es el único servicio
-con persistencia (sesión en `localStorage`) y cliente HTTP
-(`services/http-client.ts`, listo para una API real pero sin uso todavía).
+`src/data/db.ts` es la única "base de datos" simulada del proyecto: un
+array exportado por entidad (`bookingsDB`, `roomsDB`, `usersDB`, etc.),
+organizado por secciones (sesión de autenticación, Lote B, Lote C, Lote D,
+y `order`/`service_request`, que WEB-09 definía sin dataset propio hasta
+esta consolidación). Reemplaza a `services/mockData.ts`,
+`services/authMockData.ts` y `shared/mocks/{lot-b,lot-c,lot-d}.ts`, que
+antes coexistían con IDs de mundos distintos que no se cruzaban entre sí
+(p. ej. `paymentService` leía `mockData.ts` mientras `guestAccountService`
+ya leía el dataset real de pagos del Lote C). `bookingService`,
+`roomService`, `guestService`, `paymentService` y `catalogService` leen de
+ahí (Lote B/C/D); igual `guestAccountService`/`cashService` (Lote C) y
+`personnelService`/`inventoryService`/`auditService` (Lote D).
+`authService.ts` es el único servicio con persistencia (sesión en
+`localStorage`) y cliente HTTP (`services/http-client.ts`, listo para una
+API real pero sin uso todavía). Única excepción documentada a "un solo
+archivo con datos inventados": el fixture de demo de
+`src/modules/ui-catalog/services/catalog-service.ts`, que no representa
+ninguna entidad del contrato y existe solo para renderizar `/components`.
 
 ## Pruebas
 

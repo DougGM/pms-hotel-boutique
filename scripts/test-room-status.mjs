@@ -15,8 +15,7 @@ import assert from 'node:assert/strict';
 await mkdir('.cache', { recursive: true });
 await build({
   entryPoints: [
-    'src/services/mockData.ts',
-    'src/shared/mocks/lot-b.ts',
+    'src/data/db.ts',
     'src/shared/constants/statuses.ts',
     'src/shared/types/entities/room/index.ts',
   ],
@@ -37,8 +36,7 @@ const load = (relativePath) => {
   return require(p);
 };
 
-const { mockRooms } = load('services/mockData');
-const { lotBMockData } = load('shared/mocks/lot-b');
+const { roomsDB } = load('data/db');
 const {
   ROOM_STATUSES,
   ROOM_STATUS_TRANSITIONS,
@@ -48,11 +46,11 @@ const {
 } = load('shared/constants/statuses');
 const roomMapper = load('shared/types/entities/room/index');
 
-const ALL_ROOMS = [...mockRooms, ...lotBMockData.rooms];
+const ALL_ROOMS = roomsDB;
 
 // --- A. Todo registro tiene ambos campos, sin estados sueltos -------------
 
-test('room: todo registro de ambos datasets tiene status y housekeeping_status válidos', () => {
+test('room: todo registro tiene status y housekeeping_status válidos', () => {
   assert.ok(ALL_ROOMS.length > 0);
   for (const room of ALL_ROOMS) {
     // room.status es snake_case de DTO ('out_of_service'); ROOM_STATUSES es
@@ -144,7 +142,7 @@ test('isRoomAssignable: exhaustivo sobre las 16 combinaciones de ambas máquinas
   }
 });
 
-test('isRoomAssignable: coincide con cada registro real de ambos datasets', () => {
+test('isRoomAssignable: coincide con cada registro real del dataset', () => {
   for (const room of ALL_ROOMS) {
     const expected =
       room.status === 'available' &&
@@ -226,7 +224,7 @@ test('mapper room: toDTO(toDomain(dto)) conserva status y housekeeping_status', 
 // (`status === 'available'`) que además mencione la limpieza en el mismo
 // archivo — no la mera presencia de los literales, que aparece
 // legítimamente en los tipos (`room.dto.ts`/`room.model.ts`) y en los
-// datasets (`mockData.ts`/`lot-b.ts`). Si alguien reescribe la regla con un
+// dataset (`src/data/db.ts`). Si alguien reescribe la regla con un
 // condicional suelto en vez de importar `isRoomAssignable`, esa comparación
 // aparecerá fuera de `statuses.ts` y esta prueba la atrapa.
 

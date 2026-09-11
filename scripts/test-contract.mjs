@@ -65,14 +65,14 @@ test('contrato: session/ y user/ existen por separado (sesión de PMS vs. rol de
 
 // --- B. Campos de monto enteros en el dataset que sirven los servicios -----
 //
-// test-money-contract.mjs ya cubre mockData.ts (rates/bookings/payments/
-// products) a fondo, incluida la trampa de centavos. Esta sección cubre el
-// dataset que roomService/guestService/bookingService realmente sirven desde
-// la FASE 5: shared/mocks/lot-b.ts.
+// test-money-contract.mjs ya cubre src/data/db.ts (rates/bookings/payments/
+// products) a fondo, incluida la trampa de centavos. Esta sección cubre
+// puntualmente el dataset que roomService/guestService/bookingService
+// realmente sirven: ratesDB/bookingsDB.
 
 await mkdir('.cache', { recursive: true });
 await build({
-  entryPoints: ['src/shared/mocks/lot-b.ts'],
+  entryPoints: ['src/data/db.ts'],
   outdir: '.cache',
   outbase: 'src',
   outExtension: { '.js': '.cjs' },
@@ -84,19 +84,19 @@ await build({
 });
 
 const require = createRequire(import.meta.url);
-const { lotBMockData } = require(require.resolve('../.cache/shared/mocks/lot-b.cjs'));
+const { ratesDB, bookingsDB } = require(require.resolve('../.cache/data/db.cjs'));
 
-test('lot-b: rates.price_cents es entero y currency es GTQ en cada registro', () => {
-  assert.ok(lotBMockData.rates.length > 0);
-  for (const rate of lotBMockData.rates) {
+test('db: ratesDB.price_cents es entero y currency es GTQ en cada registro', () => {
+  assert.ok(ratesDB.length > 0);
+  for (const rate of ratesDB) {
     assert.ok(Number.isInteger(rate.price_cents), `rate ${rate.id}: price_cents no es entero`);
     assert.equal(rate.currency, 'GTQ', `rate ${rate.id}: currency no es GTQ`);
   }
 });
 
-test('lot-b: bookings.total_amount_cents es entero y currency es GTQ en cada registro', () => {
-  assert.ok(lotBMockData.bookings.length > 0);
-  for (const booking of lotBMockData.bookings) {
+test('db: bookingsDB.total_amount_cents es entero y currency es GTQ en cada registro', () => {
+  assert.ok(bookingsDB.length > 0);
+  for (const booking of bookingsDB) {
     assert.ok(
       Number.isInteger(booking.total_amount_cents),
       `booking ${booking.id}: total_amount_cents no es entero`,
@@ -105,11 +105,11 @@ test('lot-b: bookings.total_amount_cents es entero y currency es GTQ en cada reg
   }
 });
 
-test('lot-b: ningún registro de rates/bookings usa un nombre de campo en camelCase legacy', () => {
-  for (const rate of lotBMockData.rates) {
+test('db: ningún registro de ratesDB/bookingsDB usa un nombre de campo en camelCase legacy', () => {
+  for (const rate of ratesDB) {
     assert.ok(!('priceCents' in rate), `rate ${rate.id} usa priceCents en vez de price_cents`);
   }
-  for (const booking of lotBMockData.bookings) {
+  for (const booking of bookingsDB) {
     assert.ok(
       !('totalAmountCents' in booking),
       `booking ${booking.id} usa totalAmountCents en vez de total_amount_cents`,

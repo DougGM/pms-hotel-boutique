@@ -39,9 +39,12 @@ export function RoomsView() {
 ```
 
 Servicios disponibles: `authService`, `roomService`, `bookingService`,
-`guestService`, `paymentService` y `catalogService`. Las operaciones de
-creación reciben los DTOs de entrada definidos en `src/shared/types/entities`;
-sus respuestas siempre son modelos de dominio.
+`guestService`, `paymentService`, `catalogService`, `guestAccountService`,
+`cashService`, `personnelService`, `inventoryService` y `auditService`. Las
+operaciones de creación reciben los DTOs de entrada definidos en
+`src/shared/types/entities`; sus respuestas siempre son modelos de dominio.
+Todos leen de `src/data/db.ts`, la única "base de datos" simulada del
+proyecto — ver `src/ARCHITECTURE.md`.
 
 ## Forzar errores mock
 
@@ -58,8 +61,8 @@ unitarias se puede usar `simulateLatency(0, 0)` directamente.
 ## Integración con WEB-06
 
 `authService.login(email, password, signal?)` conserva su API y admite cancelar
-una solicitud pendiente. Valida ambas credenciales contra cuentas públicas de
-`authMockData.ts`, una por cada rol del contrato compartido. Las cuentas y
+una solicitud pendiente. Valida ambas credenciales contra `sessionAccountsDB`
+(`src/data/db.ts`), una por cada rol del contrato compartido. Las cuentas y
 permisos se documentan en `src/modules/auth/README.md`.
 
 `getCurrentSession(signal?)` devuelve la sesión completa con fechas de dominio;

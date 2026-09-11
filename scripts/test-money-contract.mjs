@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 
 await mkdir('.cache', { recursive: true });
 await build({
-  entryPoints: ['src/services/mockData.ts', 'src/shared/utils/currency.ts'],
+  entryPoints: ['src/data/db.ts', 'src/shared/utils/currency.ts'],
   outdir: '.cache',
   outbase: 'src',
   outExtension: { '.js': '.cjs' },
@@ -24,17 +24,17 @@ const load = (relativePath) => {
   return require(path);
 };
 
-const { mockPayments, mockRates, mockBookings, mockProducts } = load('services/mockData');
+const { paymentsDB, ratesDB, bookingsDB, productsDB } = load('data/db');
 const { formatCurrency } = load('shared/utils/currency');
 
-// --- A. mockPayments --------------------------------------------------
+// --- A. paymentsDB --------------------------------------------------
 
-test('mockPayments: existen registros', () => {
-  assert.ok(Array.isArray(mockPayments) && mockPayments.length > 0);
+test('paymentsDB: existen registros', () => {
+  assert.ok(Array.isArray(paymentsDB) && paymentsDB.length > 0);
 });
 
-test('mockPayments: amount_cents es entero en cada registro', () => {
-  for (const payment of mockPayments) {
+test('paymentsDB: amount_cents es entero en cada registro', () => {
+  for (const payment of paymentsDB) {
     assert.ok(
       Number.isInteger(payment.amount_cents),
       `payment ${payment.id}: amount_cents no es entero (${payment.amount_cents})`,
@@ -42,19 +42,19 @@ test('mockPayments: amount_cents es entero en cada registro', () => {
   }
 });
 
-test('mockPayments: currency es GTQ en cada registro', () => {
-  for (const payment of mockPayments) {
+test('paymentsDB: currency es GTQ en cada registro', () => {
+  for (const payment of paymentsDB) {
     assert.equal(payment.currency, 'GTQ', `payment ${payment.id}: currency no es GTQ`);
   }
 });
 
-// --- B. mockRates ---------------------------------------------------------
+// --- B. ratesDB ---------------------------------------------------------
 //
 // El precio por noche ya no vive en Room (WEB-09 lo mueve a Rate, ligada a
 // RoomType): un Room real no trae el precio embebido.
 
-test('mockRates: price_cents es entero en cada registro', () => {
-  for (const rate of mockRates) {
+test('ratesDB: price_cents es entero en cada registro', () => {
+  for (const rate of ratesDB) {
     assert.ok(
       Number.isInteger(rate.price_cents),
       `rate ${rate.id}: price_cents no es entero (${rate.price_cents})`,
@@ -62,16 +62,16 @@ test('mockRates: price_cents es entero en cada registro', () => {
   }
 });
 
-test('mockRates: currency es GTQ en cada registro', () => {
-  for (const rate of mockRates) {
+test('ratesDB: currency es GTQ en cada registro', () => {
+  for (const rate of ratesDB) {
     assert.equal(rate.currency, 'GTQ', `rate ${rate.id}: currency no es GTQ`);
   }
 });
 
-// --- C. mockBookings ------------------------------------------------------
+// --- C. bookingsDB ------------------------------------------------------
 
-test('mockBookings: total_amount_cents es entero en cada registro', () => {
-  for (const booking of mockBookings) {
+test('bookingsDB: total_amount_cents es entero en cada registro', () => {
+  for (const booking of bookingsDB) {
     assert.ok(
       Number.isInteger(booking.total_amount_cents),
       `booking ${booking.id}: total_amount_cents no es entero (${booking.total_amount_cents})`,
@@ -79,16 +79,16 @@ test('mockBookings: total_amount_cents es entero en cada registro', () => {
   }
 });
 
-test('mockBookings: currency es GTQ en cada registro', () => {
-  for (const booking of mockBookings) {
+test('bookingsDB: currency es GTQ en cada registro', () => {
+  for (const booking of bookingsDB) {
     assert.equal(booking.currency, 'GTQ', `booking ${booking.id}: currency no es GTQ`);
   }
 });
 
-// --- D. mockProducts --------------------------------------------------
+// --- D. productsDB --------------------------------------------------
 
-test('mockProducts: price_cents es entero en cada registro', () => {
-  for (const product of mockProducts) {
+test('productsDB: price_cents es entero en cada registro', () => {
+  for (const product of productsDB) {
     assert.ok(
       Number.isInteger(product.price_cents),
       `product ${product.id}: price_cents no es entero (${product.price_cents})`,
@@ -96,8 +96,8 @@ test('mockProducts: price_cents es entero en cada registro', () => {
   }
 });
 
-test('mockProducts: currency es GTQ en cada registro', () => {
-  for (const product of mockProducts) {
+test('productsDB: currency es GTQ en cada registro', () => {
+  for (const product of productsDB) {
     assert.equal(product.currency, 'GTQ', `product ${product.id}: currency no es GTQ`);
   }
 });
@@ -108,8 +108,8 @@ test('formatCurrency: 125000 centavos -> Q1,250.00', () => {
   assert.equal(formatCurrency(125000), 'Q1,250.00');
 });
 
-test('formatCurrency: formatea el monto real del primer mockPayment sin lanzar', () => {
-  const [payment] = mockPayments;
+test('formatCurrency: formatea el monto real del primer payment sin lanzar', () => {
+  const [payment] = paymentsDB;
   const formatted = formatCurrency(payment.amount_cents, payment.currency);
   assert.match(formatted, /^Q[\d,]+\.\d{2}$/);
 });
@@ -120,17 +120,17 @@ test('formatCurrency: rechaza centavos no enteros (guarda de regresión de la ET
 
 // --- F. Contrato de nombres *_cents -----------------------------------------
 //
-// Se valida sobre las claves reales de los mocks activos (no con una regex
+// Se valida sobre las claves reales del dataset activo (no con una regex
 // sobre el código fuente) para no duplicar la fuente de verdad ni depender
 // de detalles de formato del archivo. Nombres en snake_case: son los DTO
 // oficiales de WEB-09 (contrato único desde el cierre de Fase 0), no el
 // contrato plano en camelCase que existía antes.
 
 test('contrato: los campos monetarios activos usan sufijo _cents, no los nombres legacy en decimal', () => {
-  const [payment] = mockPayments;
-  const [rate] = mockRates;
-  const [booking] = mockBookings;
-  const [product] = mockProducts;
+  const [payment] = paymentsDB;
+  const [rate] = ratesDB;
+  const [booking] = bookingsDB;
+  const [product] = productsDB;
 
   assert.ok('amount_cents' in payment, 'Payment debe tener amount_cents');
   assert.ok(!('amount' in payment), 'Payment ya no debe tener amount decimal');
