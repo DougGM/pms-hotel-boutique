@@ -45,3 +45,27 @@ Verificacion:
 - `npm run test`: OK.
 - `npm run check`: bloqueado en `format:check` por los mismos archivos preexistentes fuera de esta issue
   (`src/index.css`, `NEXT_CONTRIBUTOR.md`, archivos de `shared/types`, configs, etc.).
+
+## WEB-22 / Issue #48 - BookingFormScreen
+
+Estado: implementado en rama `booking-engine`.
+
+Cambios realizados:
+
+- `BookingFormScreen` dejo de ser placeholder y ahora carga tipos de habitacion y tarifas.
+- El formulario usa los campos reales de `CreateBookingDto`: `guest_id`, `room_type_id`, `rate_id`, `check_in`, `check_out`, `adults`, `children` y `notes`.
+- Precarga `roomTypeId`, `checkIn` y `checkOut` cuando vienen desde WEB-20/WEB-21 por query string.
+- Valida campos requeridos con `Input`, `Select` y `DatePickerRange` de `shared/components`.
+- Crea la reserva con `bookingService.createBooking(data)` y redirige a `/booking/:bookingId/done` con el id devuelto.
+- No simula ni referencia pasarela de pago; HU-06 queda fuera de alcance como indica la issue.
+- La pantalla cubre carga, error con reintento y lista vacia cuando no hay tipos de habitacion activos.
+- El resumen muestra tarifa y total estimado con `formatCurrency`, y fechas con `formatDateGT`.
+
+Verificacion:
+
+- `npm run typecheck`: OK.
+- `npm run lint`: OK.
+- `npm run build`: OK.
+- `npm run test`: OK.
+- `npm run check`: bloqueado en `format:check` por los mismos archivos preexistentes fuera de esta issue
+  (`src/index.css`, `NEXT_CONTRIBUTOR.md`, archivos de `shared/types`, configs, etc.).
