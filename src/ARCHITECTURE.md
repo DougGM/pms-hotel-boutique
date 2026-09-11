@@ -3,18 +3,22 @@
 ```text
 src/
   public/                 Vistas disponibles sin sesión
-    page.tsx              Entrada pública
     pages/                Páginas públicas adicionales (incluye el catálogo de UI, /components)
   private/                Vistas autenticadas de empleados y administración
     page.tsx              Layout con menú principal
     pages/                Páginas privadas que combinan módulos
     guards/                RequireSession, RequirePermission
     routes/                Catálogo de navegación privada por permiso
-  layouts/                Layouts conectados a React Router
-  pages/                  Páginas base conectadas a las rutas (LoginPage, OperationsHomePage, PublicHomePage)
+  layouts/                Layouts conectados a React Router (PublicLayout incluye el
+                          enlace "Personal · Iniciar sesión" hacia el login de staff)
+  pages/                  Páginas base conectadas a las rutas (LoginPage, OperationsHomePage)
   modules/
     auth/                 Sesión de personal: modelos, mappers, servicios (fachada) y componentes
     ui-catalog/            Ejemplos asíncronos del catálogo de componentes
+    rooms/                 Lote D (Ronda 1) — screens/, components/
+    booking-engine/        Lote B (Ronda 1) — screens/, components/ (motor de reserva público)
+    occupancy/              Lote A (Ronda 1) — screens/, components/
+    front-desk/             Lote C (Ronda 1) — screens/, components/
   shared/
     components/           Button, Input, Select, Modal, DatePickerRange, Card, Badge,
                            EmptyState, LoadingState, ErrorState, DataTable (TableFrame), Pagination
