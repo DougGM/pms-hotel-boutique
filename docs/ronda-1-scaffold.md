@@ -9,6 +9,13 @@ módulos de la Ronda 1 y registra sus 14 rutas de una sola vez, para que los
 cuatro lotes puedan ramificar sin pisarse el primer día en `routes.ts` /
 `router.tsx`.
 
+**Actualización posterior (#50, rama `web-50-ocupacion-alta-manual`):** el
+módulo `occupancy` ya dejó de ser stub. `OccupancyScreen` carga habitaciones,
+reservas y tipos de habitación para mostrar ocupación por fecha; también lista
+reservas activas sin habitación asignada. `ManualBookingScreen` carga huéspedes
+y tipos de habitación activos, valida campos requeridos y crea reservas vía
+`bookingService.createBooking`.
+
 ## 1. Reglas de la ronda
 
 1. **`src/app/routes.ts` y `src/app/router.tsx` quedan congelados.** Quien

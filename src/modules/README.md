@@ -17,6 +17,9 @@ es el acceso público y `src/private/page.tsx` es el layout de la zona
 autenticada.
 
 Ronda 1 (WEB-round-1-scaffold) agrega cuatro módulos de pantalla sin las seis
-capas completas — solo `screens/` y `components/`, sin lógica de negocio
-todavía: `rooms`, `booking-engine`, `occupancy` y `front-desk`. Ver
-`docs/ronda-1-scaffold.md`.
+capas completas — solo `screens/` y `components/`: `rooms`, `booking-engine`,
+`occupancy` y `front-desk`. Ver `docs/ronda-1-scaffold.md`.
+
+El módulo `occupancy` ya contiene las pantallas reales del Lote A (#50):
+`OccupancyScreen` cruza habitaciones y reservas por fecha, y
+`ManualBookingScreen` crea reservas manuales usando los servicios compartidos.

@@ -39,6 +39,9 @@ documento resume el estado resultante, no el proceso para llegar a él.
 - WEB-14 implementado: `roomService.createRoom/updateRoom/getRoomTypes`,
   `bookingService.checkIn/checkOut/assignRoom` y
   `guestAccountService.createCharge`.
+- Lote A / #50 implementado en rama apilada sobre WEB-14:
+  `OccupancyScreen` muestra ocupación por fecha y `ManualBookingScreen` crea
+  reservas manuales.
 - Base de la app React Native en el repositorio separado `pms-hotel-mobile`
   (empleados: autenticación, tareas, habitaciones, solicitudes, pedidos).
 
@@ -62,7 +65,7 @@ documento resume el estado resultante, no el proceso para llegar a él.
 | ----------------------------------------------------------------------- | -------------------------------- | ------------------------------------------------------------- |
 | Auth                                                                    | Integrada y probada (14 pruebas) | Construir las pantallas que la consumen                       |
 | Base compartida (rutas, tema, primitivos, contrato de datos, servicios) | Cerrada (Fase 0)                 | —                                                             |
-| Reservaciones y recepción                                               | Sin pantallas                    | Construir sobre `bookingService`/`roomService`/`guestService` |
+| Reservaciones y recepción                                               | Lote A implementado              | Revisar/mergear #50; seguir con lotes B/C/D                   |
 | Caja (WEB-11)                                                           | Dataset y servicios base listos  | Construir pantallas                                           |
 | Catálogos e inventario (WEB-12)                                         | Dataset y servicios base listos  | Construir pantallas                                           |
 | Housekeeping / Room service / Conserjería / Huésped / Administración    | Sin pantallas                    | Implementar según prioridad del equipo                        |
@@ -81,6 +84,5 @@ documento resume el estado resultante, no el proceso para llegar a él.
 `npm run check` (`format:check && typecheck && lint && build && test`) es la
 verificación requerida antes de publicar cambios. La suite actual tiene once
 scripts y 238 pruebas; `test-services` cubre 16 casos, incluidos los siete
-métodos de WEB-14. Revisión visual histórica en navegador de `/`,
-`/auth/login`, `/pms` (con y sin sesión), 404 pública/privada y `/components`
-tras eliminar la UI de Bolt — igual que antes del borrado.
+métodos de WEB-14. Para #50 también se validan `typecheck`, `lint`, `build` y
+respuesta HTTP 200 en dev server para `/pms/occupancy` y `/pms/bookings/new`.
