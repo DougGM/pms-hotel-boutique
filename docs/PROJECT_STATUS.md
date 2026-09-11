@@ -40,9 +40,9 @@ documento resume el estado resultante, no el proceso para llegar a él.
   `bookingService.checkIn/checkOut/assignRoom` y
   `guestAccountService.createCharge`.
 - Lote A implementado en rama apilada sobre WEB-14:
-  `#51` (`OccupancyScreen`) muestra ocupación por fecha y `#52`
-  (`ManualBookingScreen`) crea reservas manuales. El padre `#50` queda cubierto
-  por esas dos pantallas.
+  `#51` (`OccupancyScreen`) muestra disponibilidad por fecha y estados reales
+  de habitación/limpieza; `#52` (`ManualBookingScreen`) crea reservas manuales.
+  El padre `#50` queda cubierto por esas dos pantallas.
 - Base de la app React Native en el repositorio separado `pms-hotel-mobile`
   (empleados: autenticación, tareas, habitaciones, solicitudes, pedidos).
 

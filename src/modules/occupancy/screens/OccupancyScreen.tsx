@@ -142,8 +142,16 @@ export function OccupancyScreen() {
       sortValue: ({ roomTypeName }) => roomTypeName,
     },
     {
+      id: 'dateAvailability',
+      header: 'Disponibilidad en fecha',
+      cell: ({ booking }) => (
+        <Badge tone={booking ? 'info' : 'success'}>{booking ? 'Ocupada' : 'Libre'}</Badge>
+      ),
+      sortValue: ({ booking }) => (booking ? 1 : 0),
+    },
+    {
       id: 'roomStatus',
-      header: 'Ocupación',
+      header: 'Estado habitación',
       cell: ({ room }) => (
         <Badge tone={ROOM_STATUS_TONES[room.status]}>{ROOM_STATUS_LABELS[room.status]}</Badge>
       ),

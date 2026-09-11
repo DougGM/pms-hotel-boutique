@@ -11,8 +11,9 @@ cuatro lotes puedan ramificar sin pisarse el primer día en `routes.ts` /
 
 **Actualización posterior (#50/#51/#52, rama `web-50-51-52-occupancy-manual`):**
 el módulo `occupancy` ya dejó de ser stub. `#51` (`OccupancyScreen`) carga
-habitaciones, reservas y tipos de habitación para mostrar ocupación por fecha;
-también lista reservas activas sin habitación asignada. `#52`
+habitaciones, reservas y tipos de habitación para mostrar disponibilidad por
+fecha y los estados reales de habitación/limpieza; también lista reservas
+activas sin habitación asignada. `#52`
 (`ManualBookingScreen`) carga huéspedes y tipos de habitación activos, valida
 campos requeridos y crea reservas vía `bookingService.createBooking`. Con esas
 dos sub-tareas queda cubierto el padre `#50`.
