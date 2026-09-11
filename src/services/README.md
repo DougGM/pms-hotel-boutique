@@ -46,6 +46,22 @@ operaciones de creación reciben los DTOs de entrada definidos en
 Todos leen de `src/data/db.ts`, la única "base de datos" simulada del
 proyecto — ver `src/ARCHITECTURE.md`.
 
+## WEB-14: servicios faltantes de la vertical Ronda 1
+
+`roomService` expone `createRoom(data)`, `updateRoom(id, data)` y
+`getRoomTypes()`. Los dos primeros escriben en `roomsDB`, generan/actualizan
+timestamps y devuelven `Room` de dominio; `getRoomTypes()` devuelve
+`RoomType[]` desde `roomTypesDB`.
+
+`bookingService` expone `checkIn(bookingId)`, `checkOut(bookingId)` y
+`assignRoom(bookingId, roomId)`. `checkIn`/`checkOut` validan contra
+`BOOKING_STATUS_TRANSITIONS`; una transición inválida lanza error. `assignRoom`
+solo asigna habitaciones que `isRoomAssignable()` considera aptas.
+
+`guestAccountService.createCharge(data)` crea un `Charge` real, lo marca como
+`posted`, calcula `amount_cents = quantity * unit_price_cents` y actualiza el
+`balance_cents` guardado de la cuenta abierta de esa reserva.
+
 ## Forzar errores mock
 
 1. En código: `mockUtils.setForceError(true)` y, al terminar la prueba,

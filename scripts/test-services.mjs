@@ -220,3 +220,93 @@ test('mockUtils.setForceError: hace que los servicios rechacen, y se puede desac
   mockUtils.setForceError(false);
   await assert.doesNotReject(() => bookingService.getBookings());
 });
+
+// --- D. WEB-14: servicios faltantes para la vertical Ronda 1 ---------------
+
+test('roomService.createRoom/updateRoom/getRoomTypes: escriben roomsDB y devuelven Models', async () => {
+  const room = await assertServiceCall('roomService.createRoom', () =>
+    roomService.createRoom({
+      room_number: '909',
+      room_type_id: 'RT-01',
+      floor: 9,
+      notes: 'Habitación creada por prueba WEB-14.',
+    }),
+  );
+  assert.equal(room.roomNumber, '909');
+  assert.equal(room.status, 'available');
+  assert.equal(room.housekeepingStatus, 'dirty');
+  assert.ok(!('room_number' in room), 'createRoom debe devolver Model, no DTO');
+
+  const updated = await assertServiceCall('roomService.updateRoom', () =>
+    roomService.updateRoom(room.id, {
+      status: 'maintenance',
+      notes: 'Mantenimiento preventivo.',
+    }),
+  );
+  assert.equal(updated.status, 'maintenance');
+  assert.equal(updated.notes, 'Mantenimiento preventivo.');
+
+  const roomTypes = await assertServiceCall('roomService.getRoomTypes', () =>
+    roomService.getRoomTypes(),
+  );
+  assert.ok(Array.isArray(roomTypes) && roomTypes.length > 0);
+  assert.ok('bedConfiguration' in roomTypes[0], 'RoomType debe ser Model camelCase');
+  assert.ok(!('bed_configuration' in roomTypes[0]), 'RoomType no debe traer campos DTO');
+});
+
+test('bookingService.checkIn/checkOut: validan transiciones con BOOKING_STATUS_TRANSITIONS', async () => {
+  const checkedIn = await assertServiceCall('bookingService.checkIn', () =>
+    bookingService.checkIn('BKG-002'),
+  );
+  assert.equal(checkedIn.status, 'checkedIn');
+
+  const checkedOut = await assertServiceCall('bookingService.checkOut', () =>
+    bookingService.checkOut('BKG-002'),
+  );
+  assert.equal(checkedOut.status, 'checkedOut');
+
+  await assert.rejects(
+    () => bookingService.checkIn('BKG-002'),
+    /Transición inválida de reserva/,
+    'no debe permitir salir de checkedOut hacia checkedIn',
+  );
+});
+
+test('bookingService.assignRoom: asigna solo habitaciones asignables con isRoomAssignable', async () => {
+  const booking = await assertServiceCall('bookingService.assignRoom', () =>
+    bookingService.assignRoom('BKG-008', 'RM-403'),
+  );
+  assert.equal(booking.roomId, 'RM-403');
+
+  await assert.rejects(
+    () => bookingService.assignRoom('BKG-010', 'RM-502'),
+    /no está disponible para asignación/,
+    'available + dirty no es asignable',
+  );
+});
+
+test('guestAccountService.createCharge: crea Charge y actualiza el balance guardado', async () => {
+  const before = await assertServiceCall('guestAccountService.getAccountByBookingId', () =>
+    guestAccountService.getAccountByBookingId('BKG-002'),
+  );
+  assert.ok(before);
+
+  const charge = await assertServiceCall('guestAccountService.createCharge', () =>
+    guestAccountService.createCharge({
+      booking_id: 'BKG-002',
+      description: 'Cargo de prueba WEB-14',
+      quantity: 2,
+      unit_price_cents: 1250,
+      currency: 'GTQ',
+      created_by_user_id: 'USR-001',
+    }),
+  );
+  assert.equal(charge.amountCents, 2500);
+  assert.equal(charge.status, 'posted');
+  assert.ok(!('amount_cents' in charge), 'createCharge debe devolver Model, no DTO');
+
+  const after = await assertServiceCall('guestAccountService.getAccountByBookingId', () =>
+    guestAccountService.getAccountByBookingId('BKG-002'),
+  );
+  assert.equal(after.balanceCents, before.balanceCents + 2500);
+});

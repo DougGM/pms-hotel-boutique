@@ -92,7 +92,7 @@ npm run format
 ```
 
 `npm run check` ejecuta formato, TypeScript, ESLint, compilación de
-producción y `npm run test` (siete suites, 103 pruebas — ver
+producción y `npm run test` (once suites, 238 pruebas — ver
 [src/ARCHITECTURE.md](src/ARCHITECTURE.md)). Cada suite también se puede
 correr por separado: `npm run test:auth`, `test:currency`, `test:date`,
 `test:money-contract`, `test:contract`, `test:services`, `test:presentation`.
