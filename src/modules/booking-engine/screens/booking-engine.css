@@ -1,0 +1,98 @@
+.booking-search-page {
+  display: grid;
+  gap: var(--space-7);
+}
+
+.booking-search-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-6);
+}
+
+.booking-search-heading h1 {
+  margin: var(--space-2) 0 var(--space-2);
+  font-family: var(--font-family-heading);
+  font-size: var(--font-size-4xl);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.booking-search-heading p,
+.booking-search-summary,
+.booking-roomtype-card p {
+  color: var(--color-text-muted);
+  line-height: var(--line-height-normal);
+}
+
+.booking-search-layout {
+  display: grid;
+  grid-template-columns: minmax(var(--size-legacy-300), 0.72fr) minmax(0, 1fr);
+  gap: var(--space-6);
+  align-items: start;
+}
+
+.booking-search-card,
+.booking-roomtype-card {
+  background: var(--color-surface);
+  border: var(--size-legacy-1) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-7);
+  box-shadow: 0 var(--size-legacy-3) var(--size-legacy-9) var(--color-legacy-3b2a1a05);
+}
+
+.booking-search-card {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.booking-search-results,
+.booking-roomtype-list {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.booking-search-summary {
+  margin: 0;
+  font-weight: var(--font-weight-semibold);
+}
+
+.booking-roomtype-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-6);
+  align-items: center;
+}
+
+.booking-roomtype-card h2 {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-xl);
+}
+
+.booking-roomtype-card p {
+  margin: var(--space-2) 0 var(--space-4);
+}
+
+.booking-roomtype-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.booking-roomtype-meta span {
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-pill);
+  padding: var(--space-1) var(--space-3);
+  background: var(--color-surface-secondary);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+@media (max-width: 900px) {
+  .booking-search-layout,
+  .booking-roomtype-card {
+    grid-template-columns: 1fr;
+  }
+}
