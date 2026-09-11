@@ -1,7 +1,8 @@
 # Ronda 1 — andamiaje de rutas y módulos
 
 **Fecha:** 2026-09-11 · **Rama:** `feat/web-round-1-scaffold` contra `develop`.
-Ver también `src/ARCHITECTURE.md` y `src/modules/README.md`.
+Ver también `src/ARCHITECTURE.md`, `src/modules/README.md` y
+`docs/DECISIONES.md` D-006 (registro formal de esta decisión).
 
 Este PR no construye ninguna pantalla real. Crea el árbol de los cuatro
 módulos de la Ronda 1 y registra sus 14 rutas de una sola vez, para que los

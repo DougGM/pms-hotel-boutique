@@ -8,6 +8,18 @@ Para la estructura de carpetas y el contrato de datos completo, ver
 
 **El trabajo vive en `develop`, no en `main`.**
 
+## Ronda 1 (rutas y módulos)
+
+`src/app/routes.ts`, `src/app/router.tsx` y la unión `Permission`/
+`rolePermissions` de `src/modules/auth/models/session.ts` quedan
+**congelados** — una ruta o un permiso nuevo se piden por PR a JEPG321, no
+se agregan desde la rama de un lote. Cada lote de la Ronda 1 (`rooms`,
+`booking-engine`, `occupancy`, `front-desk`) escribe solo dentro de
+`src/modules/<módulo>/`; nada en `shared/`, nada en `app/`. Tabla completa
+de las 14 rutas con su permiso, y la deuda pendiente entre `Permission` de
+`session.ts` (WEB-06) y `permissionsDB`/`rolesDB` de `db.ts` (WEB-12,
+D-003), en `docs/ronda-1-scaffold.md` y `docs/DECISIONES.md` D-006.
+
 ## Idioma
 
 Todo el código en inglés: nombres de archivo, carpetas, variables, funciones,
