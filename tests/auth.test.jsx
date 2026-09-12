@@ -97,8 +97,10 @@ test('each staff role only sees its menu and direct unauthorized URLs are blocke
   await open('/login');
   const roles = [
     ['recepcion', 'Recepción', '/pms/users', 2],
-    ['personal', 'Limpieza', '/pms/cash', 4],
-    ['gerente', 'Caja', '/pms/users', 6],
+    ['limpieza', 'Limpieza', '/pms/cash', 2],
+    ['conserjeria', 'Conserjería', '/pms/housekeeping', 2],
+    ['roomservice', 'Room Service', '/pms/concierge', 2],
+    ['huesped', 'Panel operativo', '/pms/reception', 1],
     ['admin', 'Usuarios', null, 7],
   ];
   for (const [account, section, forbidden, count] of roles) {
@@ -128,12 +130,12 @@ test('each staff role only sees its menu and direct unauthorized URLs are blocke
 
 test('session survives remount; logout in another tab clears access', async () => {
   await open('/auth/login');
-  await login('personal@hotelboutique.test');
+  await login('limpieza@hotelboutique.test');
   act(() => view.unmount());
   router.dispose();
   await open('/pms/housekeeping');
   assert.equal(router.state.location.pathname, '/pms/housekeeping');
-  assert.ok(text().includes('María López'));
+  assert.ok(text().includes('Maria Lopez'));
   storage.removeItem(sessionStorageKey);
   await act(async () => {
     window.dispatchEvent(Object.assign(new Event('storage'), { key: sessionStorageKey }));
@@ -145,7 +147,7 @@ test('session survives remount; logout in another tab clears access', async () =
 test('public and private 404 pages remain scoped to their layouts', async () => {
   await open('/no-existe');
   assert.ok(text().includes('Error 404'));
-  assert.equal(view.root.findAllByType('nav').length, 0);
+  assert.equal(view.root.findAllByType('nav').length, 1);
   await act(async () => {
     await router.navigate('/auth/login');
   });
@@ -159,7 +161,7 @@ test('public and private 404 pages remain scoped to their layouts', async () => 
   }
 });
 
-function storedSession(id = 'user-1', expiresAt = Date.now() + 10000) {
+function storedSession(id = 'user-admin', expiresAt = Date.now() + 10000) {
   return JSON.stringify({
     user: { id, role: 'ADMIN' },
     token: 'mock-access-' + id,
@@ -172,22 +174,18 @@ test('expired, malformed and unknown sessions are cleared; persisted roles are i
   for (const value of [
     '{',
     'null',
-    storedSession('user-1', Date.now() - 1),
+    storedSession('user-admin', Date.now() - 1),
     storedSession('missing'),
   ]) {
     storage.setItem(sessionStorageKey, value);
     assert.equal(await authService.restore(), null);
     assert.equal(values.size, 0);
   }
-  storage.setItem(sessionStorageKey, storedSession('user-staff'));
+  storage.setItem(sessionStorageKey, storedSession('user-housekeeping'));
   const session = await authService.restore();
-  assert.equal(session.role, 'STAFF');
-  assert.deepEqual(session.permissions, [
-    'dashboard:view',
-    'housekeeping:view',
-    'room-service:view',
-    'concierge:view',
-  ]);
+  assert.equal(session.role, 'HOUSEKEEPING');
+  assert.deepEqual(session.permissions, ['dashboard:view', 'housekeeping:view']);
+
   assert.ok(session.expiresAt instanceof Date);
 });
 
@@ -220,7 +218,7 @@ test('return URL cannot redirect to another origin or a non-private page', () =>
 });
 
 test('session expiration removes persisted credentials and redirects the mounted app', async () => {
-  storage.setItem(sessionStorageKey, storedSession('user-1', Date.now() + 1100));
+  storage.setItem(sessionStorageKey, storedSession('user-admin', Date.now() + 1100));
   await open('/pms');
   assert.ok(text().includes('Cerrar sesión'));
   await act(async () => {

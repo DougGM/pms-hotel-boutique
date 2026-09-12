@@ -137,8 +137,8 @@ Sobrevive el contrato oficial de WEB-09 (`entities/<x>/<x>.dto.ts`, snake_case, 
 **Decisiones de diseño no triviales, para que quien revise las entienda sin releer el diff:**
 
 1. **`user` no se unificó como las otras 5.** El contrato oficial `entities/user/` modela el
-   puesto de un empleado (admin/manager/frontDesk/housekeeping/maintenance, alineado con la app
-   móvil) — un concepto distinto del rol de acceso al PMS (ADMIN/RECEPTIONIST/MANAGER/STAFF) que
+   puesto de un empleado (admin/guest/reception/housekeeping/concierge/roomService, alineado con la app
+   móvil) — un concepto distinto del rol de acceso/login (ADMIN/GUEST/RECEPTION/HOUSEKEEPING/CONCIERGE/ROOM_SERVICE) que
    ya usa WEB-06, probado con 14 pruebas. `modules/auth/README.md` ya advertía explícitamente no
    mezclarlos. Se creó `shared/types/entities/session/` (SessionUserDTO, LoginDTO,
    AuthResponseDTO, AuthSession, `toAuthSession`) como contrato neutral que consumen tanto

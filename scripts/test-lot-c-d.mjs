@@ -247,7 +247,7 @@ test('amenity: al menos una desactivada conservando su historial', () => {
 // --- E. Personal, roles y categorías -----------------------------------
 
 test('user: al menos 2 activos por cada rol pedido, y al menos 1 desactivado', () => {
-  const REQUIRED_ROLES = ['admin', 'front_desk', 'housekeeping', 'room_service', 'concierge'];
+  const REQUIRED_ROLES = ['admin', 'reception', 'housekeeping', 'room_service', 'concierge'];
   for (const role of REQUIRED_ROLES) {
     const activeCount = usersDB.filter(
       (user) => user.role === role && user.status === 'active',

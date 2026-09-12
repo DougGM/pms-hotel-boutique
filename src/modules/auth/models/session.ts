@@ -3,9 +3,11 @@ import type { AuthSession, LoginDTO } from '@/shared/types/entities/session';
 
 export const roleLabels: Record<UserRole, string> = {
   ADMIN: 'Administración',
-  RECEPTIONIST: 'Recepción',
-  MANAGER: 'Gerencia',
-  STAFF: 'Personal operativo',
+  GUEST: 'Huésped',
+  RECEPTION: 'Recepción',
+  HOUSEKEEPING: 'Limpieza',
+  CONCIERGE: 'Conserjería',
+  ROOM_SERVICE: 'Room Service',
 };
 export type StaffRole = UserRole;
 export type Permission =
@@ -33,19 +35,11 @@ export const rolePermissions: Record<UserRole, readonly Permission[]> = {
     'occupancy:view',
     'front-desk:operate',
   ],
-  RECEPTIONIST: ['dashboard:view', 'reception:view', 'occupancy:view', 'front-desk:operate'],
-  MANAGER: [
-    'dashboard:view',
-    'reception:view',
-    'housekeeping:view',
-    'room-service:view',
-    'concierge:view',
-    'cash:view',
-    'rooms:manage',
-    'occupancy:view',
-    'front-desk:operate',
-  ],
-  STAFF: ['dashboard:view', 'housekeeping:view', 'room-service:view', 'concierge:view'],
+  GUEST: ['dashboard:view'],
+  RECEPTION: ['dashboard:view', 'reception:view', 'occupancy:view', 'front-desk:operate'],
+  HOUSEKEEPING: ['dashboard:view', 'housekeeping:view'],
+  CONCIERGE: ['dashboard:view', 'concierge:view'],
+  ROOM_SERVICE: ['dashboard:view', 'room-service:view'],
 };
 export interface Session extends AuthSession {
   role: UserRole;

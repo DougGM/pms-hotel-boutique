@@ -138,10 +138,10 @@ import { toDomain as toBooking } from '@/shared/types/entities/booking';
 **`shared/types/entities/session/` es un caso aparte, y no se reexporta desde
 el barrel.** Modela la respuesta de login/sesión (`SessionUserDTO`,
 `AuthResponseDTO`, `AuthSession`, `LoginDTO`) con el rol de acceso al PMS
-(`UserRole` de `common.ts`: ADMIN/RECEPTIONIST/MANAGER/STAFF). Es un concepto
+(`UserRole` de `common.ts`: ADMIN/GUEST/RECEPTION/HOUSEKEEPING/CONCIERGE/ROOM_SERVICE). Es un concepto
 distinto de `shared/types/entities/user/`, que modela el puesto de un
 empleado en el directorio de personal
-(admin/manager/frontDesk/housekeeping/maintenance, alineado con la app
+(admin/guest/reception/housekeeping/concierge/roomService, alineado con la app
 móvil). Comparten nombre por casualidad, no por ser la misma entidad; no
 fusionarlos. Ver `modules/auth/README.md`.
 

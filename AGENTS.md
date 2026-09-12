@@ -73,6 +73,8 @@ Antes de cerrar una tarea, revisar al menos estos archivos segun aplique:
 - `docs/DECISIONES.md`: decisiones de arquitectura/modelado que no deben
   rediscutirse.
 - `docs/AVISO-DISENO-BOLT.md`: avisos sobre diseno Bolt y ownership visual.
+- `docs/AVISO-ROLES-PERMISOS.md`: roles finales de login, permisos y cuentas
+  mock.
 - README del modulo tocado, si existe (`src/modules/<modulo>/README.md`,
   `src/services/README.md`, `src/shared/README.md`, etc.).
 

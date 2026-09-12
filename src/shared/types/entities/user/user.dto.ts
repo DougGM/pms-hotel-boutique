@@ -1,11 +1,5 @@
 export type UserRoleDto =
-  | 'admin'
-  | 'manager'
-  | 'front_desk'
-  | 'housekeeping'
-  | 'maintenance'
-  | 'room_service'
-  | 'concierge';
+  'admin' | 'guest' | 'reception' | 'housekeeping' | 'concierge' | 'room_service';
 export type UserStatusDto = 'active' | 'inactive';
 
 export interface UserDTO {
