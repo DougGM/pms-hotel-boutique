@@ -17,10 +17,11 @@
   max-width: 40rem;
 }
 
-.room-form-hint {
+.room-form-error {
   grid-column: 1 / -1;
   margin: 0;
-  color: var(--color-text-muted);
+  color: var(--color-error);
+  font-weight: var(--font-weight-semibold);
 }
 
 @media (max-width: 760px) {

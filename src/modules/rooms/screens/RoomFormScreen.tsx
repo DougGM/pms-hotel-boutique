@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { routePaths } from '@/app/routes';
 import { ROOM_HOUSEKEEPING_STATUSES, ROOM_STATUSES } from '@/shared/constants/statuses';
 import { Button } from '@/shared/components/Button';
 import { EmptyState } from '@/shared/components/EmptyState';
@@ -8,7 +9,12 @@ import { Input } from '@/shared/components/Input';
 import { LoadingState } from '@/shared/components/LoadingState';
 import { Select } from '@/shared/components/Select';
 import { roomService } from '@/services/roomService';
-import type { Room, RoomHousekeepingStatus, RoomStatus } from '@/shared/types/entities/room';
+import type {
+  CreateRoomDto,
+  Room,
+  RoomHousekeepingStatus,
+  RoomStatus,
+} from '@/shared/types/entities/room';
 import type { RoomType } from '@/shared/types/entities/room-type';
 import './rooms.css';
 
@@ -26,6 +32,8 @@ type FormState = {
   notes: string;
 };
 
+type FormErrors = Partial<Record<keyof FormState, string>>;
+
 const initialForm: FormState = {
   roomNumber: '',
   roomTypeId: '',
@@ -39,11 +47,33 @@ function getErrorMessage(cause: unknown): string {
   return cause instanceof Error ? cause.message : 'Error inesperado.';
 }
 
+function toRoomStatusDto(status: RoomStatus): CreateRoomDto['status'] {
+  return status === 'outOfService' ? 'out_of_service' : status;
+}
+
+function validateForm(form: FormState): FormErrors {
+  const errors: FormErrors = {};
+  if (!form.roomNumber.trim()) errors.roomNumber = 'Ingresa el número de habitación.';
+  if (!form.roomTypeId) errors.roomTypeId = 'Selecciona un tipo de habitación.';
+  if (form.floor.trim() === '' || !Number.isInteger(Number(form.floor))) {
+    errors.floor = 'Ingresa un piso válido.';
+  }
+  if (!ROOM_STATUSES.includes(form.status)) errors.status = 'Selecciona un estado válido.';
+  if (!ROOM_HOUSEKEEPING_STATUSES.includes(form.housekeepingStatus)) {
+    errors.housekeepingStatus = 'Selecciona un estado de limpieza válido.';
+  }
+  return errors;
+}
+
 export function RoomFormScreen() {
   const { roomId } = useParams<'roomId'>();
+  const navigate = useNavigate();
   const isEditing = Boolean(roomId);
   const [screen, setScreen] = useState<ScreenState>({ status: 'loading' });
   const [form, setForm] = useState<FormState>(initialForm);
+  const [errors, setErrors] = useState<FormErrors>({});
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const loadFormData = useCallback(async () => {
     setScreen({ status: 'loading' });
@@ -91,6 +121,40 @@ export function RoomFormScreen() {
 
   function updateField<Key extends keyof FormState>(key: Key, value: FormState[Key]) {
     setForm((current) => ({ ...current, [key]: value }));
+    setErrors((current) => ({ ...current, [key]: undefined }));
+    setSubmitError(null);
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const nextErrors = validateForm(form);
+    setErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) return;
+
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      const payload: CreateRoomDto = {
+        room_number: form.roomNumber.trim(),
+        room_type_id: form.roomTypeId,
+        floor: Number(form.floor),
+        status: toRoomStatusDto(form.status),
+        housekeeping_status: form.housekeepingStatus,
+        notes: form.notes.trim() || undefined,
+      };
+
+      if (roomId) {
+        await roomService.updateRoom(roomId, payload);
+      } else {
+        await roomService.createRoom(payload);
+      }
+
+      navigate(routePaths.pms.rooms);
+    } catch (cause) {
+      setSubmitError(getErrorMessage(cause));
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -115,11 +179,12 @@ export function RoomFormScreen() {
       )}
 
       {screen.status === 'ready' && screen.roomTypes.length > 0 && (
-        <form className="room-form" onSubmit={(event) => event.preventDefault()} noValidate>
+        <form className="room-form" onSubmit={handleSubmit} noValidate>
           <Input
             label="Número de habitación"
             required
             value={form.roomNumber}
+            error={errors.roomNumber}
             onChange={(event) => updateField('roomNumber', event.target.value)}
           />
 
@@ -127,6 +192,7 @@ export function RoomFormScreen() {
             label="Tipo de habitación"
             required
             value={form.roomTypeId}
+            error={errors.roomTypeId}
             onChange={(event) => updateField('roomTypeId', event.target.value)}
           >
             <option value="">Seleccionar tipo</option>
@@ -142,6 +208,7 @@ export function RoomFormScreen() {
             type="number"
             required
             value={form.floor}
+            error={errors.floor}
             onChange={(event) => updateField('floor', event.target.value)}
           />
 
@@ -149,6 +216,7 @@ export function RoomFormScreen() {
             label="Estado"
             required
             value={form.status}
+            error={errors.status}
             onChange={(event) => updateField('status', event.target.value as RoomStatus)}
           >
             {ROOM_STATUSES.map((status) => (
@@ -162,6 +230,7 @@ export function RoomFormScreen() {
             label="Limpieza"
             required
             value={form.housekeepingStatus}
+            error={errors.housekeepingStatus}
             onChange={(event) =>
               updateField('housekeepingStatus', event.target.value as RoomHousekeepingStatus)
             }
@@ -179,8 +248,9 @@ export function RoomFormScreen() {
             onChange={(event) => updateField('notes', event.target.value)}
           />
 
-          <p className="room-form-hint">Guardado disponible en la siguiente etapa.</p>
-          <Button type="submit" disabled>
+          {submitError && <p className="room-form-error">{submitError}</p>}
+
+          <Button type="submit" loading={submitting}>
             Guardar
           </Button>
         </form>
