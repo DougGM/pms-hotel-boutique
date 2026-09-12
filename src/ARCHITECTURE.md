@@ -44,6 +44,23 @@ src/
   app/routes.ts             Catálogo tipado y constantes de rutas
 ```
 
+## Contrato visual Bolt
+
+El prototipo Bolt es la fuente visual del producto. Las pantallas nuevas pueden
+vivir en `modules/<modulo>/screens/`, pero su CSS debe reutilizar el lenguaje
+existente en `src/index.css` y `src/styles/tokens.css`: layouts, paneles,
+formularios, tablas, cards, botones, estados, tipografia y colores deben partir
+de las clases/tokens heredados (`visitor-*`, `reservation-*`, `rc-*`, `adm-*`,
+`.panel`, `.button`, `.content`, etc.) antes de crear una familia nueva de
+clases.
+
+La estructura de carpetas de Ronda 1 esta aceptada; lo que no se acepta es que
+una pantalla mergeada parezca otra app. Si un modulo necesita clases propias,
+deben ser wrappers pequenos alrededor del diseno Bolt, no un sistema visual
+paralelo. La excepcion funcional definida por producto es el login: Bolt lo
+separaba en huesped/empleado, pero la app usa un login general y decide el
+tipo de usuario segun credenciales y permisos de sesion.
+
 ## Reglas de capas
 
 - Una vista sin sesión se crea en `public/pages/`.

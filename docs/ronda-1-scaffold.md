@@ -32,6 +32,11 @@ dos sub-tareas queda cubierto el padre `#50`.
 3. **Los primitivos de `shared/components/` son el sistema de estilos del
    proyecto.** `src/index.css` no se extiende; a futuro se reduce a reset y
    variables.
+   El diseno visual sigue siendo el prototipo Bolt: cada pantalla nueva debe
+   reutilizar tokens y patrones existentes (`visitor-*`, `reservation-*`,
+   `rc-*`, `adm-*`, `.panel`, `.button`, `.content`) y solo agregar wrappers
+   pequenos por modulo. La excepcion funcional es el login general: Bolt
+   separaba huesped/empleado, pero la app decide el acceso por credenciales.
 4. **Sigue viva la regla de oro**: nada fuera de la capa de servicios
    (`src/services/`) importa de `src/data/`.
 5. **Estados** desde `shared/constants/statuses.ts` (`isRoomAssignable()`

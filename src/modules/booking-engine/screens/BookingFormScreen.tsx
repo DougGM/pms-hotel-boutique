@@ -1,4 +1,12 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  BedDouble,
+  CalendarDays,
+  CheckCircle2,
+  StickyNote,
+  UserRound,
+  UsersRound,
+} from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { bookingService } from '@/services/bookingService';
 import { roomService } from '@/services/roomService';
@@ -213,16 +221,37 @@ export function BookingFormScreen() {
     <section className="content booking-form-page">
       <div className="booking-form-heading">
         <div>
-          <p className="eyebrow">Nueva reserva</p>
-          <h1>Reservar</h1>
-          <p>Completa los datos requeridos para asegurar la estadia.</p>
+          <p className="eyebrow">Reserva directa</p>
+          <h1>Completa tu estadia</h1>
+          <p>Confirma los datos principales y deja listo el pre-registro.</p>
         </div>
       </div>
 
-      <div className="booking-form-layout">
+      <div className="reservation-steps booking-form-steps" aria-label="Progreso de reserva">
+        <span className="res-step done">
+          <span className="res-step-num">
+            <CheckCircle2 size={13} aria-hidden="true" />
+          </span>
+          Habitacion
+        </span>
+        <span className="res-step active">
+          <span className="res-step-num">2</span>
+          Datos
+        </span>
+        <span className="res-step">
+          <span className="res-step-num">3</span>
+          Confirmacion
+        </span>
+      </div>
+
+      <div className="booking-form-layout booking-reservation-shell">
         <form className="booking-form-card" onSubmit={handleSubmit}>
           {submitError ? <p className="field-error">{submitError}</p> : null}
 
+          <div className="booking-form-section-title">
+            <UserRound size={16} aria-hidden="true" />
+            <span>Informacion del huesped</span>
+          </div>
           <div className="booking-form-grid">
             <Input
               label="ID del huesped"
@@ -253,19 +282,6 @@ export function BookingFormScreen() {
               ))}
             </Select>
 
-            <div className="booking-form-full">
-              <DatePickerRange
-                label="Fechas de estadia"
-                value={range}
-                onChange={(nextRange) => {
-                  setRange(nextRange);
-                  setErrors((current) => ({ ...current, dates: undefined }));
-                }}
-                minDate={new Date()}
-                error={errors.dates}
-              />
-            </div>
-
             <Input
               label="Adultos"
               type="number"
@@ -292,8 +308,25 @@ export function BookingFormScreen() {
               required
             />
 
+            <div className="booking-form-full">
+              <div className="booking-form-section-title booking-form-calendar-title">
+                <CalendarDays size={16} aria-hidden="true" />
+                <span>Fechas de estadia</span>
+              </div>
+              <DatePickerRange
+                value={range}
+                onChange={(nextRange) => {
+                  setRange(nextRange);
+                  setErrors((current) => ({ ...current, dates: undefined }));
+                }}
+                minDate={new Date()}
+                error={errors.dates}
+              />
+            </div>
+
             <div className="field booking-form-full">
-              <label className="field-label" htmlFor="booking-notes">
+              <label className="field-label booking-form-notes-label" htmlFor="booking-notes">
+                <StickyNote size={14} aria-hidden="true" />
                 Notas
               </label>
               <textarea
@@ -313,7 +346,19 @@ export function BookingFormScreen() {
         </form>
 
         <aside className="booking-form-summary">
-          <h2>Resumen</h2>
+          <div className="booking-form-summary-head">
+            <BedDouble size={18} aria-hidden="true" />
+            <div>
+              <span>Resumen</span>
+              <h2>Tu reserva</h2>
+            </div>
+          </div>
+          <div className="booking-form-room-chip">
+            <span>{selectedRoomType?.name ?? 'Habitacion por definir'}</span>
+            <strong>
+              {selectedRate ? formatCurrency(selectedRate.priceCents) : 'Tarifa pendiente'}
+            </strong>
+          </div>
           <div className="booking-rate-summary">
             <div>
               <span>Habitacion</span>
@@ -343,6 +388,12 @@ export function BookingFormScreen() {
                 {totalAmount !== undefined ? formatCurrency(totalAmount) : 'Por definir'}
               </strong>
             </div>
+          </div>
+          <div className="booking-form-guest-count">
+            <UsersRound size={15} aria-hidden="true" />
+            <span>
+              {adults || '0'} adulto(s), {children || '0'} nino(s)
+            </span>
           </div>
         </aside>
       </div>
