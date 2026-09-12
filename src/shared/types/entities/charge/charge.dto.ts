@@ -20,3 +20,14 @@ export interface ChargeDTO {
 }
 
 export type ChargeDto = ChargeDTO;
+
+export interface CreateChargeDto {
+  booking_id: string;
+  product_id?: string;
+  description: string;
+  quantity: number;
+  unit_price_cents: number;
+  currency: Currency;
+  charged_at?: string;
+  created_by_user_id?: string;
+}

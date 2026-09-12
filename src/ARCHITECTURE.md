@@ -182,14 +182,14 @@ patrón: esbuild empaqueta el módulo a probar a CommonJS y se ejecuta con
 | `test-date.mjs`                  | `formatDateGT`/`formatTimeGT`/`calculateNights`/mappers de fecha civil (35 pruebas)                              |
 | `test-money-contract.mjs`        | `mockData.ts`: montos enteros, `currency: 'GTQ'`, sufijo `_cents` (13 pruebas)                                   |
 | `test-contract.mjs`              | Una sola definición por entidad, incluidas las nueve de los Lotes C/D (29 pruebas)                               |
-| `test-shared-contract.mjs`       | Fechas ISO, `_cents`, estados dentro de `statuses.ts`, `guest_link_code` único, mappers sin pérdida (37 pruebas) |
-| `test-referential-integrity.mjs` | Ninguna referencia queda colgada entre lotes (bookings, guests, users, cuentas, caja, inventario) (64 pruebas)   |
+| `test-shared-contract.mjs`       | Fechas ISO, `_cents`, estados dentro de `statuses.ts`, `guest_link_code` único, mappers sin pérdida (34 pruebas) |
+| `test-referential-integrity.mjs` | Ninguna referencia queda colgada entre lotes (bookings, guests, users, cuentas, caja, inventario) (56 pruebas)   |
 | `test-room-status.mjs`           | Separación `status`/`housekeepingStatus` de `room`, `isRoomAssignable()` (9 pruebas)                             |
 | `test-lot-c-d.mjs`               | Aritmética de cuentas/caja/inventario, horario de amenidades, cobertura de casos (WEB-11/WEB-12) (15 pruebas)    |
-| `test-services.mjs`              | Los servicios son `async`, con latencia simulada, devuelven Models, forzado de error, regla de oro (7 pruebas)   |
+| `test-services.mjs`              | Servicios async con latencia, Models, forzado de error, regla de oro y métodos WEB-14 (16 pruebas)               |
 | `test-presentation.mjs`          | Primitivos de `shared/components/` y el catálogo `/components` (6 pruebas)                                       |
 
-Total: 240 pruebas. `npm run check` encadena
+Total: 238 pruebas. `npm run check` encadena
 `format:check && typecheck && lint && build && test`.
 
 ## `index.css`: pendiente de separar
