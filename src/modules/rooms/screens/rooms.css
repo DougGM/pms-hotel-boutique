@@ -1,0 +1,11 @@
+.rooms-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+  margin-bottom: var(--space-8);
+}
+
+.rooms-header h1 {
+  margin: 0;
+}

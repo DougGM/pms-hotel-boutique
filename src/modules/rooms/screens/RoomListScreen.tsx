@@ -1,11 +1,15 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { routePaths } from '@/app/routes';
 import { Badge, type BadgeTone } from '@/shared/components/Badge';
+import { Button } from '@/shared/components/Button';
 import { DataTable, type DataTableColumn } from '@/shared/components/DataTable';
 import { EmptyState } from '@/shared/components/EmptyState';
 import { ErrorState } from '@/shared/components/ErrorState';
 import { LoadingState } from '@/shared/components/LoadingState';
 import { roomService } from '@/services/roomService';
 import type { Room, RoomHousekeepingStatus, RoomStatus } from '@/shared/types/entities/room';
+import './rooms.css';
 
 type ScreenState =
   { status: 'loading' } | { status: 'error'; message: string } | { status: 'ready'; rooms: Room[] };
@@ -28,7 +32,7 @@ const ROOM_HOUSEKEEPING_TONES: Record<RoomHousekeepingStatus, BadgeTone> = {
   inspected: 'success',
 };
 
-const columns: DataTableColumn<Room>[] = [
+const baseColumns: DataTableColumn<Room>[] = [
   {
     id: 'roomNumber',
     header: 'Habitación',
@@ -60,6 +64,7 @@ const columns: DataTableColumn<Room>[] = [
 ];
 
 export function RoomListScreen() {
+  const navigate = useNavigate();
   const [screen, setScreen] = useState<ScreenState>({ status: 'loading' });
 
   const loadRooms = useCallback(async () => {
@@ -76,9 +81,32 @@ export function RoomListScreen() {
     void loadRooms();
   }, [loadRooms]);
 
+  const columns = useMemo<DataTableColumn<Room>[]>(
+    () => [
+      ...baseColumns,
+      {
+        id: 'actions',
+        header: 'Acciones',
+        cell: (room) => (
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => navigate(routePaths.pms.roomEdit.replace(':roomId', room.id))}
+          >
+            Editar
+          </Button>
+        ),
+      },
+    ],
+    [navigate],
+  );
+
   return (
     <section className="content">
-      <h1>Habitaciones</h1>
+      <div className="rooms-header">
+        <h1>Habitaciones</h1>
+        <Button onClick={() => navigate(routePaths.pms.roomNew)}>Nueva habitación</Button>
+      </div>
 
       {screen.status === 'loading' && <LoadingState label="Cargando habitaciones..." />}
 
