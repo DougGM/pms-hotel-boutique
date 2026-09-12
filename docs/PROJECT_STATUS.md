@@ -32,9 +32,17 @@ documento resume el estado resultante, no el proceso para llegar a él.
   `formatCurrency`/`formatDateGT`/`formatTimeGT` como únicas funciones de
   formato.
 - Servicios (`bookingService`, `roomService`, `guestService`,
-  `paymentService`, `catalogService`, `authService`) async, con latencia
-  simulada y forzado de error; `bookingService`/`roomService`/`guestService`
-  leen del dataset del Lote B (`shared/mocks/lot-b.ts`).
+  `paymentService`, `catalogService`, `guestAccountService`, `cashService`,
+  `personnelService`, `inventoryService`, `auditService`, `authService`) async,
+  con latencia simulada y forzado de error; todos leen de `src/data/db.ts`,
+  salvo `authService`, que además persiste la sesión en `localStorage`.
+- WEB-14 implementado: `roomService.createRoom/updateRoom/getRoomTypes`,
+  `bookingService.checkIn/checkOut/assignRoom` y
+  `guestAccountService.createCharge`.
+- Lote A implementado en rama apilada sobre WEB-14:
+  `#51` (`OccupancyScreen`) muestra disponibilidad por fecha y estados reales
+  de habitación/limpieza; `#52` (`ManualBookingScreen`) crea reservas manuales.
+  El padre `#50` queda cubierto por esas dos pantallas.
 - Base de la app React Native en el repositorio separado `pms-hotel-mobile`
   (empleados: autenticación, tareas, habitaciones, solicitudes, pedidos).
 
@@ -58,9 +66,9 @@ documento resume el estado resultante, no el proceso para llegar a él.
 | ----------------------------------------------------------------------- | -------------------------------- | ------------------------------------------------------------- |
 | Auth                                                                    | Integrada y probada (14 pruebas) | Construir las pantallas que la consumen                       |
 | Base compartida (rutas, tema, primitivos, contrato de datos, servicios) | Cerrada (Fase 0)                 | —                                                             |
-| Reservaciones y recepción                                               | Sin pantallas                    | Construir sobre `bookingService`/`roomService`/`guestService` |
-| Caja (WEB-11)                                                           | Sin datos mock ni servicio       | WEB-11                                                        |
-| Catálogos e inventario (WEB-12)                                         | Sin datos mock ni servicio       | WEB-12                                                        |
+| Reservaciones y recepción                                               | Lote A implementado              | Revisar/mergear #50/#51/#52; seguir con lotes B/C/D           |
+| Caja (WEB-11)                                                           | Dataset y servicios base listos  | Construir pantallas                                           |
+| Catálogos e inventario (WEB-12)                                         | Dataset y servicios base listos  | Construir pantallas                                           |
 | Housekeeping / Room service / Conserjería / Huésped / Administración    | Sin pantallas                    | Implementar según prioridad del equipo                        |
 
 ## Decisiones
@@ -74,10 +82,9 @@ documento resume el estado resultante, no el proceso para llegar a él.
 
 ## Verificación más reciente
 
-`npm run check` (`format:check && typecheck && lint && build && test`) pasa
-completo: Prettier, TypeScript, ESLint, compilación de producción y las
-siete suites de `npm run test` (103 pruebas: `test-auth` 14, `test-currency`
-11, `test-date` 35, `test-money-contract` 13, `test-contract` 17,
-`test-services` 7, `test-presentation` 6). Revisión visual en navegador de
-`/`, `/auth/login`, `/pms` (con y sin sesión), 404 pública/privada y
-`/components` tras eliminar la UI de Bolt — igual que antes del borrado.
+`npm run check` (`format:check && typecheck && lint && build && test`) es la
+verificación requerida antes de publicar cambios. La suite actual tiene once
+scripts y 238 pruebas; `test-services` cubre 16 casos, incluidos los siete
+métodos de WEB-14. Para #50/#51/#52 también se validan `typecheck`, `lint`,
+`build` y respuesta HTTP 200 en dev server para `/pms/occupancy` y
+`/pms/bookings/new`.

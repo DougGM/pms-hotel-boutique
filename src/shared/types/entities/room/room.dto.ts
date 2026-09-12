@@ -17,3 +17,14 @@ export interface RoomDTO {
 }
 
 export type RoomDto = RoomDTO;
+
+export interface CreateRoomDto {
+  room_number: string;
+  room_type_id: string;
+  floor: number;
+  status?: RoomStatusDto;
+  housekeeping_status?: RoomHousekeepingStatusDto;
+  notes?: string;
+}
+
+export type UpdateRoomDto = Partial<CreateRoomDto>;

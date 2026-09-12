@@ -41,7 +41,14 @@ export type {
   CashSession,
   CashSessionStatus,
 } from './cash-session';
-export type { ChargeDTO, ChargeDto, ChargeStatusDto, Charge, ChargeStatus } from './charge';
+export type {
+  ChargeDTO,
+  ChargeDto,
+  ChargeStatusDto,
+  CreateChargeDto,
+  Charge,
+  ChargeStatus,
+} from './charge';
 export type {
   DepositDTO,
   DepositDto,
@@ -113,6 +120,8 @@ export type {
   RoomDto,
   RoomStatusDto,
   RoomHousekeepingStatusDto,
+  CreateRoomDto,
+  UpdateRoomDto,
   Room,
   RoomStatus,
   RoomHousekeepingStatus,

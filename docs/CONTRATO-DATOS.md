@@ -1,6 +1,6 @@
 # Contrato de datos — PMS Hotel Boutique
 
-**Última actualización:** 2026-09-10 · rama `feat/mocks-lotes-c-d`.
+**Última actualización:** 2026-09-11 · rama `web-14-servicios-faltantes`.
 
 ## 1. Propósito y regla de gobierno
 
@@ -52,6 +52,31 @@ código de la web.
 - **IDs:** `string` en todo el contrato (`ID` en `shared/types/common.ts`).
   Tratarlos como opacos — nunca parsear ni comparar numéricamente (ver
   decisión pendiente 6.3).
+
+### 2.1 DTOs de entrada de servicios WEB-14
+
+Los servicios de escritura reciben DTOs de entrada, no Models. Sus respuestas
+siempre son Models.
+
+- `CreateRoomDto`: `room_number`, `room_type_id`, `floor`, y opcionalmente
+  `status`, `housekeeping_status`, `notes`. `UpdateRoomDto` es el parcial de
+  ese mismo contrato.
+- `CreateBookingDto`: `guest_id`, `room_type_id`, `rate_id?`, `check_in`,
+  `check_out`, `adults`, `children`, `notes?`.
+- `CreateChargeDto`: `booking_id`, `product_id?`, `description`, `quantity`,
+  `unit_price_cents`, `currency`, `charged_at?`, `created_by_user_id?`. El
+  servicio calcula `amount_cents` y fija `status: 'posted'`.
+
+Servicios habilitados por WEB-14:
+
+- `roomService.createRoom`, `roomService.updateRoom`, `roomService.getRoomTypes`.
+- `bookingService.checkIn`, `bookingService.checkOut`,
+  `bookingService.assignRoom`.
+- `guestAccountService.createCharge`.
+
+`checkIn`/`checkOut` aplican `BOOKING_STATUS_TRANSITIONS`; `assignRoom` usa
+`isRoomAssignable()`; `createCharge` actualiza el `balance_cents` guardado de
+la cuenta abierta.
 
 ## 3. Entidad por entidad
 
