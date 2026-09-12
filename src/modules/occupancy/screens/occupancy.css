@@ -1,0 +1,80 @@
+.occupancy-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-6);
+  margin-bottom: var(--space-8);
+}
+
+.occupancy-header h1 {
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-family-heading);
+  color: var(--color-text-primary);
+}
+
+.occupancy-muted {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.occupancy-panel {
+  margin-top: var(--space-8);
+}
+
+.occupancy-panel h2 {
+  margin: 0 0 var(--space-4);
+  font-size: var(--font-size-xl);
+  color: var(--color-text-primary);
+}
+
+.occupancy-list {
+  display: grid;
+  gap: var(--space-3);
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.occupancy-list li {
+  display: grid;
+  grid-template-columns: minmax(8rem, 1fr) minmax(10rem, 1.5fr) minmax(14rem, 1.5fr);
+  gap: var(--space-4);
+  align-items: center;
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.occupancy-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-5);
+  max-width: 58rem;
+}
+
+.occupancy-error {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--color-error);
+  font-weight: var(--font-weight-semibold);
+}
+
+.occupancy-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+@media (max-width: 760px) {
+  .occupancy-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .occupancy-list li,
+  .occupancy-form {
+    grid-template-columns: 1fr;
+  }
+}
