@@ -5,8 +5,9 @@ import {
   type CreateBookingDto,
 } from '@/shared/types/entities/booking';
 import { BOOKING_STATUS_TRANSITIONS, isRoomAssignable } from '@/shared/constants/statuses';
-import type { ID } from '@/shared/types/common';
-import { bookingsDB, roomsDB } from '@/data/db';
+import { toDomainCalendarDate, type ID } from '@/shared/types/common';
+import { calculateNights } from '@/shared/utils/date';
+import { bookingsDB, ratesDB, roomsDB } from '@/data/db';
 import { mockUtils, simulateLatency } from './mockUtils';
 
 function assertBookingExists(id: ID): BookingDto {
@@ -62,13 +63,18 @@ export const bookingService = {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible crear la reserva.');
     const now = new Date().toISOString();
+    const rate = data.rate_id ? ratesDB.find((item) => item.id === data.rate_id) : undefined;
+    const totalAmountCents = rate
+      ? rate.price_cents *
+        calculateNights(toDomainCalendarDate(data.check_in), toDomainCalendarDate(data.check_out))
+      : 0;
     const booking = {
       ...data,
       id: `booking-${bookingsDB.length + 1}`,
       confirmation_code: `PMS-${String(bookingsDB.length + 1).padStart(4, '0')}`,
       guest_link_code: `LNK-${String(bookingsDB.length + 1).padStart(4, '0')}`,
       status: 'pending' as const,
-      total_amount_cents: 0,
+      total_amount_cents: totalAmountCents,
       currency: 'GTQ' as const,
       created_at: now,
       updated_at: now,
