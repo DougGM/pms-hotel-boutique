@@ -46,6 +46,28 @@ Verificacion:
 - `npm run check`: bloqueado en `format:check` por los mismos archivos preexistentes fuera de esta issue
   (`src/index.css`, `NEXT_CONTRIBUTOR.md`, archivos de `shared/types`, configs, etc.).
 
+## WEB-23 / Issue #49 - BookingConfirmationScreen
+
+Estado: implementado en rama `booking-engine`.
+
+Cambios realizados:
+
+- `BookingConfirmationScreen` dejo de ser placeholder y carga la reserva con `bookingService.getBookingById(bookingId)`.
+- La pantalla muestra codigo de confirmacion, fechas, noches, tipo de habitacion, huesped y monto.
+- Fechas y monto usan `formatDateGT` y `formatCurrency`.
+- La pantalla cubre carga, error con reintento y reserva inexistente.
+- La confirmacion se mantiene en pantalla; el envio por correo queda fuera de alcance como indica la issue.
+- `bookingService.createBooking` ahora calcula `total_amount_cents` cuando recibe `rate_id` y fechas, para que la reserva creada en WEB-22 tenga monto real.
+
+Verificacion:
+
+- `npm run typecheck`: OK.
+- `npm run lint`: OK.
+- `npm run build`: OK.
+- `npm run test`: OK.
+- `npm run check`: bloqueado en `format:check` por los mismos archivos preexistentes fuera de esta issue
+  (`src/index.css`, `NEXT_CONTRIBUTOR.md`, archivos de `shared/types`, configs, etc.).
+
 ## WEB-22 / Issue #48 - BookingFormScreen
 
 Estado: implementado en rama `booking-engine`.
