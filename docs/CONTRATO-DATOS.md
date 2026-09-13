@@ -342,7 +342,7 @@ Ver sección 3.12 para la distinción con `session`.
 | `first_name`      | `string`                                                                        |                     |
 | `last_name`       | `string`                                                                        |                     |
 | `email`           | `string`                                                                        |                     |
-| `role`            | `'admin' \| 'manager' \| 'front_desk' \| 'housekeeping' \| 'maintenance'`      | Puesto de trabajo   |
+| `role`            | `'admin' \| 'guest' \| 'reception' \| 'housekeeping' \| 'concierge' \| 'room_service'` | Rol operativo/acceso alineado |
 | `status`          | `'active' \| 'inactive'`                                                       |                     |
 | `created_at`      | `string`                                                                        |                     |
 | `updated_at`      | `string`                                                                        |                     |
@@ -353,7 +353,7 @@ Ver sección 3.12 para la distinción con `session`.
   "first_name": "Ana",
   "last_name": "Martínez",
   "email": "ana@hotelboutique.test",
-  "role": "front_desk",
+  "role": "reception",
   "status": "active",
   "created_at": "2026-01-10T12:00:00.000Z",
   "updated_at": "2026-01-10T12:00:00.000Z"
@@ -721,11 +721,10 @@ Dos conceptos que comparten nombre por casualidad:
 
 - **`shared/types/entities/session/`** modela la respuesta de login: el
   **rol de acceso al PMS** (`UserRole` en `common.ts`:
-  `ADMIN | RECEPTIONIST | MANAGER | STAFF`), token, expiración. Es lo que
-  decide qué pantallas/permisos ve un empleado autenticado en la web.
+  `ADMIN | GUEST | RECEPTION | HOUSEKEEPING | CONCIERGE | ROOM_SERVICE`), token, expiración. Es lo que
+  decide que pantallas/permisos ve una sesion autenticada en la web.
 - **`shared/types/entities/user/`** modela el **puesto de un empleado** en
-  el directorio de personal (`admin | manager | frontDesk | housekeeping |
-  maintenance`), usado en catálogos/reportes.
+  el directorio de personal (`admin | guest | reception | housekeeping | concierge | roomService`), usado en catalogos/reportes.
 
 Móvil, según su propio plan (MOV-04), solo necesita replicar `user` (el
 puesto, para mostrar quién es el personal asignado a una tarea). No
@@ -994,7 +993,7 @@ contrato de `room_feature`.
 **Estado: resuelta e implementada** (ver
 [`docs/DECISIONES.md`, D-003](./DECISIONES.md#d-003--el-catálogo-rolepermission-no-es-una-fk-desde-userrole)).
 `role.code` corresponde por **valor** a los literales de `UserRoleDto`,
-no por una FK real — `user.role` no cambia de tipo. Sección 3.10c tiene el
+no por una FK real; `user.role` mantiene el tipo `UserRoleDto` alineado. Seccion 3.10c tiene el
 contrato completo.
 
 ## 7. Cómo se cambia este contrato

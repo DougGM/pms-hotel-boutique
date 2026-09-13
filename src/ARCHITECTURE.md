@@ -44,6 +44,23 @@ src/
   app/routes.ts             Catálogo tipado y constantes de rutas
 ```
 
+## Contrato visual Bolt
+
+El prototipo Bolt es la fuente visual del producto. Las pantallas nuevas pueden
+vivir en `modules/<modulo>/screens/`, pero su CSS debe reutilizar el lenguaje
+existente en `src/index.css` y `src/styles/tokens.css`: layouts, paneles,
+formularios, tablas, cards, botones, estados, tipografia y colores deben partir
+de las clases/tokens heredados (`visitor-*`, `reservation-*`, `rc-*`, `adm-*`,
+`.panel`, `.button`, `.content`, etc.) antes de crear una familia nueva de
+clases.
+
+La estructura de carpetas de Ronda 1 esta aceptada; lo que no se acepta es que
+una pantalla mergeada parezca otra app. Si un modulo necesita clases propias,
+deben ser wrappers pequenos alrededor del diseno Bolt, no un sistema visual
+paralelo. La excepcion funcional definida por producto es el login: Bolt lo
+separaba en huesped/empleado, pero la app usa un login general y decide el
+tipo de usuario segun credenciales y permisos de sesion.
+
 ## Reglas de capas
 
 - Una vista sin sesión se crea en `public/pages/`.
@@ -121,10 +138,10 @@ import { toDomain as toBooking } from '@/shared/types/entities/booking';
 **`shared/types/entities/session/` es un caso aparte, y no se reexporta desde
 el barrel.** Modela la respuesta de login/sesión (`SessionUserDTO`,
 `AuthResponseDTO`, `AuthSession`, `LoginDTO`) con el rol de acceso al PMS
-(`UserRole` de `common.ts`: ADMIN/RECEPTIONIST/MANAGER/STAFF). Es un concepto
+(`UserRole` de `common.ts`: ADMIN/GUEST/RECEPTION/HOUSEKEEPING/CONCIERGE/ROOM_SERVICE). Es un concepto
 distinto de `shared/types/entities/user/`, que modela el puesto de un
 empleado en el directorio de personal
-(admin/manager/frontDesk/housekeeping/maintenance, alineado con la app
+(admin/guest/reception/housekeeping/concierge/roomService, alineado con la app
 móvil). Comparten nombre por casualidad, no por ser la misma entidad; no
 fusionarlos. Ver `modules/auth/README.md`.
 

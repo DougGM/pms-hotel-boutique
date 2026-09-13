@@ -25,7 +25,7 @@ documento resume el estado resultante, no el proceso para llegar a él.
   `LoadingState`, `ErrorState`, `DataTable`/`TableFrame`, `Pagination`) en
   `src/shared/components/`, todos visibles y probados en `/components`.
 - Sesión de personal: login simulado, guardas de ruta por permiso, menú por
-  rol (ADMIN/RECEPTIONIST/MANAGER/STAFF), persistencia de ocho horas.
+  rol (ADMIN/GUEST/RECEPTION/HOUSEKEEPING/CONCIERGE/ROOM_SERVICE), persistencia de ocho horas.
 - Contrato de datos: **una sola definición por entidad**
   (`src/shared/types/entities/<entidad>/`, DTO snake_case → Mapper → Model
   camelCase). Moneda en quetzal, montos como entero en centavos,

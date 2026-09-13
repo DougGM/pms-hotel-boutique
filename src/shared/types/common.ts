@@ -3,7 +3,8 @@
 export type Currency = 'GTQ';
 export type ID = string;
 export type ISODateString = string;
-export type UserRole = 'ADMIN' | 'RECEPTIONIST' | 'MANAGER' | 'STAFF';
+export type UserRole =
+  'ADMIN' | 'GUEST' | 'RECEPTION' | 'HOUSEKEEPING' | 'CONCIERGE' | 'ROOM_SERVICE';
 
 export const toDomainDate = (value: string): Date => new Date(value);
 
