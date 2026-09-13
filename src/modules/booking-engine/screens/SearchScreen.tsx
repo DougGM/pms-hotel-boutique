@@ -3,6 +3,7 @@ import { ArrowRight, CalendarDays, Check, UserRound } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { bookingService } from '@/services/bookingService';
 import { roomService } from '@/services/roomService';
+import { DatePickerRange, type DateRangeValue } from '@/shared/components/DatePickerRange';
 import { EmptyState } from '@/shared/components/EmptyState';
 import { ErrorState } from '@/shared/components/ErrorState';
 import { LoadingState } from '@/shared/components/LoadingState';
@@ -10,6 +11,7 @@ import { BOOKING_STATUS_TRANSITIONS } from '@/shared/constants/statuses';
 import type { Booking } from '@/shared/types/entities/booking';
 import type { Rate } from '@/shared/types/entities/rate';
 import type { Room } from '@/shared/types/entities/room';
+import type { RoomFeature } from '@/shared/types/entities/room-feature';
 import type { RoomType } from '@/shared/types/entities/room-type';
 import { formatCurrency } from '@/shared/utils/currency';
 import { calculateNights, formatDateGT } from '@/shared/utils/date';
@@ -21,11 +23,6 @@ type ShowcaseStatus = 'loading' | 'success' | 'error';
 type AvailableRoomType = {
   roomType: RoomType;
   availableRooms: number;
-};
-
-type DateRangeValue = {
-  start: Date | null;
-  end: Date | null;
 };
 
 function dateKey(date: Date): string {
@@ -147,6 +144,7 @@ export function SearchScreen() {
   const [status, setStatus] = useState<SearchStatus>('idle');
   const [showcaseStatus, setShowcaseStatus] = useState<ShowcaseStatus>('loading');
   const [roomTypes, setRoomTypes] = useState<RoomType[]>([]);
+  const [features, setFeatures] = useState<RoomFeature[]>([]);
   const [rates, setRates] = useState<Rate[]>([]);
   const [results, setResults] = useState<AvailableRoomType[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -154,17 +152,20 @@ export function SearchScreen() {
   const [rangeError, setRangeError] = useState<string | undefined>();
   const [hasSearched, setHasSearched] = useState(false);
   const [guests, setGuests] = useState('2 adultos');
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
 
   const loadShowcase = useCallback(async () => {
     setShowcaseStatus('loading');
     setShowcaseError(null);
     try {
-      const [nextRoomTypes, nextRates] = await Promise.all([
+      const [nextRoomTypes, nextRates, nextFeatures] = await Promise.all([
         roomService.getRoomTypes(),
         roomService.getRates(),
+        roomService.getRoomFeatures(),
       ]);
       setRoomTypes(nextRoomTypes.filter((roomType) => roomType.active));
       setRates(nextRates);
+      setFeatures(nextFeatures);
       setShowcaseStatus('success');
     } catch (cause) {
       setShowcaseError(
@@ -216,6 +217,10 @@ export function SearchScreen() {
   const roomCards = hasSearched
     ? results.map(({ roomType, availableRooms }) => ({ roomType, availableRooms }))
     : roomTypes.map((roomType) => ({ roomType, availableRooms: undefined }));
+  const featureById = useMemo(
+    () => new Map(features.map((feature) => [feature.id, feature.name])),
+    [features],
+  );
 
   return (
     <section className="booking-search-page">
@@ -276,30 +281,40 @@ export function SearchScreen() {
           </div>
         </div>
         <div className="search-fields">
-          <label>
-            <span>Entrada</span>
-            <input
-              type="date"
-              value={range.start ? dateKey(range.start) : ''}
-              min={dateKey(new Date())}
-              onChange={(event) => {
-                setRange((current) => ({ ...current, start: parseDateKey(event.target.value) }));
-                setRangeError(undefined);
-              }}
-            />
-          </label>
-          <label>
-            <span>Salida</span>
-            <input
-              type="date"
-              value={range.end ? dateKey(range.end) : ''}
-              min={range.start ? dateKey(addDays(range.start, 1)) : dateKey(new Date())}
-              onChange={(event) => {
-                setRange((current) => ({ ...current, end: parseDateKey(event.target.value) }));
-                setRangeError(undefined);
-              }}
-            />
-          </label>
+          <div className="booking-search-range">
+            <button
+              type="button"
+              className="booking-search-date-trigger"
+              onClick={() => setIsDatePickerOpen((current) => !current)}
+              aria-expanded={isDatePickerOpen}
+            >
+              <span>
+                <small>Entrada</small>
+                <strong>{range.start ? formatDateGT(range.start) : 'Seleccionar'}</strong>
+              </span>
+              <span>
+                <small>Salida</small>
+                <strong>{range.end ? formatDateGT(range.end) : 'Seleccionar'}</strong>
+              </span>
+            </button>
+            {isDatePickerOpen ? (
+              <div className="booking-search-range-popover">
+                <DatePickerRange
+                  value={range}
+                  onChange={(nextRange) => {
+                    setRange(nextRange);
+                    setRangeError(undefined);
+                    if (isCompleteStayRange(nextRange)) {
+                      setIsDatePickerOpen(false);
+                    }
+                  }}
+                  minDate={new Date()}
+                  error={rangeError}
+                />
+              </div>
+            ) : null}
+            {rangeError && !isDatePickerOpen ? <p className="field-error">{rangeError}</p> : null}
+          </div>
           <label>
             <span>Huespedes</span>
             <select value={guests} onChange={(event) => setGuests(event.target.value)}>
@@ -320,7 +335,6 @@ export function SearchScreen() {
         </button>
       </form>
 
-      {rangeError ? <p className="search-error">{rangeError}</p> : null}
       {status === 'error' ? (
         <div className="booking-public-state">
           <ErrorState description={error ?? 'Intenta nuevamente.'} onRetry={searchAvailability} />
@@ -345,6 +359,12 @@ export function SearchScreen() {
             <span className="search-results-count">
               {results.length} {results.length === 1 ? 'opcion disponible' : 'opciones disponibles'}
             </span>
+          </div>
+        ) : null}
+
+        {status === 'loading' ? (
+          <div className="booking-public-state booking-search-loading">
+            <LoadingState label="Buscando disponibilidad..." />
           </div>
         ) : null}
 
@@ -375,6 +395,12 @@ export function SearchScreen() {
               const detailUrl = isCompleteStayRange(range)
                 ? `/rooms/${roomType.id}?checkIn=${dateKey(range.start)}&checkOut=${dateKey(range.end)}`
                 : `/rooms/${roomType.id}`;
+              const featureNames = roomType.roomFeatureIds
+                .map((featureId) => featureById.get(featureId))
+                .filter((featureName): featureName is string => Boolean(featureName))
+                .slice(0, 2);
+              const cardFeatures =
+                featureNames.length > 0 ? featureNames : [roomType.bedConfiguration];
 
               return (
                 <article className="visitor-room" key={roomType.id}>
@@ -407,18 +433,12 @@ export function SearchScreen() {
                     </div>
                   </div>
                   <div className="room-features-list">
-                    <span>
-                      <Check size={12} aria-hidden="true" />
-                      {roomType.bedConfiguration}
-                    </span>
-                    <span>
-                      <Check size={12} aria-hidden="true" />
-                      Wi-Fi gratis
-                    </span>
-                    <span>
-                      <Check size={12} aria-hidden="true" />
-                      Desayuno incluido
-                    </span>
+                    {cardFeatures.map((featureName) => (
+                      <span key={featureName}>
+                        <Check size={12} aria-hidden="true" />
+                        {featureName}
+                      </span>
+                    ))}
                   </div>
                   <div className="room-card-footer">
                     <span className="booking-room-code">{roomType.code}</span>

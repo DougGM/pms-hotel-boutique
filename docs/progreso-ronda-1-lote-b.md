@@ -7,10 +7,17 @@ Estado: implementado en rama `booking-engine`.
 Cambios realizados:
 
 - `SearchScreen` dejo de ser placeholder y ahora permite seleccionar rango de fechas con `DatePickerRange`.
+- Tras mergear `develop`, se corrigio una regresion visual/funcional: el buscador habia vuelto a inputs
+  `type="date"` manuales; ahora usa de nuevo `DatePickerRange` de `shared/components` como exige la issue,
+  manteniendo el estilo publico Aurora/Bolt.
+- Para no romper el layout compacto del prototipo Bolt, `SearchScreen` envuelve `DatePickerRange` en un selector
+  desplegable propio del modulo: la barra muestra Entrada/Salida como campos compactos y el calendario aparece en popover.
 - La busqueda carga datos mediante `roomService.getRoomTypes()`, `roomService.getRooms()` y `bookingService.getBookings()`.
 - La disponibilidad se calcula por tipo de habitacion usando habitaciones asignables y reservas que se solapan con el rango elegido.
 - Cada resultado enlaza a `/rooms/:roomTypeId` preservando `checkIn` y `checkOut` en query string para WEB-21.
 - La pantalla cubre estado inicial, carga, error con reintento y busqueda sin resultados.
+- Las tarjetas publicas muestran caracteristicas reales desde `roomFeatureIds`/`roomService.getRoomFeatures()` en vez de
+  amenidades escritas a mano.
 - Se agrego `roomService.getRoomTypes()` porque la issue lo requiere y esta rama no lo exponia aun.
 
 Verificacion:
@@ -31,6 +38,7 @@ Cambios realizados:
 - `RoomDetailScreen` carga todos los tipos con `roomService.getRoomTypes()` y filtra por `roomTypeId` de la ruta.
 - La pantalla muestra descripcion, capacidad, configuracion de cama, codigo y caracteristicas del tipo de habitacion.
 - Se agregaron paneles visuales para las fotografias, porque `roomType.model.ts` no tiene campos de imagen en esta rama.
+  Queda documentada la limitacion: fotos reales requieren ampliar contrato/datos o aprobar un mapeo visual por `roomTypeId`.
 - La tarifa se resuelve contra las fechas recibidas por query string (`checkIn`, `checkOut`) y se muestra con `formatCurrency`.
 - El resumen usa `formatDateGT` para las fechas y calcula noches con `calculateNights`.
 - El boton de reserva navega a `/booking/new` llevando `roomTypeId`, `checkIn` y `checkOut` cuando vienen desde WEB-20.
