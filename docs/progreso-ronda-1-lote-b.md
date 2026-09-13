@@ -18,6 +18,7 @@ Cambios realizados:
 - La pantalla cubre estado inicial, carga, error con reintento y busqueda sin resultados.
 - Las tarjetas publicas muestran caracteristicas reales desde `roomFeatureIds`/`roomService.getRoomFeatures()` en vez de
   amenidades escritas a mano.
+- Las tarjetas reutilizan las imagenes de `roomImages.ts` para que el listado publico no dependa de gradientes simulados.
 - Se agrego `roomService.getRoomTypes()` porque la issue lo requiere y esta rama no lo exponia aun.
 
 Verificacion:
@@ -37,8 +38,9 @@ Cambios realizados:
 
 - `RoomDetailScreen` carga todos los tipos con `roomService.getRoomTypes()` y filtra por `roomTypeId` de la ruta.
 - La pantalla muestra descripcion, capacidad, configuracion de cama, codigo y caracteristicas del tipo de habitacion.
-- Se agregaron paneles visuales para las fotografias, porque `roomType.model.ts` no tiene campos de imagen en esta rama.
-  Queda documentada la limitacion: fotos reales requieren ampliar contrato/datos o aprobar un mapeo visual por `roomTypeId`.
+- Se agregaron fotografias reales mediante URLs HTTPS en `src/modules/booking-engine/data/roomImages.ts`,
+  mapeadas por `roomTypeId` y reutilizadas por Search/Detail. Esto evita tocar `shared/types`, `db.ts` o el contrato `RoomType`.
+- Si un tipo no tuviera imagenes mapeadas, la pantalla conserva un fallback visual local.
 - La tarifa se resuelve contra las fechas recibidas por query string (`checkIn`, `checkOut`) y se muestra con `formatCurrency`.
 - El resumen usa `formatDateGT` para las fechas y calcula noches con `calculateNights`.
 - El boton de reserva navega a `/booking/new` llevando `roomTypeId`, `checkIn` y `checkOut` cuando vienen desde WEB-20.

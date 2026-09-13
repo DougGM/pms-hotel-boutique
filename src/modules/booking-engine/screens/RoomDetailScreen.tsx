@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { roomService } from '@/services/roomService';
+import { roomImages } from '../data/roomImages';
 import { Badge } from '@/shared/components/Badge';
 import { Button } from '@/shared/components/Button';
 import { EmptyState } from '@/shared/components/EmptyState';
@@ -161,23 +162,25 @@ export function RoomDetailScreen() {
     );
   }
 
+  const roomType = detail.roomType;
   const hasValidDates = isValidStay(checkIn, checkOut);
   const rate = hasValidDates
-    ? findRateForStay(detail.rates, detail.roomType.id, checkIn, checkOut!)
-    : findFallbackRate(detail.rates, detail.roomType.id);
+    ? findRateForStay(detail.rates, roomType.id, checkIn, checkOut!)
+    : findFallbackRate(detail.rates, roomType.id);
   const nights = hasValidDates ? calculateNights(checkIn, checkOut!) : 0;
   const totalAmount = rate && hasValidDates ? rate.priceCents * nights : undefined;
   const bookingUrl = hasValidDates
-    ? `/booking/new?roomTypeId=${detail.roomType.id}&checkIn=${dateKey(checkIn)}&checkOut=${dateKey(checkOut!)}`
-    : `/booking/new?roomTypeId=${detail.roomType.id}`;
+    ? `/booking/new?roomTypeId=${roomType.id}&checkIn=${dateKey(checkIn)}&checkOut=${dateKey(checkOut!)}`
+    : `/booking/new?roomTypeId=${roomType.id}`;
+  const images = roomImages[roomType.id] ?? [];
 
   return (
     <section className="content booking-detail-page">
       <div className="booking-detail-heading">
         <div>
           <p className="eyebrow">Detalle de habitacion</p>
-          <h1>{detail.roomType.name}</h1>
-          <p>{detail.roomType.description}</p>
+          <h1>{roomType.name}</h1>
+          <p>{roomType.description}</p>
         </div>
         <Link className="ui-action" to="/">
           Cambiar fechas
@@ -187,23 +190,45 @@ export function RoomDetailScreen() {
       <div className="booking-detail-layout">
         <div className="booking-detail-main">
           <div className="booking-photo-grid" aria-label="Fotografias de la habitacion">
-            <div className="booking-photo-card">
-              <span>{detail.roomType.name}</span>
-            </div>
-            <div className="booking-photo-card">
-              <span>Descanso</span>
-            </div>
-            <div className="booking-photo-card">
-              <span>Ambiente</span>
-            </div>
+            {images.length > 0 ? (
+              images.map((image, index) => (
+                <figure className="booking-photo-card booking-photo-image-card" key={image.src}>
+                  <img
+                    src={image.src}
+                    alt={image.alt}
+                    loading={index === 0 ? 'eager' : 'lazy'}
+                    onError={(event) => {
+                      event.currentTarget.hidden = true;
+                    }}
+                  />
+                  <figcaption>
+                    <span>
+                      {index === 0 ? roomType.name : index === 1 ? 'Descanso' : 'Ambiente'}
+                    </span>
+                  </figcaption>
+                </figure>
+              ))
+            ) : (
+              <>
+                <div className="booking-photo-card">
+                  <span>{roomType.name}</span>
+                </div>
+                <div className="booking-photo-card">
+                  <span>Descanso</span>
+                </div>
+                <div className="booking-photo-card">
+                  <span>Ambiente</span>
+                </div>
+              </>
+            )}
           </div>
 
           <article className="booking-detail-card">
             <h2>Caracteristicas</h2>
             <div className="booking-roomtype-meta">
-              <span>{detail.roomType.capacity} huespedes</span>
-              <span>{detail.roomType.bedConfiguration}</span>
-              <span>Codigo {detail.roomType.code}</span>
+              <span>{roomType.capacity} huespedes</span>
+              <span>{roomType.bedConfiguration}</span>
+              <span>Codigo {roomType.code}</span>
             </div>
             <div className="booking-feature-list">
               {featureNames.map((featureName) => (

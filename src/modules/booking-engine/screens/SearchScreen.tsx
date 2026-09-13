@@ -3,6 +3,7 @@ import { ArrowRight, CalendarDays, Check, UserRound } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { bookingService } from '@/services/bookingService';
 import { roomService } from '@/services/roomService';
+import { roomImages } from '../data/roomImages';
 import { DatePickerRange, type DateRangeValue } from '@/shared/components/DatePickerRange';
 import { EmptyState } from '@/shared/components/EmptyState';
 import { ErrorState } from '@/shared/components/ErrorState';
@@ -401,12 +402,24 @@ export function SearchScreen() {
                 .slice(0, 2);
               const cardFeatures =
                 featureNames.length > 0 ? featureNames : [roomType.bedConfiguration];
+              const roomImage = roomImages[roomType.id]?.[0];
 
               return (
                 <article className="visitor-room" key={roomType.id}>
                   <div
                     className={`room-visual booking-room-visual booking-room-visual-${index % 3}`}
                   >
+                    {roomImage ? (
+                      <img
+                        className="booking-room-card-image"
+                        src={roomImage.src}
+                        alt={roomImage.alt}
+                        loading="lazy"
+                        onError={(event) => {
+                          event.currentTarget.hidden = true;
+                        }}
+                      />
+                    ) : null}
                     <span className="room-tag">
                       {availableRooms !== undefined
                         ? `${availableRooms} disponibles`
