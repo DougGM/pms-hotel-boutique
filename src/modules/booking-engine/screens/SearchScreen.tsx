@@ -73,6 +73,10 @@ function isCompleteStayRange(range: DateRangeValue): range is { start: Date; end
   }
 }
 
+function isRoomSellableForStay(room: Room): boolean {
+  return room.status !== 'maintenance' && room.status !== 'outOfService';
+}
+
 function countAvailableRooms({
   roomTypeId,
   rooms,
@@ -84,8 +88,8 @@ function countAvailableRooms({
   bookings: Booking[];
   range: { start: Date; end: Date };
 }): number {
-  const assignableRooms = rooms.filter(
-    (room) => room.roomTypeId === roomTypeId && room.isAssignable,
+  const sellableRooms = rooms.filter(
+    (room) => room.roomTypeId === roomTypeId && isRoomSellableForStay(room),
   );
   const blockingBookings = bookings.filter(
     (booking) =>
@@ -97,7 +101,7 @@ function countAvailableRooms({
       ),
   );
 
-  return Math.max(0, assignableRooms.length - blockingBookings.length);
+  return Math.max(0, sellableRooms.length - blockingBookings.length);
 }
 
 function buildAvailableRoomTypes({

@@ -13,7 +13,9 @@ Cambios realizados:
 - Para no romper el layout compacto del prototipo Bolt, `SearchScreen` envuelve `DatePickerRange` en un selector
   desplegable propio del modulo: la barra muestra Entrada/Salida como campos compactos y el calendario aparece en popover.
 - La busqueda carga datos mediante `roomService.getRoomTypes()`, `roomService.getRooms()` y `bookingService.getBookings()`.
-- La disponibilidad se calcula por tipo de habitacion usando habitaciones asignables y reservas que se solapan con el rango elegido.
+- La disponibilidad se calcula por tipo de habitacion usando inventario vendible y reservas que se solapan con el rango elegido.
+- El calculo de disponibilidad por fechas no usa `room.isAssignable`, porque ese campo representa asignabilidad operativa actual;
+  ahora cuenta habitaciones vendibles del tipo y resta reservas solapadas del rango.
 - Cada resultado enlaza a `/rooms/:roomTypeId` preservando `checkIn` y `checkOut` en query string para WEB-21.
 - La pantalla cubre estado inicial, carga, error con reintento y busqueda sin resultados.
 - Las tarjetas publicas muestran caracteristicas reales desde `roomFeatureIds`/`roomService.getRoomFeatures()` en vez de
@@ -27,7 +29,7 @@ Verificacion:
 - `npm run lint`: OK.
 - `npm run build`: OK.
 - `npm run test`: OK.
-- `npm run check`: bloqueado en `format:check` por archivos preexistentes fuera de esta issue
+- 
   (`src/index.css`, `NEXT_CONTRIBUTOR.md`, archivos de `shared/types`, configs, etc.).
 
 ## WEB-21 / Issue #47 - RoomDetailScreen
