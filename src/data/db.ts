@@ -43,17 +43,27 @@ import type { UserDto } from '@/shared/types/entities/user';
 // Sesión de autenticación (WEB-06) — credenciales de demostración
 // ============================================================================
 //
-// Distinto de `user` (Lote D): esto es el rol de acceso al PMS
-// (ADMIN/RECEPTIONIST/MANAGER/STAFF), no el puesto de un empleado. Ver
+// Distinto de `user` (Lote D): esto es el rol de acceso/login de la app
+// (ADMIN/GUEST/RECEPTION/HOUSEKEEPING/CONCIERGE/ROOM_SERVICE), no el puesto de un empleado. Ver
 // `src/modules/auth/README.md` y `docs/CONTRATO-DATOS.md`.
 
 export const sessionAccountsDB: { user: SessionUserDTO; password: string }[] = [
   {
     user: {
-      id: 'user-1',
+      id: 'user-admin',
       email: 'admin@hotelboutique.test',
-      name: 'Ana Martínez',
+      name: 'Ana Martinez',
       role: 'ADMIN',
+      createdAt: '2026-01-10T12:00:00.000Z',
+    },
+    password: 'AuroraDemo2026!',
+  },
+  {
+    user: {
+      id: 'user-guest',
+      email: 'huesped@hotelboutique.test',
+      name: 'Carlos Mendez',
+      role: 'GUEST',
       createdAt: '2026-01-10T12:00:00.000Z',
     },
     password: 'AuroraDemo2026!',
@@ -62,34 +72,43 @@ export const sessionAccountsDB: { user: SessionUserDTO; password: string }[] = [
     user: {
       id: 'user-reception',
       email: 'recepcion@hotelboutique.test',
-      name: 'Luis Pérez',
-      role: 'RECEPTIONIST',
+      name: 'Luis Perez',
+      role: 'RECEPTION',
       createdAt: '2026-01-10T12:00:00.000Z',
     },
     password: 'AuroraDemo2026!',
   },
   {
     user: {
-      id: 'user-manager',
-      email: 'gerente@hotelboutique.test',
-      name: 'Sofía Castillo',
-      role: 'MANAGER',
+      id: 'user-housekeeping',
+      email: 'limpieza@hotelboutique.test',
+      name: 'Maria Lopez',
+      role: 'HOUSEKEEPING',
       createdAt: '2026-01-10T12:00:00.000Z',
     },
     password: 'AuroraDemo2026!',
   },
   {
     user: {
-      id: 'user-staff',
-      email: 'personal@hotelboutique.test',
-      name: 'María López',
-      role: 'STAFF',
+      id: 'user-concierge',
+      email: 'conserjeria@hotelboutique.test',
+      name: 'Sofia Castillo',
+      role: 'CONCIERGE',
+      createdAt: '2026-01-10T12:00:00.000Z',
+    },
+    password: 'AuroraDemo2026!',
+  },
+  {
+    user: {
+      id: 'user-room-service',
+      email: 'roomservice@hotelboutique.test',
+      name: 'Jorge Chavez',
+      role: 'ROOM_SERVICE',
       createdAt: '2026-01-10T12:00:00.000Z',
     },
     password: 'AuroraDemo2026!',
   },
 ];
-
 // ============================================================================
 // Lote B (WEB-10) — reservas, tarifas y clientes
 // ============================================================================
@@ -1057,7 +1076,7 @@ export const promotionsDB: PromotionDto[] = [
 // ============================================================================
 //
 // Construido sobre las reservas y huéspedes reales del Lote B (BKG-*/GST-*).
-// Los usuarios referenciados (USR-001 front_desk, USR-002 admin) se definen
+// Los usuarios referenciados (USR-001 reception, USR-002 admin) se definen
 // en la sección del Lote D, más abajo en este mismo archivo.
 
 export const guestAccountsDB: GuestAccountDto[] = [
@@ -1460,7 +1479,7 @@ export const usersDB: UserDto[] = [
     first_name: 'Marcos',
     last_name: 'Ruano',
     email: 'marcos.ruano@hotelboutique.test',
-    role: 'front_desk',
+    role: 'reception',
     status: 'active',
     created_at: LOT_D_T,
     updated_at: LOT_D_T,
@@ -1490,7 +1509,7 @@ export const usersDB: UserDto[] = [
     first_name: 'Rosa',
     last_name: 'Xicará',
     email: 'rosa.xicara@hotelboutique.test',
-    role: 'front_desk',
+    role: 'reception',
     status: 'active',
     created_at: LOT_D_T,
     updated_at: LOT_D_T,
@@ -1560,7 +1579,7 @@ export const usersDB: UserDto[] = [
     first_name: 'Sofía',
     last_name: 'Barillas',
     email: 'sofia.barillas@hotelboutique.test',
-    role: 'front_desk',
+    role: 'reception',
     status: 'inactive',
     created_at: '2026-07-01T00:00:00.000Z',
     updated_at: '2026-09-06T09:00:00.000Z',
@@ -1638,23 +1657,33 @@ export const rolesDB: RoleDto[] = [
     id: 'ROLE-001',
     code: 'admin',
     name: 'Administración',
-    permission_ids: ['PERM-001', 'PERM-002', 'PERM-003', 'PERM-004', 'PERM-008', 'PERM-009'],
+    permission_ids: [
+      'PERM-001',
+      'PERM-002',
+      'PERM-003',
+      'PERM-004',
+      'PERM-005',
+      'PERM-006',
+      'PERM-007',
+      'PERM-008',
+      'PERM-009',
+    ],
     active: true,
     created_at: LOT_D_T,
     updated_at: LOT_D_T,
   },
   {
     id: 'ROLE-002',
-    code: 'manager',
-    name: 'Gerencia',
-    permission_ids: ['PERM-002', 'PERM-003', 'PERM-004', 'PERM-008', 'PERM-009'],
+    code: 'guest',
+    name: 'Huesped',
+    permission_ids: [],
     active: true,
     created_at: LOT_D_T,
     updated_at: LOT_D_T,
   },
   {
     id: 'ROLE-003',
-    code: 'front_desk',
+    code: 'reception',
     name: 'Recepción',
     permission_ids: ['PERM-003', 'PERM-004', 'PERM-009'],
     active: true,
@@ -1672,9 +1701,9 @@ export const rolesDB: RoleDto[] = [
   },
   {
     id: 'ROLE-005',
-    code: 'maintenance',
-    name: 'Mantenimiento',
-    permission_ids: ['PERM-009'],
+    code: 'concierge',
+    name: 'Conserjeria',
+    permission_ids: ['PERM-007', 'PERM-009'],
     active: true,
     created_at: LOT_D_T,
     updated_at: LOT_D_T,
@@ -1684,15 +1713,6 @@ export const rolesDB: RoleDto[] = [
     code: 'room_service',
     name: 'Room Service',
     permission_ids: ['PERM-006', 'PERM-009'],
-    active: true,
-    created_at: LOT_D_T,
-    updated_at: LOT_D_T,
-  },
-  {
-    id: 'ROLE-007',
-    code: 'concierge',
-    name: 'Conserjería',
-    permission_ids: ['PERM-007', 'PERM-009'],
     active: true,
     created_at: LOT_D_T,
     updated_at: LOT_D_T,

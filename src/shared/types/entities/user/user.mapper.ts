@@ -7,12 +7,7 @@ export const toDomain = (dto: UserDto): User => ({
   firstName: dto.first_name,
   lastName: dto.last_name,
   email: dto.email,
-  role:
-    dto.role === 'front_desk'
-      ? 'frontDesk'
-      : dto.role === 'room_service'
-        ? 'roomService'
-        : dto.role,
+  role: dto.role === 'room_service' ? 'roomService' : dto.role,
   status: dto.status,
   createdAt: toDomainDate(dto.created_at),
   updatedAt: toDomainDate(dto.updated_at),
@@ -23,12 +18,7 @@ export const toDTO = (model: User): UserDto => ({
   first_name: model.firstName,
   last_name: model.lastName,
   email: model.email,
-  role:
-    model.role === 'frontDesk'
-      ? 'front_desk'
-      : model.role === 'roomService'
-        ? 'room_service'
-        : model.role,
+  role: model.role === 'roomService' ? 'room_service' : model.role,
   status: model.status,
   created_at: toDtoDate(model.createdAt),
   updated_at: toDtoDate(model.updatedAt),

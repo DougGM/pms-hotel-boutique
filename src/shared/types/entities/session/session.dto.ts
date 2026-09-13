@@ -2,12 +2,9 @@ import type { ISODateString, UserRole } from '@/shared/types/common';
 
 /**
  * The authenticated user as the login/session response carries it: the PMS
- * access role (ADMIN/RECEPTIONIST/MANAGER/STAFF) that drives navigation and
- * permissions. Deliberately separate from the `User` entity in
- * `shared/types/entities/user/`, which models a staff-directory job role
- * (admin/manager/frontDesk/housekeeping/maintenance) for catalog screens —
- * a different concept that happens to share a name. Do not merge them; see
- * `src/modules/auth/README.md`.
+ * access role (ADMIN/GUEST/RECEPTION/HOUSEKEEPING/CONCIERGE/ROOM_SERVICE)
+ * that drives navigation and permissions. Keep it aligned with the `User`
+ * staff-directory role catalog in `shared/types/entities/user/`.
  */
 export interface SessionUserDTO {
   id: string;

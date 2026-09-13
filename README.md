@@ -102,16 +102,17 @@ correr por separado: `npm run test:auth`, `test:currency`, `test:date`,
 Abrir `/auth/login`. Todas las cuentas de prueba usan la contraseña pública
 `AuroraDemo2026!`. No utilizar credenciales reales.
 
-| Correo                       | Rol                        |
-| ---------------------------- | -------------------------- |
-| admin@hotelboutique.test     | Administración (ADMIN)     |
-| recepcion@hotelboutique.test | Recepción (RECEPTIONIST)   |
-| gerente@hotelboutique.test   | Gerencia (MANAGER)         |
-| personal@hotelboutique.test  | Personal operativo (STAFF) |
-
-La sesión dura ocho horas y se conserva al recargar. El menú depende del rol;
-abrir directamente una sección ajena muestra acceso restringido. «Cerrar
-sesión» elimina la persistencia y sincroniza el cierre con otras pestañas.
+| Correo                                                                        | Rol                         |
+| ----------------------------------------------------------------------------- | --------------------------- |
+| admin@hotelboutique.test                                                      | Administracion (ADMIN)      |
+| huesped@hotelboutique.test                                                    | Huesped (GUEST)             |
+| recepcion@hotelboutique.test                                                  | Recepcion (RECEPTION)       |
+| limpieza@hotelboutique.test                                                   | Limpieza (HOUSEKEEPING)     |
+| conserjeria@hotelboutique.test                                                | Conserjeria (CONCIERGE)     |
+| roomservice@hotelboutique.test                                                | Room Service (ROOM_SERVICE) |
+| La sesión dura ocho horas y se conserva al recargar. El menú depende del rol; |
+| abrir directamente una sección ajena muestra acceso restringido. «Cerrar      |
+| sesión» elimina la persistencia y sincroniza el cierre con otras pestañas.    |
 
 La autenticación es simulada y no protege datos de producción. Consume el
 servicio compartido `services/authService.ts` y los tipos `SessionUser`/

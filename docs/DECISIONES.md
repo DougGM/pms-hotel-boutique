@@ -371,6 +371,67 @@ mismo procedimiento, mismo dueño.
 Ver también `docs/ronda-1-scaffold.md` para la tabla completa de rutas y
 permisos.
 
+## D-007 � Seguimiento de #18/#24: roles finales de login
+
+**Fecha:** 2026-09-12 � **Estado:** aceptada e implementada en la capa de sesion.
+
+### Contexto
+
+Durante la revision posterior a los merges de Ronda 1 se detecto que `#18`
+(WEB-06, shell de autenticacion y guardas por rol) y `#24` (WEB-12, datos mock
+de roles/permisos) cerraron la base tecnica, pero dejaron una brecha: los roles
+de sesion seguian siendo genericos (`ADMIN`, `RECEPTIONIST`, `MANAGER`,
+`STAFF`) mientras producto necesitaba roles funcionales para probar accesos por
+area.
+
+Eso hacia dificil probar de forma directa los accesos de huesped, recepcion,
+limpieza, conserjeria y room service desde el login general.
+
+### Decision
+
+La capa de sesion/login cambia a estos roles funcionales:
+
+- `ADMIN`
+- `GUEST`
+- `RECEPTION`
+- `HOUSEKEEPING`
+- `CONCIERGE`
+- `ROOM_SERVICE`
+
+Se agregan cuentas mock para cada rol en `sessionAccountsDB` y se actualiza la
+matriz de permisos en `modules/auth/models/session.ts`.
+
+El catalogo operativo (`user.role`, `rolesDB`) tambien queda alineado a los
+mismos roles en formato de datos:
+
+- `admin`
+- `guest`
+- `reception`
+- `housekeeping`
+- `concierge`
+- `room_service`
+
+`permissionsDB` conserva sus llaves porque modelan acciones, no nombres de
+roles. `usersDB` sigue representando personal operativo; no necesita crear un
+registro de huesped solo por existir el rol `guest`.
+
+### Que NO hacer
+
+- No volver a usar `MANAGER`/`STAFF` como roles de sesion.
+- No volver a usar `manager`/`front_desk`/`maintenance` como roles de usuario
+  operativo.
+- No mezclar `HOUSEKEEPING` con `CONCIERGE`: limpieza y conserjeria son flujos
+  distintos.
+- No asumir que `GUEST` ya tiene portal completo; por ahora solo existe la
+  cuenta/rol de sesion y el portal queda pendiente.
+- No cambiar roles sin actualizar permisos, mocks, navegacion, tests y docs en
+  el mismo cambio.
+
+### Seguimiento
+
+Si se agrega un rol nuevo, debe entrar en `common.ts`, `session.ts`,
+`UserRoleDto`, `rolesDB`, tests de contrato/integridad y documentacion del
+mismo PR.
 ## Cómo agregar una nueva decisión
 
 Copiar la estructura de D-001: **Contexto** (qué problema había y qué
