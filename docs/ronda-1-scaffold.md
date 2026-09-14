@@ -18,6 +18,14 @@ activas sin habitación asignada. `#52`
 campos requeridos y crea reservas vía `bookingService.createBooking`. Con esas
 dos sub-tareas queda cubierto el padre `#50`.
 
+**Actualización WEB-29 (2026-09-13):** `GuestAccountScreen` dejó de ser stub.
+Carga la cuenta por `GACC-*` y sus cargos por `booking_id`, muestra el desglose
+con saldo y estado, y permite registrar consumos mediante
+`guestAccountService.createCharge`. El formulario valida concepto y monto
+positivo en GTQ, conserva estados de carga/error y actualiza el saldo visible
+después de una creación exitosa. La pantalla reutiliza los componentes de
+presentación y patrones Bolt existentes; no agrega un sistema visual nuevo.
+
 ## 1. Reglas de la ronda
 
 1. **`src/app/routes.ts` y `src/app/router.tsx` quedan congelados.** Quien
