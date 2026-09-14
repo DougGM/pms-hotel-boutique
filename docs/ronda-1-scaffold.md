@@ -25,6 +25,23 @@ con saldo y estado, y permite registrar consumos mediante
 positivo en GTQ, conserva estados de carga/error y actualiza el saldo visible
 después de una creación exitosa. La pantalla reutiliza los componentes de
 presentación y patrones Bolt existentes; no agrega un sistema visual nuevo.
+**Actualización posterior (#54, WEB-28, rama `fix/web-28-check-in`):** el
+módulo `front-desk` deja de ser stub en `CheckInScreen.tsx`. Carga la reserva
+(`bookingService.getBookingById`) y al huésped asociado
+(`guestService.getGuestById`), permite asignar una habitación entre las que
+`isRoomAssignable()` considera asignables (`bookingService.assignRoom`) y
+habilita "Completar check-in" solo cuando la reserva tiene habitación
+asignada y su estado admite la transición a `checkedIn` según
+`BOOKING_STATUS_TRANSITIONS`; si no la admite, la pantalla lo explica en vez
+de fallar en silencio. Al completar el check-in
+(`bookingService.checkIn`) redirige a `/pms/accounts/:accountId` usando
+`guestAccountService.getAccountByBookingId`. El formulario de documento de
+identificación y acompañantes queda como captura local de recepción: no hay
+todavía un campo de contrato (DTO/Model) para acompañantes ni un método de
+servicio para persistir el documento del huésped desde esta pantalla —
+persistirlo es trabajo de un ticket aparte que agregue esos campos/métodos,
+no algo que este lote de front-desk pueda resolver tocando `shared/` o
+`services/` por su cuenta.
 
 ## 1. Reglas de la ronda
 
