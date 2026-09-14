@@ -18,6 +18,14 @@ activas sin habitación asignada. `#52`
 campos requeridos y crea reservas vía `bookingService.createBooking`. Con esas
 dos sub-tareas queda cubierto el padre `#50`.
 
+**Actualización WEB-30 / #56 (2026-09-13):** `CheckOutScreen` carga la reserva
+con `bookingService.getBookingById`, su cuenta y cargos con
+`guestAccountService`, y presenta el comprobante con `formatDateGT` y
+`formatCurrency`. El botón de salida consulta `BOOKING_STATUS_TRANSITIONS` y
+solo permite ejecutar `bookingService.checkOut` cuando la reserva está en
+`checkedIn`; los estados loading, error con reintento, listo y confirmado
+quedan reflejados en pantalla.
+
 ## 1. Reglas de la ronda
 
 1. **`src/app/routes.ts` y `src/app/router.tsx` quedan congelados.** Quien
