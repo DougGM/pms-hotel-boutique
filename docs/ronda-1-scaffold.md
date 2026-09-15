@@ -18,6 +18,15 @@ activas sin habitación asignada. `#52`
 campos requeridos y crea reservas vía `bookingService.createBooking`. Con esas
 dos sub-tareas queda cubierto el padre `#50`.
 
+
+**Actualización WEB-30 / #56 (2026-09-13):** `CheckOutScreen` carga la reserva
+con `bookingService.getBookingById`, su cuenta y cargos con
+`guestAccountService`, y presenta el comprobante con `formatDateGT` y
+`formatCurrency`. El botón de salida consulta `BOOKING_STATUS_TRANSITIONS` y
+solo permite ejecutar `bookingService.checkOut` cuando la reserva está en
+`checkedIn`; los estados loading, error con reintento, listo y confirmado
+quedan reflejados en pantalla.
+
 **Actualización WEB-29 (2026-09-13):** `GuestAccountScreen` dejó de ser stub.
 Carga la cuenta por `GACC-*` y sus cargos por `booking_id`, muestra el desglose
 con saldo y estado, y permite registrar consumos mediante
@@ -42,6 +51,7 @@ servicio para persistir el documento del huésped desde esta pantalla —
 persistirlo es trabajo de un ticket aparte que agregue esos campos/métodos,
 no algo que este lote de front-desk pueda resolver tocando `shared/` o
 `services/` por su cuenta.
+
 
 ## 1. Reglas de la ronda
 
