@@ -96,6 +96,19 @@ export function RoomTypeListScreen() {
       ),
       sortValue: ({ roomType }) => (roomType.active ? 1 : 0),
     },
+    {
+      id: 'actions',
+      header: 'Acciones',
+      cell: ({ roomType }) => (
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() => navigate(routePaths.pms.roomTypeEdit.replace(':roomTypeId', roomType.id))}
+        >
+          Editar
+        </Button>
+      ),
+    },
   ];
 
   return (
