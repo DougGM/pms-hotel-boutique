@@ -3,6 +3,7 @@ import {
   type Booking,
   type BookingDto,
   type CreateBookingDto,
+  type UpdateBookingDto,
 } from '@/shared/types/entities/booking';
 import { BOOKING_STATUS_TRANSITIONS, isRoomAssignable } from '@/shared/constants/statuses';
 import { toDomainCalendarDate, type ID } from '@/shared/types/common';
@@ -91,6 +92,47 @@ export const bookingService = {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible hacer check-out.');
     return transitionBooking(assertBookingExists(bookingId), 'checkedOut');
+  },
+  async updateBooking(id: ID, data: UpdateBookingDto): Promise<Booking> {
+    await simulateLatency();
+    mockUtils.throwIfSimulatingError('No fue posible actualizar la reserva.');
+
+    const booking = assertBookingExists(id);
+    Object.assign(booking, data);
+
+    if (data.rate_id !== undefined || data.check_in !== undefined || data.check_out !== undefined) {
+      const rate = booking.rate_id
+        ? ratesDB.find((item) => item.id === booking.rate_id)
+        : undefined;
+      booking.total_amount_cents = rate
+        ? rate.price_cents *
+          calculateNights(
+            toDomainCalendarDate(booking.check_in),
+            toDomainCalendarDate(booking.check_out),
+          )
+        : booking.total_amount_cents;
+    }
+
+    booking.updated_at = new Date().toISOString();
+    return toBooking(booking);
+  },
+  async confirmBooking(bookingId: ID): Promise<Booking> {
+    await simulateLatency();
+    mockUtils.throwIfSimulatingError('No fue posible confirmar la reserva.');
+    return transitionBooking(assertBookingExists(bookingId), 'confirmed');
+  },
+  async cancelBooking(bookingId: ID, reason: string): Promise<Booking> {
+    await simulateLatency();
+    mockUtils.throwIfSimulatingError('No fue posible cancelar la reserva.');
+
+    if (!reason.trim()) throw new Error('Se requiere un motivo para cancelar la reserva.');
+
+    const booking = assertBookingExists(bookingId);
+    transitionBooking(booking, 'cancelled');
+    booking.notes = booking.notes
+      ? `${booking.notes}\nCancelada: ${reason.trim()}`
+      : `Cancelada: ${reason.trim()}`;
+    return toBooking(booking);
   },
   async assignRoom(bookingId: ID, roomId: ID): Promise<Booking> {
     await simulateLatency();

@@ -41,3 +41,5 @@ export interface CreateBookingDto {
   children: number;
   notes?: string;
 }
+
+export type UpdateBookingDto = Partial<CreateBookingDto>;
