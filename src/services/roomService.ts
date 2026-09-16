@@ -7,13 +7,23 @@ import {
 } from '@/shared/types/entities/room';
 import { toDomain as toRate, type Rate } from '@/shared/types/entities/rate';
 import { toDomain as toRoomFeature, type RoomFeature } from '@/shared/types/entities/room-feature';
-import { toDomain as toRoomType, type RoomType } from '@/shared/types/entities/room-type';
+import {
+  toDomain as toRoomType,
+  type CreateRoomTypeDto,
+  type RoomType,
+  type RoomTypeDto,
+  type UpdateRoomTypeDto,
+} from '@/shared/types/entities/room-type';
 import type { ID } from '@/shared/types/common';
 import { ratesDB, roomFeaturesDB, roomTypesDB, roomsDB } from '@/data/db';
 import { mockUtils, simulateLatency } from './mockUtils';
 
 function createRoomId(): ID {
   return `RM-${String(roomsDB.length + 1).padStart(3, '0')}`;
+}
+
+function createRoomTypeId(): ID {
+  return `RT-${String(roomTypesDB.length + 1).padStart(2, '0')}`;
 }
 
 export const roomService = {
@@ -71,6 +81,42 @@ export const roomService = {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar los tipos de habitación.');
     return roomTypesDB.map(toRoomType);
+  },
+  async getRoomTypeById(id: ID): Promise<RoomType | undefined> {
+    await simulateLatency();
+    mockUtils.throwIfSimulatingError('No fue posible cargar el tipo de habitación.');
+    const roomType = roomTypesDB.find((item) => item.id === id);
+    return roomType ? toRoomType(roomType) : undefined;
+  },
+  async createRoomType(data: CreateRoomTypeDto): Promise<RoomType> {
+    await simulateLatency();
+    mockUtils.throwIfSimulatingError('No fue posible crear el tipo de habitación.');
+
+    const now = new Date().toISOString();
+    const roomType: RoomTypeDto = {
+      id: createRoomTypeId(),
+      code: data.code,
+      name: data.name,
+      description: data.description,
+      capacity: data.capacity,
+      bed_configuration: data.bed_configuration,
+      room_feature_ids: data.room_feature_ids,
+      active: data.active ?? true,
+      created_at: now,
+      updated_at: now,
+    };
+    roomTypesDB.push(roomType);
+    return toRoomType(roomType);
+  },
+  async updateRoomType(id: ID, data: UpdateRoomTypeDto): Promise<RoomType> {
+    await simulateLatency();
+    mockUtils.throwIfSimulatingError('No fue posible actualizar el tipo de habitación.');
+
+    const roomType = roomTypesDB.find((item) => item.id === id);
+    if (!roomType) throw new Error(`No existe el tipo de habitación ${id}.`);
+
+    Object.assign(roomType, data, { updated_at: new Date().toISOString() });
+    return toRoomType(roomType);
   },
 };
 export default roomService;

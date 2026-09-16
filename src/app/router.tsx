@@ -99,6 +99,14 @@ export const router = createBrowserRouter([
             ],
           },
           {
+            path: routePaths.pms.roomTypeEdit,
+            element: <RequirePermission permission="rooms:manage" />,
+            children: [
+              { index: true, element: <RoomTypeFormScreen /> },
+              { path: routePaths.pms.notFound, element: <PrivateNotFoundPage /> },
+            ],
+          },
+          {
             path: routePaths.pms.occupancy,
             element: <RequirePermission permission="occupancy:view" />,
             children: [

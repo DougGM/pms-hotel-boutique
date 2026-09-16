@@ -31,6 +31,7 @@ export const routePaths = {
     roomEdit: '/pms/rooms/:roomId/edit',
     roomTypes: '/pms/room-types',
     roomTypeNew: '/pms/room-types/new',
+    roomTypeEdit: '/pms/room-types/:roomTypeId/edit',
     occupancy: '/pms/occupancy',
     manualBookingNew: '/pms/bookings/new',
     checkIn: '/pms/check-in/:bookingId',
