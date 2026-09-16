@@ -272,6 +272,53 @@ test('bookingService.checkIn/checkOut: validan transiciones con BOOKING_STATUS_T
   );
 });
 
+test('ciclo completo de una reserva nueva: crear, confirmar, check-in abre la cuenta del huésped', async () => {
+  const booking = await assertServiceCall('bookingService.createBooking', () =>
+    bookingService.createBooking({
+      guest_id: 'GST-001',
+      room_type_id: 'RT-01',
+      check_in: '2026-11-01',
+      check_out: '2026-11-03',
+      adults: 1,
+      children: 0,
+    }),
+  );
+  assert.equal(booking.status, 'pending');
+
+  const noAccountYet = await guestAccountService.getAccountByBookingId(booking.id);
+  assert.equal(noAccountYet, undefined, 'una reserva pending todavía no debe tener cuenta');
+
+  const confirmed = await assertServiceCall('bookingService.confirmBooking', () =>
+    bookingService.confirmBooking(booking.id),
+  );
+  assert.equal(confirmed.status, 'confirmed');
+
+  const checkedIn = await assertServiceCall('bookingService.checkIn', () =>
+    bookingService.checkIn(booking.id),
+  );
+  assert.equal(checkedIn.status, 'checkedIn');
+
+  const account = await guestAccountService.getAccountByBookingId(booking.id);
+  assert.ok(account, 'el check-in debe crear la cuenta del huésped si no existía');
+  assert.equal(account.status, 'open');
+  assert.equal(account.balanceCents, 0, 'la cuenta nueva nace con saldo cero');
+
+  await assert.rejects(
+    () => bookingService.checkIn(booking.id),
+    /Transición inválida de reserva/,
+    'un segundo check-in sobre una reserva ya checkedIn debe rechazar, no duplicar la cuenta',
+  );
+
+  const accountsForBooking = (await guestAccountService.getAccounts()).filter(
+    (item) => item.bookingId === booking.id,
+  );
+  assert.equal(
+    accountsForBooking.length,
+    1,
+    'no debe crear una segunda cuenta para la misma reserva',
+  );
+});
+
 test('bookingService.assignRoom: asigna solo habitaciones asignables con isRoomAssignable', async () => {
   const booking = await assertServiceCall('bookingService.assignRoom', () =>
     bookingService.assignRoom('BKG-008', 'RM-403'),
