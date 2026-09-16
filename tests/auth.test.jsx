@@ -96,12 +96,12 @@ test('wrong credentials show an error, retry succeeds, and intended URL is resto
 test('each staff role only sees its menu and direct unauthorized URLs are blocked', async () => {
   await open('/login');
   const roles = [
-    ['recepcion', 'Recepción', '/pms/users', 2],
+    ['recepcion', 'Recepción', '/pms/users', 3],
     ['limpieza', 'Limpieza', '/pms/cash', 2],
     ['conserjeria', 'Conserjería', '/pms/housekeeping', 2],
     ['roomservice', 'Room Service', '/pms/concierge', 2],
     ['huesped', 'Panel operativo', '/pms/reception', 1],
-    ['admin', 'Usuarios', null, 7],
+    ['admin', 'Usuarios', null, 10],
   ];
   for (const [account, section, forbidden, count] of roles) {
     await login(`${account}@hotelboutique.test`);
