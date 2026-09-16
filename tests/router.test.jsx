@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import { matchRoutes } from 'react-router-dom';
 import { router as configuredRouter } from '@/app/router';
 import { ModuleHomePage } from '@/private/pages/ModuleHomePage';
+import { PrivateNotFoundPage } from '@/private/pages/PrivateNotFoundPage';
 import { RoomListScreen } from '@/modules/rooms/screens/RoomListScreen';
 import { RoomTypeListScreen } from '@/modules/rooms/screens/RoomTypeListScreen';
 import { OccupancyScreen } from '@/modules/occupancy/screens/OccupancyScreen';
@@ -61,10 +62,21 @@ test('rooms, tipos de habitación, ocupación y recepción resuelven a su pantal
   assert.equal(leafElementType('/pms/reception'), ReceptionScreen);
 });
 
-test('los módulos sin pantalla propia todavía siguen mostrando el placeholder', () => {
-  assert.equal(leafElementType('/pms/housekeeping'), ModuleHomePage);
-  assert.equal(leafElementType('/pms/room-service'), ModuleHomePage);
-  assert.equal(leafElementType('/pms/concierge'), ModuleHomePage);
+test('los módulos web de Ronda 1 sin pantalla propia todavía siguen mostrando el placeholder', () => {
   assert.equal(leafElementType('/pms/cash'), ModuleHomePage);
   assert.equal(leafElementType('/pms/users'), ModuleHomePage);
+});
+
+/**
+ * Limpieza, Room Service y Conserjería no tienen experiencia web: viven en
+ * pms-hotel-mobile (docs/DECISIONES.md, D-008). Sus rutas siguen definidas
+ * en routes.ts pero ya no están cableadas en router.tsx (privateNavigation
+ * ya no las lista, y placeholderPmsRoutes se deriva de privateNavigation),
+ * así que caen al catch-all privado en vez de mostrar un placeholder web
+ * que nadie va a construir.
+ */
+test('limpieza, room service y conserjería no tienen ruta web propia', () => {
+  assert.equal(leafElementType('/pms/housekeeping'), PrivateNotFoundPage);
+  assert.equal(leafElementType('/pms/room-service'), PrivateNotFoundPage);
+  assert.equal(leafElementType('/pms/concierge'), PrivateNotFoundPage);
 });

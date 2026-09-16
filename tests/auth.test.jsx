@@ -96,12 +96,16 @@ test('wrong credentials show an error, retry succeeds, and intended URL is resto
 test('each staff role only sees its menu and direct unauthorized URLs are blocked', async () => {
   await open('/login');
   const roles = [
+    // limpieza/conserjeria/roomservice: Limpieza, Room Service y Conserjería
+    // se sacaron de privateNavigation (docs/DECISIONES.md, D-007) — esas
+    // experiencias viven en pms-hotel-mobile. Estos tres roles solo ven
+    // Panel operativo en la web, no es un fallo.
     ['recepcion', 'Recepción', '/pms/users', 3],
-    ['limpieza', 'Limpieza', '/pms/cash', 2],
-    ['conserjeria', 'Conserjería', '/pms/housekeeping', 2],
-    ['roomservice', 'Room Service', '/pms/concierge', 2],
+    ['limpieza', 'Panel operativo', '/pms/cash', 1],
+    ['conserjeria', 'Panel operativo', '/pms/cash', 1],
+    ['roomservice', 'Panel operativo', '/pms/users', 1],
     ['huesped', 'Panel operativo', '/pms/reception', 1],
-    ['admin', 'Usuarios', null, 10],
+    ['admin', 'Usuarios', null, 7],
   ];
   for (const [account, section, forbidden, count] of roles) {
     await login(`${account}@hotelboutique.test`);

@@ -371,9 +371,9 @@ mismo procedimiento, mismo dueño.
 Ver también `docs/ronda-1-scaffold.md` para la tabla completa de rutas y
 permisos.
 
-## D-007 � Seguimiento de #18/#24: roles finales de login
+## D-007 � Seguimiento de #18/#24: roles finales de login
 
-**Fecha:** 2026-09-12 � **Estado:** aceptada e implementada en la capa de sesion.
+**Fecha:** 2026-09-12 � **Estado:** aceptada e implementada en la capa de sesion.
 
 ### Contexto
 
@@ -432,6 +432,85 @@ registro de huesped solo por existir el rol `guest`.
 Si se agrega un rol nuevo, debe entrar en `common.ts`, `session.ts`,
 `UserRoleDto`, `rolesDB`, tests de contrato/integridad y documentacion del
 mismo PR.
+
+## D-008 · Limpieza, Room Service y Conserjería se sacan del menú web: viven en pms-hotel-mobile
+
+**Fecha:** 2026-09-15 · **Estado:** aceptada e implementada.
+
+### Contexto
+
+`privateNavigation` tenía diez entradas, incluidas Limpieza
+(`housekeeping:view`), Room Service (`room-service:view`) y Conserjería
+(`concierge:view`). Las tres apuntaban al placeholder genérico
+`ModuleHomePage`, sin ninguna pantalla real detrás. Probado en el
+navegador: un usuario con rol HOUSEKEEPING/CONCIERGE/ROOM_SERVICE entra a
+su único módulo visible y encuentra "Las funciones de esta sección
+estarán disponibles próximamente" — no porque falte construir la
+pantalla en esta Ronda, sino porque, según el plan del proyecto, la
+experiencia operativa de limpieza, room service y conserjería vive en
+`pms-hotel-mobile`, un repositorio aparte. La web nunca va a tener esas
+pantallas.
+
+### Decisión
+
+Se quitan las tres entradas de `privateNavigation`
+(`src/private/routes/navigation.ts`). Se dejan intactos:
+
+- Sus rutas: `routePaths.pms.housekeeping`/`roomService`/`concierge` en
+  `routes.ts` (congelado por D-006).
+- Sus permisos: `housekeeping:view`/`room-service:view`/`concierge:view`
+  en la unión `Permission` y en `rolePermissions` de `session.ts`
+  (también congelado por D-006).
+
+`router.tsx` deriva el placeholder de cada módulo directamente de
+`privateNavigation` (mecanismo introducido al arreglar el bug de rutas
+duplicadas de esta misma rama): quitar la entrada del menú también
+retira automáticamente su ruta, sin tocar `router.tsx` a mano. Si algún
+día se decide que alguno de estos roles necesita respaldo web, reactivar
+es agregar de nuevo la entrada a `privateNavigation` — nada más, ni
+`routes.ts`, ni `session.ts`, ni `router.tsx` cambian.
+
+Caja (`cash:view`) y Usuarios (`users:view`) **no se tocan**: son
+pantallas web propias de la Ronda 1 (lotes C y D) que sus responsables
+todavía no construyen. Siguen en el menú mostrando el mismo placeholder.
+
+### Consecuencias
+
+- **Gana**: el menú web deja de anunciar tres módulos que nunca se van a
+  construir ahí. ADMIN pasa de 10 a 7 entradas; HOUSEKEEPING, CONCIERGE y
+  ROOM_SERVICE ven solo Panel operativo, que es exactamente lo que la web
+  les ofrece hoy.
+- **Cuesta**: ninguna directa — las historias de usuario de esos tres
+  módulos no se resuelven con este cambio, solo se deja de fingir que la
+  web las cubre.
+- **A quién afecta**: a quien planifique `pms-hotel-mobile`, que hereda
+  las 32 historias de usuario de limpieza, room service y conserjería
+  completas, sin ningún respaldo web parcial que las reemplace.
+
+### Qué NO hacer
+
+- **No volver a agregar Limpieza, Room Service o Conserjería al menú
+  web** sin decidir antes, como equipo, si alguno de esos roles necesita
+  respaldo web — son 32 historias de usuario sin dueño hoy, y agregarlas
+  de nuevo sin esa decisión repite el problema que motivó este ADR.
+- **No aplicar el mismo criterio a Caja o Usuarios** — son pantallas web
+  de la Ronda 1, no de mobile; quedan como placeholder hasta que sus
+  responsables las construyan.
+- **No borrar** `routePaths.pms.housekeeping`/`roomService`/`concierge`
+  de `routes.ts` ni los permisos correspondientes de `session.ts` — son
+  el contrato válido si se decide respaldo web más adelante, y borrarlos
+  obligaría a rehacerlos desde cero.
+
+### Alternativas consideradas
+
+1. **Dejar las tres entradas apuntando al placeholder** — descartada: el
+   propietario del repositorio las probó en el navegador y confirmó que
+   no llevan a ninguna experiencia real, ni la van a tener en esta web.
+2. **Borrar también las rutas y los permisos de `routes.ts`/`session.ts`**
+   — descartada: son parte del contrato compartido con mobile y están
+   congelados por D-006; borrarlos ahora obligaría a rehacerlos por
+   completo si algún día se decide dar respaldo web a alguno de los tres.
+
 ## Cómo agregar una nueva decisión
 
 Copiar la estructura de D-001: **Contexto** (qué problema había y qué
