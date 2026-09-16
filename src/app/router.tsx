@@ -22,6 +22,7 @@ import { RoomTypeFormScreen } from '@/modules/rooms/screens/RoomTypeFormScreen';
 import { OccupancyScreen } from '@/modules/occupancy/screens/OccupancyScreen';
 import { ManualBookingScreen } from '@/modules/occupancy/screens/ManualBookingScreen';
 import { BookingDetailScreen } from '@/modules/occupancy/screens/BookingDetailScreen';
+import { ReceptionScreen } from '@/modules/front-desk/screens/ReceptionScreen';
 import { CheckInScreen } from '@/modules/front-desk/screens/CheckInScreen';
 import { GuestAccountScreen } from '@/modules/front-desk/screens/GuestAccountScreen';
 import { CheckOutScreen } from '@/modules/front-desk/screens/CheckOutScreen';
@@ -35,6 +36,14 @@ import { CheckOutScreen } from '@/modules/front-desk/screens/CheckOutScreen';
  * ver docs/DECISIONES.md).
  */
 const dedicatedPmsRoutes = [
+  {
+    path: routePaths.pms.reception,
+    element: <RequirePermission permission="reception:view" />,
+    children: [
+      { index: true, element: <ReceptionScreen /> },
+      { path: routePaths.pms.notFound, element: <PrivateNotFoundPage /> },
+    ],
+  },
   {
     path: routePaths.pms.rooms,
     element: <RequirePermission permission="rooms:manage" />,
