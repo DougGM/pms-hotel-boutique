@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
+import { routePaths } from '@/app/routes';
 import { Badge } from '@/shared/components/Badge';
 import { DataTable, type DataTableColumn } from '@/shared/components/DataTable';
 import { ErrorState } from '@/shared/components/ErrorState';
@@ -25,6 +26,7 @@ function amountToCents(value: string) {
 }
 
 export function GuestAccountScreen() {
+  const navigate = useNavigate();
   const { accountId } = useParams<'accountId'>();
   const [account, setAccount] = useState<GuestAccount | null>(null);
   const [charges, setCharges] = useState<Charge[]>([]);
@@ -183,6 +185,15 @@ export function GuestAccountScreen() {
           <p className="muted">Reserva {account.bookingId}</p>
         </div>
         <div className="welcome-actions">
+          <button
+            className="button secondary"
+            type="button"
+            onClick={() =>
+              navigate(routePaths.pms.checkOut.replace(':bookingId', account.bookingId))
+            }
+          >
+            Ir a check-out
+          </button>
           <button
             className="button primary"
             type="button"

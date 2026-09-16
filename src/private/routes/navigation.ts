@@ -9,6 +9,9 @@ export const privateNavigation: { label: string; path: string; permission: Permi
   { label: 'Conserjería', path: routePaths.pms.concierge, permission: 'concierge:view' },
   { label: 'Caja', path: routePaths.pms.cash, permission: 'cash:view' },
   { label: 'Usuarios', path: routePaths.pms.users, permission: 'users:view' },
+  { label: 'Habitaciones', path: routePaths.pms.rooms, permission: 'rooms:manage' },
+  { label: 'Tipos de habitación', path: routePaths.pms.roomTypes, permission: 'rooms:manage' },
+  { label: 'Ocupación', path: routePaths.pms.occupancy, permission: 'occupancy:view' },
 ];
 
 export function getNavigation(session: Session | null) {
