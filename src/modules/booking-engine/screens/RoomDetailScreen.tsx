@@ -132,7 +132,7 @@ export function RoomDetailScreen() {
   if (status === 'loading') {
     return (
       <section className="content booking-detail-page">
-        <LoadingState label="Cargando detalle de habitacion..." />
+        <LoadingState label="Cargando detalle de habitación..." />
       </section>
     );
   }
@@ -149,8 +149,8 @@ export function RoomDetailScreen() {
     return (
       <section className="content booking-detail-page">
         <EmptyState
-          title="Habitacion no encontrada"
-          description="El tipo de habitacion solicitado no existe o no esta disponible."
+          title="Habitación no encontrada"
+          description="El tipo de habitación solicitado no existe o no está disponible."
           action={
             <Link className="ui-action" to="/">
               Buscar disponibilidad
@@ -175,7 +175,7 @@ export function RoomDetailScreen() {
     <section className="content booking-detail-page">
       <div className="booking-detail-heading">
         <div>
-          <p className="eyebrow">Detalle de habitacion</p>
+          <p className="eyebrow">Detalle de habitación</p>
           <h1>{detail.roomType.name}</h1>
           <p>{detail.roomType.description}</p>
         </div>
@@ -186,7 +186,7 @@ export function RoomDetailScreen() {
 
       <div className="booking-detail-layout">
         <div className="booking-detail-main">
-          <div className="booking-photo-grid" aria-label="Fotografias de la habitacion">
+          <div className="booking-photo-grid" aria-label="Fotografías de la habitación">
             <div className="booking-photo-card">
               <span>{detail.roomType.name}</span>
             </div>
@@ -199,11 +199,11 @@ export function RoomDetailScreen() {
           </div>
 
           <article className="booking-detail-card">
-            <h2>Caracteristicas</h2>
+            <h2>Características</h2>
             <div className="booking-roomtype-meta">
-              <span>{detail.roomType.capacity} huespedes</span>
+              <span>{detail.roomType.capacity} huéspedes</span>
               <span>{detail.roomType.bedConfiguration}</span>
-              <span>Codigo {detail.roomType.code}</span>
+              <span>Código {detail.roomType.code}</span>
             </div>
             <div className="booking-feature-list">
               {featureNames.map((featureName) => (
@@ -224,7 +224,7 @@ export function RoomDetailScreen() {
               <p className="booking-muted">por noche</p>
             </>
           ) : (
-            <p className="booking-muted">No hay tarifa activa para este tipo de habitacion.</p>
+            <p className="booking-muted">No hay tarifa activa para este tipo de habitación.</p>
           )}
 
           <div className="booking-rate-summary">

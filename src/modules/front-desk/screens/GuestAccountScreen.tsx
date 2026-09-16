@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
-import { useParams } from 'react-router-dom';
-import { Badge } from '@/shared/components/Badge';
+import { useNavigate, useParams } from 'react-router-dom';
+import { routePaths } from '@/app/routes';
+import { Badge, type BadgeTone } from '@/shared/components/Badge';
 import { DataTable, type DataTableColumn } from '@/shared/components/DataTable';
 import { ErrorState } from '@/shared/components/ErrorState';
 import { Input } from '@/shared/components/Input';
@@ -11,6 +12,18 @@ import type { Charge, GuestAccount } from '@/shared/types/entities';
 import { formatCurrency } from '@/shared/utils/currency';
 
 type FormErrors = { description?: string; amount?: string };
+
+const CHARGE_STATUS_LABELS: Record<Charge['status'], string> = {
+  pending: 'Pendiente',
+  posted: 'Aplicado',
+  voided: 'Anulado',
+};
+
+const CHARGE_STATUS_TONES: Record<Charge['status'], BadgeTone> = {
+  pending: 'warning',
+  posted: 'success',
+  voided: 'danger',
+};
 
 function formatDate(value: Date) {
   return new Intl.DateTimeFormat('es-GT', { dateStyle: 'medium', timeStyle: 'short' }).format(
@@ -25,6 +38,7 @@ function amountToCents(value: string) {
 }
 
 export function GuestAccountScreen() {
+  const navigate = useNavigate();
   const { accountId } = useParams<'accountId'>();
   const [account, setAccount] = useState<GuestAccount | null>(null);
   const [charges, setCharges] = useState<Charge[]>([]);
@@ -90,8 +104,8 @@ export function GuestAccountScreen() {
         id: 'status',
         header: 'Estado',
         cell: (charge) => (
-          <Badge tone={charge.status === 'posted' ? 'success' : 'warning'}>
-            {charge.status === 'posted' ? 'Aplicado' : charge.status}
+          <Badge tone={CHARGE_STATUS_TONES[charge.status]}>
+            {CHARGE_STATUS_LABELS[charge.status]}
           </Badge>
         ),
         sortValue: (charge) => charge.status,
@@ -183,6 +197,15 @@ export function GuestAccountScreen() {
           <p className="muted">Reserva {account.bookingId}</p>
         </div>
         <div className="welcome-actions">
+          <button
+            className="button secondary"
+            type="button"
+            onClick={() =>
+              navigate(routePaths.pms.checkOut.replace(':bookingId', account.bookingId))
+            }
+          >
+            Ir a check-out
+          </button>
           <button
             className="button primary"
             type="button"

@@ -16,3 +16,15 @@ export interface RoomTypeDto {
   created_at: string;
   updated_at: string;
 }
+
+export interface CreateRoomTypeDto {
+  code: string;
+  name: string;
+  description?: string;
+  capacity: number;
+  bed_configuration: string;
+  room_feature_ids: string[];
+  active?: boolean;
+}
+
+export type UpdateRoomTypeDto = Partial<CreateRoomTypeDto>;

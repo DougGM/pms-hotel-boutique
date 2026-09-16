@@ -86,3 +86,10 @@ export function calculateNights(checkIn: Date, checkOut: Date): number {
   assertOrderedStay(checkIn, checkOut);
   return (calendarDayUTC(checkOut) - calendarDayUTC(checkIn)) / MS_PER_DAY;
 }
+
+/** Whether two Dates fall on the same calendar day, ignoring time of day. */
+export function isSameCalendarDay(a: Date, b: Date): boolean {
+  assertValidDate(a, 'a');
+  assertValidDate(b, 'b');
+  return calendarDayUTC(a) === calendarDayUTC(b);
+}

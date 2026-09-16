@@ -6,6 +6,7 @@ import { BOOKING_STATUS_TRANSITIONS } from '@/shared/constants/statuses';
 import { DataTable, type DataTableColumn } from '@/shared/components/DataTable';
 import { ErrorState } from '@/shared/components/ErrorState';
 import { LoadingState } from '@/shared/components/LoadingState';
+import { Modal } from '@/shared/components/Modal';
 import type { Booking, Charge, GuestAccount } from '@/shared/types/entities';
 import { formatCurrency } from '@/shared/utils/currency';
 import { formatDateGT } from '@/shared/utils/date';
@@ -20,6 +21,7 @@ export function CheckOutScreen() {
   const [account, setAccount] = useState<GuestAccount | null>(null);
   const [charges, setCharges] = useState<Charge[]>([]);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
 
   const loadCheckOut = useCallback(async () => {
     if (!bookingId) {
@@ -85,6 +87,16 @@ export function CheckOutScreen() {
     [],
   );
 
+  function openConfirm() {
+    if (!canCheckOut || isCheckingOut) return;
+    setError(null);
+    setIsConfirmOpen(true);
+  }
+
+  function closeConfirm() {
+    if (!isCheckingOut) setIsConfirmOpen(false);
+  }
+
   async function handleCheckOut() {
     if (!booking || !canCheckOut || isCheckingOut) return;
 
@@ -94,6 +106,7 @@ export function CheckOutScreen() {
       const checkedOutBooking = await bookingService.checkOut(booking.id);
       setBooking(checkedOutBooking);
       setStatus('completed');
+      setIsConfirmOpen(false);
     } catch (cause: unknown) {
       setError(cause instanceof Error ? cause.message : 'No fue posible confirmar el check-out.');
     } finally {
@@ -140,7 +153,7 @@ export function CheckOutScreen() {
           <button
             className="button primary"
             type="button"
-            onClick={handleCheckOut}
+            onClick={openConfirm}
             disabled={!canCheckOut || isCheckingOut}
           >
             {isCheckingOut
@@ -259,6 +272,40 @@ export function CheckOutScreen() {
           emptyMessage="No hay cargos registrados para esta estadía."
         />
       </div>
+
+      <Modal open={isConfirmOpen} onClose={closeConfirm} title="Confirmar salida del huésped">
+        <p>
+          Vas a cerrar la estadía y la cuenta de la reserva {booking.confirmationCode}. Esta acción
+          no se puede deshacer.
+        </p>
+        <p>
+          <strong>Saldo a liquidar:</strong>{' '}
+          {formatCurrency(account.balanceCents, account.currency)}
+        </p>
+        {error && (
+          <div className="ui-state ui-state--error" role="alert">
+            <p className="ui-state__description">{error}</p>
+          </div>
+        )}
+        <div className="modal-foot">
+          <button
+            className="button secondary"
+            type="button"
+            onClick={closeConfirm}
+            disabled={isCheckingOut}
+          >
+            Cancelar
+          </button>
+          <button
+            className="button primary"
+            type="button"
+            onClick={handleCheckOut}
+            disabled={isCheckingOut}
+          >
+            {isCheckingOut ? 'Confirmando…' : 'Confirmar check-out'}
+          </button>
+        </div>
+      </Modal>
     </section>
   );
 }
