@@ -194,7 +194,16 @@ export function OccupancyScreen() {
       cell: ({ booking }) =>
         booking ? (
           <span>
-            {booking.confirmationCode} · {formatStayRange(booking.checkIn, booking.checkOut)}
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() =>
+                navigate(routePaths.pms.bookingDetail.replace(':bookingId', booking.id))
+              }
+            >
+              {booking.confirmationCode}
+            </Button>{' '}
+            · {formatStayRange(booking.checkIn, booking.checkOut)}
           </span>
         ) : (
           <span className="occupancy-muted">Sin reserva asignada</span>
@@ -283,7 +292,15 @@ export function OccupancyScreen() {
               <ul className="occupancy-list">
                 {view.unassignedBookings.map((booking) => (
                   <li key={booking.id}>
-                    <strong>{booking.confirmationCode}</strong>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() =>
+                        navigate(routePaths.pms.bookingDetail.replace(':bookingId', booking.id))
+                      }
+                    >
+                      {booking.confirmationCode}
+                    </Button>
                     <span>
                       {view.roomTypeById.get(booking.roomTypeId)?.name ?? booking.roomTypeId}
                     </span>

@@ -96,6 +96,36 @@
   font-size: var(--font-size-legacy-13);
 }
 
+.occupancy-detail {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: var(--space-5);
+  margin: 0;
+}
+
+.occupancy-detail dt {
+  margin: 0 0 var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.occupancy-detail dd {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-md);
+}
+
+.occupancy-detail-full {
+  grid-column: 1 / -1;
+}
+
+.occupancy-form-full {
+  grid-column: 1 / -1;
+}
+
 .occupancy-error {
   grid-column: 1 / -1;
   margin: 0;

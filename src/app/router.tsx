@@ -21,6 +21,7 @@ import { RoomTypeListScreen } from '@/modules/rooms/screens/RoomTypeListScreen';
 import { RoomTypeFormScreen } from '@/modules/rooms/screens/RoomTypeFormScreen';
 import { OccupancyScreen } from '@/modules/occupancy/screens/OccupancyScreen';
 import { ManualBookingScreen } from '@/modules/occupancy/screens/ManualBookingScreen';
+import { BookingDetailScreen } from '@/modules/occupancy/screens/BookingDetailScreen';
 import { CheckInScreen } from '@/modules/front-desk/screens/CheckInScreen';
 import { GuestAccountScreen } from '@/modules/front-desk/screens/GuestAccountScreen';
 import { CheckOutScreen } from '@/modules/front-desk/screens/CheckOutScreen';
@@ -119,6 +120,22 @@ export const router = createBrowserRouter([
             element: <RequirePermission permission="occupancy:view" />,
             children: [
               { index: true, element: <ManualBookingScreen /> },
+              { path: routePaths.pms.notFound, element: <PrivateNotFoundPage /> },
+            ],
+          },
+          {
+            path: routePaths.pms.bookingDetail,
+            element: <RequirePermission permission="occupancy:view" />,
+            children: [
+              { index: true, element: <BookingDetailScreen /> },
+              { path: routePaths.pms.notFound, element: <PrivateNotFoundPage /> },
+            ],
+          },
+          {
+            path: routePaths.pms.bookingEdit,
+            element: <RequirePermission permission="occupancy:view" />,
+            children: [
+              { index: true, element: <BookingDetailScreen /> },
               { path: routePaths.pms.notFound, element: <PrivateNotFoundPage /> },
             ],
           },
