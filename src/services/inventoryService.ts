@@ -34,5 +34,10 @@ export const inventoryService = {
       .filter((item) => item.inventory_item_id === itemId)
       .map(toInventoryMovement);
   },
+  async getMovements(): Promise<InventoryMovement[]> {
+    await simulateLatency();
+    mockUtils.throwIfSimulatingError('No fue posible cargar los movimientos.');
+    return inventoryMovementsDB.map(toInventoryMovement);
+  },
 };
 export default inventoryService;

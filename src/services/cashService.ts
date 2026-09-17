@@ -24,5 +24,10 @@ export const cashService = {
     mockUtils.throwIfSimulatingError('No fue posible cargar los movimientos de caja.');
     return cashMovementsDB.filter((item) => item.cash_session_id === sessionId).map(toCashMovement);
   },
+  async getMovements(): Promise<CashMovement[]> {
+    await simulateLatency();
+    mockUtils.throwIfSimulatingError('No fue posible cargar los movimientos de caja.');
+    return cashMovementsDB.map(toCashMovement);
+  },
 };
 export default cashService;
