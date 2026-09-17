@@ -1,8 +1,20 @@
 /* eslint-disable @typescript-eslint/no-unused-vars -- Migracion controlada del prototipo Bolt; se conserva la logica original para portarla incrementalmente. */
 import { useEffect, useState } from 'react';
 import {
-  ArrowRight, Ban, Check, ChevronDown, ClipboardList, Clock, DoorOpen,
-  FileText, Package, Plus, Search, ShieldCheck, Utensils, X,
+  ArrowRight,
+  Ban,
+  Check,
+  ChevronDown,
+  ClipboardList,
+  Clock,
+  DoorOpen,
+  FileText,
+  Package,
+  Plus,
+  Search,
+  ShieldCheck,
+  Utensils,
+  X,
 } from 'lucide-react';
 import type { OrderStatus, RoomServiceOrder } from '@/private/workspace/PrivateWorkspace';
 import { catalogService } from '@/services/catalogService';
@@ -14,11 +26,15 @@ import { LoadingState } from '@/shared/components/LoadingState';
 const money = (n: number) => `$${n.toLocaleString('es-MX')}`;
 
 const statusClass = (status: OrderStatus): string =>
-  status === 'Pendiente' ? 'warning'
-  : status === 'Aceptado' || status === 'En preparación' ? 'info'
-  : status === 'Listo' || status === 'En camino' ? 'gold'
-  : status === 'Entregado' ? 'success'
-  : 'terracotta';
+  status === 'Pendiente'
+    ? 'warning'
+    : status === 'Aceptado' || status === 'En preparación'
+      ? 'info'
+      : status === 'Listo' || status === 'En camino'
+        ? 'gold'
+        : status === 'Entregado'
+          ? 'success'
+          : 'terracotta';
 
 const orderTotal = (order: RoomServiceOrder) =>
   order.items.reduce((sum, item) => sum + item.quantity * item.price, 0);
@@ -32,7 +48,12 @@ const PRODUCT_CATEGORY_LABELS: Record<string, string> = {
   other: 'Otros',
 };
 
-type InventoryItem = { name: string; stock: number; unit: string; status: 'Disponible' | 'Bajo' | 'Agotado' };
+type InventoryItem = {
+  name: string;
+  stock: number;
+  unit: string;
+  status: 'Disponible' | 'Bajo' | 'Agotado';
+};
 
 const INVENTORY_UNIT_LABELS: Record<string, string> = {
   unit: 'piezas',
@@ -65,9 +86,20 @@ function getErrorMessage(cause: unknown): string {
 }
 
 export function RoomServiceContent({
-  nav, orders, selectedOrder, onSelectOrder, onCloseOrder,
-  onUpdateStatus, onUpdateNote, onReject, onCancel, onAction,
-  search, setSearch, filter, setFilter,
+  nav,
+  orders,
+  selectedOrder,
+  onSelectOrder,
+  onCloseOrder,
+  onUpdateStatus,
+  onUpdateNote,
+  onReject,
+  onCancel,
+  onAction,
+  search,
+  setSearch,
+  filter,
+  setFilter,
 }: {
   nav: string;
   orders: RoomServiceOrder[];
@@ -116,7 +148,8 @@ export function RoomServiceContent({
             name: item.name,
             stock: item.currentQuantity,
             unit: INVENTORY_UNIT_LABELS[item.unit] ?? item.unit,
-            status: item.currentQuantity === 0 ? 'Agotado' : item.isBelowMinimum ? 'Bajo' : 'Disponible',
+            status:
+              item.currentQuantity === 0 ? 'Agotado' : item.isBelowMinimum ? 'Bajo' : 'Disponible',
           }));
 
         if (active) setCatalog({ status: 'ready', menu, inventory });
@@ -134,24 +167,68 @@ export function RoomServiceContent({
   const menuItems = catalog.status === 'ready' ? catalog.menu : [];
   const inventoryItems = catalog.status === 'ready' ? catalog.inventory : [];
 
-  const activeOrders = orders.filter((o) => !['Entregado', 'Rechazado', 'Cancelado'].includes(o.status));
-  const completedOrders = orders.filter((o) => ['Entregado', 'Rechazado', 'Cancelado'].includes(o.status));
+  const activeOrders = orders.filter(
+    (o) => !['Entregado', 'Rechazado', 'Cancelado'].includes(o.status),
+  );
+  const completedOrders = orders.filter((o) =>
+    ['Entregado', 'Rechazado', 'Cancelado'].includes(o.status),
+  );
 
   const nextAction = (order: RoomServiceOrder) => {
     switch (order.status) {
       case 'Pendiente':
-        return <>
-          <button className="button small primary" onClick={() => onUpdateStatus(order.id, 'Aceptado')}>Aceptar pedido</button>
-          <button className="button small secondary" onClick={() => setRejectionOrderId(order.id)}>Rechazar</button>
-        </>;
+        return (
+          <>
+            <button
+              className="button small primary"
+              onClick={() => onUpdateStatus(order.id, 'Aceptado')}
+            >
+              Aceptar pedido
+            </button>
+            <button
+              className="button small secondary"
+              onClick={() => setRejectionOrderId(order.id)}
+            >
+              Rechazar
+            </button>
+          </>
+        );
       case 'Aceptado':
-        return <button className="button small primary" onClick={() => onUpdateStatus(order.id, 'En preparación')}>En preparación</button>;
+        return (
+          <button
+            className="button small primary"
+            onClick={() => onUpdateStatus(order.id, 'En preparación')}
+          >
+            En preparación
+          </button>
+        );
       case 'En preparación':
-        return <button className="button small primary" onClick={() => onUpdateStatus(order.id, 'Listo')}>Marcar listo</button>;
+        return (
+          <button
+            className="button small primary"
+            onClick={() => onUpdateStatus(order.id, 'Listo')}
+          >
+            Marcar listo
+          </button>
+        );
       case 'Listo':
-        return <button className="button small primary" onClick={() => onUpdateStatus(order.id, 'En camino')}>En camino</button>;
+        return (
+          <button
+            className="button small primary"
+            onClick={() => onUpdateStatus(order.id, 'En camino')}
+          >
+            En camino
+          </button>
+        );
       case 'En camino':
-        return <button className="button small primary" onClick={() => onUpdateStatus(order.id, 'Entregado')}>Entregado</button>;
+        return (
+          <button
+            className="button small primary"
+            onClick={() => onUpdateStatus(order.id, 'Entregado')}
+          >
+            Entregado
+          </button>
+        );
       default:
         return null;
     }
@@ -162,7 +239,9 @@ export function RoomServiceContent({
       <div className="rs-order-head">
         <div>
           <span className="rs-order-number">Pedido #{order.id}</span>
-          <h3>Habitación {order.room} · {order.guest}</h3>
+          <h3>
+            Habitación {order.room} · {order.guest}
+          </h3>
           <p>Recibido a las {order.time}</p>
         </div>
         <span className={`status-pill ${statusClass(order.status)}`}>{order.status}</span>
@@ -170,29 +249,50 @@ export function RoomServiceContent({
       <div className="rs-order-items">
         {order.items.map((item, i) => (
           <div key={i}>
-            <span><strong>{item.quantity}×</strong> {item.name}</span>
+            <span>
+              <strong>{item.quantity}×</strong> {item.name}
+            </span>
             <span>{money(item.quantity * item.price)}</span>
           </div>
         ))}
       </div>
       <div className="rs-order-foot">
         <strong>{money(orderTotal(order))}</strong>
-        {order.note && <span className="rs-note"><ClipboardList size={13} /> {order.note}</span>}
-        {order.rejectionReason && <span className="rs-note" style={{ background: '#f2d6cd', color: '#a9483c' }}><Ban size={13} /> {order.rejectionReason}</span>}
-        {order.charged && <span className="rs-charged"><Check size={13} /> Cargado a habitación</span>}
+        {order.note && (
+          <span className="rs-note">
+            <ClipboardList size={13} /> {order.note}
+          </span>
+        )}
+        {order.rejectionReason && (
+          <span className="rs-note" style={{ background: '#f2d6cd', color: '#a9483c' }}>
+            <Ban size={13} /> {order.rejectionReason}
+          </span>
+        )}
+        {order.charged && (
+          <span className="rs-charged">
+            <Check size={13} /> Cargado a habitación
+          </span>
+        )}
         <div className="rs-order-actions">
           {nextAction(order)}
           {!['Entregado', 'Rechazado', 'Cancelado'].includes(order.status) && (
-            <button className="button small secondary" onClick={() => setCancelOrderId(order.id)}>Cancelar</button>
+            <button className="button small secondary" onClick={() => setCancelOrderId(order.id)}>
+              Cancelar
+            </button>
           )}
-          <button className="button small secondary" onClick={() => onSelectOrder(order.id)}>Ver detalle</button>
+          <button className="button small secondary" onClick={() => onSelectOrder(order.id)}>
+            Ver detalle
+          </button>
         </div>
       </div>
     </article>
   );
 
   const filteredActive = activeOrders.filter((order) => {
-    const matchesSearch = `${order.id} ${order.room} ${order.guest} ${order.items.map((i) => i.name).join(' ')}`.toLowerCase().includes(search.toLowerCase());
+    const matchesSearch =
+      `${order.id} ${order.room} ${order.guest} ${order.items.map((i) => i.name).join(' ')}`
+        .toLowerCase()
+        .includes(search.toLowerCase());
     const matchesFilter = filter === 'Todos' || order.status === filter;
     return matchesSearch && matchesFilter;
   });
@@ -208,22 +308,61 @@ export function RoomServiceContent({
                 <h3>Pedidos activos</h3>
                 <p>Gestiona cada pedido desde su recepción hasta la entrega</p>
               </div>
-              <span className="rs-live"><i /> Actualizado ahora</span>
+              <span className="rs-live">
+                <i /> Actualizado ahora
+              </span>
             </div>
             <div className="toolbar">
               <div className="search-box">
                 <Search size={17} />
-                <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar pedido, habitación, huésped..." />
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Buscar pedido, habitación, huésped..."
+                />
               </div>
               <div className="filter-dropdown">
-                <button className="filter-button"><span>{filter}</span><ChevronDown size={15} /></button>
+                <button className="filter-button">
+                  <span>{filter}</span>
+                  <ChevronDown size={15} />
+                </button>
                 <div className="filter-menu">
-                  <button className={filter === 'Todos' ? 'active' : ''} onClick={() => setFilter('Todos')}>Todos</button>
-                  <button className={filter === 'Pendiente' ? 'active' : ''} onClick={() => setFilter('Pendiente')}>Pendientes</button>
-                  <button className={filter === 'Aceptado' ? 'active' : ''} onClick={() => setFilter('Aceptado')}>Aceptados</button>
-                  <button className={filter === 'En preparación' ? 'active' : ''} onClick={() => setFilter('En preparación')}>En preparación</button>
-                  <button className={filter === 'Listo' ? 'active' : ''} onClick={() => setFilter('Listo')}>Listos</button>
-                  <button className={filter === 'En camino' ? 'active' : ''} onClick={() => setFilter('En camino')}>En camino</button>
+                  <button
+                    className={filter === 'Todos' ? 'active' : ''}
+                    onClick={() => setFilter('Todos')}
+                  >
+                    Todos
+                  </button>
+                  <button
+                    className={filter === 'Pendiente' ? 'active' : ''}
+                    onClick={() => setFilter('Pendiente')}
+                  >
+                    Pendientes
+                  </button>
+                  <button
+                    className={filter === 'Aceptado' ? 'active' : ''}
+                    onClick={() => setFilter('Aceptado')}
+                  >
+                    Aceptados
+                  </button>
+                  <button
+                    className={filter === 'En preparación' ? 'active' : ''}
+                    onClick={() => setFilter('En preparación')}
+                  >
+                    En preparación
+                  </button>
+                  <button
+                    className={filter === 'Listo' ? 'active' : ''}
+                    onClick={() => setFilter('Listo')}
+                  >
+                    Listos
+                  </button>
+                  <button
+                    className={filter === 'En camino' ? 'active' : ''}
+                    onClick={() => setFilter('En camino')}
+                  >
+                    En camino
+                  </button>
                 </div>
               </div>
             </div>
@@ -234,16 +373,23 @@ export function RoomServiceContent({
               </div>
               <div>
                 <span className="status-pill info">En proceso</span>
-                <strong>{orders.filter((o) => ['Aceptado', 'En preparación'].includes(o.status)).length}</strong>
+                <strong>
+                  {orders.filter((o) => ['Aceptado', 'En preparación'].includes(o.status)).length}
+                </strong>
               </div>
               <div>
                 <span className="status-pill gold">Por entregar</span>
-                <strong>{orders.filter((o) => ['Listo', 'En camino'].includes(o.status)).length}</strong>
+                <strong>
+                  {orders.filter((o) => ['Listo', 'En camino'].includes(o.status)).length}
+                </strong>
               </div>
             </div>
             <div className="rs-order-list">
               {filteredActive.length === 0 ? (
-                <div className="hk-empty"><Package size={22} /><p>No hay pedidos activos</p></div>
+                <div className="hk-empty">
+                  <Package size={22} />
+                  <p>No hay pedidos activos</p>
+                </div>
               ) : (
                 filteredActive.map(renderOrder)
               )}
@@ -258,23 +404,49 @@ export function RoomServiceContent({
               <span className="avatar blue">DG</span>
             </div>
             <div className="rs-shift-card">
-              <div><span>Pedidos del turno</span><strong>{orders.length}</strong></div>
-              <div><span>Entregados</span><strong>{orders.filter((o) => o.status === 'Entregado').length}</strong></div>
-              <div><span>Rechazados</span><strong>{orders.filter((o) => o.status === 'Rechazado').length}</strong></div>
-              <div><span>Cancelados</span><strong>{orders.filter((o) => o.status === 'Cancelado').length}</strong></div>
+              <div>
+                <span>Pedidos del turno</span>
+                <strong>{orders.length}</strong>
+              </div>
+              <div>
+                <span>Entregados</span>
+                <strong>{orders.filter((o) => o.status === 'Entregado').length}</strong>
+              </div>
+              <div>
+                <span>Rechazados</span>
+                <strong>{orders.filter((o) => o.status === 'Rechazado').length}</strong>
+              </div>
+              <div>
+                <span>Cancelados</span>
+                <strong>{orders.filter((o) => o.status === 'Cancelado').length}</strong>
+              </div>
             </div>
             <div className="rs-legend">
               <strong>Flujo del pedido</strong>
-              <span><i className="warning" /> Pendiente de aceptación</span>
-              <span><i className="info" /> Aceptado o en preparación</span>
-              <span><i className="gold" /> Listo o en camino</span>
-              <span><i className="success" /> Entregado</span>
-              <span><i className="terracotta" /> Rechazado o cancelado</span>
+              <span>
+                <i className="warning" /> Pendiente de aceptación
+              </span>
+              <span>
+                <i className="info" /> Aceptado o en preparación
+              </span>
+              <span>
+                <i className="gold" /> Listo o en camino
+              </span>
+              <span>
+                <i className="success" /> Entregado
+              </span>
+              <span>
+                <i className="terracotta" /> Rechazado o cancelado
+              </span>
             </div>
             <div className="rs-legend" style={{ borderTop: 'none', paddingTop: 0 }}>
               <strong>Ventas del turno</strong>
               <span style={{ fontSize: '18px', color: '#9b713d', fontWeight: 700 }}>
-                {money(orders.filter((o) => o.status === 'Entregado').reduce((s, o) => s + orderTotal(o), 0))}
+                {money(
+                  orders
+                    .filter((o) => o.status === 'Entregado')
+                    .reduce((s, o) => s + orderTotal(o), 0),
+                )}
               </span>
             </div>
           </aside>
@@ -295,9 +467,13 @@ export function RoomServiceContent({
                   <p className="eyebrow">RECHAZAR PEDIDO</p>
                   <h2>Indica el motivo</h2>
                 </div>
-                <button className="icon-btn" onClick={() => setRejectionOrderId(null)}><X size={18} /></button>
+                <button className="icon-btn" onClick={() => setRejectionOrderId(null)}>
+                  <X size={18} />
+                </button>
               </div>
-              <p className="login-helper">El huésped podrá consultar por qué no fue posible atender su pedido.</p>
+              <p className="login-helper">
+                El huésped podrá consultar por qué no fue posible atender su pedido.
+              </p>
               <textarea
                 className="rs-rejection-textarea"
                 value={rejectionReason}
@@ -305,7 +481,9 @@ export function RoomServiceContent({
                 placeholder="Ej. Cocina cerrada temporalmente, ingredientes no disponibles..."
               />
               <div className="modal-foot">
-                <button className="button secondary" onClick={() => setRejectionOrderId(null)}>Cancelar</button>
+                <button className="button secondary" onClick={() => setRejectionOrderId(null)}>
+                  Cancelar
+                </button>
                 <button
                   className="button primary"
                   disabled={!rejectionReason.trim()}
@@ -316,7 +494,9 @@ export function RoomServiceContent({
                     setRejectionReason('');
                     onCloseOrder();
                   }}
-                >Confirmar rechazo</button>
+                >
+                  Confirmar rechazo
+                </button>
               </div>
             </div>
           </div>
@@ -329,9 +509,13 @@ export function RoomServiceContent({
                   <p className="eyebrow">CANCELAR PEDIDO</p>
                   <h2>Indica el motivo</h2>
                 </div>
-                <button className="icon-btn" onClick={() => setCancelOrderId(null)}><X size={18} /></button>
+                <button className="icon-btn" onClick={() => setCancelOrderId(null)}>
+                  <X size={18} />
+                </button>
               </div>
-              <p className="login-helper">El sistema y el huésped conocerán el estado correcto del pedido.</p>
+              <p className="login-helper">
+                El sistema y el huésped conocerán el estado correcto del pedido.
+              </p>
               <textarea
                 className="rs-rejection-textarea"
                 value={cancelReason}
@@ -339,7 +523,9 @@ export function RoomServiceContent({
                 placeholder="Ej. El huésped no se encuentra en la habitación..."
               />
               <div className="modal-foot">
-                <button className="button secondary" onClick={() => setCancelOrderId(null)}>Cerrar</button>
+                <button className="button secondary" onClick={() => setCancelOrderId(null)}>
+                  Cerrar
+                </button>
                 <button
                   className="button primary"
                   disabled={!cancelReason.trim()}
@@ -350,7 +536,9 @@ export function RoomServiceContent({
                     setCancelReason('');
                     onCloseOrder();
                   }}
-                >Confirmar cancelación</button>
+                >
+                  Confirmar cancelación
+                </button>
               </div>
             </div>
           </div>
@@ -374,7 +562,9 @@ export function RoomServiceContent({
         </div>
         <div className="rs-menu-categories">
           {menuCategories.map((cat) => (
-            <span key={cat} className="rs-menu-cat">{cat}</span>
+            <span key={cat} className="rs-menu-cat">
+              {cat}
+            </span>
           ))}
         </div>
         {catalog.status === 'loading' && <LoadingState label="Cargando el menú..." />}
@@ -386,13 +576,18 @@ export function RoomServiceContent({
           />
         )}
         {catalog.status === 'ready' && menuItems.length === 0 && (
-          <EmptyState title="Sin productos" description="No hay productos de alimentos y bebidas activos en el catálogo." />
+          <EmptyState
+            title="Sin productos"
+            description="No hay productos de alimentos y bebidas activos en el catálogo."
+          />
         )}
         {catalog.status === 'ready' && menuItems.length > 0 && (
           <div className="rs-menu-grid">
             {menuItems.map((item) => (
               <div className="rs-menu-item" key={item.name}>
-                <div className="rs-menu-icon"><Utensils size={18} /></div>
+                <div className="rs-menu-icon">
+                  <Utensils size={18} />
+                </div>
                 <div>
                   <strong>{item.name}</strong>
                   <p>{item.description}</p>
@@ -416,24 +611,44 @@ export function RoomServiceContent({
             <h3>Historial de pedidos</h3>
             <p>Consulta los pedidos entregados, rechazados y cancelados</p>
           </div>
-          <button className="button small secondary" onClick={() => onAction('Historial actualizado')}>
+          <button
+            className="button small secondary"
+            onClick={() => onAction('Historial actualizado')}
+          >
             <FileText size={14} /> Actualizar
           </button>
         </div>
         <div className="rs-history-list">
           {completedOrders.length === 0 ? (
-            <div className="hk-empty"><FileText size={22} /><p>Aún no hay pedidos finalizados</p></div>
+            <div className="hk-empty">
+              <FileText size={22} />
+              <p>Aún no hay pedidos finalizados</p>
+            </div>
           ) : (
             completedOrders.map((order) => (
               <div className="rs-history-row" key={order.id}>
                 <div>
-                  <strong>#{order.id} · Habitación {order.room}</strong>
-                  <span>{order.guest} · {order.items.length} {order.items.length === 1 ? 'artículo' : 'artículos'} · {money(orderTotal(order))}</span>
-                  {order.rejectionReason && <small style={{ color: '#a9483c' }}>Motivo: {order.rejectionReason}</small>}
+                  <strong>
+                    #{order.id} · Habitación {order.room}
+                  </strong>
+                  <span>
+                    {order.guest} · {order.items.length}{' '}
+                    {order.items.length === 1 ? 'artículo' : 'artículos'} ·{' '}
+                    {money(orderTotal(order))}
+                  </span>
+                  {order.rejectionReason && (
+                    <small style={{ color: '#a9483c' }}>Motivo: {order.rejectionReason}</small>
+                  )}
                 </div>
                 <span className={`status-pill ${statusClass(order.status)}`}>{order.status}</span>
-                {order.charged && <span className="rs-charged"><Check size={13} /> Cargado</span>}
-                <button className="button small secondary" onClick={() => onSelectOrder(order.id)}>Ver detalle</button>
+                {order.charged && (
+                  <span className="rs-charged">
+                    <Check size={13} /> Cargado
+                  </span>
+                )}
+                <button className="button small secondary" onClick={() => onSelectOrder(order.id)}>
+                  Ver detalle
+                </button>
               </div>
             ))
           )}
@@ -459,7 +674,10 @@ export function RoomServiceContent({
             <h3>Inventario de cocina</h3>
             <p>Insumos disponibles para preparar pedidos</p>
           </div>
-          <button className="button small primary" onClick={() => onAction('Inventario actualizado')}>
+          <button
+            className="button small primary"
+            onClick={() => onAction('Inventario actualizado')}
+          >
             <Plus size={14} /> Registrar insumo
           </button>
         </div>
@@ -472,7 +690,10 @@ export function RoomServiceContent({
           />
         )}
         {catalog.status === 'ready' && inventoryItems.length === 0 && (
-          <EmptyState title="Sin insumos" description="No hay insumos de cocina registrados en el inventario." />
+          <EmptyState
+            title="Sin insumos"
+            description="No hay insumos de cocina registrados en el inventario."
+          />
         )}
         {catalog.status === 'ready' && inventoryItems.length > 0 && (
           <div className="rs-inventory-grid">
@@ -480,9 +701,13 @@ export function RoomServiceContent({
               <div className="rs-inventory-item" key={item.name}>
                 <div>
                   <strong>{item.name}</strong>
-                  <span>{item.stock} {item.unit}</span>
+                  <span>
+                    {item.stock} {item.unit}
+                  </span>
                 </div>
-                <span className={`status-pill ${inventoryStatusClass(item.status)}`}>{item.status}</span>
+                <span className={`status-pill ${inventoryStatusClass(item.status)}`}>
+                  {item.status}
+                </span>
               </div>
             ))}
           </div>
@@ -495,7 +720,10 @@ export function RoomServiceContent({
 }
 
 function RoomServiceOrderModal({
-  order, onClose, onUpdateStatus, onUpdateNote,
+  order,
+  onClose,
+  onUpdateStatus,
+  onUpdateNote,
 }: {
   order: RoomServiceOrder;
   onClose: () => void;
@@ -512,19 +740,25 @@ function RoomServiceOrderModal({
             <p className="eyebrow">DETALLE DE PEDIDO</p>
             <h2>Pedido #{order.id}</h2>
           </div>
-          <button className="icon-btn" onClick={onClose}><X size={18} /></button>
+          <button className="icon-btn" onClick={onClose}>
+            <X size={18} />
+          </button>
         </div>
         <div className="rs-detail-header">
           <div>
             <strong>Habitación {order.room}</strong>
-            <span>{order.guest} · recibido a las {order.time}</span>
+            <span>
+              {order.guest} · recibido a las {order.time}
+            </span>
           </div>
           <span className={`status-pill ${statusClass(order.status)}`}>{order.status}</span>
         </div>
         <div className="rs-detail-items">
           {order.items.map((item, i) => (
             <div key={i}>
-              <span><strong>{item.quantity}×</strong> {item.name} · {money(item.price)} c/u</span>
+              <span>
+                <strong>{item.quantity}×</strong> {item.name} · {money(item.price)} c/u
+              </span>
               <span>{money(item.quantity * item.price)}</span>
             </div>
           ))}
@@ -534,11 +768,25 @@ function RoomServiceOrderModal({
           <strong>{money(orderTotal(order))}</strong>
         </div>
         {order.rejectionReason && (
-          <div style={{ marginTop: 12, padding: 12, background: '#f2d6cd', borderRadius: 8, display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+          <div
+            style={{
+              marginTop: 12,
+              padding: 12,
+              background: '#f2d6cd',
+              borderRadius: 8,
+              display: 'flex',
+              gap: 8,
+              alignItems: 'flex-start',
+            }}
+          >
             <Ban size={16} style={{ color: '#a9483c', flexShrink: 0, marginTop: 2 }} />
             <div>
-              <strong style={{ fontSize: 11, color: '#a9483c', display: 'block' }}>Motivo de rechazo</strong>
-              <p style={{ fontSize: 11, color: '#a9483c', margin: '4px 0 0' }}>{order.rejectionReason}</p>
+              <strong style={{ fontSize: 11, color: '#a9483c', display: 'block' }}>
+                Motivo de rechazo
+              </strong>
+              <p style={{ fontSize: 11, color: '#a9483c', margin: '4px 0 0' }}>
+                {order.rejectionReason}
+              </p>
             </div>
           </div>
         )}
@@ -554,12 +802,50 @@ function RoomServiceOrderModal({
           <button className="button secondary" onClick={() => onUpdateNote(order.id, note)}>
             Guardar observación
           </button>
-          {order.status === 'Pendiente' && <button className="button primary" onClick={() => { onUpdateStatus(order.id, 'Aceptado'); }}>Aceptar pedido</button>}
-          {order.status === 'Aceptado' && <button className="button primary" onClick={() => onUpdateStatus(order.id, 'En preparación')}>En preparación</button>}
-          {order.status === 'En preparación' && <button className="button primary" onClick={() => onUpdateStatus(order.id, 'Listo')}>Marcar listo</button>}
-          {order.status === 'Listo' && <button className="button primary" onClick={() => onUpdateStatus(order.id, 'En camino')}>En camino</button>}
-          {order.status === 'En camino' && <button className="button primary" onClick={() => onUpdateStatus(order.id, 'Entregado')}>Entregado</button>}
-          {order.status === 'Entregado' && order.charged && <span className="rs-charged"><Check size={15} /> Consumo cargado a la habitación</span>}
+          {order.status === 'Pendiente' && (
+            <button
+              className="button primary"
+              onClick={() => {
+                onUpdateStatus(order.id, 'Aceptado');
+              }}
+            >
+              Aceptar pedido
+            </button>
+          )}
+          {order.status === 'Aceptado' && (
+            <button
+              className="button primary"
+              onClick={() => onUpdateStatus(order.id, 'En preparación')}
+            >
+              En preparación
+            </button>
+          )}
+          {order.status === 'En preparación' && (
+            <button className="button primary" onClick={() => onUpdateStatus(order.id, 'Listo')}>
+              Marcar listo
+            </button>
+          )}
+          {order.status === 'Listo' && (
+            <button
+              className="button primary"
+              onClick={() => onUpdateStatus(order.id, 'En camino')}
+            >
+              En camino
+            </button>
+          )}
+          {order.status === 'En camino' && (
+            <button
+              className="button primary"
+              onClick={() => onUpdateStatus(order.id, 'Entregado')}
+            >
+              Entregado
+            </button>
+          )}
+          {order.status === 'Entregado' && order.charged && (
+            <span className="rs-charged">
+              <Check size={15} /> Consumo cargado a la habitación
+            </span>
+          )}
         </div>
       </div>
     </div>

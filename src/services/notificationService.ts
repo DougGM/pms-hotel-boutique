@@ -58,7 +58,8 @@ export const notificationService = {
       title: orderTitle(order.status),
       message: `Pedido #${order.id}`,
       category: 'order',
-      read: order.status === 'delivered' || order.status === 'cancelled' || order.status === 'rejected',
+      read:
+        order.status === 'delivered' || order.status === 'cancelled' || order.status === 'rejected',
       occurredAt: order.requestedAt,
     }));
 
