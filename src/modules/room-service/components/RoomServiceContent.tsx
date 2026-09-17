@@ -1,10 +1,15 @@
 /* eslint-disable @typescript-eslint/no-unused-vars -- Migracion controlada del prototipo Bolt; se conserva la logica original para portarla incrementalmente. */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ArrowRight, Ban, Check, ChevronDown, ClipboardList, Clock, DoorOpen,
   FileText, Package, Plus, Search, ShieldCheck, Utensils, X,
 } from 'lucide-react';
 import type { OrderStatus, RoomServiceOrder } from '@/private/workspace/PrivateWorkspace';
+import { catalogService } from '@/services/catalogService';
+import { inventoryService } from '@/services/inventoryService';
+import { EmptyState } from '@/shared/components/EmptyState';
+import { ErrorState } from '@/shared/components/ErrorState';
+import { LoadingState } from '@/shared/components/LoadingState';
 
 const money = (n: number) => `$${n.toLocaleString('es-MX')}`;
 
@@ -19,34 +24,45 @@ const orderTotal = (order: RoomServiceOrder) =>
   order.items.reduce((sum, item) => sum + item.quantity * item.price, 0);
 
 type MenuItem = { name: string; description: string; price: number; category: string };
-const menuItems: MenuItem[] = [
-  { name: 'Desayuno Aurora', description: 'Huevos benedictinos, pan brioche, fruta de temporada', price: 280, category: 'Desayunos' },
-  { name: 'Club sandwich', description: 'Pavo, tocino, huevo, lechuga, tomate', price: 240, category: 'Almuerzos' },
-  { name: 'Pasta al pesto', description: 'Pasta fresca, pesto de albahaca, parmesano', price: 320, category: 'Cenas' },
-  { name: 'Café americano', description: 'Café de grano recién molido', price: 65, category: 'Bebidas' },
-  { name: 'Agua mineral', description: 'Con o sin gas · 500 ml', price: 45, category: 'Bebidas' },
-  { name: 'Jugo verde', description: 'Espinaca, manzana, jengibre, limón', price: 110, category: 'Bebidas' },
-  { name: 'Tabla de quesos', description: 'Selección de quesos artesanales, frutos secos, miel', price: 390, category: 'Botanas' },
-  { name: 'Sopa del día', description: 'Consulta con el chef la opción del día', price: 180, category: 'Cenas' },
-];
+
+const PRODUCT_CATEGORY_LABELS: Record<string, string> = {
+  foodAndBeverage: 'Alimentos y bebidas',
+  minibar: 'Minibar',
+  shop: 'Tienda',
+  other: 'Otros',
+};
 
 type InventoryItem = { name: string; stock: number; unit: string; status: 'Disponible' | 'Bajo' | 'Agotado' };
-const inventoryItems: InventoryItem[] = [
-  { name: 'Café de grano', stock: 3, unit: 'kg', status: 'Disponible' },
-  { name: 'Leche entera', stock: 8, unit: 'L', status: 'Disponible' },
-  { name: 'Pan brioche', stock: 4, unit: 'piezas', status: 'Disponible' },
-  { name: 'Huevos', stock: 12, unit: 'docenas', status: 'Disponible' },
-  { name: 'Pasta fresca', stock: 2, unit: 'kg', status: 'Bajo' },
-  { name: 'Queso parmesano', stock: 1, unit: 'kg', status: 'Bajo' },
-  { name: 'Albahaca fresca', stock: 0, unit: 'kg', status: 'Agotado' },
-  { name: 'Jugo de naranja', stock: 6, unit: 'L', status: 'Disponible' },
-  { name: 'Agua mineral', stock: 24, unit: 'botellas', status: 'Disponible' },
-];
 
+const INVENTORY_UNIT_LABELS: Record<string, string> = {
+  unit: 'piezas',
+  box: 'cajas',
+  bottle: 'botellas',
+  kg: 'kg',
+  liter: 'L',
+  roll: 'rollos',
+};
+
+/**
+ * Fija a propósito: es la taxonomía de tabs del menú (Desayunos/Almuerzos/
+ * Cenas/Bebidas/Botanas), más fina que `ProductCategory` del contrato
+ * (`minibar`|`shop`|`foodAndBeverage`|`other`). Ampliar el DTO de `product`
+ * para cubrirla está bloqueado por D-005 (docs/DECISIONES.md) — no tocar
+ * hasta que se decida la taxonomía de categorías en equipo.
+ */
 const menuCategories = ['Desayunos', 'Almuerzos', 'Cenas', 'Bebidas', 'Botanas'];
 
 const inventoryStatusClass = (status: string) =>
   status === 'Disponible' ? 'success' : status === 'Bajo' ? 'warning' : 'terracotta';
+
+type CatalogState =
+  | { status: 'loading' }
+  | { status: 'error'; message: string }
+  | { status: 'ready'; menu: MenuItem[]; inventory: InventoryItem[] };
+
+function getErrorMessage(cause: unknown): string {
+  return cause instanceof Error ? cause.message : 'No fue posible cargar el catálogo de cocina.';
+}
 
 export function RoomServiceContent({
   nav, orders, selectedOrder, onSelectOrder, onCloseOrder,
@@ -72,6 +88,51 @@ export function RoomServiceContent({
   const [rejectionReason, setRejectionReason] = useState('');
   const [cancelOrderId, setCancelOrderId] = useState<number | null>(null);
   const [cancelReason, setCancelReason] = useState('');
+  const [catalog, setCatalog] = useState<CatalogState>({ status: 'loading' });
+
+  useEffect(() => {
+    let active = true;
+
+    async function load() {
+      setCatalog({ status: 'loading' });
+      try {
+        const [products, inventoryItemsData] = await Promise.all([
+          catalogService.getProducts(),
+          inventoryService.getItems(),
+        ]);
+
+        const menu: MenuItem[] = products
+          .filter((product) => product.category === 'foodAndBeverage')
+          .map((product) => ({
+            name: product.name,
+            description: product.description ?? product.sku,
+            price: Math.round(product.priceCents / 100),
+            category: PRODUCT_CATEGORY_LABELS[product.category] ?? product.category,
+          }));
+
+        const inventory: InventoryItem[] = inventoryItemsData
+          .filter((item) => item.category === 'roomService')
+          .map((item) => ({
+            name: item.name,
+            stock: item.currentQuantity,
+            unit: INVENTORY_UNIT_LABELS[item.unit] ?? item.unit,
+            status: item.currentQuantity === 0 ? 'Agotado' : item.isBelowMinimum ? 'Bajo' : 'Disponible',
+          }));
+
+        if (active) setCatalog({ status: 'ready', menu, inventory });
+      } catch (cause) {
+        if (active) setCatalog({ status: 'error', message: getErrorMessage(cause) });
+      }
+    }
+
+    void load();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const menuItems = catalog.status === 'ready' ? catalog.menu : [];
+  const inventoryItems = catalog.status === 'ready' ? catalog.inventory : [];
 
   const activeOrders = orders.filter((o) => !['Entregado', 'Rechazado', 'Cancelado'].includes(o.status));
   const completedOrders = orders.filter((o) => ['Entregado', 'Rechazado', 'Cancelado'].includes(o.status));
@@ -316,19 +377,32 @@ export function RoomServiceContent({
             <span key={cat} className="rs-menu-cat">{cat}</span>
           ))}
         </div>
-        <div className="rs-menu-grid">
-          {menuItems.map((item) => (
-            <div className="rs-menu-item" key={item.name}>
-              <div className="rs-menu-icon"><Utensils size={18} /></div>
-              <div>
-                <strong>{item.name}</strong>
-                <p>{item.description}</p>
-                <span className="rs-menu-cat-tag">{item.category}</span>
+        {catalog.status === 'loading' && <LoadingState label="Cargando el menú..." />}
+        {catalog.status === 'error' && (
+          <ErrorState
+            title="No pudimos cargar el menú"
+            description={catalog.message}
+            onRetry={() => setCatalog({ status: 'loading' })}
+          />
+        )}
+        {catalog.status === 'ready' && menuItems.length === 0 && (
+          <EmptyState title="Sin productos" description="No hay productos de alimentos y bebidas activos en el catálogo." />
+        )}
+        {catalog.status === 'ready' && menuItems.length > 0 && (
+          <div className="rs-menu-grid">
+            {menuItems.map((item) => (
+              <div className="rs-menu-item" key={item.name}>
+                <div className="rs-menu-icon"><Utensils size={18} /></div>
+                <div>
+                  <strong>{item.name}</strong>
+                  <p>{item.description}</p>
+                  <span className="rs-menu-cat-tag">{item.category}</span>
+                </div>
+                <b>{money(item.price)}</b>
               </div>
-              <b>{money(item.price)}</b>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     );
   }
@@ -389,17 +463,30 @@ export function RoomServiceContent({
             <Plus size={14} /> Registrar insumo
           </button>
         </div>
-        <div className="rs-inventory-grid">
-          {inventoryItems.map((item) => (
-            <div className="rs-inventory-item" key={item.name}>
-              <div>
-                <strong>{item.name}</strong>
-                <span>{item.stock} {item.unit}</span>
+        {catalog.status === 'loading' && <LoadingState label="Cargando el inventario..." />}
+        {catalog.status === 'error' && (
+          <ErrorState
+            title="No pudimos cargar el inventario"
+            description={catalog.message}
+            onRetry={() => setCatalog({ status: 'loading' })}
+          />
+        )}
+        {catalog.status === 'ready' && inventoryItems.length === 0 && (
+          <EmptyState title="Sin insumos" description="No hay insumos de cocina registrados en el inventario." />
+        )}
+        {catalog.status === 'ready' && inventoryItems.length > 0 && (
+          <div className="rs-inventory-grid">
+            {inventoryItems.map((item) => (
+              <div className="rs-inventory-item" key={item.name}>
+                <div>
+                  <strong>{item.name}</strong>
+                  <span>{item.stock} {item.unit}</span>
+                </div>
+                <span className={`status-pill ${inventoryStatusClass(item.status)}`}>{item.status}</span>
               </div>
-              <span className={`status-pill ${inventoryStatusClass(item.status)}`}>{item.status}</span>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     );
   }
