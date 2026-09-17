@@ -524,10 +524,10 @@ const dbReservations: Reservation[] = bookingsDB.map((booking, index) => {
     observations: booking.notes ?? '',
     checkInTime: status === 'Check-in' || status === 'Check-out' ? formatDbTime(booking.updated_at) : null,
     checkOutTime: status === 'Check-out' ? formatDbTime(booking.updated_at) : null,
-    cancelReason: status === 'Cancelada' ? booking.notes ?? 'CancelaciÃ³n registrada en sistema' : '',
+    cancelReason: status === 'Cancelada' ? booking.notes ?? 'Cancelación registrada en sistema' : '',
     voidReason: status === 'Anulada' ? booking.notes ?? 'Reserva anulada en sistema' : '',
     guest: {
-      name: guest?.first_name ?? 'HuÃ©sped',
+      name: guest?.first_name ?? 'Huésped',
       lastName: guest?.last_name ?? '',
       phone: guest?.phone ?? '',
       email: guest?.email ?? '',
@@ -559,8 +559,8 @@ const dbRoomServiceOrders: RoomServiceOrder[] = ordersDB.map((order, index) => {
 
   return {
     id: parseDbId(order.id, index + 1),
-    room: room?.room_number ?? 'Sin habitaciÃ³n',
-    guest: guest ? `${guest.first_name} ${guest.last_name}` : 'HuÃ©sped',
+    room: room?.room_number ?? 'Sin habitación',
+    guest: guest ? `${guest.first_name} ${guest.last_name}` : 'Huésped',
     time: formatDbTime(order.requested_at),
     items: order.items.map((item) => {
       const product = productsDB.find((productItem) => productItem.id === item.product_id);
@@ -583,7 +583,7 @@ const dbGuestRequests: GuestRequest[] = serviceRequestsDB
     const room = roomsDB.find((item) => item.id === request.room_id);
     return {
       id: parseDbId(request.id, index + 1),
-      room: room?.room_number ?? 'Sin habitaciÃ³n',
+      room: room?.room_number ?? 'Sin habitación',
       request: request.description,
       time: formatDbTime(request.requested_at),
       priority: request.type === 'maintenance' ? 'Alta' : 'Media',
@@ -598,7 +598,7 @@ const dbCleaningRooms: CleaningRoom[] = roomsDB.map((room, index) => {
     : room.housekeeping_status === 'cleaning'
       ? 'En proceso'
       : 'Pendiente';
-  const checklist = ['Cama preparada', 'BaÃ±o limpio', 'Toallas completas', 'Amenidades repuestas', 'Basura retirada', 'Piso limpio']
+  const checklist = ['Cama preparada', 'Baño limpio', 'Toallas completas', 'Amenidades repuestas', 'Basura retirada', 'Piso limpio']
     .map((label) => ({ label, done: status === 'Completada' }));
 
   return {
@@ -622,7 +622,7 @@ const dbHistory: HistoryEntry[] = serviceRequestsDB
     const room = roomsDB.find((item) => item.id === request.room_id);
     return {
       id: parseDbId(request.id, index + 1),
-      room: room?.room_number ?? 'Sin habitaciÃ³n',
+      room: room?.room_number ?? 'Sin habitación',
       taskType: request.type === 'housekeeping' ? 'Solicitud: Limpieza' : `Solicitud: ${request.type}`,
       date: request.updated_at.slice(0, 10),
       startTime: formatDbTime(request.requested_at),
@@ -638,7 +638,7 @@ const dbDefects: DefectReport[] = serviceRequestsDB
     const room = roomsDB.find((item) => item.id === request.room_id);
     return {
       id: parseDbId(request.id, index + 1),
-      room: room?.room_number ?? 'Sin habitaciÃ³n',
+      room: room?.room_number ?? 'Sin habitación',
       category: 'Mantenimiento',
       description: request.description,
       priority: request.status === 'pending' ? 'Alta' : 'Media',
@@ -654,10 +654,10 @@ const dbConciergeRequests: ConciergeRequest[] = serviceRequestsDB
     const guest = guestsDB.find((item) => item.id === request.guest_id);
     return {
       id: parseDbId(request.id, index + 1),
-      room: room?.room_number ?? 'Sin habitaciÃ³n',
-      guest: guest ? `${guest.first_name} ${guest.last_name}` : 'HuÃ©sped',
+      room: room?.room_number ?? 'Sin habitación',
+      guest: guest ? `${guest.first_name} ${guest.last_name}` : 'Huésped',
       time: formatDbTime(request.requested_at),
-      category: request.type === 'concierge' ? 'ConserjerÃ­a' : 'Solicitud especial',
+      category: request.type === 'concierge' ? 'Conserjería' : 'Solicitud especial',
       description: request.description,
       priority: request.status === 'pending' ? 'Alta' : 'Media',
       status: request.status === 'completed' ? 'Completada' : request.status === 'rejected' ? 'Rechazada' : request.status === 'pending' ? 'Pendiente' : 'En proceso',
@@ -674,8 +674,8 @@ const dbTasks: Task[] = [...serviceRequestsDB.slice(0, 3), ...ordersDB.slice(0, 
   return {
     id: index + 1,
     title: isOrder ? 'Pedido de Room Service' : item.description,
-    room: `${room?.room_number ?? 'Sin habitaciÃ³n'} Â· ${getRoomTypeFromDb(room?.room_type_id)}`,
-    guest: guest ? `${guest.first_name} ${guest.last_name}` : 'HuÃ©sped',
+    room: `${room?.room_number ?? 'Sin habitación'} · ${getRoomTypeFromDb(room?.room_type_id)}`,
+    guest: guest ? `${guest.first_name} ${guest.last_name}` : 'Huésped',
     time: formatDbTime(item.requested_at),
     status: isOrder ? mapOrderStatus(item.status) : mapServiceStatus(item.status),
     tone: item.status === 'pending' ? 'warning' : item.status === 'completed' || item.status === 'delivered' ? 'success' : 'info',
