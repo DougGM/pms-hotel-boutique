@@ -47,6 +47,19 @@ import { GuestContent } from '@/modules/guest-portal/components/GuestContent';
 import { RoomServiceContent } from '@/modules/room-service/components/RoomServiceContent';
 import { AdminContent } from '@/modules/administration/components/AdminContent';
 import { AccountPreferencesModal, AccountProfileModal } from '@/private/workspace/AccountPanels';
+import {
+  bookingsDB,
+  chargesDB,
+  depositsDB,
+  guestsDB,
+  ordersDB,
+  paymentsDB,
+  productsDB,
+  roomFeaturesDB,
+  roomsDB,
+  roomTypesDB,
+  serviceRequestsDB,
+} from '@/data/db';
 
 export type RoleId = 'reception' | 'admin' | 'housekeeping' | 'room-service' | 'concierge' | 'guest';
 type IconType = typeof Home;
@@ -360,6 +373,326 @@ const recRoomBlocks: RoomBlock[] = [
   { id: 1, roomNumber: '410', startDate: '2024-08-25', endDate: '2024-08-30', reason: 'Mantenimiento', observation: 'Revisión de climatización', active: true },
 ];
 
+const parseDbId = (id: string, fallback: number) => {
+  const value = Number(id.replace(/\D/g, ''));
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+};
+
+const centsToAmount = (cents: number) => Math.round(cents / 100);
+
+const formatDbTime = (value?: string) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit', hour12: false });
+};
+
+const getRoomTypeFromDb = (roomTypeId?: string): RoomType => {
+  const roomType = roomTypesDB.find((type) => type.id === roomTypeId);
+  const name = roomType?.name.toLowerCase() ?? '';
+  if (name.includes('suite')) return 'Suite';
+  if (name.includes('deluxe')) return 'Deluxe';
+  return 'Estándar';
+};
+
+const mapPaymentMethod = (method?: string): PaymentMethod => {
+  if (method === 'credit_card' || method === 'debit_card') return 'Tarjeta';
+  if (method === 'bank_transfer') return 'Transferencia';
+  return 'Efectivo';
+};
+
+const mapReservationStatus = (status: string): ReservationStatus => {
+  const statuses: Record<string, ReservationStatus> = {
+    pending: 'Pendiente',
+    confirmed: 'Confirmada',
+    checked_in: 'Check-in',
+    checked_out: 'Check-out',
+    cancelled: 'Cancelada',
+    no_show: 'Anulada',
+  };
+  return statuses[status] ?? 'Pendiente';
+};
+
+const mapRecRoomStatus = (status: string, housekeepingStatus: string): RecRoomStatus => {
+  if (status === 'occupied') return 'Ocupada';
+  if (status === 'maintenance' || status === 'out_of_service') return 'Mantenimiento';
+  if (housekeepingStatus === 'cleaning' || housekeepingStatus === 'dirty') return 'Limpieza';
+  return 'Disponible';
+};
+
+const mapOrderStatus = (status: string): OrderStatus => {
+  const statuses: Record<string, OrderStatus> = {
+    pending: 'Pendiente',
+    accepted: 'Aceptado',
+    preparing: 'En preparación',
+    ready: 'Listo',
+    on_the_way: 'En camino',
+    delivered: 'Entregado',
+    rejected: 'Rechazado',
+    cancelled: 'Cancelado',
+  };
+  return statuses[status] ?? 'Pendiente';
+};
+
+const mapServiceStatus = (status: string): GuestRequest['status'] => {
+  if (status === 'completed') return 'Completada';
+  if (status === 'accepted' || status === 'in_progress') return 'En proceso';
+  return 'Pendiente';
+};
+
+const buildFolioFromDb = (bookingId: string): FolioEntry[] => {
+  const charges = chargesDB
+    .filter((charge) => charge.booking_id === bookingId)
+    .map((charge, index): FolioEntry => ({
+      id: parseDbId(charge.id, index + 1),
+      concept: charge.description,
+      category: 'Cargo',
+      amount: centsToAmount(charge.amount_cents),
+      date: charge.charged_at.slice(0, 10),
+      type: 'Cargo',
+      status: charge.status === 'voided' ? 'Anulado' : 'Activo',
+      voidReason: charge.void_reason ?? '',
+    }));
+  const payments = paymentsDB
+    .filter((payment) => payment.booking_id === bookingId)
+    .map((payment, index): FolioEntry => ({
+      id: parseDbId(payment.id, 4000 + index),
+      concept: 'Pago registrado',
+      category: 'Pago',
+      amount: centsToAmount(payment.amount_cents),
+      date: (payment.paid_at ?? payment.created_at).slice(0, 10),
+      type: 'Pago',
+      status: payment.status === 'refunded' || payment.status === 'failed' ? 'Anulado' : 'Activo',
+      method: mapPaymentMethod(payment.method),
+      reference: payment.transaction_reference,
+    }));
+  const deposits = depositsDB
+    .filter((deposit) => deposit.booking_id === bookingId)
+    .map((deposit, index): FolioEntry => ({
+      id: parseDbId(deposit.id, 6000 + index),
+      concept: 'Depósito garantía',
+      category: 'Depósito',
+      amount: centsToAmount(deposit.amount_cents),
+      date: deposit.collected_at.slice(0, 10),
+      type: 'Depósito',
+      status: deposit.status === 'refunded' ? 'Anulado' : 'Activo',
+      method: mapPaymentMethod(deposit.method),
+      reference: deposit.id,
+    }));
+  return [...charges, ...payments, ...deposits];
+};
+
+const dbRooms: RecRoom[] = roomsDB.map((room, index) => {
+  const roomType = roomTypesDB.find((type) => type.id === room.room_type_id);
+  const features = (roomType?.room_feature_ids ?? [])
+    .map((featureId) => roomFeaturesDB.find((feature) => feature.id === featureId)?.name)
+    .filter(Boolean) as string[];
+  const sampleBooking = bookingsDB.find((booking) => booking.room_type_id === room.room_type_id);
+  const nights = sampleBooking
+    ? Math.max(1, Math.ceil((new Date(sampleBooking.check_out).getTime() - new Date(sampleBooking.check_in).getTime()) / 86400000))
+    : 1;
+
+  return {
+    id: index + 1,
+    number: room.room_number,
+    floor: `Piso ${room.floor}`,
+    type: getRoomTypeFromDb(room.room_type_id),
+    capacity: roomType?.capacity ?? 2,
+    rate: sampleBooking ? centsToAmount(sampleBooking.total_amount_cents) / nights : 1850,
+    status: mapRecRoomStatus(room.status, room.housekeeping_status),
+    features: features.length > 0 ? features : ['Wi-Fi', 'Desayuno'],
+  };
+});
+
+const dbReservations: Reservation[] = bookingsDB.map((booking, index) => {
+  const guest = guestsDB.find((item) => item.id === booking.guest_id);
+  const room = roomsDB.find((item) => item.id === booking.room_id);
+  const nights = Math.max(1, Math.ceil((new Date(booking.check_out).getTime() - new Date(booking.check_in).getTime()) / 86400000));
+  const status = mapReservationStatus(booking.status);
+
+  return {
+    id: index + 1,
+    code: booking.confirmation_code,
+    checkIn: booking.check_in,
+    checkOut: booking.check_out,
+    roomNumber: room?.room_number ?? 'Sin asignar',
+    roomType: getRoomTypeFromDb(booking.room_type_id),
+    rate: centsToAmount(booking.total_amount_cents) / nights,
+    guestCount: booking.adults + booking.children,
+    status,
+    origin: 'Online',
+    observations: booking.notes ?? '',
+    checkInTime: status === 'Check-in' || status === 'Check-out' ? formatDbTime(booking.updated_at) : null,
+    checkOutTime: status === 'Check-out' ? formatDbTime(booking.updated_at) : null,
+    cancelReason: status === 'Cancelada' ? booking.notes ?? 'CancelaciÃ³n registrada en sistema' : '',
+    voidReason: status === 'Anulada' ? booking.notes ?? 'Reserva anulada en sistema' : '',
+    guest: {
+      name: guest?.first_name ?? 'HuÃ©sped',
+      lastName: guest?.last_name ?? '',
+      phone: guest?.phone ?? '',
+      email: guest?.email ?? '',
+      docType: guest?.document_type ?? 'DPI',
+      docNumber: guest?.document_number ?? '',
+      birthDate: '',
+      nationality: guest?.nationality ?? '',
+    },
+    companions: [],
+    folio: buildFolioFromDb(booking.id),
+  };
+});
+
+const dbRoomBlocks: RoomBlock[] = roomsDB
+  .filter((room) => room.status === 'maintenance' || room.status === 'out_of_service')
+  .map((room, index) => ({
+    id: index + 1,
+    roomNumber: room.room_number,
+    startDate: room.updated_at.slice(0, 10),
+    endDate: room.updated_at.slice(0, 10),
+    reason: room.status === 'maintenance' ? 'Mantenimiento' : 'Fuera de servicio',
+    observation: room.notes ?? 'Bloqueo registrado en inventario',
+    active: true,
+  }));
+
+const dbRoomServiceOrders: RoomServiceOrder[] = ordersDB.map((order, index) => {
+  const room = roomsDB.find((item) => item.id === order.room_id);
+  const guest = guestsDB.find((item) => item.id === order.guest_id);
+
+  return {
+    id: parseDbId(order.id, index + 1),
+    room: room?.room_number ?? 'Sin habitaciÃ³n',
+    guest: guest ? `${guest.first_name} ${guest.last_name}` : 'HuÃ©sped',
+    time: formatDbTime(order.requested_at),
+    items: order.items.map((item) => {
+      const product = productsDB.find((productItem) => productItem.id === item.product_id);
+      return {
+        name: product?.name ?? item.product_id,
+        quantity: item.quantity,
+        price: centsToAmount(item.unit_price_cents),
+      };
+    }),
+    status: mapOrderStatus(order.status),
+    note: order.notes ?? '',
+    rejectionReason: order.status === 'rejected' ? order.notes ?? '' : '',
+    charged: order.status === 'delivered',
+  };
+});
+
+const dbGuestRequests: GuestRequest[] = serviceRequestsDB
+  .filter((request) => request.type === 'housekeeping' || request.type === 'maintenance')
+  .map((request, index) => {
+    const room = roomsDB.find((item) => item.id === request.room_id);
+    return {
+      id: parseDbId(request.id, index + 1),
+      room: room?.room_number ?? 'Sin habitaciÃ³n',
+      request: request.description,
+      time: formatDbTime(request.requested_at),
+      priority: request.type === 'maintenance' ? 'Alta' : 'Media',
+      status: mapServiceStatus(request.status),
+    };
+  });
+
+const dbCleaningRooms: CleaningRoom[] = roomsDB.map((room, index) => {
+  const type = getRoomTypeFromDb(room.room_type_id);
+  const status: RoomStatus = room.housekeeping_status === 'clean' || room.housekeeping_status === 'inspected'
+    ? 'Completada'
+    : room.housekeeping_status === 'cleaning'
+      ? 'En proceso'
+      : 'Pendiente';
+  const checklist = ['Cama preparada', 'BaÃ±o limpio', 'Toallas completas', 'Amenidades repuestas', 'Basura retirada', 'Piso limpio']
+    .map((label) => ({ label, done: status === 'Completada' }));
+
+  return {
+    id: index + 1,
+    number: room.room_number,
+    floor: `Piso ${room.floor}`,
+    type,
+    cleaningType: room.status === 'occupied' ? 'Limpieza de estancia' : 'Limpieza de salida',
+    priority: room.status === 'occupied' || room.housekeeping_status === 'dirty' ? 'Alta' : 'Media',
+    status,
+    startTime: status === 'En proceso' ? formatDbTime(room.updated_at) : null,
+    endTime: status === 'Completada' ? formatDbTime(room.updated_at) : null,
+    duration: status === 'Completada' ? '35 min' : null,
+    checklist,
+  };
+});
+
+const dbHistory: HistoryEntry[] = serviceRequestsDB
+  .filter((request) => request.status === 'completed')
+  .map((request, index) => {
+    const room = roomsDB.find((item) => item.id === request.room_id);
+    return {
+      id: parseDbId(request.id, index + 1),
+      room: room?.room_number ?? 'Sin habitaciÃ³n',
+      taskType: request.type === 'housekeeping' ? 'Solicitud: Limpieza' : `Solicitud: ${request.type}`,
+      date: request.updated_at.slice(0, 10),
+      startTime: formatDbTime(request.requested_at),
+      endTime: formatDbTime(request.updated_at),
+      duration: '45 min',
+      status: 'Completada',
+    };
+  });
+
+const dbDefects: DefectReport[] = serviceRequestsDB
+  .filter((request) => request.type === 'maintenance')
+  .map((request, index) => {
+    const room = roomsDB.find((item) => item.id === request.room_id);
+    return {
+      id: parseDbId(request.id, index + 1),
+      room: room?.room_number ?? 'Sin habitaciÃ³n',
+      category: 'Mantenimiento',
+      description: request.description,
+      priority: request.status === 'pending' ? 'Alta' : 'Media',
+      observation: request.notes ?? '',
+      photo: '',
+    };
+  });
+
+const dbConciergeRequests: ConciergeRequest[] = serviceRequestsDB
+  .filter((request) => request.type === 'concierge' || request.type === 'other')
+  .map((request, index) => {
+    const room = roomsDB.find((item) => item.id === request.room_id);
+    const guest = guestsDB.find((item) => item.id === request.guest_id);
+    return {
+      id: parseDbId(request.id, index + 1),
+      room: room?.room_number ?? 'Sin habitaciÃ³n',
+      guest: guest ? `${guest.first_name} ${guest.last_name}` : 'HuÃ©sped',
+      time: formatDbTime(request.requested_at),
+      category: request.type === 'concierge' ? 'ConserjerÃ­a' : 'Solicitud especial',
+      description: request.description,
+      priority: request.status === 'pending' ? 'Alta' : 'Media',
+      status: request.status === 'completed' ? 'Completada' : request.status === 'rejected' ? 'Rechazada' : request.status === 'pending' ? 'Pendiente' : 'En proceso',
+      observation: request.notes ?? '',
+      rejectionReason: request.status === 'rejected' ? request.notes ?? '' : '',
+      completedAt: request.status === 'completed' ? formatDbTime(request.updated_at) : null,
+    };
+  });
+
+const dbTasks: Task[] = [...serviceRequestsDB.slice(0, 3), ...ordersDB.slice(0, 2)].map((item, index) => {
+  const isOrder = 'items' in item;
+  const room = roomsDB.find((roomItem) => roomItem.id === item.room_id);
+  const guest = guestsDB.find((guestItem) => guestItem.id === item.guest_id);
+  return {
+    id: index + 1,
+    title: isOrder ? 'Pedido de Room Service' : item.description,
+    room: `${room?.room_number ?? 'Sin habitaciÃ³n'} Â· ${getRoomTypeFromDb(room?.room_type_id)}`,
+    guest: guest ? `${guest.first_name} ${guest.last_name}` : 'HuÃ©sped',
+    time: formatDbTime(item.requested_at),
+    status: isOrder ? mapOrderStatus(item.status) : mapServiceStatus(item.status),
+    tone: item.status === 'pending' ? 'warning' : item.status === 'completed' || item.status === 'delivered' ? 'success' : 'info',
+  };
+});
+
+const initialTasks = dbTasks.length > 0 ? dbTasks : defaultTasks;
+const initialRooms = dbCleaningRooms.length > 0 ? dbCleaningRooms : defaultRooms;
+const initialRequests = dbGuestRequests.length > 0 ? dbGuestRequests : defaultRequests;
+const initialHistory = dbHistory.length > 0 ? dbHistory : defaultHistory;
+const initialDefects = dbDefects.length > 0 ? dbDefects : defaultDefects;
+const initialRoomServiceOrders = dbRoomServiceOrders.length > 0 ? dbRoomServiceOrders : defaultRoomServiceOrders;
+const initialConciergeRequests = dbConciergeRequests.length > 0 ? dbConciergeRequests : defaultConciergeRequests;
+const initialRecRooms = dbRooms.length > 0 ? dbRooms : recRooms;
+const initialRecReservations = dbReservations.length > 0 ? dbReservations : recReservations;
+const initialRecRoomBlocks = dbRoomBlocks.length > 0 ? dbRoomBlocks : recRoomBlocks;
+
 const navByRole: Record<RoleId, NavItem[]> = {
   reception: [
     { label: 'Resumen', icon: Gauge }, { label: 'Calendario', icon: CalendarDays, badge: '12' }, { label: 'Reservas', icon: ClipboardList },
@@ -437,29 +770,29 @@ export function PrivateWorkspace({ role: workspaceRole, initialNav, sessionName,
   const [accountPanel, setAccountPanel] = useState<'profile' | 'preferences' | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [toast, setToast] = useState('');
-  const [tasks, setTasks] = useState(defaultTasks);
+  const [tasks, setTasks] = useState(initialTasks);
   const [search, setSearch] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [hkRooms, setHkRooms] = useState(defaultRooms);
-  const [hkRequests, setHkRequests] = useState(defaultRequests);
-  const [hkHistory, setHkHistory] = useState(defaultHistory);
-  const [hkDefects, setHkDefects] = useState(defaultDefects);
+  const [hkRooms, setHkRooms] = useState(initialRooms);
+  const [hkRequests, setHkRequests] = useState(initialRequests);
+  const [hkHistory, setHkHistory] = useState(initialHistory);
+  const [hkDefects, setHkDefects] = useState(initialDefects);
   const [hkDetailRoomId, setHkDetailRoomId] = useState<number | null>(null);
   const [hkShowDefectModal, setHkShowDefectModal] = useState(false);
   const [hkShowStatusModal, setHkShowStatusModal] = useState<CleaningRoom | null>(null);
   const [hkSearch, setHkSearch] = useState('');
   const [hkFilter, setHkFilter] = useState<'Todos' | RoomStatus>('Todos');
-  const [rsOrders, setRsOrders] = useState(defaultRoomServiceOrders);
+  const [rsOrders, setRsOrders] = useState(initialRoomServiceOrders);
   const [rsSelectedOrderId, setRsSelectedOrderId] = useState<number | null>(null);
   const [rsSearch, setRsSearch] = useState('');
   const [rsFilter, setRsFilter] = useState<'Todos' | OrderStatus>('Todos');
-  const [cgRequests, setCgRequests] = useState(defaultConciergeRequests);
+  const [cgRequests, setCgRequests] = useState(initialConciergeRequests);
   const [cgSelectedRequestId, setCgSelectedRequestId] = useState<number | null>(null);
   const [cgSearch, setCgSearch] = useState('');
   const [cgFilter, setCgFilter] = useState<'Todos' | ConciergeStatus>('Todos');
-  const [recReservationList, setRecReservationList] = useState<Reservation[]>(recReservations);
-  const [recRoomList, setRecRoomList] = useState<RecRoom[]>(recRooms);
-  const [recBlockList, setRecBlockList] = useState<RoomBlock[]>(recRoomBlocks);
+  const [recReservationList, setRecReservationList] = useState<Reservation[]>(initialRecReservations);
+  const [recRoomList, setRecRoomList] = useState<RecRoom[]>(initialRecRooms);
+  const [recBlockList, setRecBlockList] = useState<RoomBlock[]>(initialRecRoomBlocks);
   const [recSelectedResId, setRecSelectedResId] = useState<number | null>(null);
   const [recShowNewRes, setRecShowNewRes] = useState(false);
   const [recShowWalkin, setRecShowWalkin] = useState(false);
@@ -481,7 +814,7 @@ export function PrivateWorkspace({ role: workspaceRole, initialNav, sessionName,
   const rsSelectedOrder = rsSelectedOrderId === null ? null : rsOrders.find((order) => order.id === rsSelectedOrderId) ?? null;
   const cgSelectedRequest = cgSelectedRequestId === null ? null : cgRequests.find((req) => req.id === cgSelectedRequestId) ?? null;
   const recSelectedRes = recSelectedResId === null ? null : recReservationList.find((r) => r.id === recSelectedResId) ?? null;
-  const recNextCode = () => `AUR-${2407 + recReservationList.length - recReservations.length}`;
+  const recNextCode = () => `AUR-${26001 + recReservationList.length - initialRecReservations.length}`;
   const recNights = (checkIn: string, checkOut: string) => Math.max(1, Math.round((new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 86400000));
   const recFolioTotals = (folio: FolioEntry[]) => {
     const active = folio.filter((f) => f.status === 'Activo');

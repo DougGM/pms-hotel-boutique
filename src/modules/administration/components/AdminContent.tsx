@@ -7,6 +7,22 @@ import {
   Wallet, Waves, Wifi, X, Settings,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import {
+  amenitiesDB,
+  auditLogsDB,
+  cashMovementsDB,
+  inventoryItemsDB,
+  inventoryMovementsDB,
+  permissionsDB,
+  productsDB,
+  promotionsDB,
+  ratesDB,
+  rolesDB,
+  roomFeaturesDB,
+  roomsDB,
+  roomTypesDB,
+  usersDB,
+} from '@/data/db';
 
 type AdminUser = {
   id: number; name: string; email: string; role: string; status: 'Activo' | 'Inactivo'; lastAccess: string;
@@ -162,6 +178,178 @@ const defaultAudit: AuditEntry[] = [
   { id: 6, user: 'Chepe Ramírez', date: '2026-08-30', time: '16:45', module: 'Reservas', action: 'Cancelación', description: 'Reserva AUR-2405 cancelada por el huésped' },
   { id: 7, user: 'Edgar González', date: '2026-08-30', time: '09:15', module: 'Inventario', action: 'Entrada', description: 'Entrada de 50 toallas de baño registrada' },
 ];
+
+const parseDbId = (id: string, fallback: number) => {
+  const value = Number(id.replace(/\D/g, ''));
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+};
+
+const centsToAmount = (cents: number) => Math.round(cents / 100);
+
+const formatDbTime = (value: string) => new Date(value).toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit', hour12: false });
+
+const userNameById = (userId?: string) => {
+  const user = usersDB.find((item) => item.id === userId);
+  return user ? `${user.first_name} ${user.last_name}` : 'Sistema';
+};
+
+const roomTypeNameById = (roomTypeId?: string) => roomTypesDB.find((type) => type.id === roomTypeId)?.name ?? 'Estándar';
+
+const roomStatusLabel = (status: string, housekeepingStatus: string) => {
+  if (status === 'occupied') return 'Ocupada';
+  if (status === 'maintenance' || status === 'out_of_service') return 'Mantenimiento';
+  if (housekeepingStatus === 'dirty' || housekeepingStatus === 'cleaning') return 'Limpieza';
+  return 'Disponible';
+};
+
+const dbAdminUsers: AdminUser[] = usersDB.map((user, index) => ({
+  id: parseDbId(user.id, index + 1),
+  name: `${user.first_name} ${user.last_name}`,
+  email: user.email,
+  role: rolesDB.find((role) => role.code === user.role)?.name ?? user.role,
+  status: user.status === 'active' ? 'Activo' : 'Inactivo',
+  lastAccess: user.updated_at.slice(0, 10),
+}));
+
+const dbAdminRoles: AdminRole[] = rolesDB.map((role, index) => ({
+  id: parseDbId(role.id, index + 1),
+  name: role.name,
+  description: `Rol ${role.code}`,
+  userCount: usersDB.filter((user) => user.role === role.code).length,
+  permissions: Object.fromEntries(ALL_PERMISSIONS.map((label, permissionIndex) => {
+    const permission = permissionsDB[permissionIndex];
+    return [label, permission ? role.permission_ids.includes(permission.id) : false];
+  })) as Record<string, boolean>,
+}));
+
+const dbAdminRooms: AdminRoom[] = roomsDB.map((room, index) => {
+  const roomType = roomTypesDB.find((type) => type.id === room.room_type_id);
+  const rate = ratesDB.find((item) => item.room_type_id === room.room_type_id);
+  const features = (roomType?.room_feature_ids ?? [])
+    .map((featureId) => roomFeaturesDB.find((feature) => feature.id === featureId)?.name)
+    .filter(Boolean) as string[];
+  return {
+    id: index + 1,
+    number: room.room_number,
+    floor: `Piso ${room.floor}`,
+    type: roomTypeNameById(room.room_type_id),
+    capacity: roomType?.capacity ?? 2,
+    rate: rate ? centsToAmount(rate.price_cents) : 0,
+    status: roomStatusLabel(room.status, room.housekeeping_status),
+    features,
+  };
+});
+
+const dbAdminRoomTypes: AdminRoomType[] = roomTypesDB.map((roomType, index) => ({
+  id: parseDbId(roomType.id, index + 1),
+  name: roomType.name,
+  capacity: roomType.capacity,
+  description: roomType.description ?? '',
+  features: roomType.room_feature_ids
+    .map((featureId) => roomFeaturesDB.find((feature) => feature.id === featureId)?.name)
+    .filter(Boolean) as string[],
+  basePrice: centsToAmount(ratesDB.find((rate) => rate.room_type_id === roomType.id)?.price_cents ?? 0),
+  status: roomType.active ? 'Activo' : 'Inactivo',
+}));
+
+const dbSeasonRates: SeasonRate[] = ratesDB.map((rate, index) => ({
+  id: parseDbId(rate.id, index + 1),
+  roomType: roomTypeNameById(rate.room_type_id),
+  seasonName: rate.name,
+  startDate: rate.valid_from,
+  endDate: rate.valid_to,
+  baseRate: centsToAmount(rate.price_cents),
+  seasonalRate: centsToAmount(rate.price_cents),
+  status: rate.active ? 'Activa' : 'Inactiva',
+}));
+
+const dbPromos: Promo[] = promotionsDB.map((promo, index) => ({
+  id: parseDbId(promo.id, index + 1),
+  name: promo.name,
+  code: promo.code,
+  percentage: promo.discount_percent,
+  startDate: promo.valid_from,
+  endDate: promo.valid_to,
+  conditions: promo.description,
+  status: promo.active ? 'Activa' : 'Inactiva',
+}));
+
+const dbAmenities: Amenity[] = amenitiesDB.map((amenity, index) => ({
+  id: parseDbId(amenity.id, index + 1),
+  name: amenity.name,
+  schedule: 'Disponible',
+  available: amenity.active,
+  status: amenity.active ? 'Activo' : 'Inactivo',
+  icon: ['Waves', 'Utensils', 'Dumbbell', 'Sparkles', 'Star', 'Wifi'][index % 6],
+}));
+
+const dbRoomServiceItems: RoomServiceItem[] = productsDB
+  .filter((product) => product.category === 'food_and_beverage')
+  .map((product, index) => ({
+    id: parseDbId(product.id, index + 1),
+    name: product.name,
+    category: 'Room Service',
+    price: centsToAmount(product.price_cents),
+    available: product.active,
+    status: product.active ? 'Activo' : 'Inactivo',
+    image: '',
+  }));
+
+const dbInventory: InventoryProduct[] = inventoryItemsDB.map((item, index) => {
+  const product = productsDB.find((productItem) => productItem.id === item.product_id);
+  return {
+    id: parseDbId(item.id, index + 1),
+    name: item.name,
+    category: item.category,
+    stock: item.current_quantity,
+    minStock: item.minimum_quantity,
+    price: product ? centsToAmount(product.price_cents) : 0,
+    status: item.active ? 'Activo' : 'Inactivo',
+  };
+});
+
+const dbInventoryMovements: InventoryMovement[] = inventoryMovementsDB.map((movement, index) => ({
+  id: parseDbId(movement.id, index + 1),
+  date: movement.occurred_at.slice(0, 10),
+  product: inventoryItemsDB.find((item) => item.id === movement.inventory_item_id)?.name ?? movement.inventory_item_id,
+  type: movement.type === 'in' ? 'Entrada' : 'Salida',
+  quantity: movement.quantity,
+  reason: movement.reason,
+  responsible: userNameById(movement.responsible_user_id),
+}));
+
+const dbCashMovements: CashMovement[] = cashMovementsDB.map((movement, index) => ({
+  id: parseDbId(movement.id, index + 1),
+  date: movement.occurred_at.slice(0, 10),
+  concept: movement.concept,
+  type: movement.type === 'income' ? 'Ingreso' : 'Egreso',
+  amount: centsToAmount(movement.amount_cents),
+  responsible: userNameById(movement.responsible_user_id),
+}));
+
+const dbAudit: AuditEntry[] = auditLogsDB.map((entry, index) => ({
+  id: parseDbId(entry.id, index + 1),
+  user: userNameById(entry.user_id),
+  date: entry.occurred_at.slice(0, 10),
+  time: formatDbTime(entry.occurred_at),
+  module: entry.module,
+  action: entry.action,
+  description: `${entry.entity_type} ${entry.entity_id}`,
+}));
+
+const initialAdminUsers = dbAdminUsers.length > 0 ? dbAdminUsers : defaultUsers;
+const initialAdminRoles = dbAdminRoles.length > 0 ? dbAdminRoles : defaultRoles;
+const initialAdminRooms = dbAdminRooms.length > 0 ? dbAdminRooms : defaultRooms;
+const initialAdminRoomTypes = dbAdminRoomTypes.length > 0 ? dbAdminRoomTypes : defaultRoomTypes;
+const initialSeasonRates = dbSeasonRates.length > 0 ? dbSeasonRates : defaultSeasonRates;
+const initialDynamicRates = defaultDynamicRates;
+const initialPromos = dbPromos.length > 0 ? dbPromos : defaultPromos;
+const initialAmenities = dbAmenities.length > 0 ? dbAmenities : defaultAmenities;
+const initialRoomServiceItems = dbRoomServiceItems.length > 0 ? dbRoomServiceItems : defaultRoomServiceItems;
+const initialInventory = dbInventory.length > 0 ? dbInventory : defaultInventory;
+const initialMovements = dbInventoryMovements.length > 0 ? dbInventoryMovements : defaultMovements;
+const initialCashMovements = dbCashMovements.length > 0 ? dbCashMovements : defaultCashMovements;
+const initialAudit = dbAudit.length > 0 ? dbAudit : defaultAudit;
 
 const dashboardPeriodOptions: DashboardPeriod[] = ['Hoy', '7 días', '30 días', '90 días'];
 const reportTabs: AdminReportTab[] = ['Ocupación', 'Ingresos', 'Reservas', 'Cancelaciones', 'Canales', 'Servicios', 'Temporadas'];
@@ -328,19 +516,19 @@ function BarChart({ data, labels }: { data: number[]; labels: string[] }) {
 }
 
 export function AdminContent({ nav, onAction, onNavigate }: { nav: string; onAction: (message: string) => void; onNavigate?: (nav: string) => void }) {
-  const [users, setUsers] = useState(defaultUsers);
-  const [roles, setRoles] = useState(defaultRoles);
-  const [rooms, setRooms] = useState(defaultRooms);
-  const [roomTypes, setRoomTypes] = useState(defaultRoomTypes);
-  const [seasonRates, setSeasonRates] = useState(defaultSeasonRates);
-  const [dynamicRates, setDynamicRates] = useState(defaultDynamicRates);
-  const [promos, setPromos] = useState(defaultPromos);
-  const [amenities, setAmenities] = useState(defaultAmenities);
-  const [rsItems, setRsItems] = useState(defaultRoomServiceItems);
-  const [inventory, setInventory] = useState(defaultInventory);
-  const [movements] = useState(defaultMovements);
-  const [cashMovements, setCashMovements] = useState(defaultCashMovements);
-  const [audit] = useState(defaultAudit);
+  const [users, setUsers] = useState(initialAdminUsers);
+  const [roles, setRoles] = useState(initialAdminRoles);
+  const [rooms, setRooms] = useState(initialAdminRooms);
+  const [roomTypes, setRoomTypes] = useState(initialAdminRoomTypes);
+  const [seasonRates, setSeasonRates] = useState(initialSeasonRates);
+  const [dynamicRates, setDynamicRates] = useState(initialDynamicRates);
+  const [promos, setPromos] = useState(initialPromos);
+  const [amenities, setAmenities] = useState(initialAmenities);
+  const [rsItems, setRsItems] = useState(initialRoomServiceItems);
+  const [inventory, setInventory] = useState(initialInventory);
+  const [movements] = useState(initialMovements);
+  const [cashMovements, setCashMovements] = useState(initialCashMovements);
+  const [audit] = useState(initialAudit);
 
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('Todos');

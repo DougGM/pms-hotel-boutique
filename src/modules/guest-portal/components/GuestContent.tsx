@@ -6,6 +6,19 @@ import {
 } from 'lucide-react';
 import type { Reservation, GuestInfo } from '@/private/workspace/PrivateWorkspace';
 import {
+  amenitiesDB,
+  bookingsDB,
+  chargesDB,
+  depositsDB,
+  guestsDB,
+  ordersDB,
+  paymentsDB,
+  productsDB,
+  roomsDB,
+  roomTypesDB,
+  serviceRequestsDB,
+} from '@/data/db';
+import {
   CancelOrderModal, CancelReservationModal, EditProfileModal, LinkReservationModal,
   ModifyReservationModal, ReceiptModal, RequestServiceModal, ReservationDetailModal,
   money, fmtDate, resStatusClass, orderStatusClass, reqStatusClass,
@@ -94,6 +107,220 @@ const amenities = [
   { name: 'Lavandería Express', description: 'Servicio de lavandería con entrega en 4 horas', icon: Clock, available: false, schedule: 'Temporalmente fuera de servicio' },
 ];
 
+const parseDbId = (id: string, fallback: number) => {
+  const value = Number(id.replace(/\D/g, ''));
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+};
+
+const centsToAmount = (cents: number) => Math.round(cents / 100);
+
+const formatDbTime = (value?: string) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit', hour12: false });
+};
+
+const getDbRoomType = (roomTypeId?: string): Reservation['roomType'] => {
+  const roomType = roomTypesDB.find((type) => type.id === roomTypeId);
+  const name = roomType?.name.toLowerCase() ?? '';
+  if (name.includes('suite')) return 'Suite';
+  if (name.includes('deluxe')) return 'Deluxe';
+  return 'Estándar';
+};
+
+const mapDbReservationStatus = (status: string): Reservation['status'] => {
+  if (status === 'confirmed') return 'Confirmada';
+  if (status === 'checked_in') return 'Check-in';
+  if (status === 'checked_out') return 'Check-out';
+  if (status === 'cancelled') return 'Cancelada';
+  if (status === 'no_show') return 'Anulada';
+  return 'Pendiente';
+};
+
+const mapDbOrderStatus = (status: string): GuestOrder['status'] => {
+  if (status === 'accepted') return 'Aceptado';
+  if (status === 'preparing' || status === 'ready') return 'En preparación';
+  if (status === 'on_the_way') return 'En camino';
+  if (status === 'delivered') return 'Entregado';
+  if (status === 'cancelled' || status === 'rejected') return 'Cancelado';
+  return 'Pendiente';
+};
+
+const mapDbRequestStatus = (status: string): GuestServiceRequest['status'] => {
+  if (status === 'completed') return 'Completada';
+  if (status === 'cancelled' || status === 'rejected') return 'Cancelada';
+  if (status === 'accepted' || status === 'in_progress') return 'En proceso';
+  return 'Pendiente';
+};
+
+const activeDbBooking = bookingsDB.find((booking) => booking.status === 'checked_in') ?? bookingsDB[0];
+const activeDbGuest = guestsDB.find((guest) => guest.id === activeDbBooking?.guest_id) ?? guestsDB[0];
+const activeDbRoom = roomsDB.find((room) => room.id === activeDbBooking?.room_id) ?? roomsDB[0];
+const dbGuestRoom = activeDbRoom?.room_number ?? guestRoom;
+
+const dbGuestProfile: GuestInfo = activeDbGuest
+  ? {
+    name: activeDbGuest.first_name,
+    lastName: activeDbGuest.last_name,
+    phone: activeDbGuest.phone ?? '',
+    email: activeDbGuest.email ?? '',
+    docType: activeDbGuest.document_type ?? 'DPI',
+    docNumber: activeDbGuest.document_number ?? '',
+    birthDate: '',
+    nationality: activeDbGuest.nationality ?? '',
+  }
+  : guestProfile;
+
+const buildDbGuestFolio = (bookingId: string): Reservation['folio'] => [
+  ...chargesDB
+    .filter((charge) => charge.booking_id === bookingId)
+    .map((charge, index) => ({
+      id: parseDbId(charge.id, index + 1),
+      concept: charge.description,
+      category: 'Cargo',
+      amount: centsToAmount(charge.amount_cents),
+      date: charge.charged_at.slice(0, 10),
+      type: 'Cargo' as const,
+      status: charge.status === 'voided' ? 'Anulado' as const : 'Activo' as const,
+    })),
+  ...paymentsDB
+    .filter((payment) => payment.booking_id === bookingId)
+    .map((payment, index) => ({
+      id: parseDbId(payment.id, 4000 + index),
+      concept: 'Pago registrado',
+      category: 'Pago',
+      amount: centsToAmount(payment.amount_cents),
+      date: (payment.paid_at ?? payment.created_at).slice(0, 10),
+      type: 'Pago' as const,
+      status: payment.status === 'failed' || payment.status === 'refunded' ? 'Anulado' as const : 'Activo' as const,
+    })),
+  ...depositsDB
+    .filter((deposit) => deposit.booking_id === bookingId)
+    .map((deposit, index) => ({
+      id: parseDbId(deposit.id, 6000 + index),
+      concept: 'Depósito garantía',
+      category: 'Depósito',
+      amount: centsToAmount(deposit.amount_cents),
+      date: deposit.collected_at.slice(0, 10),
+      type: 'Depósito' as const,
+      status: deposit.status === 'refunded' ? 'Anulado' as const : 'Activo' as const,
+    })),
+];
+
+const dbGuestReservations: Reservation[] = activeDbGuest
+  ? bookingsDB
+    .filter((booking) => booking.guest_id === activeDbGuest.id)
+    .map((booking, index) => {
+      const room = roomsDB.find((item) => item.id === booking.room_id);
+      const nights = Math.max(1, Math.ceil((new Date(booking.check_out).getTime() - new Date(booking.check_in).getTime()) / 86400000));
+      const status = mapDbReservationStatus(booking.status);
+      return {
+        id: parseDbId(booking.id, index + 1),
+        code: booking.confirmation_code,
+        checkIn: booking.check_in,
+        checkOut: booking.check_out,
+        roomNumber: room?.room_number ?? dbGuestRoom,
+        roomType: getDbRoomType(booking.room_type_id),
+        rate: centsToAmount(booking.total_amount_cents) / nights,
+        guestCount: booking.adults + booking.children,
+        status,
+        origin: 'Online',
+        observations: booking.notes ?? '',
+        checkInTime: status === 'Check-in' || status === 'Check-out' ? formatDbTime(booking.updated_at) : null,
+        checkOutTime: status === 'Check-out' ? formatDbTime(booking.updated_at) : null,
+        cancelReason: status === 'Cancelada' ? booking.notes ?? '' : '',
+        voidReason: status === 'Anulada' ? booking.notes ?? '' : '',
+        guest: dbGuestProfile,
+        companions: [],
+        folio: buildDbGuestFolio(booking.id),
+      };
+    })
+  : [];
+
+const dbGuestServiceRequests: GuestServiceRequest[] = activeDbGuest
+  ? serviceRequestsDB
+    .filter((request) => request.guest_id === activeDbGuest.id)
+    .map((request, index) => {
+      const room = roomsDB.find((item) => item.id === request.room_id);
+      return {
+        id: parseDbId(request.id, index + 1),
+        type: request.type === 'housekeeping' ? 'Limpieza' : request.type === 'maintenance' ? 'Mantenimiento' : 'Servicio',
+        description: request.description,
+        time: formatDbTime(request.requested_at),
+        status: mapDbRequestStatus(request.status),
+        room: room?.room_number ?? dbGuestRoom,
+      };
+    })
+  : [];
+
+const dbGuestMenu: GuestMenuItem[] = productsDB
+  .filter((product) => product.category === 'food_and_beverage')
+  .map((product, index) => ({
+    id: parseDbId(product.id, index + 1),
+    name: product.name,
+    description: product.sku,
+    price: centsToAmount(product.price_cents),
+    category: 'Room service',
+    available: product.active,
+  }));
+
+const dbGuestOrders: GuestOrder[] = activeDbGuest
+  ? ordersDB
+    .filter((order) => order.guest_id === activeDbGuest.id)
+    .map((order, index) => {
+      const room = roomsDB.find((item) => item.id === order.room_id);
+      return {
+        id: parseDbId(order.id, index + 1),
+        items: order.items.map((item) => {
+          const product = productsDB.find((productItem) => productItem.id === item.product_id);
+          return { name: product?.name ?? item.product_id, quantity: item.quantity, price: centsToAmount(item.unit_price_cents) };
+        }),
+        time: formatDbTime(order.requested_at),
+        status: mapDbOrderStatus(order.status),
+        note: order.notes ?? '',
+        room: room?.room_number ?? dbGuestRoom,
+      };
+    })
+  : [];
+
+const dbGuestNotifications: GuestNotification[] = [
+  ...dbGuestServiceRequests.slice(0, 3).map((request, index) => ({
+    id: index + 1,
+    title: request.status === 'Completada' ? 'Solicitud completada' : 'Solicitud registrada',
+    message: request.description,
+    time: request.time,
+    read: request.status === 'Completada',
+    category: 'Servicio' as const,
+  })),
+  ...dbGuestOrders.slice(0, 3).map((order, index) => ({
+    id: 100 + index,
+    title: `Pedido de Room Service ${order.status.toLowerCase()}`,
+    message: `Pedido #${order.id}: ${order.items.map((item) => item.name).join(', ')}`,
+    time: order.time,
+    read: order.status === 'Entregado' || order.status === 'Cancelado',
+    category: 'Pedido' as const,
+  })),
+];
+
+const dbAmenities = amenitiesDB.length > 0
+  ? amenitiesDB.map((amenity, index) => ({
+    name: amenity.name,
+    description: amenity.description,
+    icon: [Sparkles, Activity, ShieldCheck, BedDouble, Home, Package, FileText, Clock][index % 8],
+    available: amenity.active,
+    schedule: 'Disponible',
+  }))
+  : [];
+
+const initialGuestProfile = activeDbGuest ? dbGuestProfile : guestProfile;
+const initialGuestReservations = dbGuestReservations.length > 0 ? dbGuestReservations : guestReservations;
+const initialGuestNotifications = dbGuestNotifications.length > 0 ? dbGuestNotifications : guestNotifications;
+const initialGuestServiceRequests = dbGuestServiceRequests.length > 0 ? dbGuestServiceRequests : guestServiceRequests;
+const initialGuestMenu = dbGuestMenu.length > 0 ? dbGuestMenu : guestMenu;
+const initialGuestOrders = dbGuestOrders.length > 0 ? dbGuestOrders : guestOrders;
+const initialAmenities = dbAmenities.length > 0 ? dbAmenities : amenities;
+
 export function GuestContent({
   nav, onAction, onLogout,
 }: {
@@ -101,11 +328,11 @@ export function GuestContent({
   onAction: (message: string) => void;
   onLogout: () => void;
 }) {
-  const [reservations, setReservations] = useState<Reservation[]>(guestReservations);
-  const [profile, setProfile] = useState<GuestInfo>(guestProfile);
-  const [notifications, setNotifications] = useState<GuestNotification[]>(guestNotifications);
-  const [serviceRequests, setServiceRequests] = useState<GuestServiceRequest[]>(guestServiceRequests);
-  const [orders, setOrders] = useState<GuestOrder[]>(guestOrders);
+  const [reservations, setReservations] = useState<Reservation[]>(initialGuestReservations);
+  const [profile, setProfile] = useState<GuestInfo>(initialGuestProfile);
+  const [notifications, setNotifications] = useState<GuestNotification[]>(initialGuestNotifications);
+  const [serviceRequests, setServiceRequests] = useState<GuestServiceRequest[]>(initialGuestServiceRequests);
+  const [orders, setOrders] = useState<GuestOrder[]>(initialGuestOrders);
   const [cart, setCart] = useState<GuestCartItem[]>([]);
   const [orderNote, setOrderNote] = useState('');
 
@@ -360,7 +587,7 @@ export function GuestContent({
     return <div className="panel">
       <div className="panel-heading"><div><h3>Amenidades del hotel</h3><p>Todo lo que puedes disfrutar durante tu estancia</p></div></div>
       <div className="gs-amenities-grid">
-        {amenities.map((am) => {
+        {initialAmenities.map((am) => {
           const Icon = am.icon;
           return (
             <div className={`gs-amenity-card ${!am.available ? 'unavailable' : ''}`} key={am.name}>
@@ -417,8 +644,8 @@ export function GuestContent({
 
   // ─── ROOM SERVICE (Food & Beverage) ────────────────────────────
   if (nav === 'Room service') {
-    const categories = [...new Set(guestMenu.map((m) => m.category))];
-    const filteredMenu = menuCat === 'Todos' ? guestMenu : guestMenu.filter((m) => m.category === menuCat);
+    const categories = [...new Set(initialGuestMenu.map((m) => m.category))];
+    const filteredMenu = menuCat === 'Todos' ? initialGuestMenu : initialGuestMenu.filter((m) => m.category === menuCat);
     return <><div className="gs-rs-layout">
       <div className="panel gs-rs-menu">
         <div className="panel-heading"><div><h3>Menú de Room Service</h3><p>Selecciona productos y envía tu pedido</p></div></div>

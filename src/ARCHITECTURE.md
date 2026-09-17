@@ -183,6 +183,13 @@ fusionarlos. Ver `modules/auth/README.md`.
 
 ## Servicios y regla de oro
 
+Nota 2026-09-16: la migracion privada Bolt (`src/private/workspace/PrivateWorkspace.tsx`,
+`src/modules/guest-portal/components/GuestContent.tsx` y
+`src/modules/administration/components/AdminContent.tsx`) usa adaptadores
+locales que leen `src/data/db.ts` para poblar el workspace beta mientras se
+estabilizan sus servicios finales. No agregar nuevas excepciones sin
+documentarlas aqui.
+
 Ningún componente ni pantalla importa `src/data/db.ts` directamente — todo
 pasa por un servicio en `services/`. Cada servicio es `async`, devuelve
 Models (nunca DTOs), simula una latencia de 300 a 600 ms

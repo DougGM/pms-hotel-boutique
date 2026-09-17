@@ -16,6 +16,14 @@ guards actuales se mantienen; el rol Pasarela de pago no se migra como rol de
 navegacion. Perfil, Preferencias y Cerrar sesion viven en el menu superior de
 usuario, no en el lateral.
 
+**Actualizacion 2026-09-16 (`frontend-beta`):** el workspace operativo migrado
+desde Bolt deja de inicializar recepcion, limpieza, room service, conserjeria,
+administracion y portal de huesped solo con arrays locales. `PrivateWorkspace.tsx`,
+`AdminContent.tsx` y `GuestContent.tsx` ahora adaptan `bookingsDB`, `roomsDB`,
+`guestsDB`, `ordersDB`, `serviceRequestsDB`, folios, productos, roles,
+inventario, caja, auditoria y amenidades desde `src/data/db.ts`, manteniendo
+los arrays antiguos solo como fallback visual.
+
 **Actualización posterior (#50/#51/#52, rama `web-50-51-52-occupancy-manual`):**
 el módulo `occupancy` ya dejó de ser stub. `#51` (`OccupancyScreen`) carga
 habitaciones, reservas y tipos de habitación para mostrar disponibilidad por
