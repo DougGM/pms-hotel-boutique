@@ -1,28 +1,29 @@
-/* eslint-disable @typescript-eslint/no-unused-vars -- Migracion controlada del prototipo Bolt; se conserva la logica original para portarla incrementalmente. */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
-  Activity, ArrowRight, Ban, BedDouble, Bell, CalendarDays, Check, ChevronDown, ClipboardList,
-  Clock, DollarSign, Dumbbell, Download, FileText, Package, Pencil, Percent, Plus,
-  Search, Sparkles, Star, TriangleAlert, TrendingUp, Users, Utensils,
+  Activity, ArrowRight, Ban, BedDouble, CalendarDays, Check, ChevronDown,
+  DollarSign, Dumbbell, Download, FileText, Package, Pencil, Percent, Plus,
+  Search, Sparkles, Star, TriangleAlert, TrendingUp, Utensils,
   Wallet, Waves, Wifi, X, Settings,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import {
-  amenitiesDB,
-  auditLogsDB,
-  cashMovementsDB,
-  inventoryItemsDB,
-  inventoryMovementsDB,
-  permissionsDB,
-  productsDB,
-  promotionsDB,
-  ratesDB,
-  rolesDB,
-  roomFeaturesDB,
-  roomsDB,
-  roomTypesDB,
-  usersDB,
-} from '@/data/db';
+import { auditService } from '@/services/auditService';
+import { cashService } from '@/services/cashService';
+import { catalogService } from '@/services/catalogService';
+import { inventoryService } from '@/services/inventoryService';
+import { personnelService } from '@/services/personnelService';
+import { promotionService } from '@/services/promotionService';
+import { roomService } from '@/services/roomService';
+import { ErrorState } from '@/shared/components/ErrorState';
+import { LoadingState } from '@/shared/components/LoadingState';
+import { toDtoCalendarDate } from '@/shared/types/common';
+import type { AuditAction, AuditLog, AuditModule } from '@/shared/types/entities/audit-log';
+import type { InventoryItemCategory } from '@/shared/types/entities/inventory-item';
+import type { InventoryMovementReason } from '@/shared/types/entities/inventory-movement';
+import type { Product } from '@/shared/types/entities/product';
+import type { Role } from '@/shared/types/entities/role';
+import type { Room } from '@/shared/types/entities/room';
+import type { RoomType } from '@/shared/types/entities/room-type';
+import type { User } from '@/shared/types/entities/user';
 
 type AdminUser = {
   id: number; name: string; email: string; role: string; status: 'Activo' | 'Inactivo'; lastAccess: string;
@@ -69,114 +70,19 @@ type DashboardPeriod = 'Hoy' | '7 días' | '30 días' | '90 días';
 
 const ALL_PERMISSIONS = ['Recepción', 'Reservaciones', 'Caja', 'Inventario', 'Reportes', 'Administración', 'Room Service'];
 
-const defaultUsers: AdminUser[] = [
-  { id: 1, name: 'Edgar González', email: 'edgar@aurorahotel.com', role: 'Administrador', status: 'Activo', lastAccess: 'Hoy, 08:15' },
-  { id: 2, name: 'Chepe Ramírez', email: 'chepe@aurorahotel.com', role: 'Recepción', status: 'Activo', lastAccess: 'Hoy, 07:42' },
-  { id: 3, name: 'César Salazar', email: 'cesar@aurorahotel.com', role: 'Limpieza', status: 'Activo', lastAccess: 'Hoy, 06:00' },
-  { id: 4, name: 'Douglas Pérez', email: 'douglas@aurorahotel.com', role: 'Room Service', status: 'Activo', lastAccess: 'Ayer, 22:10' },
-  { id: 5, name: 'María Torres', email: 'maria@aurorahotel.com', role: 'Recepción', status: 'Activo', lastAccess: 'Hoy, 08:00' },
-];
-
-const defaultRoles: AdminRole[] = [
-  { id: 1, name: 'Administrador', description: 'Control total del sistema', userCount: 1, permissions: Object.fromEntries(ALL_PERMISSIONS.map((p) => [p, true])) as Record<string, boolean> },
-  { id: 2, name: 'Recepción', description: 'Reservas, huéspedes y caja', userCount: 2, permissions: { Recepción: true, Reservaciones: true, Caja: true, Inventario: false, Reportes: true, Administración: false, 'Room Service': false } },
-  { id: 3, name: 'Limpieza', description: 'Habitaciones y tareas de limpieza', userCount: 1, permissions: { Recepción: false, Reservaciones: false, Caja: false, Inventario: false, Reportes: false, Administración: false, 'Room Service': false } },
-  { id: 4, name: 'Room Service', description: 'Pedidos y menú de room service', userCount: 1, permissions: { Recepción: false, Reservaciones: false, Caja: false, Inventario: true, Reportes: false, Administración: false, 'Room Service': true } },
-];
-
-const defaultRooms: AdminRoom[] = [
-  { id: 1, number: '101', floor: 'Piso 1', type: 'Estándar', capacity: 2, rate: 1850, status: 'Disponible', features: ['Cama king', 'Wi-Fi', 'Desayuno'] },
-  { id: 2, number: '104', floor: 'Piso 1', type: 'Estándar', capacity: 2, rate: 1850, status: 'Limpieza', features: ['Cama king', 'Wi-Fi', 'Desayuno'] },
-  { id: 3, number: '115', floor: 'Piso 1', type: 'Estándar', capacity: 2, rate: 1850, status: 'Ocupada', features: ['Cama king', 'Wi-Fi', 'Desayuno'] },
-  { id: 4, number: '201', floor: 'Piso 2', type: 'Deluxe', capacity: 2, rate: 2450, status: 'Disponible', features: ['Cama king', 'Balcón', 'Wi-Fi', 'Desayuno'] },
-  { id: 5, number: '208', floor: 'Piso 2', type: 'Deluxe', capacity: 3, rate: 2450, status: 'Ocupada', features: ['Cama king', 'Balcón', 'Wi-Fi', 'Desayuno'] },
-  { id: 6, number: '212', floor: 'Piso 2', type: 'Deluxe', capacity: 3, rate: 2450, status: 'Disponible', features: ['Cama king', 'Balcón', 'Wi-Fi', 'Desayuno'] },
-  { id: 7, number: '307', floor: 'Piso 3', type: 'Deluxe', capacity: 3, rate: 2450, status: 'Ocupada', features: ['Cama king', 'Balcón', 'Wi-Fi', 'Desayuno'] },
-  { id: 8, number: '312', floor: 'Piso 3', type: 'Estándar', capacity: 2, rate: 1850, status: 'Disponible', features: ['Cama king', 'Wi-Fi', 'Desayuno'] },
-  { id: 9, number: '402', floor: 'Piso 4', type: 'Suite', capacity: 4, rate: 3900, status: 'Ocupada', features: ['Cama king', 'Sala', 'Wi-Fi', 'Desayuno', 'Jacuzzi'] },
-  { id: 10, number: '405', floor: 'Piso 4', type: 'Suite', capacity: 4, rate: 3900, status: 'Disponible', features: ['Cama king', 'Sala', 'Wi-Fi', 'Desayuno', 'Jacuzzi'] },
-  { id: 11, number: '410', floor: 'Piso 4', type: 'Suite', capacity: 4, rate: 3900, status: 'Mantenimiento', features: ['Cama king', 'Sala', 'Wi-Fi', 'Desayuno', 'Jacuzzi'] },
-];
-
-const defaultRoomTypes: AdminRoomType[] = [
-  { id: 1, name: 'Estándar', capacity: 2, description: 'Habitación acogedora con todas las comodidades modernas', features: ['Cama king', 'Wi-Fi', 'Desayuno', 'TV 43"', 'Aire acondicionado'], basePrice: 1850, status: 'Activo' },
-  { id: 2, name: 'Deluxe', capacity: 3, description: 'Amplia y luminosa con balcón privado y vistas a la ciudad', features: ['Cama king', 'Balcón', 'Wi-Fi', 'Desayuno', 'TV 50"', 'Minibar'], basePrice: 2450, status: 'Activo' },
-  { id: 3, name: 'Suite', capacity: 4, description: 'Suite exclusiva con sala de estar y jacuzzi privado', features: ['Cama king', 'Sala', 'Jacuzzi', 'Wi-Fi', 'Desayuno', 'TV 55"', 'Minibar premium'], basePrice: 3900, status: 'Activo' },
-];
-
-const defaultSeasonRates: SeasonRate[] = [
-  { id: 1, roomType: 'Deluxe', seasonName: 'Semana Santa', startDate: '2026-03-28', endDate: '2026-04-05', baseRate: 2450, seasonalRate: 780, status: 'Activa' },
-  { id: 2, roomType: 'Suite', seasonName: 'Semana Santa', startDate: '2026-03-28', endDate: '2026-04-05', baseRate: 3900, seasonalRate: 1200, status: 'Activa' },
-  { id: 3, roomType: 'Estándar', seasonName: 'Verano', startDate: '2026-06-15', endDate: '2026-08-31', baseRate: 1850, seasonalRate: 2200, status: 'Activa' },
-  { id: 4, roomType: 'Deluxe', seasonName: 'Navidad / Año Nuevo', startDate: '2026-12-20', endDate: '2027-01-06', baseRate: 2450, seasonalRate: 3100, status: 'Inactiva' },
-];
-
+/**
+ * Tarifas dinámicas (ajuste automático por ocupación/anticipación): no
+ * existe colección en data/db.ts ni contrato de entidad para esto — es un
+ * concepto del prototipo Bolt que nadie llegó a conectar. Fuera de alcance
+ * hasta que se defina el contrato — ver HU-22. No se le agrega respaldo con
+ * warning porque no hay nada "ausente" que avisar: simplemente no existe
+ * todavía como entidad.
+ */
 const defaultDynamicRates: DynamicRate[] = [
   { id: 1, condition: 'Ocupación', operator: '>', threshold: 80, adjustment: 'Aumentar', value: 15, status: 'Activa' },
   { id: 2, condition: 'Ocupación', operator: '>', threshold: 90, adjustment: 'Aumentar', value: 25, status: 'Activa' },
   { id: 3, condition: 'Reservas con menos de', operator: '<', threshold: 3, adjustment: 'Disminuir', value: 10, status: 'Activa' },
   { id: 4, condition: 'Estancia extendida (4+ noches)', operator: '>=', threshold: 4, adjustment: 'Disminuir', value: 12, status: 'Inactiva' },
-];
-
-const defaultPromos: Promo[] = [
-  { id: 1, name: 'Estancia extendida', code: 'AURORA15', percentage: 15, startDate: '2026-01-01', endDate: '2026-12-31', conditions: 'Estancias de 4 noches o más', status: 'Activa' },
-  { id: 2, name: 'Escapada romántica', code: 'ROMANCE', percentage: 10, startDate: '2026-02-01', endDate: '2026-12-31', conditions: 'Cena para dos + botella de vino', status: 'Activa' },
-  { id: 3, name: 'Fin de semana', code: 'WEEKEND10', percentage: 10, startDate: '2026-01-01', endDate: '2026-12-31', conditions: 'Reservas de viernes a domingo', status: 'Activa' },
-  { id: 4, name: 'Reserva anticipada', code: 'EARLY12', percentage: 12, startDate: '2026-01-01', endDate: '2026-06-30', conditions: 'Reservando 30 días antes', status: 'Inactiva' },
-];
-
-const defaultAmenities: Amenity[] = [
-  { id: 1, name: 'Piscina', schedule: '07:00 — 21:00', available: true, status: 'Activo', icon: 'Waves' },
-  { id: 2, name: 'Restaurante', schedule: '06:30 — 22:30', available: true, status: 'Activo', icon: 'Utensils' },
-  { id: 3, name: 'Gimnasio', schedule: '06:00 — 23:00', available: true, status: 'Activo', icon: 'Dumbbell' },
-  { id: 4, name: 'Spa', schedule: '10:00 — 20:00', available: false, status: 'Activo', icon: 'Sparkles' },
-  { id: 5, name: 'Terraza', schedule: '08:00 — 23:00', available: true, status: 'Activo', icon: 'Star' },
-  { id: 6, name: 'Wi-Fi', schedule: '24 horas', available: true, status: 'Activo', icon: 'Wifi' },
-];
-
-const defaultRoomServiceItems: RoomServiceItem[] = [
-  { id: 1, name: 'Desayuno Aurora', category: 'Desayunos', price: 280, available: true, status: 'Activo', image: 'https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg?auto=compress&cs=tinysrgb&h=200&w=300' },
-  { id: 2, name: 'Club sandwich', category: 'Almuerzos', price: 240, available: true, status: 'Activo', image: 'https://images.pexels.com/photos/1647263/pexels-photo-1647263.jpeg?auto=compress&cs=tinysrgb&h=200&w=300' },
-  { id: 3, name: 'Pasta al pesto', category: 'Cenas', price: 320, available: true, status: 'Activo', image: 'https://images.pexels.com/photos/1437267/pexels-photo-1437267.jpeg?auto=compress&cs=tinysrgb&h=200&w=300' },
-  { id: 4, name: 'Café americano', category: 'Bebidas', price: 65, available: true, status: 'Activo', image: 'https://images.pexels.com/photos/302899/pexels-photo-302899.jpeg?auto=compress&cs=tinysrgb&h=200&w=300' },
-  { id: 5, name: 'Tabla de quesos', category: 'Snacks', price: 390, available: false, status: 'Inactivo', image: 'https://images.pexels.com/photos/821365/pexels-photo-821365.jpeg?auto=compress&cs=tinysrgb&h=200&w=300' },
-  { id: 6, name: 'Jugo verde', category: 'Bebidas', price: 110, available: true, status: 'Activo', image: 'https://images.pexels.com/photos/1340116/pexels-photo-1340116.jpeg?auto=compress&cs=tinysrgb&h=200&w=300' },
-];
-
-const defaultInventory: InventoryProduct[] = [
-  { id: 1, name: 'Toallas de baño', category: 'Lencería', stock: 48, minStock: 50, price: 120, status: 'Activo' },
-  { id: 2, name: 'Jabón de manos', category: 'Amenidades', stock: 120, minStock: 30, price: 15, status: 'Activo' },
-  { id: 3, name: 'Shampoo', category: 'Amenidades', stock: 25, minStock: 40, price: 25, status: 'Activo' },
-  { id: 4, name: 'Café molido', category: 'Cocina', stock: 8, minStock: 15, price: 180, status: 'Activo' },
-  { id: 5, name: 'Botellas de agua', category: 'Bebidas', stock: 200, minStock: 50, price: 18, status: 'Activo' },
-  { id: 6, name: 'Sábanas king', category: 'Lencería', stock: 35, minStock: 20, price: 250, status: 'Activo' },
-  { id: 7, name: 'Toallas de piscina', category: 'Lencería', stock: 12, minStock: 25, price: 90, status: 'Activo' },
-];
-
-const defaultMovements: InventoryMovement[] = [
-  { id: 1, date: '2026-09-01', product: 'Toallas de baño', type: 'Entrada', quantity: 50, reason: 'Compra mensual', responsible: 'Edgar González' },
-  { id: 2, date: '2026-08-30', product: 'Jabón de manos', type: 'Salida', quantity: 30, reason: 'Reposición pisos 1-2', responsible: 'César Salazar' },
-  { id: 3, date: '2026-08-28', product: 'Café molido', type: 'Salida', quantity: 5, reason: 'Consumo room service', responsible: 'Douglas Pérez' },
-  { id: 4, date: '2026-08-25', product: 'Shampoo', type: 'Entrada', quantity: 60, reason: 'Compra mensual', responsible: 'Edgar González' },
-  { id: 5, date: '2026-08-20', product: 'Botellas de agua', type: 'Salida', quantity: 100, reason: 'Reposición minibares', responsible: 'César Salazar' },
-];
-
-const defaultCashMovements: CashMovement[] = [
-  { id: 1, date: '2026-09-02', concept: 'Pago de huésped · AUR-2401', type: 'Ingreso', amount: 5000, responsible: 'Chepe Ramírez' },
-  { id: 2, date: '2026-09-02', concept: 'Compra de suministros', type: 'Egreso', amount: 850, responsible: 'Edgar González' },
-  { id: 3, date: '2026-09-01', concept: 'Pago de huésped · AUR-2402', type: 'Ingreso', amount: 2000, responsible: 'Chepe Ramírez' },
-  { id: 4, date: '2026-09-01', concept: 'Servicio de lavandería', type: 'Egreso', amount: 320, responsible: 'Edgar González' },
-  { id: 5, date: '2026-08-31', concept: 'Pago de huésped · AUR-2404', type: 'Ingreso', amount: 6100, responsible: 'Chepe Ramírez' },
-];
-
-const defaultAudit: AuditEntry[] = [
-  { id: 1, user: 'Edgar González', date: '2026-09-02', time: '08:15', module: 'Tarifas', action: 'Actualización', description: 'Tarifa de temporada Semana Santa modificada para Deluxe' },
-  { id: 2, user: 'Chepe Ramírez', date: '2026-09-02', time: '07:42', module: 'Reservas', action: 'Creación', description: 'Nueva reserva AUR-2407 creada' },
-  { id: 3, user: 'Edgar González', date: '2026-09-01', time: '18:30', module: 'Usuarios', action: 'Edición', description: 'Usuario María Torres actualizado a rol Recepción' },
-  { id: 4, user: 'Douglas Pérez', date: '2026-09-01', time: '14:20', module: 'Room Service', action: 'Edición', description: 'Producto Jugo verde marcado como disponible' },
-  { id: 5, user: 'Edgar González', date: '2026-08-31', time: '10:00', module: 'Caja', action: 'Cierre', description: 'Cierre de caja del 31 de agosto registrado' },
-  { id: 6, user: 'Chepe Ramírez', date: '2026-08-30', time: '16:45', module: 'Reservas', action: 'Cancelación', description: 'Reserva AUR-2405 cancelada por el huésped' },
-  { id: 7, user: 'Edgar González', date: '2026-08-30', time: '09:15', module: 'Inventario', action: 'Entrada', description: 'Entrada de 50 toallas de baño registrada' },
 ];
 
 const parseDbId = (id: string, fallback: number) => {
@@ -186,170 +92,71 @@ const parseDbId = (id: string, fallback: number) => {
 
 const centsToAmount = (cents: number) => Math.round(cents / 100);
 
-const formatDbTime = (value: string) => new Date(value).toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit', hour12: false });
+const formatDbTime = (value: Date) => value.toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit', hour12: false });
 
-const userNameById = (userId?: string) => {
-  const user = usersDB.find((item) => item.id === userId);
-  return user ? `${user.first_name} ${user.last_name}` : 'Sistema';
+const userNameById = (users: User[], userId?: string) => {
+  const user = users.find((item) => item.id === userId);
+  return user ? `${user.firstName} ${user.lastName}` : 'Sistema';
 };
 
-const roomTypeNameById = (roomTypeId?: string) => roomTypesDB.find((type) => type.id === roomTypeId)?.name ?? 'Estándar';
+const roomTypeNameById = (roomTypes: RoomType[], roomTypeId?: string) =>
+  roomTypes.find((type) => type.id === roomTypeId)?.name ?? 'Estándar';
 
-const roomStatusLabel = (status: string, housekeepingStatus: string) => {
+/**
+ * `role.code` no pasa por el mismo mapeo que `user.role`: el mapper de
+ * `user` convierte 'room_service' (DTO) a 'roomService' (Model), pero el
+ * mapper de `role` deja `code` tal cual llega del DTO. D-003
+ * (docs/DECISIONES.md) dice que corresponden por valor — en la práctica
+ * hay que normalizar antes de comparar. Mismo criterio que ya usa el
+ * mapper de user, no una regla nueva.
+ */
+const normalizeRoleCode = (code: string) => (code === 'room_service' ? 'roomService' : code);
+
+const roomStatusLabel = (status: Room['status'], housekeepingStatus: Room['housekeepingStatus']) => {
   if (status === 'occupied') return 'Ocupada';
-  if (status === 'maintenance' || status === 'out_of_service') return 'Mantenimiento';
+  if (status === 'maintenance' || status === 'outOfService') return 'Mantenimiento';
   if (housekeepingStatus === 'dirty' || housekeepingStatus === 'cleaning') return 'Limpieza';
   return 'Disponible';
 };
 
-const dbAdminUsers: AdminUser[] = usersDB.map((user, index) => ({
-  id: parseDbId(user.id, index + 1),
-  name: `${user.first_name} ${user.last_name}`,
-  email: user.email,
-  role: rolesDB.find((role) => role.code === user.role)?.name ?? user.role,
-  status: user.status === 'active' ? 'Activo' : 'Inactivo',
-  lastAccess: user.updated_at.slice(0, 10),
-}));
+const INVENTORY_CATEGORY_LABELS: Record<InventoryItemCategory, string> = {
+  roomService: 'Room Service',
+  housekeeping: 'Housekeeping',
+  maintenance: 'Mantenimiento',
+  office: 'Oficina',
+};
 
-const dbAdminRoles: AdminRole[] = rolesDB.map((role, index) => ({
-  id: parseDbId(role.id, index + 1),
-  name: role.name,
-  description: `Rol ${role.code}`,
-  userCount: usersDB.filter((user) => user.role === role.code).length,
-  permissions: Object.fromEntries(ALL_PERMISSIONS.map((label, permissionIndex) => {
-    const permission = permissionsDB[permissionIndex];
-    return [label, permission ? role.permission_ids.includes(permission.id) : false];
-  })) as Record<string, boolean>,
-}));
+const INVENTORY_REASON_LABELS: Record<InventoryMovementReason, string> = {
+  purchase: 'Compra',
+  restock: 'Reposición',
+  consumption: 'Consumo',
+  sale: 'Venta',
+  shrinkage: 'Merma',
+};
 
-const dbAdminRooms: AdminRoom[] = roomsDB.map((room, index) => {
-  const roomType = roomTypesDB.find((type) => type.id === room.room_type_id);
-  const rate = ratesDB.find((item) => item.room_type_id === room.room_type_id);
-  const features = (roomType?.room_feature_ids ?? [])
-    .map((featureId) => roomFeaturesDB.find((feature) => feature.id === featureId)?.name)
-    .filter(Boolean) as string[];
-  return {
-    id: index + 1,
-    number: room.room_number,
-    floor: `Piso ${room.floor}`,
-    type: roomTypeNameById(room.room_type_id),
-    capacity: roomType?.capacity ?? 2,
-    rate: rate ? centsToAmount(rate.price_cents) : 0,
-    status: roomStatusLabel(room.status, room.housekeeping_status),
-    features,
-  };
-});
+/**
+ * Los módulos/acciones de auditoría reales (AuditModule/AuditAction) no
+ * coinciden con el vocabulario que el prototipo Bolt inventó ('Tarifas',
+ * 'Room Service', 'Edición'...) — son categorías distintas. Se traducen
+ * los valores reales, no se inventan nuevos.
+ */
+const AUDIT_MODULE_LABELS: Record<AuditModule, string> = {
+  guestAccounts: 'Cuentas de huésped',
+  cash: 'Caja',
+  inventory: 'Inventario',
+  catalog: 'Catálogo',
+  users: 'Usuarios',
+  bookings: 'Reservas',
+};
 
-const dbAdminRoomTypes: AdminRoomType[] = roomTypesDB.map((roomType, index) => ({
-  id: parseDbId(roomType.id, index + 1),
-  name: roomType.name,
-  capacity: roomType.capacity,
-  description: roomType.description ?? '',
-  features: roomType.room_feature_ids
-    .map((featureId) => roomFeaturesDB.find((feature) => feature.id === featureId)?.name)
-    .filter(Boolean) as string[],
-  basePrice: centsToAmount(ratesDB.find((rate) => rate.room_type_id === roomType.id)?.price_cents ?? 0),
-  status: roomType.active ? 'Activo' : 'Inactivo',
-}));
-
-const dbSeasonRates: SeasonRate[] = ratesDB.map((rate, index) => ({
-  id: parseDbId(rate.id, index + 1),
-  roomType: roomTypeNameById(rate.room_type_id),
-  seasonName: rate.name,
-  startDate: rate.valid_from,
-  endDate: rate.valid_to,
-  baseRate: centsToAmount(rate.price_cents),
-  seasonalRate: centsToAmount(rate.price_cents),
-  status: rate.active ? 'Activa' : 'Inactiva',
-}));
-
-const dbPromos: Promo[] = promotionsDB.map((promo, index) => ({
-  id: parseDbId(promo.id, index + 1),
-  name: promo.name,
-  code: promo.code,
-  percentage: promo.discount_percent,
-  startDate: promo.valid_from,
-  endDate: promo.valid_to,
-  conditions: promo.description,
-  status: promo.active ? 'Activa' : 'Inactiva',
-}));
-
-const dbAmenities: Amenity[] = amenitiesDB.map((amenity, index) => ({
-  id: parseDbId(amenity.id, index + 1),
-  name: amenity.name,
-  schedule: 'Disponible',
-  available: amenity.active,
-  status: amenity.active ? 'Activo' : 'Inactivo',
-  icon: ['Waves', 'Utensils', 'Dumbbell', 'Sparkles', 'Star', 'Wifi'][index % 6],
-}));
-
-const dbRoomServiceItems: RoomServiceItem[] = productsDB
-  .filter((product) => product.category === 'food_and_beverage')
-  .map((product, index) => ({
-    id: parseDbId(product.id, index + 1),
-    name: product.name,
-    category: 'Room Service',
-    price: centsToAmount(product.price_cents),
-    available: product.active,
-    status: product.active ? 'Activo' : 'Inactivo',
-    image: '',
-  }));
-
-const dbInventory: InventoryProduct[] = inventoryItemsDB.map((item, index) => {
-  const product = productsDB.find((productItem) => productItem.id === item.product_id);
-  return {
-    id: parseDbId(item.id, index + 1),
-    name: item.name,
-    category: item.category,
-    stock: item.current_quantity,
-    minStock: item.minimum_quantity,
-    price: product ? centsToAmount(product.price_cents) : 0,
-    status: item.active ? 'Activo' : 'Inactivo',
-  };
-});
-
-const dbInventoryMovements: InventoryMovement[] = inventoryMovementsDB.map((movement, index) => ({
-  id: parseDbId(movement.id, index + 1),
-  date: movement.occurred_at.slice(0, 10),
-  product: inventoryItemsDB.find((item) => item.id === movement.inventory_item_id)?.name ?? movement.inventory_item_id,
-  type: movement.type === 'in' ? 'Entrada' : 'Salida',
-  quantity: movement.quantity,
-  reason: movement.reason,
-  responsible: userNameById(movement.responsible_user_id),
-}));
-
-const dbCashMovements: CashMovement[] = cashMovementsDB.map((movement, index) => ({
-  id: parseDbId(movement.id, index + 1),
-  date: movement.occurred_at.slice(0, 10),
-  concept: movement.concept,
-  type: movement.type === 'income' ? 'Ingreso' : 'Egreso',
-  amount: centsToAmount(movement.amount_cents),
-  responsible: userNameById(movement.responsible_user_id),
-}));
-
-const dbAudit: AuditEntry[] = auditLogsDB.map((entry, index) => ({
-  id: parseDbId(entry.id, index + 1),
-  user: userNameById(entry.user_id),
-  date: entry.occurred_at.slice(0, 10),
-  time: formatDbTime(entry.occurred_at),
-  module: entry.module,
-  action: entry.action,
-  description: `${entry.entity_type} ${entry.entity_id}`,
-}));
-
-const initialAdminUsers = dbAdminUsers.length > 0 ? dbAdminUsers : defaultUsers;
-const initialAdminRoles = dbAdminRoles.length > 0 ? dbAdminRoles : defaultRoles;
-const initialAdminRooms = dbAdminRooms.length > 0 ? dbAdminRooms : defaultRooms;
-const initialAdminRoomTypes = dbAdminRoomTypes.length > 0 ? dbAdminRoomTypes : defaultRoomTypes;
-const initialSeasonRates = dbSeasonRates.length > 0 ? dbSeasonRates : defaultSeasonRates;
-const initialDynamicRates = defaultDynamicRates;
-const initialPromos = dbPromos.length > 0 ? dbPromos : defaultPromos;
-const initialAmenities = dbAmenities.length > 0 ? dbAmenities : defaultAmenities;
-const initialRoomServiceItems = dbRoomServiceItems.length > 0 ? dbRoomServiceItems : defaultRoomServiceItems;
-const initialInventory = dbInventory.length > 0 ? dbInventory : defaultInventory;
-const initialMovements = dbInventoryMovements.length > 0 ? dbInventoryMovements : defaultMovements;
-const initialCashMovements = dbCashMovements.length > 0 ? dbCashMovements : defaultCashMovements;
-const initialAudit = dbAudit.length > 0 ? dbAudit : defaultAudit;
+const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
+  create: 'Creación',
+  update: 'Actualización',
+  delete: 'Eliminación',
+  void: 'Anulación',
+  open: 'Apertura',
+  close: 'Cierre',
+};
 
 const dashboardPeriodOptions: DashboardPeriod[] = ['Hoy', '7 días', '30 días', '90 días'];
 const reportTabs: AdminReportTab[] = ['Ocupación', 'Ingresos', 'Reservas', 'Cancelaciones', 'Canales', 'Servicios', 'Temporadas'];
@@ -515,13 +322,302 @@ function BarChart({ data, labels }: { data: number[]; labels: string[] }) {
   );
 }
 
+type AdminData = {
+  users: AdminUser[];
+  roles: AdminRole[];
+  rooms: AdminRoom[];
+  roomTypes: AdminRoomType[];
+  seasonRates: SeasonRate[];
+  promos: Promo[];
+  amenities: Amenity[];
+  roomServiceItems: RoomServiceItem[];
+  inventory: InventoryProduct[];
+  movements: InventoryMovement[];
+  cashMovements: CashMovement[];
+  audit: AuditEntry[];
+  recentActivity: AuditEntry[];
+};
+
+type ScreenState =
+  | { status: 'loading' }
+  | { status: 'error'; message: string }
+  | ({ status: 'ready' } & AdminData);
+
+function getErrorMessage(cause: unknown): string {
+  return cause instanceof Error ? cause.message : 'No fue posible cargar el panel de administración.';
+}
+
+function buildAuditEntries(logs: AuditLog[], users: User[]): AuditEntry[] {
+  return logs.map((entry, index) => ({
+    id: parseDbId(entry.id, index + 1),
+    user: userNameById(users, entry.userId),
+    date: toDtoCalendarDate(entry.occurredAt),
+    time: formatDbTime(entry.occurredAt),
+    module: AUDIT_MODULE_LABELS[entry.module],
+    action: AUDIT_ACTION_LABELS[entry.action],
+    description: `${entry.entityType} ${entry.entityId}`,
+  }));
+}
+
 export function AdminContent({ nav, onAction, onNavigate }: { nav: string; onAction: (message: string) => void; onNavigate?: (nav: string) => void }) {
+  const [screen, setScreen] = useState<ScreenState>({ status: 'loading' });
+
+  useEffect(() => {
+    let active = true;
+
+    async function load() {
+      setScreen({ status: 'loading' });
+      try {
+        const [
+          users, roles, permissions,
+          rooms, roomTypes, roomFeatures, rates,
+          amenitiesData, products,
+          inventoryItems, inventoryMovements,
+          cashMovementsData,
+          auditLogs,
+          promotions,
+        ] = await Promise.all([
+          personnelService.getUsers(),
+          personnelService.getRoles(),
+          personnelService.getPermissions(),
+          roomService.getRooms(),
+          roomService.getRoomTypes(),
+          roomService.getRoomFeatures(),
+          roomService.getRates(),
+          catalogService.getAmenities(),
+          catalogService.getProducts(),
+          inventoryService.getItems(),
+          inventoryService.getMovements(),
+          cashService.getMovements(),
+          auditService.getLogs(),
+          promotionService.getPromotions(),
+        ]);
+
+        const adminUsers: AdminUser[] = users.map((user, index) => ({
+          id: parseDbId(user.id, index + 1),
+          name: `${user.firstName} ${user.lastName}`,
+          email: user.email,
+          role: roles.find((role: Role) => normalizeRoleCode(role.code) === user.role)?.name ?? user.role,
+          status: user.status === 'active' ? 'Activo' : 'Inactivo',
+          lastAccess: toDtoCalendarDate(user.updatedAt),
+        }));
+
+        const adminRoles: AdminRole[] = roles.map((role, index) => ({
+          id: parseDbId(role.id, index + 1),
+          name: role.name,
+          description: `Rol ${role.code}`,
+          userCount: users.filter((user) => user.role === normalizeRoleCode(role.code)).length,
+          permissions: Object.fromEntries(ALL_PERMISSIONS.map((label, permissionIndex) => {
+            const permission = permissions[permissionIndex];
+            return [label, permission ? role.permissionIds.includes(permission.id) : false];
+          })) as Record<string, boolean>,
+        }));
+
+        const adminRooms: AdminRoom[] = rooms.map((room, index) => {
+          const roomType = roomTypes.find((type) => type.id === room.roomTypeId);
+          const rate = rates.find((item) => item.roomTypeId === room.roomTypeId);
+          const features = (roomType?.roomFeatureIds ?? [])
+            .map((featureId) => roomFeatures.find((feature) => feature.id === featureId)?.name)
+            .filter((name): name is string => Boolean(name));
+          return {
+            id: index + 1,
+            number: room.roomNumber,
+            floor: `Piso ${room.floor}`,
+            type: roomTypeNameById(roomTypes, room.roomTypeId),
+            capacity: roomType?.capacity ?? 2,
+            rate: rate ? centsToAmount(rate.priceCents) : 0,
+            status: roomStatusLabel(room.status, room.housekeepingStatus),
+            features,
+          };
+        });
+
+        const adminRoomTypes: AdminRoomType[] = roomTypes.map((roomType, index) => ({
+          id: parseDbId(roomType.id, index + 1),
+          name: roomType.name,
+          capacity: roomType.capacity,
+          description: roomType.description ?? '',
+          features: roomType.roomFeatureIds
+            .map((featureId) => roomFeatures.find((feature) => feature.id === featureId)?.name)
+            .filter((name): name is string => Boolean(name)),
+          basePrice: centsToAmount(rates.find((rate) => rate.roomTypeId === roomType.id)?.priceCents ?? 0),
+          status: roomType.active ? 'Activo' : 'Inactivo',
+        }));
+
+        const seasonRates: SeasonRate[] = rates.map((rate, index) => ({
+          id: parseDbId(rate.id, index + 1),
+          roomType: roomTypeNameById(roomTypes, rate.roomTypeId),
+          seasonName: rate.name,
+          startDate: toDtoCalendarDate(rate.validFrom),
+          endDate: toDtoCalendarDate(rate.validTo),
+          baseRate: centsToAmount(rate.priceCents),
+          seasonalRate: centsToAmount(rate.priceCents),
+          status: rate.active ? 'Activa' : 'Inactiva',
+        }));
+
+        const promos: Promo[] = promotions.map((promo, index) => ({
+          id: parseDbId(promo.id, index + 1),
+          name: promo.name,
+          code: promo.code,
+          percentage: promo.discountPercent,
+          startDate: toDtoCalendarDate(promo.validFrom),
+          endDate: toDtoCalendarDate(promo.validTo),
+          conditions: promo.description,
+          status: promo.active ? 'Activa' : 'Inactiva',
+        }));
+
+        const amenities: Amenity[] = amenitiesData.map((amenity, index) => ({
+          id: parseDbId(amenity.id, index + 1),
+          name: amenity.name,
+          schedule: 'Disponible',
+          available: amenity.active,
+          status: amenity.active ? 'Activo' : 'Inactivo',
+          icon: ['Waves', 'Utensils', 'Dumbbell', 'Sparkles', 'Star', 'Wifi'][index % 6],
+        }));
+
+        const roomServiceItems: RoomServiceItem[] = products
+          .filter((product: Product) => product.category === 'foodAndBeverage')
+          .map((product, index) => ({
+            id: parseDbId(product.id, index + 1),
+            name: product.name,
+            category: 'Room Service',
+            price: centsToAmount(product.priceCents),
+            available: product.active,
+            status: product.active ? 'Activo' : 'Inactivo',
+            image: '',
+          }));
+
+        const inventory: InventoryProduct[] = inventoryItems.map((item, index) => {
+          const product = products.find((productItem) => productItem.id === item.productId);
+          return {
+            id: parseDbId(item.id, index + 1),
+            name: item.name,
+            category: INVENTORY_CATEGORY_LABELS[item.category],
+            stock: item.currentQuantity,
+            minStock: item.minimumQuantity,
+            price: product ? centsToAmount(product.priceCents) : 0,
+            status: item.active ? 'Activo' : 'Inactivo',
+          };
+        });
+
+        const movements: InventoryMovement[] = inventoryMovements.map((movement, index) => ({
+          id: parseDbId(movement.id, index + 1),
+          date: toDtoCalendarDate(movement.occurredAt),
+          product: inventoryItems.find((item) => item.id === movement.inventoryItemId)?.name ?? movement.inventoryItemId,
+          type: movement.type === 'in' ? 'Entrada' : 'Salida',
+          quantity: movement.quantity,
+          reason: INVENTORY_REASON_LABELS[movement.reason],
+          responsible: userNameById(users, movement.responsibleUserId),
+        }));
+
+        const cashMovements: CashMovement[] = cashMovementsData.map((movement, index) => ({
+          id: parseDbId(movement.id, index + 1),
+          date: toDtoCalendarDate(movement.occurredAt),
+          concept: movement.concept,
+          type: movement.type === 'income' ? 'Ingreso' : 'Egreso',
+          amount: centsToAmount(movement.amountCents),
+          responsible: userNameById(users, movement.responsibleUserId),
+        }));
+
+        const audit = buildAuditEntries(auditLogs, users);
+        const recentActivity = buildAuditEntries(
+          [...auditLogs].sort((left, right) => right.occurredAt.getTime() - left.occurredAt.getTime()).slice(0, 4),
+          users,
+        );
+
+        if (active) {
+          setScreen({
+            status: 'ready',
+            users: adminUsers,
+            roles: adminRoles,
+            rooms: adminRooms,
+            roomTypes: adminRoomTypes,
+            seasonRates,
+            promos,
+            amenities,
+            roomServiceItems,
+            inventory,
+            movements,
+            cashMovements,
+            audit,
+            recentActivity,
+          });
+        }
+      } catch (cause) {
+        if (active) setScreen({ status: 'error', message: getErrorMessage(cause) });
+      }
+    }
+
+    void load();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  if (screen.status === 'loading') {
+    return <LoadingState label="Cargando el panel de administración..." />;
+  }
+
+  if (screen.status === 'error') {
+    return (
+      <ErrorState
+        title="No pudimos cargar el panel de administración"
+        description={screen.message}
+        onRetry={() => setScreen({ status: 'loading' })}
+      />
+    );
+  }
+
+  return (
+    <AdminContentReady
+      nav={nav}
+      onAction={onAction}
+      onNavigate={onNavigate}
+      initialAdminUsers={screen.users}
+      initialAdminRoles={screen.roles}
+      initialAdminRooms={screen.rooms}
+      initialAdminRoomTypes={screen.roomTypes}
+      initialSeasonRates={screen.seasonRates}
+      initialPromos={screen.promos}
+      initialAmenities={screen.amenities}
+      initialRoomServiceItems={screen.roomServiceItems}
+      initialInventory={screen.inventory}
+      initialMovements={screen.movements}
+      initialCashMovements={screen.cashMovements}
+      initialAudit={screen.audit}
+      recentActivity={screen.recentActivity}
+    />
+  );
+}
+
+function AdminContentReady({
+  nav, onAction, onNavigate,
+  initialAdminUsers, initialAdminRoles, initialAdminRooms, initialAdminRoomTypes,
+  initialSeasonRates, initialPromos, initialAmenities, initialRoomServiceItems,
+  initialInventory, initialMovements, initialCashMovements, initialAudit, recentActivity,
+}: {
+  nav: string;
+  onAction: (message: string) => void;
+  onNavigate?: (nav: string) => void;
+  initialAdminUsers: AdminUser[];
+  initialAdminRoles: AdminRole[];
+  initialAdminRooms: AdminRoom[];
+  initialAdminRoomTypes: AdminRoomType[];
+  initialSeasonRates: SeasonRate[];
+  initialPromos: Promo[];
+  initialAmenities: Amenity[];
+  initialRoomServiceItems: RoomServiceItem[];
+  initialInventory: InventoryProduct[];
+  initialMovements: InventoryMovement[];
+  initialCashMovements: CashMovement[];
+  initialAudit: AuditEntry[];
+  recentActivity: AuditEntry[];
+}) {
   const [users, setUsers] = useState(initialAdminUsers);
   const [roles, setRoles] = useState(initialAdminRoles);
   const [rooms, setRooms] = useState(initialAdminRooms);
   const [roomTypes, setRoomTypes] = useState(initialAdminRoomTypes);
   const [seasonRates, setSeasonRates] = useState(initialSeasonRates);
-  const [dynamicRates, setDynamicRates] = useState(initialDynamicRates);
+  const [dynamicRates, setDynamicRates] = useState(defaultDynamicRates);
   const [promos, setPromos] = useState(initialPromos);
   const [amenities, setAmenities] = useState(initialAmenities);
   const [rsItems, setRsItems] = useState(initialRoomServiceItems);
@@ -642,12 +738,18 @@ export function AdminContent({ nav, onAction, onNavigate }: { nav: string; onAct
               <div><h3>Actividad reciente</h3><p>Últimos movimientos del hotel</p></div>
               <button className="icon-btn" onClick={() => onAction('Actividad actualizada')}><Activity size={17} /></button>
             </div>
-            <div className="activity-list">
-              <div className="activity-item"><span className="activity-dot success" /><div><p>Nueva reserva creada · Habitación 402</p><small>Hace 8 min</small></div></div>
-              <div className="activity-item"><span className="activity-dot info" /><div><p>Check-in completado · Habitación 115</p><small>Hace 24 min</small></div></div>
-              <div className="activity-item"><span className="activity-dot gold" /><div><p>Tarifa de temporada actualizada</p><small>Hace 1 h</small></div></div>
-              <div className="activity-item"><span className="activity-dot terracotta" /><div><p>Cierre de caja registrado</p><small>Ayer, 18:40</small></div></div>
-            </div>
+            {recentActivity.length === 0 ? (
+              <div className="hk-empty"><Activity size={20} /><p>Sin actividad registrada todavía</p></div>
+            ) : (
+              <div className="activity-list">
+                {recentActivity.map((entry) => (
+                  <div className="activity-item" key={entry.id}>
+                    <span className={`activity-dot ${entry.action === 'Anulación' || entry.action === 'Eliminación' || entry.action === 'Cierre' ? 'terracotta' : 'success'}`} />
+                    <div><p>{entry.module} · {entry.action} · {entry.description}</p><small>{entry.date} {entry.time}</small></div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </>
@@ -881,25 +983,29 @@ export function AdminContent({ nav, onAction, onNavigate }: { nav: string; onAct
             <button className="button primary" onClick={() => { setEditPromo(null); setShowPromoModal(true); }}><Plus size={17} /> Nueva promoción</button>
           </div>
           <AdminToolbar search={search} setSearch={setSearch} />
-          <div className="adm-promo-grid">
-            {filtered.map((p) => (
-              <div className="adm-promo-card" key={p.id}>
-                <div className="adm-promo-head">
-                  <div><strong>{p.name}</strong><code>{p.code}</code></div>
-                  <span className={`status-pill ${statusPillClass(p.status)}`}>{p.status}</span>
+          {filtered.length === 0 ? (
+            <div className="hk-empty"><Percent size={22} /><p>No hay promociones registradas</p></div>
+          ) : (
+            <div className="adm-promo-grid">
+              {filtered.map((p) => (
+                <div className="adm-promo-card" key={p.id}>
+                  <div className="adm-promo-head">
+                    <div><strong>{p.name}</strong><code>{p.code}</code></div>
+                    <span className={`status-pill ${statusPillClass(p.status)}`}>{p.status}</span>
+                  </div>
+                  <div className="adm-promo-body">
+                    <div className="adm-promo-pct"><Percent size={20} /><strong>{p.percentage}%</strong></div>
+                    <p>{p.conditions}</p>
+                    <div className="adm-promo-dates"><CalendarDays size={14} /><span>{p.startDate} → {p.endDate}</span></div>
+                  </div>
+                  <div className="adm-role-actions">
+                    <EditIconButton label="Editar promoción" onClick={() => { setEditPromo(p); setShowPromoModal(true); }} />
+                    <StatusSwitch checked={p.status === 'Activa'} label={p.status === 'Activa' ? 'Desactivar promoción' : 'Activar promoción'} onChange={() => { setPromos((cur) => cur.map((x) => x.id === p.id ? { ...x, status: x.status === 'Activa' ? 'Inactiva' : 'Activa' } : x)); onAction(`Promoción ${p.status === 'Activa' ? 'desactivada' : 'activada'}`); }} />
+                  </div>
                 </div>
-                <div className="adm-promo-body">
-                  <div className="adm-promo-pct"><Percent size={20} /><strong>{p.percentage}%</strong></div>
-                  <p>{p.conditions}</p>
-                  <div className="adm-promo-dates"><CalendarDays size={14} /><span>{p.startDate} → {p.endDate}</span></div>
-                </div>
-                <div className="adm-role-actions">
-                  <EditIconButton label="Editar promoción" onClick={() => { setEditPromo(p); setShowPromoModal(true); }} />
-                  <StatusSwitch checked={p.status === 'Activa'} label={p.status === 'Activa' ? 'Desactivar promoción' : 'Activar promoción'} onChange={() => { setPromos((cur) => cur.map((x) => x.id === p.id ? { ...x, status: x.status === 'Activa' ? 'Inactiva' : 'Activa' } : x)); onAction(`Promoción ${p.status === 'Activa' ? 'desactivada' : 'activada'}`); }} />
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
         {showPromoModal && (
           <PromoModal promo={editPromo} onClose={() => setShowPromoModal(false)} onSave={(p) => {
@@ -1097,39 +1203,47 @@ export function AdminContent({ nav, onAction, onNavigate }: { nav: string; onAct
             </div>
           )}
           <AdminToolbar search={search} setSearch={setSearch} />
-          <AdminTable headers={['Producto', 'Categoría', 'Stock', 'Stock mínimo', 'Precio', 'Estado', 'Acciones']}>
-            {filtered.map((p) => (
-              <tr key={p.id} className={p.stock <= p.minStock ? 'adm-row-alert' : ''}>
-                <td><strong>{p.name}</strong></td>
-                <td>{p.category}</td>
-                <td className={p.stock <= p.minStock ? 'terracotta-text' : ''}><strong>{p.stock}</strong></td>
-                <td>{p.minStock}</td>
-                <td>${p.price.toLocaleString()}</td>
-                <td><span className={`status-pill ${statusPillClass(p.status)}`}>{p.status}</span></td>
-                <td className="adm-actions">
-                  <EditIconButton label="Editar producto" onClick={() => { setEditProduct(p); setShowProductModal(true); }} />
-                  <StatusSwitch checked={p.status === 'Activo'} label={p.status === 'Activo' ? 'Desactivar producto' : 'Activar producto'} onChange={() => { setInventory((cur) => cur.map((x) => x.id === p.id ? { ...x, status: x.status === 'Activo' ? 'Inactivo' : 'Activo' } : x)); onAction(`Producto ${p.status === 'Activo' ? 'desactivado' : 'activado'}`); }} />
-                </td>
-              </tr>
-            ))}
-          </AdminTable>
+          {filtered.length === 0 ? (
+            <div className="hk-empty"><Package size={22} /><p>No hay productos en el inventario</p></div>
+          ) : (
+            <AdminTable headers={['Producto', 'Categoría', 'Stock', 'Stock mínimo', 'Precio', 'Estado', 'Acciones']}>
+              {filtered.map((p) => (
+                <tr key={p.id} className={p.stock <= p.minStock ? 'adm-row-alert' : ''}>
+                  <td><strong>{p.name}</strong></td>
+                  <td>{p.category}</td>
+                  <td className={p.stock <= p.minStock ? 'terracotta-text' : ''}><strong>{p.stock}</strong></td>
+                  <td>{p.minStock}</td>
+                  <td>${p.price.toLocaleString()}</td>
+                  <td><span className={`status-pill ${statusPillClass(p.status)}`}>{p.status}</span></td>
+                  <td className="adm-actions">
+                    <EditIconButton label="Editar producto" onClick={() => { setEditProduct(p); setShowProductModal(true); }} />
+                    <StatusSwitch checked={p.status === 'Activo'} label={p.status === 'Activo' ? 'Desactivar producto' : 'Activar producto'} onChange={() => { setInventory((cur) => cur.map((x) => x.id === p.id ? { ...x, status: x.status === 'Activo' ? 'Inactivo' : 'Activo' } : x)); onAction(`Producto ${p.status === 'Activo' ? 'desactivado' : 'activado'}`); }} />
+                  </td>
+                </tr>
+              ))}
+            </AdminTable>
+          )}
         </div>
         <div className="panel">
           <div className="panel-heading">
             <div><h3>Movimientos de inventario</h3><p>Historial de entradas y salidas</p></div>
           </div>
-          <AdminTable headers={['Fecha', 'Producto', 'Tipo', 'Cantidad', 'Motivo', 'Responsable']}>
-            {movements.map((m) => (
-              <tr key={m.id}>
-                <td>{m.date}</td>
-                <td><strong>{m.product}</strong></td>
-                <td><span className={`status-pill ${m.type === 'Entrada' ? 'success' : 'warning'}`}>{m.type}</span></td>
-                <td>{m.type === 'Entrada' ? '+' : '-'}{m.quantity}</td>
-                <td>{m.reason}</td>
-                <td>{m.responsible}</td>
-              </tr>
-            ))}
-          </AdminTable>
+          {movements.length === 0 ? (
+            <div className="hk-empty"><ArrowRight size={22} /><p>Sin movimientos registrados</p></div>
+          ) : (
+            <AdminTable headers={['Fecha', 'Producto', 'Tipo', 'Cantidad', 'Motivo', 'Responsable']}>
+              {movements.map((m) => (
+                <tr key={m.id}>
+                  <td>{m.date}</td>
+                  <td><strong>{m.product}</strong></td>
+                  <td><span className={`status-pill ${m.type === 'Entrada' ? 'success' : 'warning'}`}>{m.type}</span></td>
+                  <td>{m.type === 'Entrada' ? '+' : '-'}{m.quantity}</td>
+                  <td>{m.reason}</td>
+                  <td>{m.responsible}</td>
+                </tr>
+              ))}
+            </AdminTable>
+          )}
         </div>
         {showProductModal && (
           <ProductModal product={editProduct} onClose={() => setShowProductModal(false)} onSave={(p) => {
@@ -1175,17 +1289,21 @@ export function AdminContent({ nav, onAction, onNavigate }: { nav: string; onAct
               <button className="button primary" onClick={() => setShowCashModal(true)}><Plus size={17} /> Nuevo movimiento</button>
             </div>
           </div>
-          <AdminTable headers={['Fecha', 'Concepto', 'Tipo', 'Monto', 'Responsable']}>
-            {cashMovements.map((m) => (
-              <tr key={m.id}>
-                <td>{m.date}</td>
-                <td><strong>{m.concept}</strong></td>
-                <td><span className={`status-pill ${m.type === 'Ingreso' ? 'success' : 'warning'}`}>{m.type}</span></td>
-                <td className={m.type === 'Ingreso' ? 'success-text' : 'terracotta-text'}><strong>{m.type === 'Ingreso' ? '+' : '-'}${m.amount.toLocaleString()}</strong></td>
-                <td>{m.responsible}</td>
-              </tr>
-            ))}
-          </AdminTable>
+          {cashMovements.length === 0 ? (
+            <div className="hk-empty"><Wallet size={22} /><p>Sin movimientos de caja registrados</p></div>
+          ) : (
+            <AdminTable headers={['Fecha', 'Concepto', 'Tipo', 'Monto', 'Responsable']}>
+              {cashMovements.map((m) => (
+                <tr key={m.id}>
+                  <td>{m.date}</td>
+                  <td><strong>{m.concept}</strong></td>
+                  <td><span className={`status-pill ${m.type === 'Ingreso' ? 'success' : 'warning'}`}>{m.type}</span></td>
+                  <td className={m.type === 'Ingreso' ? 'success-text' : 'terracotta-text'}><strong>{m.type === 'Ingreso' ? '+' : '-'}${m.amount.toLocaleString()}</strong></td>
+                  <td>{m.responsible}</td>
+                </tr>
+              ))}
+            </AdminTable>
+          )}
         </div>
         {showCashModal && (
           <CashModal onClose={() => setShowCashModal(false)} onSave={(m) => {
@@ -1211,19 +1329,23 @@ export function AdminContent({ nav, onAction, onNavigate }: { nav: string; onAct
           <div><h3>Historial de auditoría</h3><p>Registro de todas las acciones del sistema</p></div>
           <button className="button secondary" onClick={() => onAction('Reporte de auditoría preparado')}><Download size={16} /> Exportar</button>
         </div>
-        <AdminToolbar search={search} setSearch={setSearch} filterLabel="Filtrar" filterValue={filter} setFilter={setFilter} filterOptions={['Todos', 'Tarifas', 'Reservas', 'Usuarios', 'Room Service', 'Caja', 'Inventario']} />
-        <AdminTable headers={['Usuario', 'Fecha', 'Hora', 'Módulo', 'Acción', 'Descripción']}>
-          {filtered.map((a) => (
-            <tr key={a.id}>
-              <td><strong>{a.user}</strong></td>
-              <td>{a.date}</td>
-              <td>{a.time}</td>
-              <td><span className="status-pill info">{a.module}</span></td>
-              <td><span className={`status-pill ${a.action === 'Cancelación' || a.action === 'Cierre' ? 'warning' : 'success'}`}>{a.action}</span></td>
-              <td>{a.description}</td>
-            </tr>
-          ))}
-        </AdminTable>
+        <AdminToolbar search={search} setSearch={setSearch} filterLabel="Filtrar" filterValue={filter} setFilter={setFilter} filterOptions={['Todos', ...Object.values(AUDIT_MODULE_LABELS)]} />
+        {filtered.length === 0 ? (
+          <div className="hk-empty"><FileText size={22} /><p>Sin registros de auditoría</p></div>
+        ) : (
+          <AdminTable headers={['Usuario', 'Fecha', 'Hora', 'Módulo', 'Acción', 'Descripción']}>
+            {filtered.map((a) => (
+              <tr key={a.id}>
+                <td><strong>{a.user}</strong></td>
+                <td>{a.date}</td>
+                <td>{a.time}</td>
+                <td><span className="status-pill info">{a.module}</span></td>
+                <td><span className={`status-pill ${a.action === 'Anulación' || a.action === 'Eliminación' || a.action === 'Cierre' ? 'warning' : 'success'}`}>{a.action}</span></td>
+                <td>{a.description}</td>
+              </tr>
+            ))}
+          </AdminTable>
+        )}
       </div>
     );
   }
