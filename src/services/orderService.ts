@@ -1,13 +1,13 @@
 import { toDomain as toOrder, type Order } from '@/shared/types/entities/order';
 import type { ID } from '@/shared/types/common';
 import { ordersDB } from '@/data/db';
-import { mockUtils, simulateLatency } from './mockUtils';
+import { mockUtils, requireCollection, simulateLatency } from './mockUtils';
 
 export const orderService = {
   async getOrders(): Promise<Order[]> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar los pedidos.');
-    return ordersDB.map(toOrder);
+    return requireCollection(ordersDB, 'ordersDB').map(toOrder);
   },
   async getOrderById(id: ID): Promise<Order | undefined> {
     await simulateLatency();
@@ -18,7 +18,9 @@ export const orderService = {
   async getOrdersByGuestId(guestId: ID): Promise<Order[]> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar los pedidos.');
-    return ordersDB.filter((item) => item.guest_id === guestId).map(toOrder);
+    return requireCollection(ordersDB, 'ordersDB')
+      .filter((item) => item.guest_id === guestId)
+      .map(toOrder);
   },
 };
 export default orderService;

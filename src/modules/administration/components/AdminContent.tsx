@@ -4,6 +4,7 @@ import {
   ArrowRight,
   Ban,
   BedDouble,
+  Building2,
   CalendarDays,
   Check,
   ChevronDown,
@@ -20,6 +21,7 @@ import {
   Star,
   TriangleAlert,
   TrendingUp,
+  Users as UsersIcon,
   Utensils,
   Wallet,
   Waves,
@@ -1377,46 +1379,55 @@ function AdminContentReady({
               'Room Service',
             ]}
           />
-          <AdminTable headers={['Nombre', 'Correo', 'Rol', 'Estado', 'Último acceso', 'Acciones']}>
-            {filtered.map((u) => (
-              <tr key={u.id}>
-                <td>
-                  <strong>{u.name}</strong>
-                </td>
-                <td>{u.email}</td>
-                <td>{u.role}</td>
-                <td>
-                  <span className={`status-pill ${statusPillClass(u.status)}`}>{u.status}</span>
-                </td>
-                <td>{u.lastAccess}</td>
-                <td className="adm-actions">
-                  <EditIconButton
-                    label="Editar usuario"
-                    onClick={() => {
-                      setEditUser(u);
-                      setShowUserModal(true);
-                    }}
-                  />
-                  <StatusSwitch
-                    checked={u.status === 'Activo'}
-                    label={u.status === 'Activo' ? 'Desactivar usuario' : 'Activar usuario'}
-                    onChange={() => {
-                      setUsers((cur) =>
-                        cur.map((x) =>
-                          x.id === u.id
-                            ? { ...x, status: x.status === 'Activo' ? 'Inactivo' : 'Activo' }
-                            : x,
-                        ),
-                      );
-                      onAction(
-                        `Usuario ${u.name} ${u.status === 'Activo' ? 'desactivado' : 'activado'}`,
-                      );
-                    }}
-                  />
-                </td>
-              </tr>
-            ))}
-          </AdminTable>
+          {filtered.length === 0 ? (
+            <div className="hk-empty">
+              <UsersIcon size={22} />
+              <p>No hay usuarios registrados</p>
+            </div>
+          ) : (
+            <AdminTable
+              headers={['Nombre', 'Correo', 'Rol', 'Estado', 'Último acceso', 'Acciones']}
+            >
+              {filtered.map((u) => (
+                <tr key={u.id}>
+                  <td>
+                    <strong>{u.name}</strong>
+                  </td>
+                  <td>{u.email}</td>
+                  <td>{u.role}</td>
+                  <td>
+                    <span className={`status-pill ${statusPillClass(u.status)}`}>{u.status}</span>
+                  </td>
+                  <td>{u.lastAccess}</td>
+                  <td className="adm-actions">
+                    <EditIconButton
+                      label="Editar usuario"
+                      onClick={() => {
+                        setEditUser(u);
+                        setShowUserModal(true);
+                      }}
+                    />
+                    <StatusSwitch
+                      checked={u.status === 'Activo'}
+                      label={u.status === 'Activo' ? 'Desactivar usuario' : 'Activar usuario'}
+                      onChange={() => {
+                        setUsers((cur) =>
+                          cur.map((x) =>
+                            x.id === u.id
+                              ? { ...x, status: x.status === 'Activo' ? 'Inactivo' : 'Activo' }
+                              : x,
+                          ),
+                        );
+                        onAction(
+                          `Usuario ${u.name} ${u.status === 'Activo' ? 'desactivado' : 'activado'}`,
+                        );
+                      }}
+                    />
+                  </td>
+                </tr>
+              ))}
+            </AdminTable>
+          )}
         </div>
         <div className="panel">
           <div className="panel-heading">
@@ -1548,55 +1559,64 @@ function AdminContentReady({
               'Suite',
             ]}
           />
-          <AdminTable
-            headers={['Número', 'Piso', 'Tipo', 'Capacidad', 'Tarifa', 'Estado', 'Acciones']}
-          >
-            {filtered.map((r) => (
-              <tr key={r.id}>
-                <td>
-                  <strong>{r.number}</strong>
-                </td>
-                <td>{r.floor}</td>
-                <td>{r.type}</td>
-                <td>{r.capacity} huéspedes</td>
-                <td>${r.rate.toLocaleString()}</td>
-                <td>
-                  <span className={`status-pill ${roomStatusClass(r.status)}`}>{r.status}</span>
-                </td>
-                <td className="adm-actions">
-                  <EditIconButton
-                    label="Editar habitación"
-                    onClick={() => {
-                      setEditRoom(r);
-                      setShowRoomModal(true);
-                    }}
-                  />
-                  <StatusSwitch
-                    checked={r.status !== 'Mantenimiento'}
-                    label={
-                      r.status === 'Mantenimiento' ? 'Activar habitación' : 'Desactivar habitación'
-                    }
-                    onChange={() => {
-                      setRooms((cur) =>
-                        cur.map((x) =>
-                          x.id === r.id
-                            ? {
-                                ...x,
-                                status:
-                                  x.status === 'Mantenimiento' ? 'Disponible' : 'Mantenimiento',
-                              }
-                            : x,
-                        ),
-                      );
-                      onAction(
-                        `Habitación ${r.number} ${r.status === 'Mantenimiento' ? 'activada' : 'desactivada'}`,
-                      );
-                    }}
-                  />
-                </td>
-              </tr>
-            ))}
-          </AdminTable>
+          {filtered.length === 0 ? (
+            <div className="hk-empty">
+              <BedDouble size={22} />
+              <p>No hay habitaciones registradas</p>
+            </div>
+          ) : (
+            <AdminTable
+              headers={['Número', 'Piso', 'Tipo', 'Capacidad', 'Tarifa', 'Estado', 'Acciones']}
+            >
+              {filtered.map((r) => (
+                <tr key={r.id}>
+                  <td>
+                    <strong>{r.number}</strong>
+                  </td>
+                  <td>{r.floor}</td>
+                  <td>{r.type}</td>
+                  <td>{r.capacity} huéspedes</td>
+                  <td>${r.rate.toLocaleString()}</td>
+                  <td>
+                    <span className={`status-pill ${roomStatusClass(r.status)}`}>{r.status}</span>
+                  </td>
+                  <td className="adm-actions">
+                    <EditIconButton
+                      label="Editar habitación"
+                      onClick={() => {
+                        setEditRoom(r);
+                        setShowRoomModal(true);
+                      }}
+                    />
+                    <StatusSwitch
+                      checked={r.status !== 'Mantenimiento'}
+                      label={
+                        r.status === 'Mantenimiento'
+                          ? 'Activar habitación'
+                          : 'Desactivar habitación'
+                      }
+                      onChange={() => {
+                        setRooms((cur) =>
+                          cur.map((x) =>
+                            x.id === r.id
+                              ? {
+                                  ...x,
+                                  status:
+                                    x.status === 'Mantenimiento' ? 'Disponible' : 'Mantenimiento',
+                                }
+                              : x,
+                          ),
+                        );
+                        onAction(
+                          `Habitación ${r.number} ${r.status === 'Mantenimiento' ? 'activada' : 'desactivada'}`,
+                        );
+                      }}
+                    />
+                  </td>
+                </tr>
+              ))}
+            </AdminTable>
+          )}
         </div>
         <div className="panel">
           <div className="panel-heading">
@@ -1614,57 +1634,64 @@ function AdminContentReady({
               <Plus size={17} /> Nuevo tipo
             </button>
           </div>
-          <div className="adm-roomtype-grid">
-            {roomTypes.map((rt) => (
-              <div className="adm-roomtype-card" key={rt.id}>
-                <div className="adm-roomtype-head">
-                  <div>
-                    <strong>{rt.name}</strong>
-                    <span>
-                      {rt.capacity} huéspedes · {rt.features.length} características
-                    </span>
+          {roomTypes.length === 0 ? (
+            <div className="hk-empty">
+              <Building2 size={22} />
+              <p>No hay tipos de habitación registrados</p>
+            </div>
+          ) : (
+            <div className="adm-roomtype-grid">
+              {roomTypes.map((rt) => (
+                <div className="adm-roomtype-card" key={rt.id}>
+                  <div className="adm-roomtype-head">
+                    <div>
+                      <strong>{rt.name}</strong>
+                      <span>
+                        {rt.capacity} huéspedes · {rt.features.length} características
+                      </span>
+                    </div>
+                    <span className={`status-pill ${statusPillClass(rt.status)}`}>{rt.status}</span>
                   </div>
-                  <span className={`status-pill ${statusPillClass(rt.status)}`}>{rt.status}</span>
+                  <p className="adm-roomtype-desc">{rt.description}</p>
+                  <div className="adm-roomtype-features">
+                    {rt.features.map((f) => (
+                      <span key={f} className="adm-feature-tag">
+                        {f}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="adm-roomtype-price">
+                    Precio base: <strong>${rt.basePrice.toLocaleString()}</strong>
+                  </div>
+                  <div className="adm-role-actions">
+                    <EditIconButton
+                      label="Editar tipo de habitación"
+                      onClick={() => {
+                        setEditRoomType(rt);
+                        setShowRoomTypeModal(true);
+                      }}
+                    />
+                    <StatusSwitch
+                      checked={rt.status === 'Activo'}
+                      label={rt.status === 'Activo' ? 'Desactivar tipo' : 'Activar tipo'}
+                      onChange={() => {
+                        setRoomTypes((cur) =>
+                          cur.map((x) =>
+                            x.id === rt.id
+                              ? { ...x, status: x.status === 'Activo' ? 'Inactivo' : 'Activo' }
+                              : x,
+                          ),
+                        );
+                        onAction(
+                          `Tipo ${rt.name} ${rt.status === 'Activo' ? 'desactivado' : 'activado'}`,
+                        );
+                      }}
+                    />
+                  </div>
                 </div>
-                <p className="adm-roomtype-desc">{rt.description}</p>
-                <div className="adm-roomtype-features">
-                  {rt.features.map((f) => (
-                    <span key={f} className="adm-feature-tag">
-                      {f}
-                    </span>
-                  ))}
-                </div>
-                <div className="adm-roomtype-price">
-                  Precio base: <strong>${rt.basePrice.toLocaleString()}</strong>
-                </div>
-                <div className="adm-role-actions">
-                  <EditIconButton
-                    label="Editar tipo de habitación"
-                    onClick={() => {
-                      setEditRoomType(rt);
-                      setShowRoomTypeModal(true);
-                    }}
-                  />
-                  <StatusSwitch
-                    checked={rt.status === 'Activo'}
-                    label={rt.status === 'Activo' ? 'Desactivar tipo' : 'Activar tipo'}
-                    onChange={() => {
-                      setRoomTypes((cur) =>
-                        cur.map((x) =>
-                          x.id === rt.id
-                            ? { ...x, status: x.status === 'Activo' ? 'Inactivo' : 'Activo' }
-                            : x,
-                        ),
-                      );
-                      onAction(
-                        `Tipo ${rt.name} ${rt.status === 'Activo' ? 'desactivado' : 'activado'}`,
-                      );
-                    }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
         {showRoomModal && (
           <RoomModal
@@ -1717,52 +1744,59 @@ function AdminContentReady({
               <Plus size={17} /> Nueva tarifa de temporada
             </button>
           </div>
-          <AdminTable
-            headers={[
-              'Tipo de habitación',
-              'Temporada',
-              'Fechas',
-              'Tarifa base',
-              'Tarifa especial',
-              'Estado',
-              'Acciones',
-            ]}
-          >
-            {seasonRates.map((sr) => (
-              <tr key={sr.id}>
-                <td>
-                  <strong>{sr.roomType}</strong>
-                </td>
-                <td>{sr.seasonName}</td>
-                <td>
-                  {sr.startDate} → {sr.endDate}
-                </td>
-                <td>${sr.baseRate.toLocaleString()}</td>
-                <td>
-                  <strong className="success-text">${sr.seasonalRate.toLocaleString()}</strong>
-                </td>
-                <td>
-                  <span className={`status-pill ${statusPillClass(sr.status)}`}>{sr.status}</span>
-                </td>
-                <td className="adm-actions">
-                  <StatusSwitch
-                    checked={sr.status === 'Activa'}
-                    label={sr.status === 'Activa' ? 'Desactivar tarifa' : 'Activar tarifa'}
-                    onChange={() => {
-                      setSeasonRates((cur) =>
-                        cur.map((x) =>
-                          x.id === sr.id
-                            ? { ...x, status: x.status === 'Activa' ? 'Inactiva' : 'Activa' }
-                            : x,
-                        ),
-                      );
-                      onAction(`Tarifa ${sr.status === 'Activa' ? 'desactivada' : 'activada'}`);
-                    }}
-                  />
-                </td>
-              </tr>
-            ))}
-          </AdminTable>
+          {seasonRates.length === 0 ? (
+            <div className="hk-empty">
+              <CalendarDays size={22} />
+              <p>No hay tarifas de temporada registradas</p>
+            </div>
+          ) : (
+            <AdminTable
+              headers={[
+                'Tipo de habitación',
+                'Temporada',
+                'Fechas',
+                'Tarifa base',
+                'Tarifa especial',
+                'Estado',
+                'Acciones',
+              ]}
+            >
+              {seasonRates.map((sr) => (
+                <tr key={sr.id}>
+                  <td>
+                    <strong>{sr.roomType}</strong>
+                  </td>
+                  <td>{sr.seasonName}</td>
+                  <td>
+                    {sr.startDate} → {sr.endDate}
+                  </td>
+                  <td>${sr.baseRate.toLocaleString()}</td>
+                  <td>
+                    <strong className="success-text">${sr.seasonalRate.toLocaleString()}</strong>
+                  </td>
+                  <td>
+                    <span className={`status-pill ${statusPillClass(sr.status)}`}>{sr.status}</span>
+                  </td>
+                  <td className="adm-actions">
+                    <StatusSwitch
+                      checked={sr.status === 'Activa'}
+                      label={sr.status === 'Activa' ? 'Desactivar tarifa' : 'Activar tarifa'}
+                      onChange={() => {
+                        setSeasonRates((cur) =>
+                          cur.map((x) =>
+                            x.id === sr.id
+                              ? { ...x, status: x.status === 'Activa' ? 'Inactiva' : 'Activa' }
+                              : x,
+                          ),
+                        );
+                        onAction(`Tarifa ${sr.status === 'Activa' ? 'desactivada' : 'activada'}`);
+                      }}
+                    />
+                  </td>
+                </tr>
+              ))}
+            </AdminTable>
+          )}
         </div>
         <div className="panel">
           <div className="panel-heading">
@@ -1967,53 +2001,64 @@ function AdminContentReady({
               <Plus size={17} /> Nueva amenidad
             </button>
           </div>
-          <div className="adm-amenity-grid">
-            {amenities.map((a) => {
-              const Icon = amenityIconMap[a.icon] ?? Sparkles;
-              return (
-                <div className="adm-amenity-card" key={a.id}>
-                  <div className="adm-amenity-icon">
-                    <Icon size={22} />
-                  </div>
-                  <div className="adm-amenity-body">
-                    <div>
-                      <strong>{a.name}</strong>
-                      <span>{a.schedule}</span>
+          {amenities.length === 0 ? (
+            <div className="hk-empty">
+              <Star size={22} />
+              <p>No hay amenidades registradas</p>
+            </div>
+          ) : (
+            <div className="adm-amenity-grid">
+              {amenities.map((a) => {
+                const Icon = amenityIconMap[a.icon] ?? Sparkles;
+                return (
+                  <div className="adm-amenity-card" key={a.id}>
+                    <div className="adm-amenity-icon">
+                      <Icon size={22} />
                     </div>
-                    <div className="adm-amenity-pills">
-                      <span className={`status-pill ${a.available ? 'success' : 'warning'}`}>
-                        {a.available ? 'Disponible' : 'No disponible'}
-                      </span>
-                      <span className={`status-pill ${statusPillClass(a.status)}`}>{a.status}</span>
+                    <div className="adm-amenity-body">
+                      <div>
+                        <strong>{a.name}</strong>
+                        <span>{a.schedule}</span>
+                      </div>
+                      <div className="adm-amenity-pills">
+                        <span className={`status-pill ${a.available ? 'success' : 'warning'}`}>
+                          {a.available ? 'Disponible' : 'No disponible'}
+                        </span>
+                        <span className={`status-pill ${statusPillClass(a.status)}`}>
+                          {a.status}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="adm-amenity-actions">
+                      <EditIconButton
+                        label="Editar amenidad"
+                        onClick={() => {
+                          setEditAmenity(a);
+                          setShowAmenityModal(true);
+                        }}
+                      />
+                      <StatusSwitch
+                        checked={a.status === 'Activo'}
+                        label={a.status === 'Activo' ? 'Desactivar amenidad' : 'Activar amenidad'}
+                        onChange={() => {
+                          setAmenities((cur) =>
+                            cur.map((x) =>
+                              x.id === a.id
+                                ? { ...x, status: x.status === 'Activo' ? 'Inactivo' : 'Activo' }
+                                : x,
+                            ),
+                          );
+                          onAction(
+                            `Amenidad ${a.status === 'Activo' ? 'desactivada' : 'activada'}`,
+                          );
+                        }}
+                      />
                     </div>
                   </div>
-                  <div className="adm-amenity-actions">
-                    <EditIconButton
-                      label="Editar amenidad"
-                      onClick={() => {
-                        setEditAmenity(a);
-                        setShowAmenityModal(true);
-                      }}
-                    />
-                    <StatusSwitch
-                      checked={a.status === 'Activo'}
-                      label={a.status === 'Activo' ? 'Desactivar amenidad' : 'Activar amenidad'}
-                      onChange={() => {
-                        setAmenities((cur) =>
-                          cur.map((x) =>
-                            x.id === a.id
-                              ? { ...x, status: x.status === 'Activo' ? 'Inactivo' : 'Activo' }
-                              : x,
-                          ),
-                        );
-                        onAction(`Amenidad ${a.status === 'Activo' ? 'desactivada' : 'activada'}`);
-                      }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </div>
         <div className="panel">
           <div className="panel-heading">
@@ -2032,52 +2077,61 @@ function AdminContentReady({
             </button>
           </div>
           <AdminToolbar search={search} setSearch={setSearch} />
-          <div className="adm-rs-grid">
-            {filteredRs.map((item) => (
-              <div className="adm-rs-card" key={item.id}>
-                <div className="adm-rs-image" style={{ backgroundImage: `url(${item.image})` }}>
-                  <span className={`status-pill ${statusPillClass(item.status)}`}>
-                    {item.status}
-                  </span>
-                </div>
-                <div className="adm-rs-body">
-                  <div>
-                    <strong>{item.name}</strong>
-                    <span>{item.category}</span>
-                  </div>
-                  <div className="adm-rs-foot">
-                    <strong>${item.price.toLocaleString()}</strong>
-                    <span className={`status-pill ${item.available ? 'success' : 'warning'}`}>
-                      {item.available ? 'Disponible' : 'No disponible'}
+          {filteredRs.length === 0 ? (
+            <div className="hk-empty">
+              <Utensils size={22} />
+              <p>No hay productos de Room Service registrados</p>
+            </div>
+          ) : (
+            <div className="adm-rs-grid">
+              {filteredRs.map((item) => (
+                <div className="adm-rs-card" key={item.id}>
+                  <div className="adm-rs-image" style={{ backgroundImage: `url(${item.image})` }}>
+                    <span className={`status-pill ${statusPillClass(item.status)}`}>
+                      {item.status}
                     </span>
                   </div>
+                  <div className="adm-rs-body">
+                    <div>
+                      <strong>{item.name}</strong>
+                      <span>{item.category}</span>
+                    </div>
+                    <div className="adm-rs-foot">
+                      <strong>${item.price.toLocaleString()}</strong>
+                      <span className={`status-pill ${item.available ? 'success' : 'warning'}`}>
+                        {item.available ? 'Disponible' : 'No disponible'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="adm-amenity-actions">
+                    <EditIconButton
+                      label="Editar producto de room service"
+                      onClick={() => {
+                        setEditRsItem(item);
+                        setShowRsItemModal(true);
+                      }}
+                    />
+                    <StatusSwitch
+                      checked={item.status === 'Activo'}
+                      label={item.status === 'Activo' ? 'Desactivar producto' : 'Activar producto'}
+                      onChange={() => {
+                        setRsItems((cur) =>
+                          cur.map((x) =>
+                            x.id === item.id
+                              ? { ...x, status: x.status === 'Activo' ? 'Inactivo' : 'Activo' }
+                              : x,
+                          ),
+                        );
+                        onAction(
+                          `Producto ${item.status === 'Activo' ? 'desactivado' : 'activado'}`,
+                        );
+                      }}
+                    />
+                  </div>
                 </div>
-                <div className="adm-amenity-actions">
-                  <EditIconButton
-                    label="Editar producto de room service"
-                    onClick={() => {
-                      setEditRsItem(item);
-                      setShowRsItemModal(true);
-                    }}
-                  />
-                  <StatusSwitch
-                    checked={item.status === 'Activo'}
-                    label={item.status === 'Activo' ? 'Desactivar producto' : 'Activar producto'}
-                    onChange={() => {
-                      setRsItems((cur) =>
-                        cur.map((x) =>
-                          x.id === item.id
-                            ? { ...x, status: x.status === 'Activo' ? 'Inactivo' : 'Activo' }
-                            : x,
-                        ),
-                      );
-                      onAction(`Producto ${item.status === 'Activo' ? 'desactivado' : 'activado'}`);
-                    }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
         {showAmenityModal && (
           <AmenityModal

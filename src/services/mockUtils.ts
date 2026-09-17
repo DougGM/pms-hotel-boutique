@@ -20,6 +20,21 @@ function hasStorageErrorFlag(): boolean {
   );
 }
 
+/**
+ * Una colección ausente en data/db.ts (undefined/null) es un hueco en los
+ * datos de prueba, no "no hay datos" — nombra la colección en consola y
+ * lanza, para que el error llegue a ErrorState en vez de a un EmptyState
+ * engañoso. Una colección presente pero vacía ([]) pasa de largo: ese caso
+ * sí es un dato válido y lo resuelve EmptyState en la pantalla.
+ */
+export function requireCollection<T>(collection: T[] | undefined | null, name: string): T[] {
+  if (!collection) {
+    console.error(`[services] Colección ausente en data/db.ts: ${name}`);
+    throw new Error(`No fue posible cargar "${name}": la colección no existe en los datos.`);
+  }
+  return collection;
+}
+
 export const mockUtils = {
   setForceError(value: boolean): void {
     forceError = value;

@@ -12,7 +12,7 @@ import { toDomain as toPayment, type Payment } from '@/shared/types/entities/pay
 import { toDomain as toDeposit, type Deposit } from '@/shared/types/entities/deposit';
 import type { ID } from '@/shared/types/common';
 import { chargesDB, depositsDB, guestAccountsDB, paymentsDB } from '@/data/db';
-import { mockUtils, simulateLatency } from './mockUtils';
+import { mockUtils, requireCollection, simulateLatency } from './mockUtils';
 
 function createChargeId(): ID {
   return `CHG-${String(chargesDB.length + 1).padStart(3, '0')}`;
@@ -22,7 +22,7 @@ export const guestAccountService = {
   async getAccounts(): Promise<GuestAccount[]> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar las cuentas de huésped.');
-    return guestAccountsDB.map(toGuestAccount);
+    return requireCollection(guestAccountsDB, 'guestAccountsDB').map(toGuestAccount);
   },
   async getAccountByBookingId(bookingId: ID): Promise<GuestAccount | undefined> {
     await simulateLatency();
@@ -33,12 +33,14 @@ export const guestAccountService = {
   async getCharges(): Promise<Charge[]> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar los cargos.');
-    return chargesDB.map(toCharge);
+    return requireCollection(chargesDB, 'chargesDB').map(toCharge);
   },
   async getChargesByBookingId(bookingId: ID): Promise<Charge[]> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar los cargos.');
-    return chargesDB.filter((item) => item.booking_id === bookingId).map(toCharge);
+    return requireCollection(chargesDB, 'chargesDB')
+      .filter((item) => item.booking_id === bookingId)
+      .map(toCharge);
   },
   async createCharge(data: CreateChargeDto): Promise<Charge> {
     await simulateLatency();
@@ -69,22 +71,26 @@ export const guestAccountService = {
   async getPayments(): Promise<Payment[]> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar los pagos.');
-    return paymentsDB.map(toPayment);
+    return requireCollection(paymentsDB, 'paymentsDB').map(toPayment);
   },
   async getPaymentsByBookingId(bookingId: ID): Promise<Payment[]> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar los pagos.');
-    return paymentsDB.filter((item) => item.booking_id === bookingId).map(toPayment);
+    return requireCollection(paymentsDB, 'paymentsDB')
+      .filter((item) => item.booking_id === bookingId)
+      .map(toPayment);
   },
   async getDeposits(): Promise<Deposit[]> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar los depósitos.');
-    return depositsDB.map(toDeposit);
+    return requireCollection(depositsDB, 'depositsDB').map(toDeposit);
   },
   async getDepositsByBookingId(bookingId: ID): Promise<Deposit[]> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar los depósitos.');
-    return depositsDB.filter((item) => item.booking_id === bookingId).map(toDeposit);
+    return requireCollection(depositsDB, 'depositsDB')
+      .filter((item) => item.booking_id === bookingId)
+      .map(toDeposit);
   },
 };
 export default guestAccountService;
