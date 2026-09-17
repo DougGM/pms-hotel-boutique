@@ -192,13 +192,31 @@ export const router = createBrowserRouter([
     children: [
       { path: routePaths.pms.dashboard, element: <PrivateSessionWorkspace /> },
       { path: routePaths.pms.reception, element: <PrivateSessionWorkspace role="reception" /> },
-      { path: routePaths.pms.housekeeping, element: <PrivateSessionWorkspace role="housekeeping" /> },
-      { path: routePaths.pms.roomService, element: <PrivateSessionWorkspace role="room-service" /> },
+      {
+        path: routePaths.pms.housekeeping,
+        element: <PrivateSessionWorkspace role="housekeeping" />,
+      },
+      {
+        path: routePaths.pms.roomService,
+        element: <PrivateSessionWorkspace role="room-service" />,
+      },
       { path: routePaths.pms.concierge, element: <PrivateSessionWorkspace role="concierge" /> },
-      { path: routePaths.pms.cash, element: <PrivateSessionWorkspace role="admin" initialNav="Caja" /> },
-      { path: routePaths.pms.users, element: <PrivateSessionWorkspace role="admin" initialNav="Usuarios y roles" /> },
-      { path: routePaths.pms.rooms, element: <PrivateSessionWorkspace role="admin" initialNav="Habitaciones" /> },
-      { path: routePaths.pms.roomTypes, element: <PrivateSessionWorkspace role="admin" initialNav="Habitaciones" /> },
+      {
+        path: routePaths.pms.cash,
+        element: <PrivateSessionWorkspace role="admin" initialNav="Caja" />,
+      },
+      {
+        path: routePaths.pms.users,
+        element: <PrivateSessionWorkspace role="admin" initialNav="Usuarios y roles" />,
+      },
+      {
+        path: routePaths.pms.rooms,
+        element: <PrivateSessionWorkspace role="admin" initialNav="Habitaciones" />,
+      },
+      {
+        path: routePaths.pms.roomTypes,
+        element: <PrivateSessionWorkspace role="admin" initialNav="Habitaciones" />,
+      },
       {
         path: routePaths.pms.root,
         element: <PrivateLayout />,

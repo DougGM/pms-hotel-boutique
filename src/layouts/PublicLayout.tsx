@@ -25,19 +25,31 @@ export function PublicLayout() {
           </Link>
 
           <div className="visitor-tabs" role="navigation" aria-label="Secciones publicas">
-            <Link className={`visitor-tab ${activeSection === 'habitaciones' ? 'active' : ''}`} to="/#habitaciones">
+            <Link
+              className={`visitor-tab ${activeSection === 'habitaciones' ? 'active' : ''}`}
+              to="/#habitaciones"
+            >
               <BedDouble size={15} aria-hidden="true" />
               <span className="visitor-tab-label">Habitaciones</span>
             </Link>
-            <Link className={`visitor-tab ${activeSection === 'amenidades' ? 'active' : ''}`} to="/#amenidades">
+            <Link
+              className={`visitor-tab ${activeSection === 'amenidades' ? 'active' : ''}`}
+              to="/#amenidades"
+            >
               <Sparkles size={15} aria-hidden="true" />
               <span className="visitor-tab-label">Amenidades</span>
             </Link>
-            <Link className={`visitor-tab ${activeSection === 'promociones' ? 'active' : ''}`} to="/#promociones">
+            <Link
+              className={`visitor-tab ${activeSection === 'promociones' ? 'active' : ''}`}
+              to="/#promociones"
+            >
               <Percent size={15} aria-hidden="true" />
               <span className="visitor-tab-label">Promociones</span>
             </Link>
-            <Link className={`visitor-tab ${activeSection === 'politicas' ? 'active' : ''}`} to="/#politicas">
+            <Link
+              className={`visitor-tab ${activeSection === 'politicas' ? 'active' : ''}`}
+              to="/#politicas"
+            >
               <ShieldCheck size={15} aria-hidden="true" />
               <span className="visitor-tab-label">Políticas</span>
             </Link>

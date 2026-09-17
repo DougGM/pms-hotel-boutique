@@ -64,7 +64,11 @@ export function StaffLoginPage() {
             : 'Ingresa con tu cuenta para acceder a tu área de trabajo.'}
         </p>
 
-        <form className="staff-login-form" onSubmit={isRegisterPage ? submitRegister : submit} aria-busy={isSubmitting}>
+        <form
+          className="staff-login-form"
+          onSubmit={isRegisterPage ? submitRegister : submit}
+          aria-busy={isSubmitting}
+        >
           {isRegisterPage ? (
             <label htmlFor="guest-name">
               Nombre completo

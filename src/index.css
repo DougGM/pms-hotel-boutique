@@ -575,11 +575,11 @@ button {
   height: 18px;
   border-radius: 50%;
   background: var(--color-surface);
-  box-shadow: 0 2px 8px rgba(59, 39, 26, .16);
+  box-shadow: 0 2px 8px rgba(59, 39, 26, 0.16);
   position: absolute;
   top: 3px;
   left: 3px;
-  transition: transform .18s ease;
+  transition: transform 0.18s ease;
 }
 .account-toggle.on i {
   background: #dceee0;
@@ -7664,7 +7664,7 @@ button {
 .adm-status-switch {
   width: 44px;
   height: 24px;
-  border: 1px solid rgba(107, 79, 54, .2);
+  border: 1px solid rgba(107, 79, 54, 0.2);
   border-radius: 999px;
   background: #f1ddd6;
   padding: 2px;
@@ -7672,7 +7672,9 @@ button {
   align-items: center;
   justify-content: flex-start;
   cursor: pointer;
-  transition: background .18s ease, border-color .18s ease;
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease;
 }
 
 .adm-status-switch span {
@@ -7680,13 +7682,13 @@ button {
   height: 18px;
   border-radius: 50%;
   background: #fff;
-  box-shadow: 0 2px 8px rgba(59, 39, 26, .16);
-  transition: transform .18s ease;
+  box-shadow: 0 2px 8px rgba(59, 39, 26, 0.16);
+  transition: transform 0.18s ease;
 }
 
 .adm-status-switch.on {
   background: #dceee0;
-  border-color: rgba(76, 128, 91, .28);
+  border-color: rgba(76, 128, 91, 0.28);
 }
 
 .adm-status-switch.on span {
