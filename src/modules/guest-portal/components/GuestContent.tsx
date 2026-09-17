@@ -1,23 +1,23 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Activity, ArrowRight, Ban, BedDouble, Bell, CalendarDays, Check, ChevronDown,
   ClipboardList, Clock, FileText, Home, LogOut, Package, Pencil,
   Plus, ShieldCheck, Sparkles, UserRound, Wallet, X,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import type { Reservation, GuestInfo } from '@/private/workspace/PrivateWorkspace';
-import {
-  amenitiesDB,
-  bookingsDB,
-  chargesDB,
-  depositsDB,
-  guestsDB,
-  ordersDB,
-  paymentsDB,
-  productsDB,
-  roomsDB,
-  roomTypesDB,
-  serviceRequestsDB,
-} from '@/data/db';
+import { bookingService } from '@/services/bookingService';
+import { catalogService } from '@/services/catalogService';
+import { guestAccountService } from '@/services/guestAccountService';
+import { guestService } from '@/services/guestService';
+import { notificationService } from '@/services/notificationService';
+import { orderService } from '@/services/orderService';
+import { roomService } from '@/services/roomService';
+import { serviceRequestService } from '@/services/serviceRequestService';
+import { ErrorState } from '@/shared/components/ErrorState';
+import { LoadingState } from '@/shared/components/LoadingState';
+import type { Booking } from '@/shared/types/entities/booking';
+import type { RoomType as RoomTypeModel } from '@/shared/types/entities/room-type';
 import {
   CancelOrderModal, CancelReservationModal, EditProfileModal, LinkReservationModal,
   ModifyReservationModal, ReceiptModal, RequestServiceModal, ReservationDetailModal,
@@ -26,300 +26,82 @@ import {
   type GuestCartItem, type GuestOrder,
 } from '@/modules/guest-portal/components/GuestModals';
 
+type GuestAmenity = {
+  name: string;
+  description: string;
+  icon: LucideIcon;
+  available: boolean;
+  schedule: string;
+};
+
+const AMENITY_ICONS: LucideIcon[] = [Sparkles, Activity, ShieldCheck, BedDouble, Home, Package, FileText, Clock];
+
 const guestRoom = '402';
 
-const guestProfile: GuestInfo = {
-  name: 'María Fernanda', lastName: 'Castillo', phone: '+52 55 1234 5678',
-  email: 'maria.castillo@email.com', docType: 'INE', docNumber: 'MTCC850101',
-  birthDate: '1985-01-01', nationality: 'Mexicana',
-};
-
-const guestReservations: Reservation[] = [
-  {
-    id: 1, code: 'AUR-2401', checkIn: '2024-08-26', checkOut: '2024-08-29', roomNumber: '402',
-    roomType: 'Suite', rate: 3900, guestCount: 2, status: 'Check-in', origin: 'Online',
-    observations: 'Aniversario, arreglo floral solicitado', checkInTime: '14:20',
-    checkOutTime: null, cancelReason: '', voidReason: '',
-    guest: guestProfile,
-    companions: [{ id: 1, name: 'Roberto', lastName: 'Castillo', document: 'RCCJ870203', age: 37 }],
-    folio: [
-      { id: 101, concept: 'Alojamiento 3 noches', category: 'Alojamiento', amount: 11700, date: '2024-08-26', type: 'Cargo', status: 'Activo' },
-      { id: 102, concept: 'Depósito garantía', category: 'Depósito', amount: 3000, date: '2024-08-26', type: 'Depósito', status: 'Activo', method: 'Tarjeta', reference: 'TXN-8821' },
-      { id: 103, concept: 'Room service — Desayuno', category: 'Room service', amount: 560, date: '2024-08-27', type: 'Cargo', status: 'Activo' },
-    ],
-  },
-  {
-    id: 4, code: 'AUR-2404', checkIn: '2024-08-24', checkOut: '2024-08-26', roomNumber: '307',
-    roomType: 'Deluxe', rate: 2450, guestCount: 2, status: 'Check-out', origin: 'Online',
-    observations: '', checkInTime: '13:00', checkOutTime: '11:30', cancelReason: '', voidReason: '',
-    guest: guestProfile, companions: [],
-    folio: [
-      { id: 401, concept: 'Alojamiento 2 noches', category: 'Alojamiento', amount: 4900, date: '2024-08-24', type: 'Cargo', status: 'Activo' },
-      { id: 402, concept: 'Amenidades — Spa', category: 'Amenidades', amount: 1200, date: '2024-08-25', type: 'Cargo', status: 'Activo' },
-      { id: 403, concept: 'Pago final', category: 'Pago', amount: 6100, date: '2024-08-26', type: 'Pago', status: 'Activo', method: 'Tarjeta', reference: 'TXN-9001' },
-    ],
-  },
-];
-
-const guestNotifications: GuestNotification[] = [
-  { id: 1, title: 'Solicitud de limpieza recibida', message: 'Tu solicitud de limpieza de estancia ha sido registrada. El equipo de housekeeping la atenderá pronto.', time: 'Hace 15 min', read: false, category: 'Servicio' },
-  { id: 2, title: 'Pedido de Room Service en camino', message: 'Tu pedido #1042 (Desayuno Aurora) está en camino a tu habitación.', time: 'Hace 40 min', read: false, category: 'Pedido' },
-  { id: 3, title: 'Cargo de Room Service', message: 'Se ha registrado un cargo de $560.00 por consumo de Room Service en tu cuenta.', time: 'Ayer, 18:40', read: false, category: 'Pedido' },
-  { id: 4, title: 'Check-in realizado correctamente', message: 'Bienvenida a Hotel Aurora. Tu estancia en la Suite 402 ha comenzado.', time: '26 ago, 14:20', read: true, category: 'Estancia' },
-  { id: 5, title: 'Promoción especial: Spa 20% de descuento', message: 'Disfruta de un 20% de descuento en tratamientos de spa durante tu estancia. Válido hasta el 31 de agosto.', time: '25 ago, 10:00', read: true, category: 'Promoción' },
-];
-
-const guestServiceRequests: GuestServiceRequest[] = [
-  { id: 301, type: 'Limpieza', description: 'Limpieza de estancia — Lo antes posible', time: '10:15', status: 'En proceso', room: guestRoom },
-  { id: 302, type: 'Artículos', description: '2× Almohadas adicionales — Por la tarde', time: '09:30', status: 'Pendiente', room: guestRoom },
-  { id: 303, type: 'Artículos', description: '1× Toallas extra — Lo antes posible', time: '08:45', status: 'Completada', room: guestRoom },
-];
-
-const guestMenu: GuestMenuItem[] = [
-  { id: 1, name: 'Desayuno Aurora', description: 'Huevos al gusto, pan artesanal, fruta de temporada y jugo natural', price: 280, category: 'Desayunos', available: true },
-  { id: 2, name: 'Huevos Benedictinos', description: 'Dos huevos pochados sobre salmón y pan inglés, salsa holandesa', price: 240, category: 'Desayunos', available: true },
-  { id: 3, name: 'Club Sandwich', description: 'Pavo, tocino, lechuga, tomate y huevo en pan tostado', price: 240, category: 'Comidas', available: true },
-  { id: 4, name: 'Pasta al Pesto', description: 'Pasta fresca con pesto de albahaca, piñones y parmesano', price: 320, category: 'Comidas', available: true },
-  { id: 5, name: 'Salmón Grillado', description: 'Filete de salmón con vegetales al vapor y arroz integral', price: 420, category: 'Comidas', available: true },
-  { id: 6, name: 'Tabla de Quesos', description: 'Selección de quesos artesanales, frutos secos y mermelada', price: 390, category: 'Botanas', available: true },
-  { id: 7, name: 'Café Americano', description: 'Café de grano recién molido', price: 65, category: 'Bebidas', available: true },
-  { id: 8, name: 'Café Latte', description: 'Espresso con leche vaporizada y arte latte', price: 85, category: 'Bebidas', available: true },
-  { id: 9, name: 'Jugo Verde', description: 'Apio, espinaca, manzana, jengibre y limón', price: 110, category: 'Bebidas', available: true },
-  { id: 10, name: 'Agua Mineral', description: 'Agua mineral con gas, 500 ml', price: 45, category: 'Bebidas', available: true },
-  { id: 11, name: 'Cheesecake de Frambuesa', description: 'Pastel de queso con coulis de frambuesa', price: 150, category: 'Postres', available: true },
-  { id: 12, name: 'Tiramisú', description: 'Clásico postre italiano con café y mascarpone', price: 140, category: 'Postres', available: false },
-];
-
-const guestOrders: GuestOrder[] = [
-  { id: 1042, items: [{ name: 'Desayuno Aurora', quantity: 2, price: 280 }, { name: 'Café Americano', quantity: 1, price: 65 }], time: '10:24', status: 'En camino', note: 'Sin nueces, por favor', room: guestRoom },
-  { id: 1041, items: [{ name: 'Club Sandwich', quantity: 1, price: 240 }, { name: 'Agua Mineral', quantity: 2, price: 45 }], time: 'Ayer 18:30', status: 'Entregado', note: 'Llevar cubiertos extra', room: guestRoom },
-  { id: 1040, items: [{ name: 'Pasta al Pesto', quantity: 1, price: 320 }], time: 'Ayer 14:15', status: 'Entregado', note: '', room: guestRoom },
-];
-
-const amenities = [
-  { name: 'Desayuno Buffet', description: 'Sabores locales e internacionales cada mañana de 7:00 a 11:00', icon: Sparkles, available: true, schedule: '7:00 — 11:00' },
-  { name: 'Wi-Fi de Alta Velocidad', description: 'Conexión gratuita en todo el hotel y áreas comunes', icon: Activity, available: true, schedule: '24 horas' },
-  { name: 'Gimnasio & Wellness', description: 'Equipamiento de última generación y clases de yoga matutinas', icon: ShieldCheck, available: true, schedule: '6:00 — 22:00' },
-  { name: 'Spa & Masajes', description: 'Tratamientos faciales, masajes de relajación y terapia corporal', icon: BedDouble, available: true, schedule: '10:00 — 20:00' },
-  { name: 'Alberca Climatizada', description: 'Alberca exterior con zona de reposo y servicio de toallas', icon: Home, available: true, schedule: '7:00 — 21:00' },
-  { name: 'Estacionamiento', description: 'Valet parking incluido para huéspedes con auto', icon: Package, available: true, schedule: '24 horas' },
-  { name: 'Business Center', description: 'Computadoras, impresora y salas de reuniones disponibles', icon: FileText, available: true, schedule: '24 horas' },
-  { name: 'Lavandería Express', description: 'Servicio de lavandería con entrega en 4 horas', icon: Clock, available: false, schedule: 'Temporalmente fuera de servicio' },
-];
-
-const parseDbId = (id: string, fallback: number) => {
+function parseDbId(id: string, fallback: number) {
   const value = Number(id.replace(/\D/g, ''));
   return Number.isFinite(value) && value > 0 ? value : fallback;
-};
+}
 
-const centsToAmount = (cents: number) => Math.round(cents / 100);
+function centsToAmount(cents: number) {
+  return Math.round(cents / 100);
+}
 
-const formatDbTime = (value?: string) => {
+function formatDbTime(value?: Date) {
   if (!value) return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit', hour12: false });
-};
+  return value.toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit', hour12: false });
+}
 
-const getDbRoomType = (roomTypeId?: string): Reservation['roomType'] => {
-  const roomType = roomTypesDB.find((type) => type.id === roomTypeId);
+function getRoomTypeLabel(roomTypeId: string | undefined, roomTypes: RoomTypeModel[]): Reservation['roomType'] {
+  const roomType = roomTypes.find((type) => type.id === roomTypeId);
   const name = roomType?.name.toLowerCase() ?? '';
   if (name.includes('suite')) return 'Suite';
   if (name.includes('deluxe')) return 'Deluxe';
   return 'Estándar';
-};
+}
 
-const mapDbReservationStatus = (status: string): Reservation['status'] => {
+function mapReservationStatus(status: Booking['status']): Reservation['status'] {
   if (status === 'confirmed') return 'Confirmada';
-  if (status === 'checked_in') return 'Check-in';
-  if (status === 'checked_out') return 'Check-out';
+  if (status === 'checkedIn') return 'Check-in';
+  if (status === 'checkedOut') return 'Check-out';
   if (status === 'cancelled') return 'Cancelada';
-  if (status === 'no_show') return 'Anulada';
+  if (status === 'noShow') return 'Anulada';
   return 'Pendiente';
-};
+}
 
-const mapDbOrderStatus = (status: string): GuestOrder['status'] => {
+function mapOrderStatus(status: string): GuestOrder['status'] {
   if (status === 'accepted') return 'Aceptado';
   if (status === 'preparing' || status === 'ready') return 'En preparación';
-  if (status === 'on_the_way') return 'En camino';
+  if (status === 'onTheWay') return 'En camino';
   if (status === 'delivered') return 'Entregado';
   if (status === 'cancelled' || status === 'rejected') return 'Cancelado';
   return 'Pendiente';
-};
+}
 
-const mapDbRequestStatus = (status: string): GuestServiceRequest['status'] => {
+function mapRequestStatus(status: string): GuestServiceRequest['status'] {
   if (status === 'completed') return 'Completada';
   if (status === 'cancelled' || status === 'rejected') return 'Cancelada';
-  if (status === 'accepted' || status === 'in_progress') return 'En proceso';
+  if (status === 'accepted' || status === 'inProgress') return 'En proceso';
   return 'Pendiente';
-};
+}
 
-const activeDbBooking = bookingsDB.find((booking) => booking.status === 'checked_in') ?? bookingsDB[0];
-const activeDbGuest = guestsDB.find((guest) => guest.id === activeDbBooking?.guest_id) ?? guestsDB[0];
-const activeDbRoom = roomsDB.find((room) => room.id === activeDbBooking?.room_id) ?? roomsDB[0];
-const dbGuestRoom = activeDbRoom?.room_number ?? guestRoom;
+type ScreenState =
+  | { status: 'loading' }
+  | { status: 'error'; message: string }
+  | {
+      status: 'ready';
+      profile: GuestInfo;
+      reservations: Reservation[];
+      notifications: GuestNotification[];
+      serviceRequests: GuestServiceRequest[];
+      menu: GuestMenuItem[];
+      orders: GuestOrder[];
+      amenities: GuestAmenity[];
+    };
 
-const dbGuestProfile: GuestInfo = activeDbGuest
-  ? {
-    name: activeDbGuest.first_name,
-    lastName: activeDbGuest.last_name,
-    phone: activeDbGuest.phone ?? '',
-    email: activeDbGuest.email ?? '',
-    docType: activeDbGuest.document_type ?? 'DPI',
-    docNumber: activeDbGuest.document_number ?? '',
-    birthDate: '',
-    nationality: activeDbGuest.nationality ?? '',
-  }
-  : guestProfile;
-
-const buildDbGuestFolio = (bookingId: string): Reservation['folio'] => [
-  ...chargesDB
-    .filter((charge) => charge.booking_id === bookingId)
-    .map((charge, index) => ({
-      id: parseDbId(charge.id, index + 1),
-      concept: charge.description,
-      category: 'Cargo',
-      amount: centsToAmount(charge.amount_cents),
-      date: charge.charged_at.slice(0, 10),
-      type: 'Cargo' as const,
-      status: charge.status === 'voided' ? 'Anulado' as const : 'Activo' as const,
-    })),
-  ...paymentsDB
-    .filter((payment) => payment.booking_id === bookingId)
-    .map((payment, index) => ({
-      id: parseDbId(payment.id, 4000 + index),
-      concept: 'Pago registrado',
-      category: 'Pago',
-      amount: centsToAmount(payment.amount_cents),
-      date: (payment.paid_at ?? payment.created_at).slice(0, 10),
-      type: 'Pago' as const,
-      status: payment.status === 'failed' || payment.status === 'refunded' ? 'Anulado' as const : 'Activo' as const,
-    })),
-  ...depositsDB
-    .filter((deposit) => deposit.booking_id === bookingId)
-    .map((deposit, index) => ({
-      id: parseDbId(deposit.id, 6000 + index),
-      concept: 'Depósito garantía',
-      category: 'Depósito',
-      amount: centsToAmount(deposit.amount_cents),
-      date: deposit.collected_at.slice(0, 10),
-      type: 'Depósito' as const,
-      status: deposit.status === 'refunded' ? 'Anulado' as const : 'Activo' as const,
-    })),
-];
-
-const dbGuestReservations: Reservation[] = activeDbGuest
-  ? bookingsDB
-    .filter((booking) => booking.guest_id === activeDbGuest.id)
-    .map((booking, index) => {
-      const room = roomsDB.find((item) => item.id === booking.room_id);
-      const nights = Math.max(1, Math.ceil((new Date(booking.check_out).getTime() - new Date(booking.check_in).getTime()) / 86400000));
-      const status = mapDbReservationStatus(booking.status);
-      return {
-        id: parseDbId(booking.id, index + 1),
-        code: booking.confirmation_code,
-        checkIn: booking.check_in,
-        checkOut: booking.check_out,
-        roomNumber: room?.room_number ?? dbGuestRoom,
-        roomType: getDbRoomType(booking.room_type_id),
-        rate: centsToAmount(booking.total_amount_cents) / nights,
-        guestCount: booking.adults + booking.children,
-        status,
-        origin: 'Online',
-        observations: booking.notes ?? '',
-        checkInTime: status === 'Check-in' || status === 'Check-out' ? formatDbTime(booking.updated_at) : null,
-        checkOutTime: status === 'Check-out' ? formatDbTime(booking.updated_at) : null,
-        cancelReason: status === 'Cancelada' ? booking.notes ?? '' : '',
-        voidReason: status === 'Anulada' ? booking.notes ?? '' : '',
-        guest: dbGuestProfile,
-        companions: [],
-        folio: buildDbGuestFolio(booking.id),
-      };
-    })
-  : [];
-
-const dbGuestServiceRequests: GuestServiceRequest[] = activeDbGuest
-  ? serviceRequestsDB
-    .filter((request) => request.guest_id === activeDbGuest.id)
-    .map((request, index) => {
-      const room = roomsDB.find((item) => item.id === request.room_id);
-      return {
-        id: parseDbId(request.id, index + 1),
-        type: request.type === 'housekeeping' ? 'Limpieza' : request.type === 'maintenance' ? 'Mantenimiento' : 'Servicio',
-        description: request.description,
-        time: formatDbTime(request.requested_at),
-        status: mapDbRequestStatus(request.status),
-        room: room?.room_number ?? dbGuestRoom,
-      };
-    })
-  : [];
-
-const dbGuestMenu: GuestMenuItem[] = productsDB
-  .filter((product) => product.category === 'food_and_beverage')
-  .map((product, index) => ({
-    id: parseDbId(product.id, index + 1),
-    name: product.name,
-    description: product.sku,
-    price: centsToAmount(product.price_cents),
-    category: 'Room service',
-    available: product.active,
-  }));
-
-const dbGuestOrders: GuestOrder[] = activeDbGuest
-  ? ordersDB
-    .filter((order) => order.guest_id === activeDbGuest.id)
-    .map((order, index) => {
-      const room = roomsDB.find((item) => item.id === order.room_id);
-      return {
-        id: parseDbId(order.id, index + 1),
-        items: order.items.map((item) => {
-          const product = productsDB.find((productItem) => productItem.id === item.product_id);
-          return { name: product?.name ?? item.product_id, quantity: item.quantity, price: centsToAmount(item.unit_price_cents) };
-        }),
-        time: formatDbTime(order.requested_at),
-        status: mapDbOrderStatus(order.status),
-        note: order.notes ?? '',
-        room: room?.room_number ?? dbGuestRoom,
-      };
-    })
-  : [];
-
-const dbGuestNotifications: GuestNotification[] = [
-  ...dbGuestServiceRequests.slice(0, 3).map((request, index) => ({
-    id: index + 1,
-    title: request.status === 'Completada' ? 'Solicitud completada' : 'Solicitud registrada',
-    message: request.description,
-    time: request.time,
-    read: request.status === 'Completada',
-    category: 'Servicio' as const,
-  })),
-  ...dbGuestOrders.slice(0, 3).map((order, index) => ({
-    id: 100 + index,
-    title: `Pedido de Room Service ${order.status.toLowerCase()}`,
-    message: `Pedido #${order.id}: ${order.items.map((item) => item.name).join(', ')}`,
-    time: order.time,
-    read: order.status === 'Entregado' || order.status === 'Cancelado',
-    category: 'Pedido' as const,
-  })),
-];
-
-const dbAmenities = amenitiesDB.length > 0
-  ? amenitiesDB.map((amenity, index) => ({
-    name: amenity.name,
-    description: amenity.description,
-    icon: [Sparkles, Activity, ShieldCheck, BedDouble, Home, Package, FileText, Clock][index % 8],
-    available: amenity.active,
-    schedule: 'Disponible',
-  }))
-  : [];
-
-const initialGuestProfile = activeDbGuest ? dbGuestProfile : guestProfile;
-const initialGuestReservations = dbGuestReservations.length > 0 ? dbGuestReservations : guestReservations;
-const initialGuestNotifications = dbGuestNotifications.length > 0 ? dbGuestNotifications : guestNotifications;
-const initialGuestServiceRequests = dbGuestServiceRequests.length > 0 ? dbGuestServiceRequests : guestServiceRequests;
-const initialGuestMenu = dbGuestMenu.length > 0 ? dbGuestMenu : guestMenu;
-const initialGuestOrders = dbGuestOrders.length > 0 ? dbGuestOrders : guestOrders;
-const initialAmenities = dbAmenities.length > 0 ? dbAmenities : amenities;
+function getErrorMessage(cause: unknown): string {
+  return cause instanceof Error ? cause.message : 'No fue posible cargar tu portal de huésped.';
+}
 
 export function GuestContent({
   nav, onAction, onLogout,
@@ -328,11 +110,259 @@ export function GuestContent({
   onAction: (message: string) => void;
   onLogout: () => void;
 }) {
-  const [reservations, setReservations] = useState<Reservation[]>(initialGuestReservations);
-  const [profile, setProfile] = useState<GuestInfo>(initialGuestProfile);
-  const [notifications, setNotifications] = useState<GuestNotification[]>(initialGuestNotifications);
-  const [serviceRequests, setServiceRequests] = useState<GuestServiceRequest[]>(initialGuestServiceRequests);
-  const [orders, setOrders] = useState<GuestOrder[]>(initialGuestOrders);
+  const [screen, setScreen] = useState<ScreenState>({ status: 'loading' });
+
+  useEffect(() => {
+    let active = true;
+
+    async function load() {
+      setScreen({ status: 'loading' });
+      try {
+        const [bookings, guests, rooms, roomTypes, products, amenitiesData] = await Promise.all([
+          bookingService.getBookings(),
+          guestService.getGuests(),
+          roomService.getRooms(),
+          roomService.getRoomTypes(),
+          catalogService.getProducts(),
+          catalogService.getAmenities(),
+        ]);
+
+        const activeBooking = bookings.find((booking) => booking.status === 'checkedIn') ?? bookings[0];
+        const activeGuest = activeBooking
+          ? guests.find((guest) => guest.id === activeBooking.guestId)
+          : undefined;
+        const activeRoom = activeBooking
+          ? rooms.find((room) => room.id === activeBooking.roomId)
+          : undefined;
+        const activeRoomNumber = activeRoom?.roomNumber ?? guestRoom;
+
+        const profile: GuestInfo = activeGuest
+          ? {
+              name: activeGuest.firstName,
+              lastName: activeGuest.lastName,
+              phone: activeGuest.phone ?? '',
+              email: activeGuest.email ?? '',
+              docType: activeGuest.documentType ?? 'DPI',
+              docNumber: activeGuest.documentNumber ?? '',
+              birthDate: '',
+              nationality: activeGuest.nationality ?? '',
+            }
+          : {
+              name: '', lastName: '', phone: '', email: '',
+              docType: 'DPI', docNumber: '', birthDate: '', nationality: '',
+            };
+
+        const guestBookings = activeGuest
+          ? bookings.filter((booking) => booking.guestId === activeGuest.id)
+          : [];
+
+        const reservations: Reservation[] = await Promise.all(
+          guestBookings.map(async (booking, index) => {
+            const [charges, payments, deposits] = await Promise.all([
+              guestAccountService.getChargesByBookingId(booking.id),
+              guestAccountService.getPaymentsByBookingId(booking.id),
+              guestAccountService.getDepositsByBookingId(booking.id),
+            ]);
+            const room = rooms.find((item) => item.id === booking.roomId);
+            const nights = Math.max(
+              1,
+              Math.ceil((booking.checkOut.getTime() - booking.checkIn.getTime()) / 86400000),
+            );
+            const status = mapReservationStatus(booking.status);
+            const folio: Reservation['folio'] = [
+              ...charges.map((charge, chargeIndex) => ({
+                id: parseDbId(charge.id, chargeIndex + 1),
+                concept: charge.description,
+                category: 'Cargo',
+                amount: centsToAmount(charge.amountCents),
+                date: charge.chargedAt.toISOString().slice(0, 10),
+                type: 'Cargo' as const,
+                status: charge.status === 'voided' ? ('Anulado' as const) : ('Activo' as const),
+              })),
+              ...payments.map((payment, paymentIndex) => ({
+                id: parseDbId(payment.id, 4000 + paymentIndex),
+                concept: 'Pago registrado',
+                category: 'Pago',
+                amount: centsToAmount(payment.amountCents),
+                date: (payment.paidAt ?? payment.createdAt).toISOString().slice(0, 10),
+                type: 'Pago' as const,
+                status:
+                  payment.status === 'failed' || payment.status === 'refunded'
+                    ? ('Anulado' as const)
+                    : ('Activo' as const),
+              })),
+              ...deposits.map((deposit, depositIndex) => ({
+                id: parseDbId(deposit.id, 6000 + depositIndex),
+                concept: 'Depósito garantía',
+                category: 'Depósito',
+                amount: centsToAmount(deposit.amountCents),
+                date: deposit.collectedAt.toISOString().slice(0, 10),
+                type: 'Depósito' as const,
+                status: deposit.status === 'refunded' ? ('Anulado' as const) : ('Activo' as const),
+              })),
+            ];
+            return {
+              id: parseDbId(booking.id, index + 1),
+              code: booking.confirmationCode,
+              checkIn: booking.checkIn.toISOString().slice(0, 10),
+              checkOut: booking.checkOut.toISOString().slice(0, 10),
+              roomNumber: room?.roomNumber ?? activeRoomNumber,
+              roomType: getRoomTypeLabel(booking.roomTypeId, roomTypes),
+              rate: centsToAmount(booking.totalAmountCents) / nights,
+              guestCount: booking.adults + booking.children,
+              status,
+              origin: 'Online',
+              observations: booking.notes ?? '',
+              checkInTime:
+                status === 'Check-in' || status === 'Check-out' ? formatDbTime(booking.updatedAt) : null,
+              checkOutTime: status === 'Check-out' ? formatDbTime(booking.updatedAt) : null,
+              cancelReason: status === 'Cancelada' ? booking.notes ?? '' : '',
+              voidReason: status === 'Anulada' ? booking.notes ?? '' : '',
+              guest: profile,
+              companions: [],
+              folio,
+            };
+          }),
+        );
+
+        const [requests, guestOrdersRaw, notificationsRaw] = await Promise.all([
+          activeGuest ? serviceRequestService.getRequestsByGuestId(activeGuest.id) : Promise.resolve([]),
+          activeGuest ? orderService.getOrdersByGuestId(activeGuest.id) : Promise.resolve([]),
+          activeGuest ? notificationService.getNotificationsByGuestId(activeGuest.id) : Promise.resolve([]),
+        ]);
+
+        const serviceRequests: GuestServiceRequest[] = requests.map((request, index) => ({
+          id: parseDbId(request.id, index + 1),
+          type:
+            request.type === 'housekeeping'
+              ? 'Limpieza'
+              : request.type === 'maintenance'
+                ? 'Mantenimiento'
+                : 'Servicio',
+          description: request.description,
+          time: formatDbTime(request.requestedAt),
+          status: mapRequestStatus(request.status),
+          room: rooms.find((item) => item.id === request.roomId)?.roomNumber ?? activeRoomNumber,
+        }));
+
+        const orders: GuestOrder[] = guestOrdersRaw.map((order, index) => ({
+          id: parseDbId(order.id, index + 1),
+          items: order.items.map((item) => {
+            const product = products.find((productItem) => productItem.id === item.productId);
+            return {
+              name: product?.name ?? item.productId,
+              quantity: item.quantity,
+              price: centsToAmount(item.unitPriceCents),
+            };
+          }),
+          time: formatDbTime(order.requestedAt),
+          status: mapOrderStatus(order.status),
+          note: order.notes ?? '',
+          room: rooms.find((item) => item.id === order.roomId)?.roomNumber ?? activeRoomNumber,
+        }));
+
+        const notifications: GuestNotification[] = notificationsRaw.map((item, index) => ({
+          id: index + 1,
+          title: item.title,
+          message: item.message,
+          time: formatDbTime(item.occurredAt),
+          read: item.read,
+          category: item.category === 'order' ? 'Pedido' : 'Servicio',
+        }));
+
+        const menu: GuestMenuItem[] = products
+          .filter((product) => product.category === 'foodAndBeverage')
+          .map((product, index) => ({
+            id: parseDbId(product.id, index + 1),
+            name: product.name,
+            description: product.description ?? product.sku,
+            price: centsToAmount(product.priceCents),
+            category: 'Room service',
+            available: product.active,
+          }));
+
+        const amenities: GuestAmenity[] = amenitiesData.map((amenity, index) => ({
+          name: amenity.name,
+          description: amenity.description ?? '',
+          icon: AMENITY_ICONS[index % AMENITY_ICONS.length],
+          available: amenity.active,
+          schedule:
+            amenity.opensAt && amenity.closesAt ? `${amenity.opensAt} — ${amenity.closesAt}` : 'Disponible',
+        }));
+
+        if (active) {
+          setScreen({
+            status: 'ready',
+            profile,
+            reservations,
+            notifications,
+            serviceRequests,
+            menu,
+            orders,
+            amenities,
+          });
+        }
+      } catch (cause) {
+        if (active) setScreen({ status: 'error', message: getErrorMessage(cause) });
+      }
+    }
+
+    void load();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  if (screen.status === 'loading') {
+    return <LoadingState label="Cargando tu portal de huésped..." />;
+  }
+
+  if (screen.status === 'error') {
+    return (
+      <ErrorState
+        title="No pudimos cargar tu portal de huésped"
+        description={screen.message}
+        onRetry={() => setScreen({ status: 'loading' })}
+      />
+    );
+  }
+
+  return (
+    <GuestContentReady
+      nav={nav}
+      onAction={onAction}
+      onLogout={onLogout}
+      initialProfile={screen.profile}
+      initialReservations={screen.reservations}
+      initialNotifications={screen.notifications}
+      initialServiceRequests={screen.serviceRequests}
+      initialMenu={screen.menu}
+      initialOrders={screen.orders}
+      amenities={screen.amenities}
+    />
+  );
+}
+
+function GuestContentReady({
+  nav, onAction, onLogout,
+  initialProfile, initialReservations, initialNotifications, initialServiceRequests, initialMenu, initialOrders, amenities,
+}: {
+  nav: string;
+  onAction: (message: string) => void;
+  onLogout: () => void;
+  initialProfile: GuestInfo;
+  initialReservations: Reservation[];
+  initialNotifications: GuestNotification[];
+  initialServiceRequests: GuestServiceRequest[];
+  initialMenu: GuestMenuItem[];
+  initialOrders: GuestOrder[];
+  amenities: GuestAmenity[];
+}) {
+  const [reservations, setReservations] = useState<Reservation[]>(initialReservations);
+  const [profile, setProfile] = useState<GuestInfo>(initialProfile);
+  const [notifications, setNotifications] = useState<GuestNotification[]>(initialNotifications);
+  const [serviceRequests, setServiceRequests] = useState<GuestServiceRequest[]>(initialServiceRequests);
+  const [orders, setOrders] = useState<GuestOrder[]>(initialOrders);
   const [cart, setCart] = useState<GuestCartItem[]>([]);
   const [orderNote, setOrderNote] = useState('');
 
@@ -587,7 +617,7 @@ export function GuestContent({
     return <div className="panel">
       <div className="panel-heading"><div><h3>Amenidades del hotel</h3><p>Todo lo que puedes disfrutar durante tu estancia</p></div></div>
       <div className="gs-amenities-grid">
-        {initialAmenities.map((am) => {
+        {amenities.map((am) => {
           const Icon = am.icon;
           return (
             <div className={`gs-amenity-card ${!am.available ? 'unavailable' : ''}`} key={am.name}>
@@ -644,8 +674,8 @@ export function GuestContent({
 
   // ─── ROOM SERVICE (Food & Beverage) ────────────────────────────
   if (nav === 'Room service') {
-    const categories = [...new Set(initialGuestMenu.map((m) => m.category))];
-    const filteredMenu = menuCat === 'Todos' ? initialGuestMenu : initialGuestMenu.filter((m) => m.category === menuCat);
+    const categories = [...new Set(initialMenu.map((m) => m.category))];
+    const filteredMenu = menuCat === 'Todos' ? initialMenu : initialMenu.filter((m) => m.category === menuCat);
     return <><div className="gs-rs-layout">
       <div className="panel gs-rs-menu">
         <div className="panel-heading"><div><h3>Menú de Room Service</h3><p>Selecciona productos y envía tu pedido</p></div></div>

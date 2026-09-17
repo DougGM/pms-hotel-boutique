@@ -22,9 +22,19 @@ function requestTitle(status: string): string {
   return status === 'completed' ? 'Solicitud completada' : 'Solicitud registrada';
 }
 
+const ORDER_STATUS_LABELS: Record<string, string> = {
+  pending: 'pendiente',
+  accepted: 'aceptado',
+  preparing: 'en preparación',
+  ready: 'listo',
+  onTheWay: 'en camino',
+  delivered: 'entregado',
+  rejected: 'rechazado',
+  cancelled: 'cancelado',
+};
+
 function orderTitle(status: string): string {
-  const label = status === 'onTheWay' ? 'en camino' : status === 'delivered' ? 'entregado' : status;
-  return `Pedido de Room Service ${label}`;
+  return `Pedido de Room Service ${ORDER_STATUS_LABELS[status] ?? status}`;
 }
 
 export const notificationService = {
