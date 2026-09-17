@@ -61,6 +61,27 @@ paralelo. La excepcion funcional definida por producto es el login: Bolt lo
 separaba en huesped/empleado, pero la app usa un login general y decide el
 tipo de usuario segun credenciales y permisos de sesion.
 
+`src/private/workspace/` y los modulos de dominio (`front-desk`, `administration`, `guest-portal`, `room-service`) contiene la migracion privada del prototipo Bolt
+para recuperar las experiencias completas de Recepcion, Administracion,
+Limpieza, Room Service, Conserjeria y huesped sin reemplazar el login actual.
+El workspace se monta desde rutas privadas protegidas por `RequireSession` y
+recibe el rol desde la sesion o desde una ruta dedicada. No reintroduce el rol
+de Pasarela de pago: los pagos viven en Caja/Reservas.
+
+Perfil, Preferencias y Cerrar sesion pertenecen al menu superior del usuario,
+no al menu lateral. En listados administrativos, la accion de editar debe
+quedar como lapiz y activar/desactivar debe representarse como switch.
+El nombre visible, saludo y preferencias de vista inicial deben salir de la
+sesion y del menu disponible para el rol actual, no de nombres fijos heredados
+del prototipo Bolt.
+Los controles visibles del backoffice deben ejecutar una accion real o no
+renderizarse. En administracion, los tabs y filtros de reportes/dashboard
+deben cambiar metricas, grafica o filas visibles; no deben ser decorativos.
+Los botones de resumen como Ver todo o Gestionar deben navegar a la vista
+operativa correspondiente. La campana de notificaciones debe mostrar alertas
+accionables del rol actual; en Administracion incluye alertas de stock bajo
+para que no dependan solo del dashboard.
+
 ## Reglas de capas
 
 - Una vista sin sesión se crea en `public/pages/`.
@@ -73,6 +94,8 @@ tipo de usuario segun credenciales y permisos de sesion.
   de navegación por permiso se mantienen en `private/guards/` y `private/routes/`.
   La fachada de auth consume `services/authService.ts`. Consultar
   `modules/auth/README.md` para el contrato y la política de permisos.
+  `/auth/register` reutiliza `StaffLoginPage` en modo registro publico de
+  huesped demo; no otorga permisos del PMS ni reemplaza el login de personal.
 - El catálogo de UI está en `public/pages/ComponentsCatalogPage.tsx` (ruta
   `/components`); sus ejemplos asíncronos viven en `modules/ui-catalog/`. Los
   primitivos están en `shared/components/` y consumen tokens desde

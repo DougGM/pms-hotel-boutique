@@ -29,6 +29,235 @@
 }
 
 .booking-room-visual {
+  background-size: cover;
+  background-position: center;
+}
+
+.booking-public-section {
+  scroll-margin-top: var(--size-legacy-110);
+  display: grid;
+  gap: var(--space-6);
+  margin-top: var(--space-12);
+}
+
+.booking-amenity-grid,
+.booking-promo-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-5);
+}
+
+.booking-amenity-card,
+.booking-promo-card {
+  overflow: hidden;
+  background: var(--color-surface);
+  border: var(--size-legacy-1) solid var(--color-border);
+  border-radius: var(--radius-legacy-13);
+  box-shadow: 0 var(--size-legacy-8) var(--size-legacy-18) var(--color-legacy-3b2a1a0d);
+}
+
+.booking-amenity-image,
+.booking-promo-image {
+  min-height: var(--size-legacy-160);
+  background-size: cover;
+  background-position: center;
+  position: relative;
+}
+
+.booking-amenity-image::after,
+.booking-promo-image::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 35%, var(--color-legacy-2e211a88));
+}
+
+.booking-amenity-image span,
+.booking-promo-image span {
+  position: absolute;
+  left: var(--space-5);
+  bottom: var(--space-5);
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-pill);
+  background: var(--color-legacy-fbf8f4);
+  color: var(--color-brand-gold-dark);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+}
+
+.booking-amenity-card > div:last-child,
+.booking-promo-body {
+  padding: var(--space-6);
+}
+
+.booking-amenity-card h3,
+.booking-promo-card h3,
+.booking-policy-list h3 {
+  margin: 0 0 var(--space-2);
+  color: var(--color-text-primary);
+  font-family: var(--font-family-heading);
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+}
+
+.booking-amenity-card p,
+.booking-promo-card p,
+.booking-policy-section > div:first-child p,
+.booking-policy-list p {
+  margin: 0;
+  color: var(--color-text-muted);
+  line-height: var(--line-height-normal);
+}
+
+.booking-service-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  border: var(--size-legacy-1) solid var(--color-legacy-e7ddd3);
+  border-radius: var(--radius-lg);
+  background: var(--color-legacy-f8f2e9);
+}
+
+.booking-service-strip span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.booking-promo-body {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.booking-promo-body small {
+  color: var(--color-brand-gold-dark);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  text-transform: uppercase;
+}
+
+.booking-promo-body .button {
+  justify-self: start;
+  margin-top: var(--space-2);
+}
+
+.booking-policy-section {
+  grid-template-columns: minmax(0, 0.38fr) minmax(0, 1fr);
+  align-items: start;
+  padding: var(--space-9);
+  border-radius: var(--radius-xl);
+  background: var(--color-text-primary);
+  color: var(--color-surface);
+}
+
+.booking-policy-section h2 {
+  margin: var(--space-2) 0 var(--space-4);
+  font-family: var(--font-family-heading);
+  font-size: var(--font-size-4xl);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: 0;
+}
+
+.booking-policy-section .eyebrow {
+  color: var(--color-legacy-c8a56e);
+}
+
+.booking-policy-section > div:first-child p {
+  color: var(--color-legacy-c9bab0);
+}
+
+.booking-policy-list {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.booking-policy-list article {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  border: var(--size-legacy-1) solid rgba(255, 255, 255, 0.14);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.booking-policy-list svg {
+  color: var(--color-legacy-c8a56e);
+}
+
+.booking-policy-list h3 {
+  color: var(--color-surface);
+}
+
+.booking-policy-list p {
+  color: var(--color-legacy-c9bab0);
+}
+
+.booking-experience {
+  width: min(calc(100% - var(--size-legacy-64)), var(--size-legacy-1100));
+}
+
+.booking-experience-grid {
+  width: 100%;
+  grid-template-columns: 1.15fr 1fr 1fr;
+  grid-auto-rows: clamp(150px, 14vw, 220px);
+}
+
+.booking-experience-tile {
+  min-height: 0;
+}
+
+.booking-experience-tile:nth-child(1) {
+  grid-row: span 2;
+}
+
+.booking-experience-tile:nth-child(4) {
+  grid-row: span 2;
+}
+
+@media (max-width: 1100px) {
+  .booking-amenity-grid,
+  .booking-promo-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .booking-experience-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: 180px;
+  }
+
+  .booking-experience-tile:nth-child(1),
+  .booking-experience-tile:nth-child(4) {
+    grid-row: span 1;
+  }
+}
+
+@media (max-width: 760px) {
+  .booking-amenity-grid,
+  .booking-promo-grid,
+  .booking-policy-section {
+    grid-template-columns: 1fr;
+  }
+
+  .booking-experience {
+    width: min(calc(100% - var(--space-8)), var(--size-legacy-1100));
+  }
+
+  .booking-experience-grid {
+    grid-template-columns: 1fr;
+    grid-auto-rows: 170px;
+  }
+}
+
+.booking-room-visual {
   background:
     linear-gradient(
       180deg,
@@ -37,6 +266,8 @@
       var(--color-legacy-2e211a44) 100%
     ),
     linear-gradient(135deg, var(--color-legacy-dbe7f0), var(--color-legacy-cfad7b));
+  background-size: cover;
+  background-position: center;
 }
 
 .booking-room-visual-1 {
@@ -48,6 +279,8 @@
       var(--color-legacy-2e211a44) 100%
     ),
     linear-gradient(135deg, var(--color-legacy-f0dfbd), var(--color-legacy-dbe7f0));
+  background-size: cover;
+  background-position: center;
 }
 
 .booking-room-visual-2 {
@@ -59,6 +292,8 @@
       var(--color-legacy-2e211a44) 100%
     ),
     linear-gradient(135deg, var(--color-legacy-e3d5cb), var(--color-legacy-f0dfbd));
+  background-size: cover;
+  background-position: center;
 }
 
 .booking-room-code {

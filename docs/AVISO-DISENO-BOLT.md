@@ -28,13 +28,29 @@ La zona publica del motor de reservas esta asociada a las issues:
 Antes de continuar con cambios visuales en esa zona, validar ownership en
 GitHub para no pisar trabajo asignado.
 
+Actualizacion 2026-09-16: los tabs publicos del header (`Habitaciones`,
+`Amenidades`, `Promociones`, `Politicas`) funcionan como vistas conmutadas en
+la home publica mediante hash (`/#amenidades`, etc.). No deben volver a quedar
+como secciones apiladas ni links decorativos.
+
 ## Boton `Registrarse`
 
-No se encontro una issue abierta especifica para implementar registro. Por
-ahora no debe agregarse un flujo nuevo desde `Registrarse` sin una tarea
-explicita.
+Actualizacion 2026-09-16: por solicitud directa de producto durante la
+migracion visual, `Registrarse` apunta a `/auth/register` y muestra un
+formulario publico de huesped en modo demo. Este formulario no cambia el
+contrato de autenticacion del PMS ni crea permisos de personal.
 
 El login general si esta definido: a diferencia del prototipo Bolt, que
 separaba huesped/empleado, esta app usa un unico login y decide el acceso por
 credenciales/permisos de sesion.
 
+## Web privada / workspace Bolt
+
+Desde 2026-09-16, las experiencias privadas completas migradas desde Bolt viven
+en `src/private/workspace/` y los modulos de dominio (`front-desk`, `administration`, `guest-portal`, `room-service`). Esta carpeta no reemplaza el contrato de
+login, permisos ni rutas: solo porta las pantallas privadas al lenguaje visual
+Bolt dentro de la arquitectura actual.
+
+El rol Pasarela de pago no se conserva como rol lateral. Perfil, Preferencias y
+Cerrar sesion deben permanecer en el menu superior del usuario. Para acciones de
+administracion, usar lapiz para editar y switch para activar/desactivar.

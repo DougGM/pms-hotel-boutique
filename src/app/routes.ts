@@ -13,6 +13,7 @@ export const routePaths = {
     bookingNew: '/booking/new',
     bookingConfirmation: '/booking/:bookingId/done',
     login: '/auth/login',
+    register: '/auth/register',
     legacyLogin: '/login',
     components: '/components',
     notFound: '*',

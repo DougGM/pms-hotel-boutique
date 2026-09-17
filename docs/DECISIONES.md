@@ -435,7 +435,7 @@ mismo PR.
 
 ## D-008 · Limpieza, Room Service y Conserjería se sacan del menú web: viven en pms-hotel-mobile
 
-**Fecha:** 2026-09-15 · **Estado:** aceptada e implementada.
+**Fecha:** 2026-09-15 · **Estado:** reemplazada por D-009.
 
 ### Contexto
 
@@ -510,6 +510,66 @@ todavía no construyen. Siguen en el menú mostrando el mismo placeholder.
    — descartada: son parte del contrato compartido con mobile y están
    congelados por D-006; borrarlos ahora obligaría a rehacerlos por
    completo si algún día se decide dar respaldo web a alguno de los tres.
+
+## D-009 · Migración privada Bolt como respaldo web completo
+
+**Fecha:** 2026-09-16 · **Estado:** aceptada en rama `feat/migracion-bolt-completa-20260916`.
+
+### Contexto
+
+La app modular conservaba parte del contrato visual Bolt, pero varias
+experiencias privadas completas del prototipo habían quedado fuera o reducidas:
+Recepción, Administración, Limpieza, Room Service, Conserjería y huésped.
+Caja y Usuarios seguían apareciendo como placeholders, y D-008 había retirado
+Limpieza/Room Service/Conserjería del menú web.
+
+Producto pidió recuperar el frente Bolt dentro de la arquitectura actual, sin
+volver al login del prototipo. También se pidió retirar el rol de Pasarela de
+pago, mantener Perfil/Preferencias/Cerrar sesión en el menú superior de usuario
+y usar lápiz para editar más switch para activar/desactivar.
+
+### Decisión
+
+Se agrega `src/private/workspace/` y los modulos de dominio (`front-desk`, `administration`, `guest-portal`, `room-service`) como módulo de migración Bolt para las
+pantallas privadas. El login, la sesión y los permisos siguen siendo los
+actuales (`/auth/login`, `RequireSession`, `useAuth`). El workspace Bolt recibe
+el rol desde la sesión o desde la ruta privada dedicada.
+
+`router.tsx` conecta rutas privadas directas para dashboard, recepción,
+limpieza, room service, conserjería, caja, usuarios, habitaciones y tipos de
+habitación contra `PrivateSessionWorkspace`. Las rutas de formularios/detalles que
+todavía dependen del flujo modular existente permanecen disponibles bajo el
+`PrivateLayout` previo.
+
+El destino por defecto del login tambien queda alineado a esas rutas: RECEPCION
+entra a `/pms/reception`, HOUSEKEEPING a `/pms/housekeeping`, CONCIERGE a
+`/pms/concierge` y ROOM_SERVICE a `/pms/room-service` cuando no hay una URL
+privada previa segura que restaurar.
+
+El rol de Pasarela de pago se elimina del workspace migrado. Los pagos quedan
+como funcionalidad de reservas/caja, no como rol lateral.
+
+Room Service no requiere un cobro manual separado: cuando un pedido pasa a
+`Entregado`, el consumo se agrega automaticamente al folio de la reserva activa
+de esa habitacion y el pedido queda marcado como cargado. Si el pedido se
+cancela o rechaza antes de entregarse, no genera cargo.
+
+### Qué NO hacer
+
+- No restaurar el login de Bolt: el login profesional actual es el contrato.
+- No volver a poner Perfil, Preferencias o Cerrar sesión como entradas del menú
+  lateral; viven en el menú del usuario del topbar.
+- No crear un segundo sistema visual para estas pantallas: los componentes
+  migrados siguen usando `visitor-*`, `reservation-*`, `rc-*`, `adm-*`,
+  `.panel`, `.button`, `.content` y la hoja `src/index.css`.
+- No reintroducir el rol Pasarela de pago como rol de sesión o navegación.
+
+### Alternativas consideradas
+
+1. **Reemplazar toda la app por el `App.tsx` original de Bolt** — descartada:
+   habría roto el login, guards, rutas, permisos y carpetas actuales.
+2. **Copiar solo estilos Bolt sobre las pantallas existentes** — descartada:
+   no recuperaba los flujos completos que sí existían en el prototipo.
 
 ## Cómo agregar una nueva decisión
 
