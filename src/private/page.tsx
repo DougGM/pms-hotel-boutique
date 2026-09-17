@@ -9,6 +9,7 @@ type PrivatePageProps = {
   menuItems: string[];
   onNavigate?: (item: string) => void;
   sessionLabel?: string;
+  sessionEmail?: string;
   onLogout?: () => void;
 };
 
@@ -19,6 +20,7 @@ export function PrivatePage({
   menuItems,
   onNavigate,
   sessionLabel,
+  sessionEmail,
   onLogout,
 }: PrivatePageProps) {
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -82,10 +84,22 @@ export function PrivatePage({
                 </button>
                 {showUserMenu && (
                   <div className="role-menu">
-                    <button type="button" onClick={() => { setShowUserMenu(false); setAccountPanel('profile'); }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowUserMenu(false);
+                        setAccountPanel('profile');
+                      }}
+                    >
                       <UserRound size={15} /> Mi perfil
                     </button>
-                    <button type="button" onClick={() => { setShowUserMenu(false); setAccountPanel('preferences'); }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowUserMenu(false);
+                        setAccountPanel('preferences');
+                      }}
+                    >
                       <Settings size={15} /> Preferencias
                     </button>
                     {onLogout && (
@@ -104,6 +118,7 @@ export function PrivatePage({
           <AccountProfileModal
             name={accountName}
             roleLabel={role}
+            email={sessionEmail ?? ''}
             initials={accountInitials}
             onClose={() => setAccountPanel(null)}
             onSave={() => undefined}

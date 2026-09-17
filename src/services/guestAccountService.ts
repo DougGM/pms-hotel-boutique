@@ -30,6 +30,11 @@ export const guestAccountService = {
     const account = guestAccountsDB.find((item) => item.booking_id === bookingId);
     return account ? toGuestAccount(account) : undefined;
   },
+  async getCharges(): Promise<Charge[]> {
+    await simulateLatency();
+    mockUtils.throwIfSimulatingError('No fue posible cargar los cargos.');
+    return chargesDB.map(toCharge);
+  },
   async getChargesByBookingId(bookingId: ID): Promise<Charge[]> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar los cargos.');
@@ -61,10 +66,20 @@ export const guestAccountService = {
     account.updated_at = now;
     return toCharge(charge);
   },
+  async getPayments(): Promise<Payment[]> {
+    await simulateLatency();
+    mockUtils.throwIfSimulatingError('No fue posible cargar los pagos.');
+    return paymentsDB.map(toPayment);
+  },
   async getPaymentsByBookingId(bookingId: ID): Promise<Payment[]> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar los pagos.');
     return paymentsDB.filter((item) => item.booking_id === bookingId).map(toPayment);
+  },
+  async getDeposits(): Promise<Deposit[]> {
+    await simulateLatency();
+    mockUtils.throwIfSimulatingError('No fue posible cargar los depósitos.');
+    return depositsDB.map(toDeposit);
   },
   async getDepositsByBookingId(bookingId: ID): Promise<Deposit[]> {
     await simulateLatency();

@@ -58,6 +58,10 @@ async function login(email, password = 'AuroraDemo2026!') {
   });
   await act(async () => {
     await view.root.findByType('form').props.onSubmit({ preventDefault() {} });
+    // Un login exitoso puede navegar a una pantalla que hace su propia carga
+    // async post-montaje (p. ej. PrivateWorkspace) además de la del login en
+    // sí — igual que open(), hay que darle tiempo a esa segunda ronda.
+    await wait();
   });
 }
 
@@ -149,6 +153,12 @@ test('session survives remount; logout in another tab clears access', async () =
   act(() => view.unmount());
   router.dispose();
   await open('/pms/housekeeping');
+  // Remontaje desde cero: primero se restaura la sesión persistida (async) y
+  // solo entonces arranca la carga propia de PrivateWorkspace — dos rondas
+  // de latencia simulada en serie, open() por sí solo cubre una.
+  await act(async () => {
+    await wait();
+  });
   assert.equal(router.state.location.pathname, '/pms/housekeeping');
   assert.ok(text().includes('Maria Lopez'));
   storage.removeItem(sessionStorageKey);
