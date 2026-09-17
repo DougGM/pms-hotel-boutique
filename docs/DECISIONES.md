@@ -571,6 +571,176 @@ cancela o rechaza antes de entregarse, no genera cargo.
 2. **Copiar solo estilos Bolt sobre las pantallas existentes** — descartada:
    no recuperaba los flujos completos que sí existían en el prototipo.
 
+## D-010 · Instante vs. fecha de calendario: convención de conversión Date↔string
+
+**Fecha:** 2026-09-17 · **Estado:** aceptada e implementada parcialmente (ver "Qué queda pendiente").
+
+### Contexto
+
+75ccc64 corrigió un bug puntual en `GuestContent.tsx`:
+`booking.checkIn.toISOString().slice(0, 10)` para mostrar una fecha de
+calendario cruza por UTC antes de recortar el día. En America/Guatemala
+(UTC-6, sin horario de verano), eso desplaza la fecha mostrada un día
+hacia atrás. El mismo patrón (`new Date().toISOString().slice(0, 10)`
+para el "hoy" de un registro nuevo, y `new Date(str).getTime() -
+new Date(str).getTime()) / 86400000` para contar noches) seguía vivo en
+`PrivateWorkspace.tsx`, `AdminContent.tsx`, `GuestModals.tsx` y
+`OccupancyScreen.tsx` — no se había generalizado el fix.
+
+El contrato ya distinguía dos tipos de fecha, documentado en los
+comentarios de `shared/types/common.ts` y `shared/utils/date.ts` desde
+antes de este PR, pero sin un ADR que lo registrara como decisión ni
+una regla automática que lo hiciera cumplir:
+
+- **Instante** (`created_at`, `paid_at`, `occurred_at`...): un momento
+  exacto en el tiempo. El DTO es ISO 8601 con `Z` (UTC); el Model es
+  `Date`; se muestra convertido a hora local (`formatTimeGT`).
+- **Fecha de calendario** (`check_in`, `check_out`, `valid_from`,
+  `valid_to`...): una etiqueta de día civil, sin hora. El DTO es
+  `"YYYY-MM-DD"`; el Model **sigue siendo `Date`, pero anclado a
+  medianoche local** — no un string. Se construye y se lee solo con
+  `toDomainCalendarDate`/`toDtoCalendarDate` (getters/constructor
+  locales, nunca UTC), y se muestra con `formatDateGT`.
+
+Una versión anterior de este mismo ADR, en borrador, proponía cambiar
+el Model de fecha de calendario a `string` ("se compara como string,
+se muestra partiendo el string") para eliminar la clase de bug de raíz.
+Se descartó antes de aceptarse: `toDomainCalendarDate`/
+`toDtoCalendarDate` ya resuelven el problema correctamente cuando se
+usan de forma consistente, y migrar el tipo del Model habría tocado
+los mappers de `booking`/`rate`/`promotion` y cada pantalla que hace
+noches, comparaciones u orden con esas fechas — un cambio de contrato
+mucho más grande que el bug que lo motivó. El bug real nunca fue el
+tipo del Model; fue usar `toISOString()`/`new Date(str)` a secas en vez
+de los helpers que ya existían.
+
+### Decisión
+
+1. **El Model de fecha de calendario es `Date` a medianoche local.**
+   Se construye y se serializa **solo** con `toDomainCalendarDate`/
+   `toDtoCalendarDate` de `shared/types/common.ts`. Nunca
+   `new Date(value)` a secas sobre un string de solo fecha (parsea como
+   medianoche UTC) ni `.toISOString().slice(0, 10)` para volver a
+   truncarlo (cruza por UTC en la dirección contraria).
+2. **El Model de instante es `Date`**, vía `toDomainDate`/`toDtoDate`;
+   el DTO es ISO 8601 con `Z`. Se muestra en hora local con
+   `formatTimeGT`; nunca se necesita su día calendario directamente.
+3. **Comparar dos fechas de calendario ya serializadas ("YYYY-MM-DD")
+   no necesita `Date`**: la comparación de string (`a < b`, `a >= b`)
+   es válida para ese formato y evita construir un `Date` innecesario
+   (aplicado en `recIsRoomBlocked`/`recHasConflict` de
+   `PrivateWorkspace.tsx`).
+4. **Contar noches entre dos fechas de calendario usa
+   `calculateNights()`** de `shared/utils/date.ts` (días civiles vía
+   ancla UTC, nunca la resta cruda de milisegundos entre dos
+   instancias de `Date`/86400000).
+5. **El "hoy" de una operación de negocio** (fecha de un cargo/pago/
+   depósito nuevo, día operativo) se calcula en hora local:
+   `toDtoCalendarDate(new Date())`, nunca
+   `new Date().toISOString().slice(0, 10)`.
+6. **Convención de sufijo de campo, registrada hoy, aplicación
+   pendiente**: un campo de instante termina en `_at` (`created_at`,
+   `paid_at`); uno de fecha de calendario termina en `_date` o es el
+   nombre semántico ya existente sin sufijo ambiguo (`check_in`,
+   `valid_from`). Ningún campo del contrato se renombra todavía — ver
+   "Qué queda pendiente".
+7. **Prevención automática**: `eslint.config.js` prohíbe
+   `.toISOString().slice(...)` fuera de `common.ts`/`date.ts` (regla
+   `no-restricted-syntax`); `scripts/test-date.mjs` corre fijado a
+   `TZ=America/Guatemala` y agrega un barrido estático del mismo patrón
+   más `/86400000`, como respaldo de lo que el linter no puede decidir
+   sin información de tipos.
+
+### Consecuencias
+
+- **Gana** el proyecto: el bug de 75ccc64 deja de ser un parche
+  puntual — la regla de ESLint y el barrido estático de
+  `test-date.mjs` impiden que alguien lo reintroduzca sin darse cuenta,
+  y no exige tocar el contrato de datos ni las pantallas que ya
+  consumen `Date` para estas fechas.
+- **Cuesta**: `ReceptionContent.tsx`, `ReceptionModals.tsx` y
+  `ReservationDetail.tsx` (front-desk) tenían el mismo patrón de
+  `new Date(str)`/`86400000` y **no se corrigieron en este PR** —
+  front-desk tiene trabajo en vuelo hoy y tocar esos archivos arriesga
+  conflicto de merge. Quedan exceptuados explícitamente de la regla de
+  ESLint y del barrido estático (ver ambos archivos), documentado ahí
+  mismo y aquí.
+- **A quién afecta**: a quien retome front-desk — debe cerrar esa
+  excepción aplicando el mismo fix (usar `toDomainCalendarDate`/
+  `calculateNights`/comparación de string) y retirar las tres
+  exclusiones de `eslint.config.js` y `scripts/test-date.mjs` en el
+  mismo cambio. A móvil (MOV-04), cuando se coordine la renombrada de
+  sufijos del punto 6.
+
+### Qué NO hacer
+
+- **No usar `new Date(value)` a secas sobre un string de solo fecha**
+  (`"YYYY-MM-DD"`, sin hora). Parsea como medianoche UTC y en
+  America/Guatemala (UTC-6) se lee un día antes con getters locales.
+  Usar `toDomainCalendarDate(value)`.
+- **No usar `.toISOString().slice(0, 10)`** (ni ninguna variación) para
+  obtener la fecha de calendario de un `Date`. Cruza por UTC. Usar
+  `toDtoCalendarDate(date)`.
+- **No restar `Date.getTime()` crudo entre dos fechas de calendario y
+  dividir entre 86400000** para contar noches. El resultado puede
+  coincidir por casualidad (ver Contexto: el desplazamiento se cancela
+  cuando ambos operandos se parsean igual de mal), pero es frágil y
+  queda fuera del contrato. Usar `calculateNights()`.
+- **No reimplementar el formato de fecha por pantalla**
+  (`toLocaleDateString`, o una función local como el
+  `toDateInputValue`/`toCalendarTime` que tenía `OccupancyScreen.tsx`
+  antes de este PR). `formatDateGT`/`formatTimeGT` son las únicas
+  funciones de formato de fecha/hora del proyecto (ver `CLAUDE.md`).
+- **No migrar el Model de fecha de calendario a `string`** sin que el
+  equipo decida coordinar ese cambio de contrato — es la alternativa
+  que este mismo ADR descartó (ver Contexto); reabrirla exige tocar
+  mappers y pantallas de nuevo, no es una decisión de una sola persona
+  dentro de un PR de datos.
+- **No renombrar campos del contrato a `_at`/`_date` todavía** — ver
+  "Qué queda pendiente".
+
+### Qué queda pendiente
+
+- **Renombrar los campos del contrato a la convención `_at`/`_date`**
+  del punto 6 — coordinado con MOV-04 (móvil), porque el contrato de
+  datos es fuente de verdad compartida y un rename unilateral desde
+  la web rompe a móvil sin aviso.
+- **Cerrar la excepción de front-desk** (`ReceptionContent.tsx`,
+  `ReceptionModals.tsx`, `ReservationDetail.tsx`) en cuanto ese lote
+  termine su trabajo en vuelo — ver Consecuencias.
+
+### Alternativas consideradas
+
+1. **Migrar el Model de fecha de calendario a `string`** — descartada,
+   ver Contexto: resuelve la misma clase de bug pero con un costo de
+   migración (mappers + pantallas consumidoras) desproporcionado al
+   bug real, que era de uso indebido de `toISOString()`, no del tipo
+   del Model.
+2. **Solo documentar la convención, sin regla de ESLint ni test** —
+   descartada: 75ccc64 ya demostró que documentar en comentarios no
+   impidió que el mismo patrón reapareciera en cuatro archivos más
+   durante la misma rama.
+3. **Aplicar el fix también en front-desk dentro de este PR** —
+   descartada por riesgo de conflicto: esos tres archivos tienen
+   trabajo de otro colaborador en vuelo hoy: ver "Qué queda pendiente".
+
+### Nota para la sesión de revisión de equipo
+
+`scripts/test-router.mjs` tiene una prueba en rojo, pre-existente a
+este PR (confirmado con `git stash` contra el commit previo a esta
+rama): espera `PrivateNotFoundPage` en `/pms/housekeeping`,
+`/pms/room-service` y `/pms/concierge`, pero el router resuelve
+`PrivateSessionWorkspace`. Es la contradicción entre **D-008**
+("Limpieza, Room Service y Conserjería viven solo en `pms-hotel-mobile`,
+se sacan del menú web") y **D-009** ("la migración Bolt cablea esos
+mismos tres módulos como respaldo web completo dentro de
+`PrivateWorkspace`"). D-009 es la decisión más reciente y la que
+efectivamente cableó el router, pero D-008 nunca se marcó como
+reemplazada más allá de una nota en su encabezado — el equipo necesita
+decidir explícitamente cuál de las dos prevalece (o si D-009 debe
+actualizarse para reemplazar formalmente a D-008) antes de que alguien
+intente "arreglar" el router o la prueba por su cuenta.
+
 ## Cómo agregar una nueva decisión
 
 Copiar la estructura de D-001: **Contexto** (qué problema había y qué
