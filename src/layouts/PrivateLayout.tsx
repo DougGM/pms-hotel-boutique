@@ -29,6 +29,7 @@ export function PrivateLayout() {
         if (item) navigate(item.path);
       }}
       sessionLabel={`${session.user.name} · ${roleLabels[session.role]}`}
+      sessionEmail={session.user.email}
       onLogout={() => {
         logout();
         navigate(routePaths.public.login, { replace: true });

@@ -26,13 +26,21 @@ Contrasena publica de demostracion: `AuroraDemo2026!`.
 | recepcion@hotelboutique.test   | RECEPTION    | Panel, recepcion y operacion front desk                                |
 | limpieza@hotelboutique.test    | HOUSEKEEPING | Panel y limpieza                                                       |
 | conserjeria@hotelboutique.test | CONCIERGE    | Panel y conserjeria                                                    |
-| roomservice@hotelboutique.test | ROOM_SERVICE | Panel y room service                                                   |
+| roomservice@hotelboutique.test | ROOM_SERVICE | Entra directo a `/pms/room-service` y usa el workspace de pedidos      |
 
-La matriz de navegacion vive en `models/session.ts`; los enlaces y las guardas
-comparten esta politica. El contrato ya distingue departamentos operativos desde
-la sesion. Si el equipo cambia literales o agrega portal de huesped, ajustar la
-matriz y las pruebas junto con ese contrato. Las secciones siguen siendo
-provisionales; este cambio no implementa sus funciones de negocio.
+La matriz de navegacion vive en `models/session.ts`; los enlaces, destinos de
+login y guardas comparten esta politica. El contrato ya distingue departamentos
+operativos desde la sesion, por eso RECEPCION, HOUSEKEEPING, CONCIERGE y
+ROOM_SERVICE aterrizan en sus rutas dedicadas cuando no hay URL privada previa.
+Si el equipo cambia literales o agrega portal de huesped, ajustar la matriz y
+las pruebas junto con ese contrato. Las secciones siguen siendo provisionales;
+este cambio no implementa sus funciones de negocio.
+
+Frontend beta usa estas mismas cuentas como fuente visible de usuarios en
+Administracion: `personnelService.getUsers()` deriva sus modelos desde
+`sessionAccountsDB`. Los permisos y nombres de rol siguen cruzandose con
+`rolesDB`/`permissionsDB`, por lo que cambiar un usuario aqui cambia login y
+la tabla administrativa a la vez.
 
 ## Persistencia y cierre
 

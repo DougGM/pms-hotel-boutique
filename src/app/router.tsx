@@ -26,6 +26,7 @@ import { ReceptionScreen } from '@/modules/front-desk/screens/ReceptionScreen';
 import { CheckInScreen } from '@/modules/front-desk/screens/CheckInScreen';
 import { GuestAccountScreen } from '@/modules/front-desk/screens/GuestAccountScreen';
 import { CheckOutScreen } from '@/modules/front-desk/screens/CheckOutScreen';
+import { PrivateSessionWorkspace } from '@/private/workspace/PrivateSessionWorkspace';
 
 /**
  * Cada pantalla real de un módulo de privateNavigation vive aquí, con su
@@ -180,6 +181,7 @@ export const router = createBrowserRouter([
       { path: routePaths.public.bookingNew, element: <BookingFormScreen /> },
       { path: routePaths.public.bookingConfirmation, element: <BookingConfirmationScreen /> },
       { path: routePaths.public.login, element: <LoginPage /> },
+      { path: routePaths.public.register, element: <LoginPage /> },
       { path: routePaths.public.legacyLogin, element: <LoginPage /> },
       { path: routePaths.public.components, element: <ComponentsCatalogPage /> },
       { path: routePaths.public.notFound, element: <PublicNotFoundPage /> },
@@ -188,6 +190,33 @@ export const router = createBrowserRouter([
   {
     element: <RequireSession />,
     children: [
+      { path: routePaths.pms.dashboard, element: <PrivateSessionWorkspace /> },
+      { path: routePaths.pms.reception, element: <PrivateSessionWorkspace role="reception" /> },
+      {
+        path: routePaths.pms.housekeeping,
+        element: <PrivateSessionWorkspace role="housekeeping" />,
+      },
+      {
+        path: routePaths.pms.roomService,
+        element: <PrivateSessionWorkspace role="room-service" />,
+      },
+      { path: routePaths.pms.concierge, element: <PrivateSessionWorkspace role="concierge" /> },
+      {
+        path: routePaths.pms.cash,
+        element: <PrivateSessionWorkspace role="admin" initialNav="Caja" />,
+      },
+      {
+        path: routePaths.pms.users,
+        element: <PrivateSessionWorkspace role="admin" initialNav="Usuarios y roles" />,
+      },
+      {
+        path: routePaths.pms.rooms,
+        element: <PrivateSessionWorkspace role="admin" initialNav="Habitaciones" />,
+      },
+      {
+        path: routePaths.pms.roomTypes,
+        element: <PrivateSessionWorkspace role="admin" initialNav="Habitaciones" />,
+      },
       {
         path: routePaths.pms.root,
         element: <PrivateLayout />,

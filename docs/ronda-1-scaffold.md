@@ -9,6 +9,21 @@ módulos de la Ronda 1 y registra sus 14 rutas de una sola vez, para que los
 cuatro lotes puedan ramificar sin pisarse el primer día en `routes.ts` /
 `router.tsx`.
 
+**Actualizacion 2026-09-16 (`feat/migracion-bolt-completa-20260916`):** las
+rutas privadas principales dejan de depender solo de placeholders y conectan el
+workspace privado y componentes migrados desde Bolt en las carpetas de dominio. El login y los
+guards actuales se mantienen; el rol Pasarela de pago no se migra como rol de
+navegacion. Perfil, Preferencias y Cerrar sesion viven en el menu superior de
+usuario, no en el lateral.
+
+**Actualizacion 2026-09-16 (`frontend-beta`):** el workspace operativo migrado
+desde Bolt deja de inicializar recepcion, limpieza, room service, conserjeria,
+administracion y portal de huesped solo con arrays locales. `PrivateWorkspace.tsx`,
+`AdminContent.tsx` y `GuestContent.tsx` ahora adaptan `bookingsDB`, `roomsDB`,
+`guestsDB`, `ordersDB`, `serviceRequestsDB`, folios, productos, roles,
+inventario, caja, auditoria y amenidades desde `src/data/db.ts`, manteniendo
+los arrays antiguos solo como fallback visual.
+
 **Actualización posterior (#50/#51/#52, rama `web-50-51-52-occupancy-manual`):**
 el módulo `occupancy` ya dejó de ser stub. `#51` (`OccupancyScreen`) carga
 habitaciones, reservas y tipos de habitación para mostrar disponibilidad por
@@ -91,6 +106,7 @@ Públicas (`PublicLayout`, sin guarda):
 | `/rooms/:roomTypeId` | `RoomDetailScreen` | booking-engine |
 | `/booking/new` | `BookingFormScreen` | booking-engine |
 | `/booking/:bookingId/done` | `BookingConfirmationScreen` | booking-engine |
+| `/auth/register` | `StaffLoginPage` en modo registro de huesped demo | auth/public |
 
 Privadas (`RequireSession` + `RequirePermission`):
 
@@ -106,6 +122,12 @@ Privadas (`RequireSession` + `RequirePermission`):
 | `/pms/check-in/:bookingId` | `CheckInScreen` | front-desk | `front-desk:operate` |
 | `/pms/accounts/:accountId` | `GuestAccountScreen` | front-desk | `front-desk:operate` |
 | `/pms/check-out/:bookingId` | `CheckOutScreen` | front-desk | `front-desk:operate` |
+
+Nota 2026-09-16: la migracion Bolt agrega workspaces privados dedicados fuera
+del `PrivateLayout` clasico para `/pms/reception`, `/pms/housekeeping`,
+`/pms/room-service`, `/pms/concierge` y `/pms/dashboard`. `StaffLoginPage`
+restaura una URL privada segura si existe; si no existe, usa el rol de sesion
+para entrar directo al workspace operativo correspondiente.
 
 ## 3. Permisos nuevos en `session.ts`
 

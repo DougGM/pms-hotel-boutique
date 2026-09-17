@@ -69,17 +69,16 @@ activa. Sin sesión, toda ruta bajo `/pms` redirige al login.
 
 `src/app/routes.ts` centraliza las URL: `routePaths` contiene las entradas
 implementadas, los alias y los comodines que consume el router; `routes`
-conserva el catálogo de rutas previstas por módulo y referencia las entradas
+conserva el catalogo de rutas previstas por modulo y referencia las entradas
 implementadas. Al conectar una vista nueva, definir su URL en ese archivo y
-referenciarla desde `src/app/router.tsx`. Las vistas pendientes aún muestran
-la 404 de su área, excepto las entradas del menú por rol, que muestran una
-página provisional hasta integrar cada módulo.
+referenciarla desde `src/app/router.tsx`.
 
-Las pantallas que generó Bolt (`src/app/App.tsx`, `src/components/`) se
-eliminaron al cerrar la Fase 0: no estaban conectadas a esta estructura. Su
-hoja de estilos global, `src/index.css`, se conserva porque el layout actual
-todavía depende de reglas base definidas ahí (ver
-[src/ARCHITECTURE.md](src/ARCHITECTURE.md)).
+El prototipo Bolt original se migro parcialmente a
+`src/private/workspace/` y los modulos de dominio (`front-desk`, `administration`, `guest-portal`, `room-service`) para cubrir las experiencias privadas completas
+sin reemplazar el login actual. Las rutas protegidas siguen usando sesion y
+permisos del proyecto; el rol Pasarela de pago no se conserva como rol de
+navegacion. Su hoja de estilos global, `src/index.css`, sigue siendo parte del
+contrato visual (ver [src/ARCHITECTURE.md](src/ARCHITECTURE.md)).
 
 ## Comandos
 

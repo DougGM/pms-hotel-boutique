@@ -1,4 +1,6 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
+import { Bell, ChevronDown, LogOut, Settings, UserRound } from 'lucide-react';
+import { AccountPreferencesModal, AccountProfileModal } from '@/private/workspace/AccountPanels';
 import './staff-shell.css';
 
 type PrivatePageProps = {
@@ -7,6 +9,7 @@ type PrivatePageProps = {
   menuItems: string[];
   onNavigate?: (item: string) => void;
   sessionLabel?: string;
+  sessionEmail?: string;
   onLogout?: () => void;
 };
 
@@ -17,8 +20,16 @@ export function PrivatePage({
   menuItems,
   onNavigate,
   sessionLabel,
+  sessionEmail,
   onLogout,
 }: PrivatePageProps) {
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const [accountPanel, setAccountPanel] = useState<'profile' | 'preferences' | null>(null);
+  const [name, role = 'Equipo'] = sessionLabel?.split(/\s*(?:·|Â·)\s*/) ?? [];
+  const accountName = name || 'Hotel Aurora';
+  const accountInitials = accountName.slice(0, 2).toUpperCase();
+  const preferenceViews = menuItems.length > 0 ? menuItems : [activeItem || 'Panel operativo'];
+
   return (
     <div className="app-shell staff-shell">
       <aside className="sidebar">
@@ -40,14 +51,91 @@ export function PrivatePage({
             </button>
           ))}
         </nav>
-        {sessionLabel && <p className="eyebrow">{sessionLabel}</p>}
-        {onLogout && (
-          <button className="nav-item" type="button" onClick={onLogout}>
-            Cerrar sesión
-          </button>
-        )}
       </aside>
-      <main className="main-area">{children}</main>
+      <main className="main-area">
+        <header className="topbar staff-topbar">
+          <div className="crumbs">
+            <span>Hotel Aurora</span>
+            {activeItem && (
+              <>
+                <span>/</span>
+                <strong>{activeItem}</strong>
+              </>
+            )}
+          </div>
+          <div className="topbar-actions">
+            <button className="icon-btn notification" type="button" aria-label="Notificaciones">
+              <Bell size={19} />
+              <i />
+            </button>
+            {sessionLabel && (
+              <div className="profile-wrap">
+                <button
+                  className="profile-button"
+                  type="button"
+                  onClick={() => setShowUserMenu((current) => !current)}
+                >
+                  <span className="avatar gold">{accountInitials}</span>
+                  <span>
+                    <strong>{name}</strong>
+                    <small>{role}</small>
+                  </span>
+                  <ChevronDown size={15} />
+                </button>
+                {showUserMenu && (
+                  <div className="role-menu">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowUserMenu(false);
+                        setAccountPanel('profile');
+                      }}
+                    >
+                      <UserRound size={15} /> Mi perfil
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowUserMenu(false);
+                        setAccountPanel('preferences');
+                      }}
+                    >
+                      <Settings size={15} /> Preferencias
+                    </button>
+                    {onLogout && (
+                      <button className="logout" type="button" onClick={onLogout}>
+                        <LogOut size={15} /> Cerrar sesión
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </header>
+        {children}
+        {accountPanel === 'profile' && (
+          <AccountProfileModal
+            name={accountName}
+            roleLabel={role}
+            email={sessionEmail ?? ''}
+            initials={accountInitials}
+            onClose={() => setAccountPanel(null)}
+            onSave={() => undefined}
+          />
+        )}
+        {accountPanel === 'preferences' && (
+          <AccountPreferencesModal
+            name={accountName}
+            roleLabel={role}
+            initials={accountInitials}
+            initialView={activeItem || preferenceViews[0]}
+            viewOptions={preferenceViews}
+            onClose={() => setAccountPanel(null)}
+            onSave={() => undefined}
+          />
+        )}
+      </main>
     </div>
   );
 }

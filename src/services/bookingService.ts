@@ -10,7 +10,7 @@ import { toDomainCalendarDate, type ID } from '@/shared/types/common';
 import { calculateNights } from '@/shared/utils/date';
 import type { GuestAccountDto } from '@/shared/types/entities/guest-account';
 import { bookingsDB, guestAccountsDB, ratesDB, roomsDB } from '@/data/db';
-import { mockUtils, simulateLatency } from './mockUtils';
+import { mockUtils, requireCollection, simulateLatency } from './mockUtils';
 
 function assertBookingExists(id: ID): BookingDto {
   const booking = bookingsDB.find((item) => item.id === id);
@@ -82,7 +82,7 @@ export const bookingService = {
   async getBookings(): Promise<Booking[]> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar las reservas.');
-    return bookingsDB.map(toBooking);
+    return requireCollection(bookingsDB, 'bookingsDB').map(toBooking);
   },
   async getBookingById(id: ID): Promise<Booking | undefined> {
     await simulateLatency();

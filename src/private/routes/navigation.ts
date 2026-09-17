@@ -2,12 +2,9 @@ import { routePaths } from '@/app/routes';
 import { hasPermission, type Permission, type Session } from '@/modules/auth/models/session';
 
 /**
- * Limpieza, Room Service y Conserjería no están acá: sus experiencias viven
- * en pms-hotel-mobile, no en esta web (ver docs/DECISIONES.md, D-008). Sus
- * rutas (routePaths.pms.housekeeping/roomService/concierge) y sus permisos
- * (housekeeping:view/room-service:view/concierge:view) siguen intactos en
- * routes.ts y session.ts — si algún día se decide que necesitan respaldo
- * web, reactivarlas es agregar de nuevo la entrada acá, nada más.
+ * privateNavigation alimenta el layout PMS clasico. Los workspaces Bolt
+ * migrados de Limpieza, Room Service y Conserjeria entran por rutas dedicadas
+ * en router.ts para conservar sus menus internos por rol.
  */
 export const privateNavigation: { label: string; path: string; permission: Permission }[] = [
   { label: 'Panel operativo', path: routePaths.pms.dashboard, permission: 'dashboard:view' },
@@ -23,7 +20,16 @@ export function getNavigation(session: Session | null) {
   return privateNavigation.filter((item) => hasPermission(session, item.permission));
 }
 
-export function getLoginDestination(from: unknown) {
+const defaultDestinationByRole: Record<Session['role'], string> = {
+  ADMIN: routePaths.pms.dashboard,
+  GUEST: routePaths.pms.dashboard,
+  RECEPTION: routePaths.pms.reception,
+  HOUSEKEEPING: routePaths.pms.housekeeping,
+  CONCIERGE: routePaths.pms.concierge,
+  ROOM_SERVICE: routePaths.pms.roomService,
+};
+
+export function getLoginDestination(from: unknown, session?: Session | null) {
   if (typeof from === 'string' && !from.includes('\\')) {
     try {
       const base = 'https://hotel.invalid';
@@ -38,5 +44,5 @@ export function getLoginDestination(from: unknown) {
       /* An invalid destination falls back to the dashboard. */
     }
   }
-  return routePaths.pms.dashboard;
+  return session ? defaultDestinationByRole[session.role] : routePaths.pms.dashboard;
 }

@@ -16,7 +16,7 @@ import {
 } from '@/shared/types/entities/room-type';
 import type { ID } from '@/shared/types/common';
 import { ratesDB, roomFeaturesDB, roomTypesDB, roomsDB } from '@/data/db';
-import { mockUtils, simulateLatency } from './mockUtils';
+import { mockUtils, requireCollection, simulateLatency } from './mockUtils';
 
 function createRoomId(): ID {
   return `RM-${String(roomsDB.length + 1).padStart(3, '0')}`;
@@ -30,17 +30,17 @@ export const roomService = {
   async getRoomFeatures(): Promise<RoomFeature[]> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar las caracteristicas.');
-    return roomFeaturesDB.map(toRoomFeature);
+    return requireCollection(roomFeaturesDB, 'roomFeaturesDB').map(toRoomFeature);
   },
   async getRates(): Promise<Rate[]> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar las tarifas.');
-    return ratesDB.map(toRate);
+    return requireCollection(ratesDB, 'ratesDB').map(toRate);
   },
   async getRooms(): Promise<Room[]> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar las habitaciones.');
-    return roomsDB.map(toRoom);
+    return requireCollection(roomsDB, 'roomsDB').map(toRoom);
   },
   async getRoomById(id: ID): Promise<Room | undefined> {
     await simulateLatency();
@@ -80,7 +80,7 @@ export const roomService = {
   async getRoomTypes(): Promise<RoomType[]> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar los tipos de habitación.');
-    return roomTypesDB.map(toRoomType);
+    return requireCollection(roomTypesDB, 'roomTypesDB').map(toRoomType);
   },
   async getRoomTypeById(id: ID): Promise<RoomType | undefined> {
     await simulateLatency();

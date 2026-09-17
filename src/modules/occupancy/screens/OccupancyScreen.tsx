@@ -15,6 +15,7 @@ import type { Booking } from '@/shared/types/entities/booking';
 import type { GuestAccount } from '@/shared/types/entities/guest-account';
 import type { Room } from '@/shared/types/entities/room';
 import type { RoomType } from '@/shared/types/entities/room-type';
+import { toDomainCalendarDate, toDtoCalendarDate } from '@/shared/types/common';
 import { formatDateGT, formatStayRange } from '@/shared/utils/date';
 import './occupancy.css';
 
@@ -64,24 +65,11 @@ const HOUSEKEEPING_STATUS_TONES: Record<Room['housekeepingStatus'], BadgeTone> =
   inspected: 'success',
 };
 
-function toDateInputValue(date: Date): string {
-  const year = String(date.getFullYear()).padStart(4, '0');
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
-function toCalendarTime(value: string): number {
-  const [year, month, day] = value.split('-').map(Number);
-  return Date.UTC(year, month - 1, day);
-}
-
 function isBookingActiveOn(booking: Booking, selectedDate: string): boolean {
   if (booking.status === 'cancelled' || booking.status === 'noShow') return false;
-  const selected = toCalendarTime(selectedDate);
   return (
-    toCalendarTime(toDateInputValue(booking.checkIn)) <= selected &&
-    selected < toCalendarTime(toDateInputValue(booking.checkOut))
+    toDtoCalendarDate(booking.checkIn) <= selectedDate &&
+    selectedDate < toDtoCalendarDate(booking.checkOut)
   );
 }
 
@@ -91,7 +79,7 @@ function getErrorMessage(cause: unknown): string {
 
 export function OccupancyScreen() {
   const navigate = useNavigate();
-  const [selectedDate, setSelectedDate] = useState(() => toDateInputValue(new Date()));
+  const [selectedDate, setSelectedDate] = useState(() => toDtoCalendarDate(new Date()));
   const [screen, setScreen] = useState<ScreenState>({ status: 'loading' });
 
   const loadData = useCallback(async () => {
@@ -273,7 +261,7 @@ export function OccupancyScreen() {
         <>
           {view.rows.length ? (
             <DataTable
-              caption={`Ocupación del ${formatDateGT(new Date(`${selectedDate}T00:00:00`))}`}
+              caption={`Ocupación del ${formatDateGT(toDomainCalendarDate(selectedDate))}`}
               columns={columns}
               data={view.rows}
               getRowId={(row) => row.room.id}

@@ -46,6 +46,12 @@ operaciones de creación reciben los DTOs de entrada definidos en
 Todos leen de `src/data/db.ts`, la única "base de datos" simulada del
 proyecto — ver `src/ARCHITECTURE.md`.
 
+Nota frontend beta: `personnelService.getUsers()` usa `sessionAccountsDB` como
+fuente visible de usuarios/roles para que Administracion muestre las mismas
+cuentas que se usan para iniciar sesion. `personnelService.getRoles()` y
+`getPermissions()` siguen leyendo `rolesDB` y `permissionsDB`; `usersDB` queda
+como directorio operativo historico del Lote D.
+
 ## WEB-14: servicios faltantes de la vertical Ronda 1
 
 `roomService` expone `createRoom(data)`, `updateRoom(id, data)` y

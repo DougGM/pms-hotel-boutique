@@ -5,13 +5,13 @@ import {
 } from '@/shared/types/entities/cash-movement';
 import type { ID } from '@/shared/types/common';
 import { cashMovementsDB, cashSessionsDB } from '@/data/db';
-import { mockUtils, simulateLatency } from './mockUtils';
+import { mockUtils, requireCollection, simulateLatency } from './mockUtils';
 
 export const cashService = {
   async getSessions(): Promise<CashSession[]> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar las jornadas de caja.');
-    return cashSessionsDB.map(toCashSession);
+    return requireCollection(cashSessionsDB, 'cashSessionsDB').map(toCashSession);
   },
   async getSessionById(id: ID): Promise<CashSession | undefined> {
     await simulateLatency();
@@ -22,7 +22,14 @@ export const cashService = {
   async getMovementsBySessionId(sessionId: ID): Promise<CashMovement[]> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar los movimientos de caja.');
-    return cashMovementsDB.filter((item) => item.cash_session_id === sessionId).map(toCashMovement);
+    return requireCollection(cashMovementsDB, 'cashMovementsDB')
+      .filter((item) => item.cash_session_id === sessionId)
+      .map(toCashMovement);
+  },
+  async getMovements(): Promise<CashMovement[]> {
+    await simulateLatency();
+    mockUtils.throwIfSimulatingError('No fue posible cargar los movimientos de caja.');
+    return requireCollection(cashMovementsDB, 'cashMovementsDB').map(toCashMovement);
   },
 };
 export default cashService;

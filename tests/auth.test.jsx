@@ -58,6 +58,29 @@ async function login(email, password = 'AuroraDemo2026!') {
   });
   await act(async () => {
     await view.root.findByType('form').props.onSubmit({ preventDefault() {} });
+    // Un login exitoso puede navegar a una pantalla que hace su propia carga
+    // async post-montaje (p. ej. PrivateWorkspace) además de la del login en
+    // sí — igual que open(), hay que darle tiempo a esa segunda ronda.
+    await wait();
+  });
+}
+
+async function logoutFromWorkspace() {
+  const profileButtons = view.root.findAllByProps({ className: 'profile-button' });
+  if (profileButtons.length === 0) {
+    await act(async () => {
+      view.root
+        .findAllByType('button')
+        .find((button) => JSON.stringify(button.children).includes('Cerrar sesión'))
+        .props.onClick();
+    });
+    return;
+  }
+  await act(async () => {
+    profileButtons[0].props.onClick();
+  });
+  await act(async () => {
+    view.root.findByProps({ className: 'logout' }).props.onClick();
   });
 }
 
@@ -88,7 +111,7 @@ test('wrong credentials show an error, retry succeeds, and intended URL is resto
   assert.equal(router.state.location.pathname, '/pms/reception');
   assert.equal(router.state.location.search, '?day=today');
   assert.equal(router.state.location.hash, '#calendar');
-  assert.ok(text().includes('Cerrar sesión'));
+  assert.ok(text().includes('Luis Perez'));
   assert.ok(!values.get(sessionStorageKey).includes('AuroraDemo2026!'));
   assert.ok(!values.get(sessionStorageKey).includes('permissions'));
 });
@@ -96,19 +119,16 @@ test('wrong credentials show an error, retry succeeds, and intended URL is resto
 test('each staff role only sees its menu and direct unauthorized URLs are blocked', async () => {
   await open('/login');
   const roles = [
-    // limpieza/conserjeria/roomservice: Limpieza, Room Service y Conserjería
-    // se sacaron de privateNavigation (docs/DECISIONES.md, D-007) — esas
-    // experiencias viven en pms-hotel-mobile. Estos tres roles solo ven
-    // Panel operativo en la web, no es un fallo.
-    ['recepcion', 'Recepción', '/pms/users', 3],
-    ['limpieza', 'Panel operativo', '/pms/cash', 1],
-    ['conserjeria', 'Panel operativo', '/pms/cash', 1],
-    ['roomservice', 'Panel operativo', '/pms/users', 1],
-    ['huesped', 'Panel operativo', '/pms/reception', 1],
-    ['admin', 'Usuarios', null, 7],
+    ['recepcion', '/pms/reception', 'Recepción', '/pms/users', 3],
+    ['limpieza', '/pms/housekeeping', 'Habitaciones', '/pms/cash', 4],
+    ['conserjeria', '/pms/concierge', 'Solicitudes', '/pms/cash', 3],
+    ['roomservice', '/pms/room-service', 'Pedidos activos', '/pms/users', 4],
+    ['huesped', '/pms/dashboard', 'Room service', '/pms/reception', 7],
+    ['admin', '/pms/dashboard', 'Usuarios y roles', null, 10],
   ];
-  for (const [account, section, forbidden, count] of roles) {
+  for (const [account, expectedPath, section, forbidden, count] of roles) {
     await login(`${account}@hotelboutique.test`);
+    assert.equal(router.state.location.pathname, expectedPath, account);
     const nav = view.root.findByType('nav');
     const labels = nav
       .findAllByType('button')
@@ -121,12 +141,7 @@ test('each staff role only sees its menu and direct unauthorized URLs are blocke
       });
       assert.ok(text().includes('No tienes permiso para ver esta sección'), account);
     }
-    await act(async () => {
-      view.root
-        .findAllByType('button')
-        .find((button) => button.children.includes('Cerrar sesión'))
-        .props.onClick();
-    });
+    await logoutFromWorkspace();
     assert.equal(router.state.location.pathname, '/auth/login');
     assert.equal(values.size, 0);
   }
@@ -138,6 +153,12 @@ test('session survives remount; logout in another tab clears access', async () =
   act(() => view.unmount());
   router.dispose();
   await open('/pms/housekeeping');
+  // Remontaje desde cero: primero se restaura la sesión persistida (async) y
+  // solo entonces arranca la carga propia de PrivateWorkspace — dos rondas
+  // de latencia simulada en serie, open() por sí solo cubre una.
+  await act(async () => {
+    await wait();
+  });
   assert.equal(router.state.location.pathname, '/pms/housekeeping');
   assert.ok(text().includes('Maria Lopez'));
   storage.removeItem(sessionStorageKey);
@@ -224,7 +245,7 @@ test('return URL cannot redirect to another origin or a non-private page', () =>
 test('session expiration removes persisted credentials and redirects the mounted app', async () => {
   storage.setItem(sessionStorageKey, storedSession('user-admin', Date.now() + 1100));
   await open('/pms');
-  assert.ok(text().includes('Cerrar sesión'));
+  assert.ok(text().includes('Ana Martinez'));
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 600));
   });
@@ -243,7 +264,7 @@ test('session recovery failure offers a working retry', async () => {
     await act(async () => {
       await view.root.findByType('button').props.onClick();
     });
-    assert.ok(text().includes('Cerrar sesión'));
+    assert.ok(text().includes('Ana Martinez'));
   } finally {
     mockUtils.setForceError(false);
   }

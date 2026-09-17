@@ -46,9 +46,11 @@ los mismos roles, en formato de datos:
 - `room_service`
 
 `permissionsDB` conserva sus llaves actuales porque representan acciones, no
-roles. El directorio `usersDB` sigue siendo personal operativo; por eso no es
-obligatorio tener usuarios tipo `guest` ahi aunque el rol exista para login y
-catalogo.
+roles. Para la pantalla administrativa de usuarios, `personnelService.getUsers`
+usa `sessionAccountsDB` como fuente base: esos son los usuarios/roles que se
+usan para login y para gestionar accesos visibles en el frontend beta.
+`usersDB` queda como directorio operativo historico del Lote D, no como la
+fuente visible principal de gestion de usuarios.
 
 ## Cuentas mock para pruebas
 

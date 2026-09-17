@@ -5,12 +5,14 @@ import {
 } from '@/shared/types/entities/payment';
 import type { ID } from '@/shared/types/common';
 import { paymentsDB } from '@/data/db';
-import { mockUtils, simulateLatency } from './mockUtils';
+import { mockUtils, requireCollection, simulateLatency } from './mockUtils';
 export const paymentService = {
   async getPaymentsByBookingId(bookingId: ID): Promise<Payment[]> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar los pagos.');
-    return paymentsDB.filter((item) => item.booking_id === bookingId).map(toPayment);
+    return requireCollection(paymentsDB, 'paymentsDB')
+      .filter((item) => item.booking_id === bookingId)
+      .map(toPayment);
   },
   async addCharge(data: AddPaymentDto): Promise<Payment> {
     await simulateLatency();

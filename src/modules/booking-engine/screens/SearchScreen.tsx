@@ -1,6 +1,20 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowRight, CalendarDays, Check, UserRound } from 'lucide-react';
-import { Link, useSearchParams } from 'react-router-dom';
+import {
+  ArrowRight,
+  CalendarDays,
+  Car,
+  Check,
+  Coffee,
+  Dumbbell,
+  Percent,
+  ShieldCheck,
+  Sparkles,
+  UserRound,
+  Utensils,
+  Waves,
+  Wifi,
+} from 'lucide-react';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { bookingService } from '@/services/bookingService';
 import { roomService } from '@/services/roomService';
 import { EmptyState } from '@/shared/components/EmptyState';
@@ -22,6 +36,40 @@ type AvailableRoomType = {
   roomType: RoomType;
   availableRooms: number;
 };
+
+const roomImages = [
+  'https://images.pexels.com/photos/271624/pexels-photo-271624.jpeg?auto=compress&cs=tinysrgb&w=1200',
+  'https://images.pexels.com/photos/164595/pexels-photo-164595.jpeg?auto=compress&cs=tinysrgb&w=1200',
+  'https://images.pexels.com/photos/261102/pexels-photo-261102.jpeg?auto=compress&cs=tinysrgb&w=1200',
+];
+
+const amenities = [
+  { title: 'Piscina climatizada', detail: 'Terraza tranquila, camastros y servicio de bebidas.', icon: Waves, image: 'https://images.pexels.com/photos/261327/pexels-photo-261327.jpeg?auto=compress&cs=tinysrgb&w=900' },
+  { title: 'Desayuno Aurora', detail: 'Café de especialidad, panadería fresca y opciones locales.', icon: Coffee, image: 'https://images.pexels.com/photos/1833349/pexels-photo-1833349.jpeg?auto=compress&cs=tinysrgb&w=900' },
+  { title: 'Restaurante & bar', detail: 'Cocina de temporada para cerrar el día sin salir del hotel.', icon: Utensils, image: 'https://images.pexels.com/photos/262978/pexels-photo-262978.jpeg?auto=compress&cs=tinysrgb&w=900' },
+  { title: 'Wellness room', detail: 'Gimnasio, spa bajo reserva y amenidades para descansar.', icon: Dumbbell, image: 'https://images.pexels.com/photos/3757957/pexels-photo-3757957.jpeg?auto=compress&cs=tinysrgb&w=900' },
+];
+
+const promotions = [
+  { name: 'Estancia extendida', code: 'AURORA15', value: '15%', detail: 'Ahorra en reservas de 4 noches o más.', image: 'https://images.pexels.com/photos/754628/pexels-photo-754628.jpeg?auto=compress&cs=tinysrgb&w=900' },
+  { name: 'Escapada romántica', code: 'ROMANCE', value: '10%', detail: 'Cena para dos y botella de vino incluida.', image: 'https://images.pexels.com/photos/1707828/pexels-photo-1707828.jpeg?auto=compress&cs=tinysrgb&w=900' },
+  { name: 'Fin de semana', code: 'WEEKEND10', value: '10%', detail: 'Tarifa especial de viernes a domingo.', image: 'https://images.pexels.com/photos/3754595/pexels-photo-3754595.jpeg?auto=compress&cs=tinysrgb&w=900' },
+];
+
+const policies = [
+  { title: 'Cancelación flexible', detail: 'Sin cargo hasta 48 horas antes de la llegada en tarifa flexible.' },
+  { title: 'Check-in y check-out', detail: 'Entrada desde las 15:00 y salida hasta las 12:00. Early check-in sujeto a disponibilidad.' },
+  { title: 'Pago seguro', detail: 'Puedes reservar con tarjeta y completar cargos adicionales durante la estancia.' },
+];
+
+const experienceImages = [
+  'https://images.pexels.com/photos/9119625/pexels-photo-9119625.jpeg?auto=compress&cs=tinysrgb&h=650&w=940',
+  'https://images.pexels.com/photos/14036253/pexels-photo-14036253.jpeg?auto=compress&cs=tinysrgb&h=650&w=940',
+  'https://images.pexels.com/photos/7222168/pexels-photo-7222168.jpeg?auto=compress&cs=tinysrgb&h=650&w=940',
+  'https://images.pexels.com/photos/24433378/pexels-photo-24433378.jpeg?auto=compress&cs=tinysrgb&h=650&w=940',
+  'https://images.pexels.com/photos/3011575/pexels-photo-3011575.jpeg?auto=compress&cs=tinysrgb&h=650&w=940',
+  'https://images.pexels.com/photos/6466301/pexels-photo-6466301.jpeg?auto=compress&cs=tinysrgb&h=650&w=940',
+];
 
 type DateRangeValue = {
   start: Date | null;
@@ -134,6 +182,7 @@ function findLowestRate(rates: Rate[], roomTypeId: string): Rate | undefined {
 }
 
 export function SearchScreen() {
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const initialRange = useMemo<DateRangeValue>(() => {
     const today = new Date();
@@ -154,6 +203,10 @@ export function SearchScreen() {
   const [rangeError, setRangeError] = useState<string | undefined>();
   const [hasSearched, setHasSearched] = useState(false);
   const [guests, setGuests] = useState('2 adultos');
+
+  const scrollToSearch = useCallback(() => {
+    document.getElementById('buscar')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, []);
 
   const loadShowcase = useCallback(async () => {
     setShowcaseStatus('loading');
@@ -216,6 +269,9 @@ export function SearchScreen() {
   const roomCards = hasSearched
     ? results.map(({ roomType, availableRooms }) => ({ roomType, availableRooms }))
     : roomTypes.map((roomType) => ({ roomType, availableRooms: undefined }));
+  const publicTab = ['amenidades', 'promociones', 'politicas'].includes(location.hash.replace('#', ''))
+    ? location.hash.replace('#', '')
+    : 'habitaciones';
 
   return (
     <section className="booking-search-page">
@@ -262,6 +318,7 @@ export function SearchScreen() {
       </div>
 
       <form
+        id="buscar"
         className="search-panel booking-search-panel"
         onSubmit={(event) => {
           event.preventDefault();
@@ -328,6 +385,8 @@ export function SearchScreen() {
       ) : null}
 
       <div className="visitor-content">
+        {publicTab === 'habitaciones' ? (
+          <>
         {hasSearched && status === 'success' ? (
           <div className="search-results-bar">
             <div className="search-results-info">
@@ -348,7 +407,7 @@ export function SearchScreen() {
           </div>
         ) : null}
 
-        <div className="visitor-section-head">
+        <div className="visitor-section-head" id="habitaciones">
           <div>
             <p className="eyebrow">Elige tu espacio</p>
             <h2>Habitaciones pensadas para ti</h2>
@@ -380,6 +439,7 @@ export function SearchScreen() {
                 <article className="visitor-room" key={roomType.id}>
                   <div
                     className={`room-visual booking-room-visual booking-room-visual-${index % 3}`}
+                    style={{ backgroundImage: `linear-gradient(180deg, rgba(46, 33, 26, 0.08) 0%, transparent 42%, rgba(46, 33, 26, 0.35) 100%), url(${roomImages[index % roomImages.length]})` }}
                   >
                     <span className="room-tag">
                       {availableRooms !== undefined
@@ -432,7 +492,122 @@ export function SearchScreen() {
             })}
           </div>
         ) : null}
+          </>
+        ) : null}
+
+        {publicTab === 'amenidades' ? (
+        <section className="booking-public-section" id="amenidades">
+          <div className="visitor-section-head">
+            <div>
+              <p className="eyebrow">Amenidades incluidas</p>
+              <h2>Todo listo para disfrutar tu estancia</h2>
+            </div>
+            <button className="text-button" type="button" onClick={scrollToSearch}>
+              Buscar fechas <ArrowRight size={14} aria-hidden="true" />
+            </button>
+          </div>
+          <div className="booking-amenity-grid">
+            {amenities.map((amenity) => {
+              const Icon = amenity.icon;
+              return (
+                <article className="booking-amenity-card" key={amenity.title}>
+                  <div className="booking-amenity-image" style={{ backgroundImage: `url(${amenity.image})` }}>
+                    <span><Icon size={18} aria-hidden="true" /></span>
+                  </div>
+                  <div>
+                    <h3>{amenity.title}</h3>
+                    <p>{amenity.detail}</p>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+          <div className="booking-service-strip">
+            <span><Wifi size={16} aria-hidden="true" /> Wi-Fi de alta velocidad</span>
+            <span><Car size={16} aria-hidden="true" /> Traslado bajo reserva</span>
+            <span><Sparkles size={16} aria-hidden="true" /> Servicio a la habitación</span>
+          </div>
+        </section>
+        ) : null}
+
+        {publicTab === 'promociones' ? (
+        <section className="booking-public-section" id="promociones">
+          <div className="visitor-section-head">
+            <div>
+              <p className="eyebrow">Ofertas vigentes</p>
+              <h2>Promociones para reservar mejor</h2>
+            </div>
+          </div>
+          <div className="booking-promo-grid">
+            {promotions.map((promo) => (
+              <article className="booking-promo-card" key={promo.code}>
+                <div className="booking-promo-image" style={{ backgroundImage: `url(${promo.image})` }}>
+                  <span><Percent size={15} aria-hidden="true" /> {promo.code}</span>
+                </div>
+                <div className="booking-promo-body">
+                  <small>{promo.value} de beneficio</small>
+                  <h3>{promo.name}</h3>
+                  <p>{promo.detail}</p>
+                  <button className="button small secondary" type="button" onClick={scrollToSearch}>
+                    Usar promoción <ArrowRight size={13} aria-hidden="true" />
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+        ) : null}
+
+        {publicTab === 'politicas' ? (
+        <section className="booking-public-section booking-policy-section" id="politicas">
+          <div>
+            <p className="eyebrow">Políticas claras</p>
+            <h2>Reserva con tranquilidad</h2>
+            <p>Antes de confirmar, revisa las condiciones principales de Hotel Aurora.</p>
+          </div>
+          <div className="booking-policy-list">
+            {policies.map((policy) => (
+              <article key={policy.title}>
+                <ShieldCheck size={18} aria-hidden="true" />
+                <div>
+                  <h3>{policy.title}</h3>
+                  <p>{policy.detail}</p>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+        ) : null}
       </div>
+
+      <section className="visitor-experience booking-experience">
+        <div className="visitor-section-head center">
+          <div>
+            <p className="eyebrow">Vive Aurora</p>
+            <h2>
+              Una experiencia
+              <br />
+              <em>en cada rincón.</em>
+            </h2>
+          </div>
+        </div>
+        <p className="visitor-section-desc center">
+          Desde nuestras instalaciones hasta cada detalle de servicio, todo está diseñado para que tu
+          estancia sea inolvidable.
+        </p>
+        <div className="experience-grid booking-experience-grid">
+          {experienceImages.map((image) => (
+            <div className="experience-tile booking-experience-tile" key={image} style={{ backgroundImage: `url(${image})` }}>
+              <div className="experience-overlay" />
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <footer className="visitor-footer">
+        <span>© 2024 Aurora Hotel Group</span>
+        <span>Privacidad · Términos · Contacto</span>
+      </footer>
     </section>
   );
 }

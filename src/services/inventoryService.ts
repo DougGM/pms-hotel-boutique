@@ -8,13 +8,13 @@ import {
 } from '@/shared/types/entities/inventory-movement';
 import type { ID } from '@/shared/types/common';
 import { inventoryItemsDB, inventoryMovementsDB } from '@/data/db';
-import { mockUtils, simulateLatency } from './mockUtils';
+import { mockUtils, requireCollection, simulateLatency } from './mockUtils';
 
 export const inventoryService = {
   async getItems(): Promise<InventoryItem[]> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar el inventario.');
-    return inventoryItemsDB.map(toInventoryItem);
+    return requireCollection(inventoryItemsDB, 'inventoryItemsDB').map(toInventoryItem);
   },
   async getItemById(id: ID): Promise<InventoryItem | undefined> {
     await simulateLatency();
@@ -25,14 +25,21 @@ export const inventoryService = {
   async getItemsBelowMinimum(): Promise<InventoryItem[]> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar la alerta de stock bajo.');
-    return inventoryItemsDB.map(toInventoryItem).filter((item) => item.isBelowMinimum);
+    return requireCollection(inventoryItemsDB, 'inventoryItemsDB')
+      .map(toInventoryItem)
+      .filter((item) => item.isBelowMinimum);
   },
   async getMovementsByItemId(itemId: ID): Promise<InventoryMovement[]> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar los movimientos.');
-    return inventoryMovementsDB
+    return requireCollection(inventoryMovementsDB, 'inventoryMovementsDB')
       .filter((item) => item.inventory_item_id === itemId)
       .map(toInventoryMovement);
+  },
+  async getMovements(): Promise<InventoryMovement[]> {
+    await simulateLatency();
+    mockUtils.throwIfSimulatingError('No fue posible cargar los movimientos.');
+    return requireCollection(inventoryMovementsDB, 'inventoryMovementsDB').map(toInventoryMovement);
   },
 };
 export default inventoryService;
