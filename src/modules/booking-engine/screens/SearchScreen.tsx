@@ -280,20 +280,20 @@ export function SearchScreen() {
         <div className="visitor-hero-copy">
           <p className="eyebrow">Hospitalidad que se siente</p>
           <h1>
-            Tu proxima estancia <em>comienza aqui.</em>
+            Tu próxima estancia <em>comienza aquí.</em>
           </h1>
           <p>
-            Descansa, descubre y dejanos cuidar cada detalle. Encuentra el espacio perfecto para tu
-            proxima visita a Hotel Aurora.
+            Descansa, descubre y déjanos cuidar cada detalle. Encuentra el espacio perfecto para tu
+            próxima visita a Hotel Aurora.
           </p>
           <div className="hero-stats">
             <div>
               <strong>4.9</strong>
-              <small>Valoracion de huespedes</small>
+              <small>Valoración de huéspedes</small>
             </div>
             <div>
               <strong>24/7</strong>
-              <small>Atencion personalizada</small>
+              <small>Atención personalizada</small>
             </div>
             <div>
               <strong>+12</strong>
@@ -328,7 +328,7 @@ export function SearchScreen() {
         <div className="search-title">
           <CalendarDays size={24} aria-hidden="true" />
           <div>
-            <strong>Encuentra tu habitacion</strong>
+            <strong>Encuentra tu habitación</strong>
             <span>Consulta disponibilidad y tarifas en segundos</span>
           </div>
         </div>
@@ -358,12 +358,12 @@ export function SearchScreen() {
             />
           </label>
           <label>
-            <span>Huespedes</span>
+            <span>Huéspedes</span>
             <select value={guests} onChange={(event) => setGuests(event.target.value)}>
               <option>1 adulto</option>
               <option>2 adultos</option>
-              <option>2 adultos - 1 nino</option>
-              <option>4 huespedes</option>
+              <option>2 adultos - 1 niño</option>
+              <option>4 huéspedes</option>
             </select>
           </label>
         </div>
@@ -402,7 +402,7 @@ export function SearchScreen() {
               </span>
             </div>
             <span className="search-results-count">
-              {results.length} {results.length === 1 ? 'opcion disponible' : 'opciones disponibles'}
+              {results.length} {results.length === 1 ? 'opción disponible' : 'opciones disponibles'}
             </span>
           </div>
         ) : null}
@@ -423,7 +423,7 @@ export function SearchScreen() {
         {showcaseStatus === 'success' && hasSearched && results.length === 0 ? (
           <EmptyState
             title="Sin disponibilidad"
-            description="No encontramos tipos de habitacion disponibles para esas fechas."
+            description="No encontramos tipos de habitación disponibles para esas fechas."
           />
         ) : null}
 
@@ -447,7 +447,7 @@ export function SearchScreen() {
                         : index === 0
                           ? 'Mejor precio'
                           : index === 1
-                            ? 'Mas reservada'
+                            ? 'Más reservada'
                             : 'Experiencia premium'}
                     </span>
                   </div>
@@ -455,7 +455,7 @@ export function SearchScreen() {
                     <div>
                       <h3>{roomType.name}</h3>
                       <p>
-                        {roomType.bedConfiguration} - {roomType.capacity} huespedes
+                        {roomType.bedConfiguration} - {roomType.capacity} huéspedes
                       </p>
                     </div>
                     <div className="room-price">

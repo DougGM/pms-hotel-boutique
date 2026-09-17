@@ -4,6 +4,11 @@
   overflow-wrap: anywhere;
 }
 
+.login-brand.staff-login-brand {
+  color: var(--color-text-primary);
+  margin-bottom: 1.5rem;
+}
+
 .staff-login-form {
   display: grid;
   gap: 1rem;
