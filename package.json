@@ -12,7 +12,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
     "check": "npm run format:check && npm run typecheck && npm run lint && npm run build && npm run test",
-    "test": "npm run test:auth && npm run test:currency && npm run test:date && npm run test:money-contract && npm run test:contract && npm run test:shared-contract && npm run test:referential-integrity && npm run test:room-status && npm run test:lot-c-d && npm run test:services && npm run test:presentation",
+    "test": "npm run test:auth && npm run test:currency && npm run test:date && npm run test:money-contract && npm run test:contract && npm run test:shared-contract && npm run test:referential-integrity && npm run test:room-status && npm run test:lot-c-d && npm run test:services && npm run test:presentation && npm run test:router",
     "test:auth": "node scripts/test-auth.mjs",
     "test:currency": "node scripts/test-currency.mjs",
     "test:date": "node scripts/test-date.mjs",
@@ -23,7 +23,8 @@
     "test:room-status": "node scripts/test-room-status.mjs",
     "test:lot-c-d": "node scripts/test-lot-c-d.mjs",
     "test:services": "node scripts/test-services.mjs",
-    "test:presentation": "node scripts/test-presentation.mjs"
+    "test:presentation": "node scripts/test-presentation.mjs",
+    "test:router": "node scripts/test-router.mjs"
   },
   "dependencies": {
     "lucide-react": "^0.446.0",

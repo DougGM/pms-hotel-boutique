@@ -30,7 +30,8 @@ const load = (relativePath) => {
   return require(path);
 };
 
-const { formatDateGT, formatTimeGT, formatStayRange, calculateNights } = load('utils/date');
+const { formatDateGT, formatTimeGT, formatStayRange, calculateNights, isSameCalendarDay } =
+  load('utils/date');
 const { toDomainCalendarDate, toDtoCalendarDate } = load('types/common');
 const bookingMapper = load('types/entities/booking/booking.mapper');
 const rateMapper = load('types/entities/rate/rate.mapper');
@@ -128,6 +129,28 @@ test('calculateNights: rango invertido -> lanza error, nunca negativo', () => {
 
 test('calculateNights: Date inválido -> lanza error', () => {
   assert.throws(() => calculateNights(new Date(NaN), new Date(2026, 8, 10)), /inválida/);
+});
+
+// --- isSameCalendarDay ------------------------------------------------
+
+test('isSameCalendarDay: mismo día, distinta hora -> true', () => {
+  const morning = new Date(2026, 8, 10, 6, 0);
+  const night = new Date(2026, 8, 10, 23, 45);
+  assert.equal(isSameCalendarDay(morning, night), true);
+});
+
+test('isSameCalendarDay: días distintos, aunque estén a una hora de diferencia -> false', () => {
+  const lateNight = new Date(2026, 8, 10, 23, 30);
+  const earlyNextDay = new Date(2026, 8, 11, 0, 30);
+  assert.equal(isSameCalendarDay(lateNight, earlyNextDay), false);
+});
+
+test('isSameCalendarDay: cruce de mes -> false', () => {
+  assert.equal(isSameCalendarDay(new Date(2026, 8, 30), new Date(2026, 9, 1)), false);
+});
+
+test('isSameCalendarDay: Date inválido -> lanza error', () => {
+  assert.throws(() => isSameCalendarDay(new Date(NaN), new Date(2026, 8, 10)), /inválida/);
 });
 
 // --- Días calendario, no diferencia cruda de milisegundos -----------------

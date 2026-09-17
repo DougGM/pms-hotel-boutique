@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { routePaths } from '@/app/routes';
-import { Badge, type BadgeTone } from '@/shared/components/Badge';
+import { Badge } from '@/shared/components/Badge';
 import { Button } from '@/shared/components/Button';
 import { DataTable, type DataTableColumn } from '@/shared/components/DataTable';
-import { EmptyState } from '@/shared/components/EmptyState';
 import { ErrorState } from '@/shared/components/ErrorState';
 import { LoadingState } from '@/shared/components/LoadingState';
 import { roomService } from '@/services/roomService';
@@ -19,15 +18,13 @@ type ScreenState =
   | { status: 'error'; message: string }
   | { status: 'ready'; roomTypes: RoomType[]; roomFeatures: RoomFeature[]; rates: Rate[] };
 
+type RoomTypeRow = { roomType: RoomType; featureNames: string; baseRate: Rate | undefined };
+
 function getErrorMessage(cause: unknown): string {
   return cause instanceof Error ? cause.message : 'Error inesperado.';
 }
 
-function activeTone(active: boolean): BadgeTone {
-  return active ? 'success' : 'neutral';
-}
-
-/** Misma selección que `findFallbackRate` en RoomDetailScreen (booking-engine):
+/** Mismo criterio que `findFallbackRate` en RoomDetailScreen (booking-engine):
  * la tarifa activa más barata del tipo, usada como "precio base" sin fechas. */
 function findBaseRate(rates: Rate[], roomTypeId: string): Rate | undefined {
   return rates
@@ -39,7 +36,7 @@ export function RoomTypeListScreen() {
   const navigate = useNavigate();
   const [screen, setScreen] = useState<ScreenState>({ status: 'loading' });
 
-  const loadRoomTypes = useCallback(async () => {
+  const loadData = useCallback(async () => {
     setScreen({ status: 'loading' });
     try {
       const [roomTypes, roomFeatures, rates] = await Promise.all([
@@ -54,71 +51,93 @@ export function RoomTypeListScreen() {
   }, []);
 
   useEffect(() => {
-    void loadRoomTypes();
-  }, [loadRoomTypes]);
+    void loadData();
+  }, [loadData]);
 
-  const columns = useMemo<DataTableColumn<RoomType>[]>(() => {
+  const rows = useMemo<RoomTypeRow[]>(() => {
     if (screen.status !== 'ready') return [];
-    const featureById = new Map(screen.roomFeatures.map((feature) => [feature.id, feature.name]));
-
-    return [
-      {
-        id: 'code',
-        header: 'Código',
-        cell: (roomType) => roomType.code,
-        sortValue: (roomType) => roomType.code,
-      },
-      {
-        id: 'name',
-        header: 'Nombre',
-        cell: (roomType) => roomType.name,
-        sortValue: (roomType) => roomType.name,
-      },
-      {
-        id: 'capacity',
-        header: 'Capacidad',
-        cell: (roomType) => `${roomType.capacity} personas`,
-        sortValue: (roomType) => roomType.capacity,
-      },
-      {
-        id: 'features',
-        header: 'Características',
-        cell: (roomType) => {
-          const names = roomType.roomFeatureIds.map((id) => featureById.get(id) ?? id);
-          return names.length > 0 ? names.join(', ') : '—';
-        },
-        sortValue: (roomType) =>
-          roomType.roomFeatureIds.map((id) => featureById.get(id) ?? id).join(', '),
-      },
-      {
-        id: 'basePrice',
-        header: 'Precio base',
-        cell: (roomType) => {
-          const rate = findBaseRate(screen.rates, roomType.id);
-          return rate ? formatCurrency(rate.priceCents, rate.currency) : 'Sin tarifa activa';
-        },
-        sortValue: (roomType) => findBaseRate(screen.rates, roomType.id)?.priceCents ?? -1,
-      },
-      {
-        id: 'active',
-        header: 'Estado',
-        cell: (roomType) => (
-          <Badge tone={activeTone(roomType.active)}>
-            {roomType.active ? 'Activo' : 'Inactivo'}
-          </Badge>
-        ),
-        sortValue: (roomType) => (roomType.active ? 1 : 0),
-      },
-    ];
+    const featureNameById = new Map(
+      screen.roomFeatures.map((feature) => [feature.id, feature.name]),
+    );
+    return screen.roomTypes
+      .map((roomType) => ({
+        roomType,
+        featureNames:
+          roomType.roomFeatureIds.map((id) => featureNameById.get(id) ?? id).join(', ') || '—',
+        baseRate: findBaseRate(screen.rates, roomType.id),
+      }))
+      .sort((left, right) => left.roomType.name.localeCompare(right.roomType.name, 'es'));
   }, [screen]);
+
+  const columns: DataTableColumn<RoomTypeRow>[] = [
+    {
+      id: 'code',
+      header: 'Código',
+      cell: ({ roomType }) => roomType.code,
+      sortValue: ({ roomType }) => roomType.code,
+    },
+    {
+      id: 'name',
+      header: 'Nombre',
+      cell: ({ roomType }) => roomType.name,
+      sortValue: ({ roomType }) => roomType.name,
+    },
+    {
+      id: 'bedConfiguration',
+      header: 'Configuración de camas',
+      cell: ({ roomType }) => roomType.bedConfiguration,
+    },
+    {
+      id: 'capacity',
+      header: 'Capacidad',
+      cell: ({ roomType }) => roomType.capacity,
+      sortValue: ({ roomType }) => roomType.capacity,
+    },
+    {
+      id: 'features',
+      header: 'Características',
+      cell: ({ featureNames }) => featureNames,
+    },
+    {
+      id: 'basePrice',
+      header: 'Precio base',
+      cell: ({ baseRate }) =>
+        baseRate ? formatCurrency(baseRate.priceCents, baseRate.currency) : 'Sin tarifa activa',
+      sortValue: ({ baseRate }) => baseRate?.priceCents ?? -1,
+    },
+    {
+      id: 'active',
+      header: 'Estado',
+      cell: ({ roomType }) => (
+        <Badge tone={roomType.active ? 'success' : 'neutral'}>
+          {roomType.active ? 'Activo' : 'Inactivo'}
+        </Badge>
+      ),
+      sortValue: ({ roomType }) => (roomType.active ? 1 : 0),
+    },
+    {
+      id: 'actions',
+      header: 'Acciones',
+      cell: ({ roomType }) => (
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() => navigate(routePaths.pms.roomTypeEdit.replace(':roomTypeId', roomType.id))}
+        >
+          Editar
+        </Button>
+      ),
+    },
+  ];
 
   return (
     <section className="content">
       <div className="rooms-header">
-        <h1>Tipos de habitación</h1>
-        <Button onClick={() => navigate(routePaths.pms.roomTypeNew)}>
-          Nuevo tipo de habitación
-        </Button>
+        <div>
+          <h1>Tipos de habitación</h1>
+          <p className="rooms-muted">Catálogo de tipos de habitación del hotel.</p>
+        </div>
+        <Button onClick={() => navigate(routePaths.pms.roomTypeNew)}>Nuevo tipo</Button>
       </div>
 
       {screen.status === 'loading' && <LoadingState label="Cargando tipos de habitación..." />}
@@ -127,23 +146,18 @@ export function RoomTypeListScreen() {
         <ErrorState
           title="No pudimos cargar los tipos de habitación"
           description={screen.message}
-          onRetry={loadRoomTypes}
+          onRetry={loadData}
         />
       )}
 
-      {screen.status === 'ready' && screen.roomTypes.length === 0 && (
-        <EmptyState
-          title="Sin tipos de habitación"
-          description="No hay tipos de habitación registrados todavía."
-        />
-      )}
-
-      {screen.status === 'ready' && screen.roomTypes.length > 0 && (
+      {screen.status === 'ready' && (
         <DataTable
-          columns={columns}
-          data={screen.roomTypes}
-          getRowId={(roomType) => roomType.id}
           caption="Tipos de habitación"
+          columns={columns}
+          data={rows}
+          getRowId={(row) => row.roomType.id}
+          pageSize={10}
+          emptyMessage="Todavía no hay tipos de habitación registrados."
         />
       )}
     </section>
