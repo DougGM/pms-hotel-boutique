@@ -254,6 +254,19 @@ const roomTypeNameById = (roomTypes: RoomType[], roomTypeId?: string) =>
  */
 const normalizeRoleCode = (code: string) => (code === 'room_service' ? 'roomService' : code);
 
+const roleDisplayName = (role?: Role) => {
+  if (!role) return '';
+  const labels: Record<string, string> = {
+    admin: 'Administración',
+    guest: 'Huésped',
+    reception: 'Recepción',
+    housekeeping: 'Limpieza',
+    concierge: 'Conserjería',
+    roomService: 'Room Service',
+  };
+  return labels[normalizeRoleCode(role.code)] ?? role.name;
+};
+
 const roomStatusLabel = (
   status: Room['status'],
   housekeepingStatus: Room['housekeepingStatus'],
@@ -819,20 +832,21 @@ export function AdminContent({
           promotionService.getPromotions(),
         ]);
 
-        const adminUsers: AdminUser[] = users.map((user, index) => ({
-          id: parseDbId(user.id, index + 1),
-          name: `${user.firstName} ${user.lastName}`,
-          email: user.email,
-          role:
-            roles.find((role: Role) => normalizeRoleCode(role.code) === user.role)?.name ??
-            user.role,
-          status: user.status === 'active' ? 'Activo' : 'Inactivo',
-          lastAccess: toDtoCalendarDate(user.updatedAt),
-        }));
+        const adminUsers: AdminUser[] = users.map((user, index) => {
+          const role = roles.find((item: Role) => normalizeRoleCode(item.code) === user.role);
+          return {
+            id: parseDbId(user.id, index + 1),
+            name: `${user.firstName} ${user.lastName}`,
+            email: user.email,
+            role: roleDisplayName(role) || user.role,
+            status: user.status === 'active' ? 'Activo' : 'Inactivo',
+            lastAccess: toDtoCalendarDate(user.updatedAt),
+          };
+        });
 
         const adminRoles: AdminRole[] = roles.map((role, index) => ({
           id: parseDbId(role.id, index + 1),
-          name: role.name,
+          name: roleDisplayName(role),
           description: `Rol ${role.code}`,
           userCount: users.filter((user) => user.role === normalizeRoleCode(role.code)).length,
           permissions: Object.fromEntries(
@@ -1336,6 +1350,7 @@ function AdminContentReady({
 
   // ─── USUARIOS Y ROLES ───
   if (nav === 'Usuarios y roles') {
+    const roleFilterOptions = ['Todos', 'Activo', 'Inactivo', ...roles.map((role) => role.name)];
     const filtered = users.filter((u) => {
       const ms = `${u.name} ${u.email} ${u.role}`.toLowerCase().includes(search.toLowerCase());
       const mf =
@@ -1369,15 +1384,7 @@ function AdminContentReady({
             filterLabel="Filtrar"
             filterValue={filter}
             setFilter={setFilter}
-            filterOptions={[
-              'Todos',
-              'Activo',
-              'Inactivo',
-              'Administrador',
-              'Recepción',
-              'Limpieza',
-              'Room Service',
-            ]}
+            filterOptions={roleFilterOptions}
           />
           {filtered.length === 0 ? (
             <div className="hk-empty">

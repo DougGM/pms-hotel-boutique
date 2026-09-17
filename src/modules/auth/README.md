@@ -36,6 +36,12 @@ Si el equipo cambia literales o agrega portal de huesped, ajustar la matriz y
 las pruebas junto con ese contrato. Las secciones siguen siendo provisionales;
 este cambio no implementa sus funciones de negocio.
 
+Frontend beta usa estas mismas cuentas como fuente visible de usuarios en
+Administracion: `personnelService.getUsers()` deriva sus modelos desde
+`sessionAccountsDB`. Los permisos y nombres de rol siguen cruzandose con
+`rolesDB`/`permissionsDB`, por lo que cambiar un usuario aqui cambia login y
+la tabla administrativa a la vez.
+
 ## Persistencia y cierre
 
 WEB-05 es el unico propietario de `PMS_AUTH_SESSION` y del token de `httpClient`.

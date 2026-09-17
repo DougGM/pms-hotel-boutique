@@ -412,8 +412,10 @@ mismos roles en formato de datos:
 - `room_service`
 
 `permissionsDB` conserva sus llaves porque modelan acciones, no nombres de
-roles. `usersDB` sigue representando personal operativo; no necesita crear un
-registro de huesped solo por existir el rol `guest`.
+roles. En el frontend beta, `personnelService.getUsers` toma
+`sessionAccountsDB` como fuente visible de gestion de usuarios para que
+administracion muestre las mismas cuentas/roles que se usan para iniciar
+sesion. `usersDB` queda como directorio operativo historico del Lote D.
 
 ### Que NO hacer
 

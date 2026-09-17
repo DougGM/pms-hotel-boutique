@@ -216,6 +216,12 @@ archivo con datos inventados": el fixture de demo de
 `src/modules/ui-catalog/services/catalog-service.ts`, que no representa
 ninguna entidad del contrato y existe solo para renderizar `/components`.
 
+Nota frontend beta: `personnelService.getUsers()` toma sus usuarios visibles
+de `sessionAccountsDB` para que Gestion de usuarios coincida con las cuentas de
+login. `getRoles()` y `getPermissions()` siguen leyendo `rolesDB` y
+`permissionsDB`; `usersDB` permanece como directorio operativo historico del
+Lote D.
+
 ## Pruebas
 
 `npm run test` corre once suites (`scripts/*.mjs`), todas con el mismo
