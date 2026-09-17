@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { Sparkles } from 'lucide-react';
 import { Link, Navigate, useLocation } from 'react-router-dom';
 import { routePaths } from '@/app/routes';
 import { useAuth } from '@/modules/auth/components/auth-context';
@@ -56,6 +57,15 @@ export function StaffLoginPage() {
   return (
     <main className="public-page-shell">
       <section className="public-page-card staff-login">
+        <Link className="login-brand staff-login-brand" to={routePaths.public.home}>
+          <span className="brand-mark" aria-hidden="true">
+            <Sparkles size={18} />
+          </span>
+          <span>
+            AURORA
+            <small>HOTEL & RESORT</small>
+          </span>
+        </Link>
         <p className="eyebrow">{isRegisterPage ? 'Cuenta de huésped' : 'Acceso del personal'}</p>
         <h1>{isRegisterPage ? 'Crear cuenta' : 'Iniciar sesión'}</h1>
         <p className="muted">
