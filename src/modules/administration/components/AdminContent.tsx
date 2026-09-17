@@ -2716,7 +2716,7 @@ function AdminContentReady({
             onClose={() => setShowCashModal(false)}
             onSave={(m) => {
               setCashMovements((cur) => [
-                { ...m, id: Date.now(), date: new Date().toISOString().slice(0, 10) },
+                { ...m, id: Date.now(), date: toDtoCalendarDate(new Date()) },
                 ...cur,
               ]);
               onAction('Movimiento de caja registrado correctamente');

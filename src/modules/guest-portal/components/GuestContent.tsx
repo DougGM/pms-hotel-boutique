@@ -36,7 +36,8 @@ import { ErrorState } from '@/shared/components/ErrorState';
 import { LoadingState } from '@/shared/components/LoadingState';
 import type { Booking } from '@/shared/types/entities/booking';
 import type { RoomType as RoomTypeModel } from '@/shared/types/entities/room-type';
-import { toDtoCalendarDate } from '@/shared/types/common';
+import { toDomainCalendarDate, toDtoCalendarDate } from '@/shared/types/common';
+import { calculateNights } from '@/shared/utils/date';
 import {
   CancelOrderModal,
   CancelReservationModal,
@@ -227,10 +228,7 @@ export function GuestContent({
           const bookingPayments = payments.filter((payment) => payment.bookingId === booking.id);
           const bookingDeposits = deposits.filter((deposit) => deposit.bookingId === booking.id);
           const room = rooms.find((item) => item.id === booking.roomId);
-          const nights = Math.max(
-            1,
-            Math.ceil((booking.checkOut.getTime() - booking.checkIn.getTime()) / 86400000),
-          );
+          const nights = Math.max(1, calculateNights(booking.checkIn, booking.checkOut));
           const status = mapReservationStatus(booking.status);
           const folio: Reservation['folio'] = [
             ...bookingCharges.map((charge, chargeIndex) => ({
@@ -749,8 +747,9 @@ function GuestContentReady({
               filteredReservations.map((res) => {
                 const nights = Math.max(
                   1,
-                  Math.round(
-                    (new Date(res.checkOut).getTime() - new Date(res.checkIn).getTime()) / 86400000,
+                  calculateNights(
+                    toDomainCalendarDate(res.checkIn),
+                    toDomainCalendarDate(res.checkOut),
                   ),
                 );
                 return (
@@ -860,9 +859,9 @@ function GuestContentReady({
     }
     const nights = Math.max(
       1,
-      Math.round(
-        (new Date(currentStay.checkOut).getTime() - new Date(currentStay.checkIn).getTime()) /
-          86400000,
+      calculateNights(
+        toDomainCalendarDate(currentStay.checkIn),
+        toDomainCalendarDate(currentStay.checkOut),
       ),
     );
     return (

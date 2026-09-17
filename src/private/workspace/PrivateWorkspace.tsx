@@ -57,7 +57,8 @@ import { roomService } from '@/services/roomService';
 import { serviceRequestService } from '@/services/serviceRequestService';
 import { ErrorState } from '@/shared/components/ErrorState';
 import { LoadingState } from '@/shared/components/LoadingState';
-import { toDtoCalendarDate } from '@/shared/types/common';
+import { toDomainCalendarDate, toDtoCalendarDate } from '@/shared/types/common';
+import { calculateNights } from '@/shared/utils/date';
 import type { AuditLog } from '@/shared/types/entities/audit-log';
 import type { Booking } from '@/shared/types/entities/booking';
 import type { Guest } from '@/shared/types/entities/guest';
@@ -432,12 +433,7 @@ async function loadWorkspaceData(): Promise<WorkspaceState> {
       .filter((name): name is string => Boolean(name));
     const sampleBooking = bookings.find((booking) => booking.roomTypeId === room.roomTypeId);
     const nights = sampleBooking
-      ? Math.max(
-          1,
-          Math.ceil(
-            (sampleBooking.checkOut.getTime() - sampleBooking.checkIn.getTime()) / 86400000,
-          ),
-        )
+      ? Math.max(1, calculateNights(sampleBooking.checkIn, sampleBooking.checkOut))
       : 1;
 
     return {
@@ -459,10 +455,7 @@ async function loadWorkspaceData(): Promise<WorkspaceState> {
   const recReservations: Reservation[] = bookings.map((booking, index) => {
     const guest = guests.find((item) => item.id === booking.guestId);
     const room = rooms.find((item) => item.id === booking.roomId);
-    const nights = Math.max(
-      1,
-      Math.ceil((booking.checkOut.getTime() - booking.checkIn.getTime()) / 86400000),
-    );
+    const nights = Math.max(1, calculateNights(booking.checkIn, booking.checkOut));
     const status = mapReservationStatus(booking.status);
     const bookingCharges = charges.filter((charge) => charge.bookingId === booking.id);
     const bookingPayments = payments.filter((payment) => payment.bookingId === booking.id);
@@ -1061,10 +1054,7 @@ function PrivateWorkspaceReady({
   const recNextCode = () =>
     `AUR-${26001 + recReservationList.length - initialData.recReservations.length}`;
   const recNights = (checkIn: string, checkOut: string) =>
-    Math.max(
-      1,
-      Math.round((new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 86400000),
-    );
+    Math.max(1, calculateNights(toDomainCalendarDate(checkIn), toDomainCalendarDate(checkOut)));
   const recFolioTotals = (folio: FolioEntry[]) => {
     const active = folio.filter((f) => f.status === 'Activo');
     const charges = active.filter((f) => f.type === 'Cargo').reduce((s, f) => s + f.amount, 0);
@@ -1075,10 +1065,7 @@ function PrivateWorkspaceReady({
   const recIsRoomBlocked = (roomNumber: string, checkIn: string, checkOut: string) =>
     recBlockList.some(
       (b) =>
-        b.active &&
-        b.roomNumber === roomNumber &&
-        new Date(b.endDate) >= new Date(checkIn) &&
-        new Date(b.startDate) <= new Date(checkOut),
+        b.active && b.roomNumber === roomNumber && b.endDate >= checkIn && b.startDate <= checkOut,
     );
   const recHasConflict = (
     roomNumber: string,
@@ -1091,8 +1078,8 @@ function PrivateWorkspaceReady({
         r.id !== excludeId &&
         !['Cancelada', 'Anulada'].includes(r.status) &&
         r.roomNumber === roomNumber &&
-        new Date(r.checkOut) > new Date(checkIn) &&
-        new Date(r.checkIn) < new Date(checkOut),
+        r.checkOut > checkIn &&
+        r.checkIn < checkOut,
     );
 
   const role = roles.find((item) => item.id === activeRole) ?? roles[0];
@@ -1413,7 +1400,7 @@ function PrivateWorkspaceReady({
               concept,
               category: 'Room service',
               amount,
-              date: new Date().toISOString().slice(0, 10),
+              date: toDtoCalendarDate(new Date()),
               type: 'Cargo' as const,
               status: 'Activo' as const,
             },
@@ -1607,7 +1594,7 @@ function PrivateWorkspaceReady({
                   concept,
                   category,
                   amount,
-                  date: new Date().toISOString().slice(0, 10),
+                  date: toDtoCalendarDate(new Date()),
                   type: 'Cargo' as const,
                   status: 'Activo' as const,
                 },
@@ -1655,7 +1642,7 @@ function PrivateWorkspaceReady({
                   concept: `Pago ${method}`,
                   category: 'Pago',
                   amount,
-                  date: new Date().toISOString().slice(0, 10),
+                  date: toDtoCalendarDate(new Date()),
                   type: 'Pago' as const,
                   status: 'Activo' as const,
                   method,
@@ -1688,7 +1675,7 @@ function PrivateWorkspaceReady({
                   concept: 'Depósito / garantía',
                   category: 'Depósito',
                   amount,
-                  date: new Date().toISOString().slice(0, 10),
+                  date: toDtoCalendarDate(new Date()),
                   type: 'Depósito' as const,
                   status: 'Activo' as const,
                   method,
@@ -3895,11 +3882,7 @@ function VisitorScreen({
   ];
 
   const guestCount = parseInt(guests) || 2;
-  const nights = (() => {
-    const d1 = new Date(checkIn);
-    const d2 = new Date(checkOut);
-    return Math.round((d2.getTime() - d1.getTime()) / 86400000);
-  })();
+  const nights = calculateNights(toDomainCalendarDate(checkIn), toDomainCalendarDate(checkOut));
   const availableRooms = rooms.filter((r) => r.maxGuests >= guestCount);
 
   const handleSearch = () => {

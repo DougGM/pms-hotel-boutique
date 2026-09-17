@@ -1,8 +1,15 @@
 import { build } from 'esbuild';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, readdir, readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
+import path from 'node:path';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+
+// Toda esta suite corre fijada a America/Guatemala (UTC-6, sin DST): es la
+// única zona donde el desplazamiento de día por UTC (D-010) se manifiesta.
+// Corriéndola en cualquier otra zona (UTC, o una de offset positivo) no
+// habría atrapado el bug real de 75ccc64.
+process.env.TZ = 'America/Guatemala';
 
 await mkdir('.cache', { recursive: true });
 await build({
@@ -323,4 +330,81 @@ test('promotion.mapper: valid_from/valid_to en YYYY-MM-DD llegan al Model conser
   const roundTrip = promotionMapper.toDTO(model);
   assert.equal(roundTrip.valid_from, '2026-09-01');
   assert.equal(roundTrip.valid_to, '2026-11-30');
+});
+
+// --- D-010: zona fija America/Guatemala (UTC-6, sin DST) -------------------
+
+test('TZ America/Guatemala: "2026-09-17" sobrevive DTO -> Model -> display sin desplazarse', () => {
+  const model = toDomainCalendarDate('2026-09-17');
+  assert.equal(formatDateGT(model), '17-09-2026');
+  assert.equal(toDtoCalendarDate(model), '2026-09-17');
+});
+
+test('TZ America/Guatemala: un instante de las 20:00 locales cae en el día correcto', () => {
+  // 2026-09-17T20:00 en UTC-6 es 2026-09-18T02:00Z: si algo formateara este
+  // instante por UTC en vez de por hora local, mostraría el 18, no el 17.
+  const instant = new Date(2026, 8, 17, 20, 0, 0);
+  assert.equal(instant.toISOString(), '2026-09-18T02:00:00.000Z');
+  assert.equal(formatDateGT(instant), '17-09-2026');
+});
+
+test('TZ America/Guatemala: calculateNights entre dos fechas de calendario no se ve afectado por la hora', () => {
+  const checkIn = toDomainCalendarDate('2026-09-17');
+  const checkOut = toDomainCalendarDate('2026-09-20');
+  assert.equal(calculateNights(checkIn, checkOut), 3);
+});
+
+// --- D-010: barrido estático, respaldo de lo que el linter no puede decidir
+// sin información de tipos (D-010, ver eslint.config.js) ---------------------
+//
+// src/shared/types/common.ts y src/shared/utils/date.ts son los únicos
+// lugares permitidos de conversión Date<->string del contrato. Los 3
+// archivos de front-desk están temporalmente exceptuados (ver
+// docs/DECISIONES.md D-010): tienen trabajo en vuelo hoy y no se tocan en
+// esta rama para no generar conflictos, pero ya llevan el patrón prohibido.
+
+const DATE_SAFETY_EXEMPT = new Set([
+  path.normalize('src/shared/types/common.ts'),
+  path.normalize('src/shared/utils/date.ts'),
+  path.normalize('src/modules/front-desk/components/workspace/ReceptionContent.tsx'),
+  path.normalize('src/modules/front-desk/components/workspace/ReceptionModals.tsx'),
+  path.normalize('src/modules/front-desk/components/workspace/ReservationDetail.tsx'),
+]);
+
+async function collectSourceFiles(dir) {
+  const entries = await readdir(dir, { withFileTypes: true });
+  const files = [];
+  for (const entry of entries) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...(await collectSourceFiles(full)));
+    } else if (/\.(ts|tsx)$/.test(entry.name)) {
+      files.push(full);
+    }
+  }
+  return files;
+}
+
+test('D-010: ningún archivo fuera de los helpers de fecha usa .toISOString().slice(...)', async () => {
+  const files = (await collectSourceFiles('src')).filter((file) => !DATE_SAFETY_EXEMPT.has(file));
+  const offenders = [];
+  for (const file of files) {
+    const content = await readFile(file, 'utf8');
+    if (/\.toISOString\(\)\s*\.slice\(/.test(content)) offenders.push(file);
+  }
+  assert.deepEqual(offenders, [], `usan .toISOString().slice(...): ${offenders.join(', ')}`);
+});
+
+test('D-010: ningún archivo fuera de los helpers de fecha cuenta noches restando milisegundos crudos (/86400000)', async () => {
+  const files = (await collectSourceFiles('src')).filter((file) => !DATE_SAFETY_EXEMPT.has(file));
+  const offenders = [];
+  for (const file of files) {
+    const content = await readFile(file, 'utf8');
+    if (/86400000/.test(content)) offenders.push(file);
+  }
+  assert.deepEqual(
+    offenders,
+    [],
+    `usan /86400000 en vez de calculateNights: ${offenders.join(', ')}`,
+  );
 });

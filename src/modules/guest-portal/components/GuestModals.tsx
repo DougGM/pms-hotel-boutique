@@ -15,6 +15,8 @@ import type {
   GuestInfo,
   ReservationStatus,
 } from '@/private/workspace/PrivateWorkspace';
+import { toDomainCalendarDate } from '@/shared/types/common';
+import { calculateNights } from '@/shared/utils/date';
 
 export type GuestNotification = {
   id: number;
@@ -109,9 +111,9 @@ export function ReservationDetailModal({
 }) {
   const nights = Math.max(
     1,
-    Math.round(
-      (new Date(reservation.checkOut).getTime() - new Date(reservation.checkIn).getTime()) /
-        86400000,
+    calculateNights(
+      toDomainCalendarDate(reservation.checkIn),
+      toDomainCalendarDate(reservation.checkOut),
     ),
   );
   const total = reservation.rate * nights;
@@ -393,9 +395,9 @@ export function ReceiptModal({
   const balance = charges - payments - deposits;
   const nights = Math.max(
     1,
-    Math.round(
-      (new Date(reservation.checkOut).getTime() - new Date(reservation.checkIn).getTime()) /
-        86400000,
+    calculateNights(
+      toDomainCalendarDate(reservation.checkIn),
+      toDomainCalendarDate(reservation.checkOut),
     ),
   );
   return (
