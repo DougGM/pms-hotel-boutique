@@ -18,6 +18,7 @@ import { ErrorState } from '@/shared/components/ErrorState';
 import { LoadingState } from '@/shared/components/LoadingState';
 import type { Booking } from '@/shared/types/entities/booking';
 import type { RoomType as RoomTypeModel } from '@/shared/types/entities/room-type';
+import { toDtoCalendarDate } from '@/shared/types/common';
 import {
   CancelOrderModal, CancelReservationModal, EditProfileModal, LinkReservationModal,
   ModifyReservationModal, ReceiptModal, RequestServiceModal, ReservationDetailModal,
@@ -175,7 +176,7 @@ export function GuestContent({
                 concept: charge.description,
                 category: 'Cargo',
                 amount: centsToAmount(charge.amountCents),
-                date: charge.chargedAt.toISOString().slice(0, 10),
+                date: toDtoCalendarDate(charge.chargedAt),
                 type: 'Cargo' as const,
                 status: charge.status === 'voided' ? ('Anulado' as const) : ('Activo' as const),
               })),
@@ -184,7 +185,7 @@ export function GuestContent({
                 concept: 'Pago registrado',
                 category: 'Pago',
                 amount: centsToAmount(payment.amountCents),
-                date: (payment.paidAt ?? payment.createdAt).toISOString().slice(0, 10),
+                date: toDtoCalendarDate(payment.paidAt ?? payment.createdAt),
                 type: 'Pago' as const,
                 status:
                   payment.status === 'failed' || payment.status === 'refunded'
@@ -196,7 +197,7 @@ export function GuestContent({
                 concept: 'Depósito garantía',
                 category: 'Depósito',
                 amount: centsToAmount(deposit.amountCents),
-                date: deposit.collectedAt.toISOString().slice(0, 10),
+                date: toDtoCalendarDate(deposit.collectedAt),
                 type: 'Depósito' as const,
                 status: deposit.status === 'refunded' ? ('Anulado' as const) : ('Activo' as const),
               })),
@@ -204,8 +205,8 @@ export function GuestContent({
             return {
               id: parseDbId(booking.id, index + 1),
               code: booking.confirmationCode,
-              checkIn: booking.checkIn.toISOString().slice(0, 10),
-              checkOut: booking.checkOut.toISOString().slice(0, 10),
+              checkIn: toDtoCalendarDate(booking.checkIn),
+              checkOut: toDtoCalendarDate(booking.checkOut),
               roomNumber: room?.roomNumber ?? activeRoomNumber,
               roomType: getRoomTypeLabel(booking.roomTypeId, roomTypes),
               rate: centsToAmount(booking.totalAmountCents) / nights,
