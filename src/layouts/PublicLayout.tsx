@@ -1,9 +1,12 @@
+import { useState } from 'react';
 import { BedDouble, Percent, ShieldCheck, Sparkles } from 'lucide-react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { routePaths } from '@/app/routes';
+import { PublicAuthModal, type PublicAuthMode } from '@/public/components/PublicAuthModal';
 
 export function PublicLayout() {
   const location = useLocation();
+  const [authMode, setAuthMode] = useState<PublicAuthMode | null>(null);
   const isLoginPage =
     location.pathname === routePaths.public.login ||
     location.pathname === routePaths.public.register ||
@@ -51,21 +54,25 @@ export function PublicLayout() {
               to="/#politicas"
             >
               <ShieldCheck size={15} aria-hidden="true" />
-              <span className="visitor-tab-label">Políticas</span>
+              <span className="visitor-tab-label">Politicas</span>
             </Link>
           </div>
 
           <nav className="visitor-auth" aria-label="Navegacion publica">
-            <Link className="visitor-link" to={routePaths.public.login}>
-              Iniciar sesión
-            </Link>
-            <Link className="button primary small" to={routePaths.public.register}>
-              Registrarse
-            </Link>
+            <button className="visitor-link" type="button" onClick={() => setAuthMode('login')}>
+              Iniciar sesion
+            </button>
           </nav>
         </header>
       ) : null}
       <Outlet />
+      {authMode ? (
+        <PublicAuthModal
+          mode={authMode}
+          onClose={() => setAuthMode(null)}
+          onModeChange={setAuthMode}
+        />
+      ) : null}
     </div>
   );
 }

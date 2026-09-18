@@ -35,6 +35,12 @@ como secciones apiladas ni links decorativos.
 
 ## Boton `Registrarse`
 
+Actualizacion 2026-09-17: `Iniciar sesion` abre un modal flotante sobre la home
+publica mediante `PublicAuthModal`; desde ese modal se puede cambiar a registro.
+`/auth/login` y `/auth/register` se conservan como rutas directas/fallback. El
+registro publico de huesped sigue en modo demo y no cambia el contrato de
+autenticacion del PMS ni crea permisos de personal.
+
 Actualizacion 2026-09-16: por solicitud directa de producto durante la
 migracion visual, `Registrarse` apunta a `/auth/register` y muestra un
 formulario publico de huesped en modo demo. Este formulario no cambia el

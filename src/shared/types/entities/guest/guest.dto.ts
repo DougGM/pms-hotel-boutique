@@ -15,3 +15,4 @@ export interface GuestDTO {
 }
 
 export type GuestDto = GuestDTO;
+export type CreateGuestDto = Omit<GuestDTO, 'id' | 'created_at' | 'updated_at'>;

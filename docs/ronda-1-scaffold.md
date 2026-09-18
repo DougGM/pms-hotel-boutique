@@ -108,6 +108,17 @@ Públicas (`PublicLayout`, sin guarda):
 | `/booking/:bookingId/done` | `BookingConfirmationScreen` | booking-engine |
 | `/auth/register` | `StaffLoginPage` en modo registro de huesped demo | auth/public |
 
+Nota 2026-09-17 (`pulir-detalles`): desde la home publica, `Iniciar sesion`
+abre `PublicAuthModal` sobre la pagina en vez de navegar inmediatamente. El
+registro se alcanza desde ese mismo modal. Las rutas `/auth/login` y
+`/auth/register` siguen existiendo para enlaces directos. `BookingFormScreen`
+captura datos del huesped, crea un `Guest` demo mediante
+`guestService.createGuest` y luego crea la reserva con el ID generado. El flujo
+avanza dentro de la misma pantalla por `Datos y habitacion`, `Confirmacion` y
+`Pago`; la reserva se persiste solo en el ultimo paso. El paso de pago es demo
+y ofrece metodos frecuentes para hotel: tarjeta, transferencia, pago en hotel y
+billetera digital, sin procesar cobros reales.
+
 Privadas (`RequireSession` + `RequirePermission`):
 
 | Ruta | Pantalla | Módulo | Permiso |

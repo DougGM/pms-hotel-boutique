@@ -68,6 +68,11 @@ solo asigna habitaciones que `isRoomAssignable()` considera aptas.
 `posted`, calcula `amount_cents = quantity * unit_price_cents` y actualiza el
 `balance_cents` guardado de la cuenta abierta de esa reserva.
 
+Actualizacion 2026-09-17: `guestService.createGuest(data)` crea huespedes demo
+en `guestsDB`, genera el siguiente ID `GST-*`, agrega timestamps y devuelve
+`Guest` de dominio. El motor publico de reservas lo usa para no pedir al
+usuario un ID interno antes de crear la reserva.
+
 ## Forzar errores mock
 
 1. En código: `mockUtils.setForceError(true)` y, al terminar la prueba,

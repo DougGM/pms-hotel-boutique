@@ -84,6 +84,16 @@ para que no dependan solo del dashboard.
 
 ## Reglas de capas
 
+Nota 2026-09-17: en la home publica, `PublicLayout` abre login y registro como
+modal flotante con `PublicAuthModal`; las rutas `/auth/login` y
+`/auth/register` se conservan como fallback para acceso directo. La reserva
+publica ya no solicita un `guest_id` manual: `BookingFormScreen` captura datos
+basicos del huesped, confirma la seleccion en pantalla, pasa por un pago demo y
+recien al final llama a `guestService.createGuest` para usar el ID generado en
+`bookingService.createBooking`. El pago publico presenta opciones frecuentes de
+hotel (tarjeta, transferencia, pago en hotel y billetera digital), pero no
+procesa cobros reales en esta fase.
+
 - Una vista sin sesión se crea en `public/pages/`.
 - Una vista autenticada se crea en `private/pages/`; su lógica de negocio se
   consume desde el módulo correspondiente.
@@ -221,6 +231,11 @@ de `sessionAccountsDB` para que Gestion de usuarios coincida con las cuentas de
 login. `getRoles()` y `getPermissions()` siguen leyendo `rolesDB` y
 `permissionsDB`; `usersDB` permanece como directorio operativo historico del
 Lote D.
+
+Nota 2026-09-17: `guestService.createGuest(data)` es la operacion mock para
+crear huespedes desde el flujo publico de reserva. Escribe en `guestsDB` desde
+la capa de servicios, genera IDs `GST-*` y mantiene el contrato DTO -> Mapper
+-> Model.
 
 ## Pruebas
 
