@@ -38,6 +38,7 @@ const {
   guestsDB,
   ratesDB,
   bookingsDB,
+  bookingCompanionsDB,
   promotionsDB,
   guestAccountsDB,
   chargesDB,
@@ -111,6 +112,12 @@ const FK_CHECKS = [
     field: 'rate_id',
     target: idsOf(ratesDB),
     optional: true,
+  },
+  {
+    label: 'bookingCompanion.booking_id -> booking',
+    records: bookingCompanionsDB,
+    field: 'booking_id',
+    target: idsOf(bookingsDB),
   },
   // -- Lote C (WEB-11): cuentas, cargos, pagos, depósitos y caja --
   {
@@ -321,6 +328,7 @@ const CATALOGS = [
   { label: 'guest', records: guestsDB },
   { label: 'rate', records: ratesDB },
   { label: 'booking', records: bookingsDB },
+  { label: 'bookingCompanion', records: bookingCompanionsDB },
   { label: 'promotion', records: promotionsDB },
   { label: 'guestAccount', records: guestAccountsDB },
   { label: 'charge', records: chargesDB },

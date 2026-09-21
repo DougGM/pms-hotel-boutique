@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { bookingCompanionService } from '@/services/bookingCompanionService';
 import { bookingService } from '@/services/bookingService';
 import { guestAccountService } from '@/services/guestAccountService';
 import { guestService } from '@/services/guestService';
@@ -13,7 +14,12 @@ import { LoadingState } from '@/shared/components/LoadingState';
 import { Select } from '@/shared/components/Select';
 import { BOOKING_STATUS_TRANSITIONS } from '@/shared/constants/statuses';
 import type { Booking } from '@/shared/types/entities/booking';
-import type { Guest } from '@/shared/types/entities/guest';
+import type {
+  BookingCompanion,
+  BookingCompanionGuestType,
+  UpsertBookingCompanionDto,
+} from '@/shared/types/entities/booking-companion';
+import type { Guest, GuestDocumentTypeDto } from '@/shared/types/entities/guest';
 import type { Room } from '@/shared/types/entities/room';
 import { formatDateGT } from '@/shared/utils/date';
 import './front-desk.css';
@@ -23,6 +29,15 @@ type ScreenState =
   | { status: 'error'; message: string }
   | { status: 'notFound' }
   | { status: 'ready'; booking: Booking; guest?: Guest; rooms: Room[] };
+
+type CompanionForm = {
+  id?: string;
+  firstName: string;
+  lastName: string;
+  documentType: Guest['documentType'] | '';
+  documentNumber: string;
+  guestType: BookingCompanionGuestType;
+};
 
 const BOOKING_STATUS_LABELS: Record<Booking['status'], string> = {
   pending: 'Pendiente',
@@ -46,15 +61,59 @@ function getErrorMessage(cause: unknown): string {
   return cause instanceof Error ? cause.message : 'Error inesperado.';
 }
 
+function companionToForm(companion: BookingCompanion): CompanionForm {
+  return {
+    id: companion.id,
+    firstName: companion.firstName,
+    lastName: companion.lastName,
+    documentType: companion.documentType,
+    documentNumber: companion.documentNumber,
+    guestType: companion.guestType,
+  };
+}
+
+function emptyCompanion(guestType: BookingCompanionGuestType = 'adult'): CompanionForm {
+  return {
+    firstName: '',
+    lastName: '',
+    documentType: '',
+    documentNumber: '',
+    guestType,
+  };
+}
+
+function toGuestDocumentTypeDto(
+  value: Guest['documentType'] | '',
+): GuestDocumentTypeDto | undefined {
+  return value === 'nationalId'
+    ? 'national_id'
+    : value === 'driverLicense'
+      ? 'driver_license'
+      : value || undefined;
+}
+
+function toCompanionDto(companion: CompanionForm): UpsertBookingCompanionDto {
+  const documentType = toGuestDocumentTypeDto(companion.documentType);
+  if (!documentType) throw new Error('Selecciona el tipo de documento de cada acompanante.');
+  return {
+    id: companion.id,
+    first_name: companion.firstName,
+    last_name: companion.lastName,
+    document_type: documentType,
+    document_number: companion.documentNumber,
+    guest_type: companion.guestType,
+  };
+}
+
 export function CheckInScreen() {
   const navigate = useNavigate();
   const { bookingId } = useParams<'bookingId'>();
 
   const [screen, setScreen] = useState<ScreenState>({ status: 'loading' });
   const [selectedRoomId, setSelectedRoomId] = useState('');
-  const [documentType, setDocumentType] = useState('');
+  const [documentType, setDocumentType] = useState<Guest['documentType'] | ''>('');
   const [documentNumber, setDocumentNumber] = useState('');
-  const [companions, setCompanions] = useState('');
+  const [companions, setCompanions] = useState<CompanionForm[]>([]);
   const [assigningRoom, setAssigningRoom] = useState(false);
   const [checkingIn, setCheckingIn] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -77,15 +136,17 @@ export function CheckInScreen() {
         return;
       }
 
-      const [guest, rooms] = await Promise.all([
+      const [guest, rooms, bookingCompanions] = await Promise.all([
         guestService.getGuestById(booking.guestId),
         roomService.getRooms(),
+        bookingCompanionService.getCompanionsByBookingId(booking.id),
       ]);
 
       setScreen({ status: 'ready', booking, guest, rooms });
       setSelectedRoomId(booking.roomId ?? '');
       setDocumentType(guest?.documentType ?? '');
       setDocumentNumber(guest?.documentNumber ?? '');
+      setCompanions(bookingCompanions.map(companionToForm));
     } catch (cause) {
       setScreen({ status: 'error', message: getErrorMessage(cause) });
     }
@@ -99,6 +160,44 @@ export function CheckInScreen() {
     if (screen.status !== 'ready') return [];
     return screen.rooms.filter((room) => room.isAssignable || room.id === screen.booking.roomId);
   }, [screen]);
+
+  const companionAdults = companions.filter((companion) => companion.guestType === 'adult').length;
+  const companionChildren = companions.filter(
+    (companion) => companion.guestType === 'child',
+  ).length;
+
+  function getCompanionValidationMessage(booking: Booking): string | undefined {
+    const expectedCompanionAdults = Math.max(booking.adults - 1, 0);
+    if (companionAdults !== expectedCompanionAdults || companionChildren !== booking.children) {
+      return `La reserva requiere ${expectedCompanionAdults} acompanante(s) adulto(s) y ${booking.children} menor(es).`;
+    }
+    if (1 + companions.length !== booking.adults + booking.children) {
+      return `La reserva espera ${booking.adults + booking.children} huesped(es) en total.`;
+    }
+    return undefined;
+  }
+
+  function updateCompanion(index: number, next: Partial<CompanionForm>) {
+    setCompanions((current) =>
+      current.map((companion, itemIndex) =>
+        itemIndex === index ? { ...companion, ...next } : companion,
+      ),
+    );
+    setActionError(null);
+  }
+
+  function addCompanion() {
+    if (screen.status !== 'ready') return;
+    const nextGuestType =
+      companionAdults < Math.max(screen.booking.adults - 1, 0) ? 'adult' : 'child';
+    setCompanions((current) => [...current, emptyCompanion(nextGuestType)]);
+    setActionError(null);
+  }
+
+  function removeCompanion(index: number) {
+    setCompanions((current) => current.filter((_, itemIndex) => itemIndex !== index));
+    setActionError(null);
+  }
 
   async function handleAssignRoom() {
     if (screen.status !== 'ready' || !selectedRoomId) return;
@@ -123,12 +222,28 @@ export function CheckInScreen() {
 
   async function handleCheckIn() {
     if (screen.status !== 'ready') return;
+    const companionValidation = getCompanionValidationMessage(screen.booking);
+    if (companionValidation) {
+      setActionError(companionValidation);
+      return;
+    }
 
     setCheckingIn(true);
     setActionError(null);
     setRoomAssignedMessage(null);
 
     try {
+      const documentTypeDto = toGuestDocumentTypeDto(documentType);
+      if (screen.guest && documentTypeDto) {
+        await guestService.updateGuest(screen.guest.id, {
+          document_type: documentTypeDto,
+          document_number: documentNumber.trim() || undefined,
+        });
+      }
+      await bookingCompanionService.saveCompanionsForBooking(
+        screen.booking.id,
+        companions.map(toCompanionDto),
+      );
       await bookingService.checkIn(screen.booking.id);
       const account = await guestAccountService.getAccountByBookingId(screen.booking.id);
       if (!account) {
@@ -175,8 +290,13 @@ export function CheckInScreen() {
   const { booking, guest } = screen;
   const canTransitionToCheckedIn = BOOKING_STATUS_TRANSITIONS[booking.status].includes('checkedIn');
   const hasRoomAssigned = Boolean(booking.roomId);
+  const companionValidation = getCompanionValidationMessage(booking);
   const canCompleteCheckIn =
-    canTransitionToCheckedIn && hasRoomAssigned && !checkingIn && !assigningRoom;
+    canTransitionToCheckedIn &&
+    hasRoomAssigned &&
+    !companionValidation &&
+    !checkingIn &&
+    !assigningRoom;
 
   return (
     <section className="content" aria-labelledby="check-in-title">
@@ -228,7 +348,7 @@ export function CheckInScreen() {
           <Select
             label="Tipo de documento"
             value={documentType}
-            onChange={(event) => setDocumentType(event.target.value)}
+            onChange={(event) => setDocumentType(event.target.value as Guest['documentType'] | '')}
           >
             <option value="">Selecciona un tipo</option>
             <option value="passport">Pasaporte</option>
@@ -241,14 +361,73 @@ export function CheckInScreen() {
             onChange={(event) => setDocumentNumber(event.target.value)}
             placeholder="Ej. 1234 56789 0101"
           />
-          <Input
-            label="Acompañantes"
-            className="front-desk-form-grid-full"
-            value={companions}
-            onChange={(event) => setCompanions(event.target.value)}
-            placeholder="Nombres separados por coma"
-            helpText="Registro de recepción para la estadía; el contrato de datos de acompañantes todavía no está definido en shared/types/entities/."
-          />
+          <div className="front-desk-form-grid-full front-desk-companion-header">
+            <div>
+              <h3>Acompañantes</h3>
+              <p>
+                {companionAdults} adulto(s) y {companionChildren} menor(es)
+              </p>
+            </div>
+            <Button type="button" variant="secondary" onClick={addCompanion}>
+              Agregar acompañante
+            </Button>
+          </div>
+          {companionValidation && (
+            <p className="field-error front-desk-form-grid-full" role="alert">
+              {companionValidation}
+            </p>
+          )}
+          {companions.map((companion, index) => (
+            <div
+              className="front-desk-companion-row front-desk-form-grid-full"
+              key={companion.id ?? index}
+            >
+              <Input
+                label="Nombre"
+                value={companion.firstName}
+                onChange={(event) => updateCompanion(index, { firstName: event.target.value })}
+              />
+              <Input
+                label="Apellido"
+                value={companion.lastName}
+                onChange={(event) => updateCompanion(index, { lastName: event.target.value })}
+              />
+              <Select
+                label="Documento"
+                value={companion.documentType}
+                onChange={(event) =>
+                  updateCompanion(index, {
+                    documentType: event.target.value as CompanionForm['documentType'],
+                  })
+                }
+              >
+                <option value="">Selecciona un tipo</option>
+                <option value="passport">Pasaporte</option>
+                <option value="nationalId">DPI / identificación nacional</option>
+                <option value="driverLicense">Licencia de conducir</option>
+              </Select>
+              <Input
+                label="Numero"
+                value={companion.documentNumber}
+                onChange={(event) => updateCompanion(index, { documentNumber: event.target.value })}
+              />
+              <Select
+                label="Tipo"
+                value={companion.guestType}
+                onChange={(event) =>
+                  updateCompanion(index, {
+                    guestType: event.target.value as BookingCompanionGuestType,
+                  })
+                }
+              >
+                <option value="adult">Adulto</option>
+                <option value="child">Menor</option>
+              </Select>
+              <Button type="button" variant="secondary" onClick={() => removeCompanion(index)}>
+                Quitar
+              </Button>
+            </div>
+          ))}
         </div>
       </div>
 

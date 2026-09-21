@@ -3,6 +3,7 @@ import {
   type CreateGuestDto,
   type Guest,
   type GuestDto,
+  type UpdateGuestDto,
 } from '@/shared/types/entities/guest';
 import type { ID } from '@/shared/types/common';
 import { guestsDB } from '@/data/db';
@@ -39,6 +40,16 @@ export const guestService = {
       updated_at: now,
     };
     guestsDB.push(guest);
+    return toGuest(guest);
+  },
+  async updateGuest(id: ID, data: UpdateGuestDto): Promise<Guest> {
+    await simulateLatency();
+    mockUtils.throwIfSimulatingError('No fue posible actualizar el huesped.');
+
+    const guest = guestsDB.find((item) => item.id === id);
+    if (!guest) throw new Error(`No existe el huesped ${id}.`);
+
+    Object.assign(guest, data, { updated_at: new Date().toISOString() });
     return toGuest(guest);
   },
 };

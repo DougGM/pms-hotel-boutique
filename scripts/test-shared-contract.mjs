@@ -19,6 +19,7 @@ await build({
     'src/shared/types/entities/amenity/index.ts',
     'src/shared/types/entities/audit-log/index.ts',
     'src/shared/types/entities/booking/index.ts',
+    'src/shared/types/entities/booking-companion/index.ts',
     'src/shared/types/entities/cash-movement/index.ts',
     'src/shared/types/entities/cash-session/index.ts',
     'src/shared/types/entities/charge/index.ts',
@@ -65,6 +66,7 @@ const {
   roomsDB,
   guestsDB,
   bookingsDB,
+  bookingCompanionsDB,
   paymentsDB,
   productsDB,
   promotionsDB,
@@ -88,6 +90,7 @@ const { ROOM_STATUSES, BOOKING_STATUSES, ORDER_STATUSES, SERVICE_REQUEST_STATUSE
 const amenityMapper = load('shared/types/entities/amenity/index');
 const auditLogMapper = load('shared/types/entities/audit-log/index');
 const bookingMapper = load('shared/types/entities/booking/index');
+const bookingCompanionMapper = load('shared/types/entities/booking-companion/index');
 const cashMovementMapper = load('shared/types/entities/cash-movement/index');
 const cashSessionMapper = load('shared/types/entities/cash-session/index');
 const chargeMapper = load('shared/types/entities/charge/index');
@@ -152,6 +155,7 @@ function collectDatasets() {
     ...roomsDB,
     ...guestsDB,
     ...bookingsDB,
+    ...bookingCompanionsDB,
     ...paymentsDB,
     ...productsDB,
     ...promotionsDB,
@@ -306,6 +310,12 @@ test('mapper amenity: round-trip sin pérdida', () => {
 
 test('mapper booking: round-trip sin pérdida', () => {
   for (const dto of bookingsDB) assertRoundTrip(`booking ${dto.id}`, dto, bookingMapper);
+});
+
+test('mapper booking-companion: round-trip sin pérdida', () => {
+  for (const dto of bookingCompanionsDB) {
+    assertRoundTrip(`booking-companion ${dto.id}`, dto, bookingCompanionMapper);
+  }
 });
 
 test('mapper guest: round-trip sin pérdida', () => {

@@ -18,6 +18,7 @@ const ENTITIES_WITH_FOLDER = [
   'amenity',
   'audit-log',
   'booking',
+  'booking-companion',
   'cash-movement',
   'cash-session',
   'charge',
