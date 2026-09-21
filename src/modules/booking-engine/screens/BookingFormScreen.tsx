@@ -26,6 +26,7 @@ import type { RoomType } from '@/shared/types/entities/room-type';
 import { toDtoCalendarDate } from '@/shared/types/common';
 import { formatCurrency } from '@/shared/utils/currency';
 import { calculateNights, formatDateGT } from '@/shared/utils/date';
+import { validateBookingCapacity } from '@/shared/utils/bookingCapacity';
 import './booking-engine.css';
 
 type FormStatus = 'loading' | 'success' | 'error';
@@ -47,7 +48,8 @@ type FormErrors = Partial<
     | 'roomTypeId'
     | 'dates'
     | 'adults'
-    | 'children',
+    | 'children'
+    | 'capacity',
     string
   >
 >;
@@ -176,6 +178,14 @@ export function BookingFormScreen() {
   const totalAmount =
     selectedRate && isValidStay(range) ? selectedRate.priceCents * nights : undefined;
   const guestFullName = [guestFirstName, guestLastName].filter(Boolean).join(' ');
+  const capacityError = selectedRoomType
+    ? validateBookingCapacity({
+        adults: Number(adults),
+        children: Number(children),
+        capacity: selectedRoomType.capacity,
+        roomTypeName: selectedRoomType.name,
+      })
+    : undefined;
 
   function stepClassName(targetStep: BookingStep): string {
     const order: BookingStep[] = ['details', 'confirmation', 'payment'];
@@ -214,6 +224,9 @@ export function BookingFormScreen() {
     }
     if (!Number.isInteger(childrenNumber) || childrenNumber < 0) {
       nextErrors.children = 'Ingresa cero o mas ninos.';
+    }
+    if (!nextErrors.adults && !nextErrors.children && capacityError) {
+      nextErrors.capacity = capacityError;
     }
 
     setErrors(nextErrors);
@@ -408,7 +421,11 @@ export function BookingFormScreen() {
                   value={roomTypeId}
                   onChange={(event) => {
                     setRoomTypeId(event.target.value);
-                    setErrors((current) => ({ ...current, roomTypeId: undefined }));
+                    setErrors((current) => ({
+                      ...current,
+                      roomTypeId: undefined,
+                      capacity: undefined,
+                    }));
                   }}
                   error={errors.roomTypeId}
                   required
@@ -427,7 +444,11 @@ export function BookingFormScreen() {
                   value={adults}
                   onChange={(event) => {
                     setAdults(event.target.value);
-                    setErrors((current) => ({ ...current, adults: undefined }));
+                    setErrors((current) => ({
+                      ...current,
+                      adults: undefined,
+                      capacity: undefined,
+                    }));
                   }}
                   error={errors.adults}
                   required
@@ -440,9 +461,13 @@ export function BookingFormScreen() {
                   value={children}
                   onChange={(event) => {
                     setChildren(event.target.value);
-                    setErrors((current) => ({ ...current, children: undefined }));
+                    setErrors((current) => ({
+                      ...current,
+                      children: undefined,
+                      capacity: undefined,
+                    }));
                   }}
-                  error={errors.children}
+                  error={errors.children ?? errors.capacity ?? capacityError}
                   required
                 />
 

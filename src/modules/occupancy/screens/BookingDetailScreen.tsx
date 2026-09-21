@@ -19,6 +19,7 @@ import type { Room } from '@/shared/types/entities/room';
 import type { RoomType } from '@/shared/types/entities/room-type';
 import { formatCurrency } from '@/shared/utils/currency';
 import { formatDateGT } from '@/shared/utils/date';
+import { validateBookingCapacity } from '@/shared/utils/bookingCapacity';
 import './occupancy.css';
 
 type ScreenState =
@@ -78,8 +79,9 @@ function toDateInputValue(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-function validateForm(form: FormState): FormErrors {
+function validateForm(form: FormState, roomTypes: RoomType[]): FormErrors {
   const errors: FormErrors = {};
+  const selectedRoomType = roomTypes.find((roomType) => roomType.id === form.roomTypeId);
   if (!form.roomTypeId) errors.roomTypeId = 'Selecciona un tipo de habitación.';
   if (!form.checkIn) errors.checkIn = 'Ingresa la fecha de entrada.';
   if (!form.checkOut) errors.checkOut = 'Ingresa la fecha de salida.';
@@ -96,6 +98,15 @@ function validateForm(form: FormState): FormErrors {
   if (!Number.isInteger(Number(form.children)) || Number(form.children) < 0) {
     errors.children = 'Ingresa cero o más menores.';
   }
+  const capacityError = selectedRoomType
+    ? validateBookingCapacity({
+        adults: Number(form.adults),
+        children: Number(form.children),
+        capacity: selectedRoomType.capacity,
+        roomTypeName: selectedRoomType.name,
+      })
+    : undefined;
+  if (!errors.adults && !errors.children && capacityError) errors.children = capacityError;
   return errors;
 }
 
@@ -181,6 +192,18 @@ export function BookingDetailScreen() {
     if (screen.status !== 'ready') return false;
     return BOOKING_STATUS_TRANSITIONS[screen.booking.status].includes('cancelled');
   }, [screen]);
+  const selectedRoomType =
+    screen.status === 'ready'
+      ? screen.roomTypes.find((roomType) => roomType.id === form.roomTypeId)
+      : undefined;
+  const liveCapacityError = selectedRoomType
+    ? validateBookingCapacity({
+        adults: Number(form.adults),
+        children: Number(form.children),
+        capacity: selectedRoomType.capacity,
+        roomTypeName: selectedRoomType.name,
+      })
+    : undefined;
 
   function updateField<Key extends keyof FormState>(key: Key, value: FormState[Key]) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -206,7 +229,7 @@ export function BookingDetailScreen() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (screen.status !== 'ready') return;
-    const nextErrors = validateForm(form);
+    const nextErrors = validateForm(form, screen.roomTypes);
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length) return;
 
@@ -443,7 +466,7 @@ export function BookingDetailScreen() {
             min="0"
             required
             value={form.children}
-            error={errors.children}
+            error={errors.children ?? liveCapacityError}
             onChange={(event) => updateField('children', event.target.value)}
           />
 

@@ -319,6 +319,50 @@ test('ciclo completo de una reserva nueva: crear, confirmar, check-in abre la cu
   );
 });
 
+test('bookingService valida capacidad del tipo de habitacion al crear y editar', async () => {
+  await assert.rejects(
+    () =>
+      bookingService.createBooking({
+        guest_id: 'GST-001',
+        room_type_id: 'RT-01',
+        check_in: '2026-12-01',
+        check_out: '2026-12-03',
+        adults: 2,
+        children: 1,
+      }),
+    /permite maximo 2 huesped/,
+    'RT-01 tiene capacidad 2 y no debe aceptar 3 huespedes',
+  );
+
+  const exactCapacity = await assertServiceCall('bookingService.createBooking exact capacity', () =>
+    bookingService.createBooking({
+      guest_id: 'GST-001',
+      room_type_id: 'RT-01',
+      check_in: '2026-12-04',
+      check_out: '2026-12-06',
+      adults: 1,
+      children: 1,
+    }),
+  );
+  assert.equal(exactCapacity.adults + exactCapacity.children, 2);
+
+  await assert.rejects(
+    () =>
+      bookingService.updateBooking(exactCapacity.id, {
+        room_type_id: 'RT-03',
+        adults: 3,
+        children: 1,
+      }),
+    /permite maximo 3 huesped/,
+    'al editar debe revalidar la capacidad del nuevo tipo seleccionado',
+  );
+
+  const stillValid = await bookingService.getBookingById(exactCapacity.id);
+  assert.equal(stillValid.adults, 1, 'una edicion invalida no debe mutar adultos');
+  assert.equal(stillValid.children, 1, 'una edicion invalida no debe mutar menores');
+  assert.equal(stillValid.roomTypeId, 'RT-01', 'una edicion invalida no debe mutar habitacion');
+});
+
 test('bookingService.assignRoom: asigna solo habitaciones asignables con isRoomAssignable', async () => {
   const booking = await assertServiceCall('bookingService.assignRoom', () =>
     bookingService.assignRoom('BKG-008', 'RM-403'),

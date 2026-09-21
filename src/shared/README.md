@@ -38,6 +38,13 @@ Todo DTO que transporte dinero debe incluir `currency: Currency`, reutilizando
 el tipo `Currency` ya existente en `src/shared/types/common.ts` — no crear un
 tipo `Currency` alternativo.
 
+### Reservas
+
+`validateBookingCapacity()` (`src/shared/utils/bookingCapacity.ts`) concentra la
+regla compartida de capacidad de reservas: `adults + children <= roomType.capacity`.
+Los formularios la usan para feedback inmediato y `bookingService` la aplica
+antes de crear o actualizar una reserva, de modo que ningun flujo pueda saltarla.
+
 ### Fechas
 
 Dos contratos distintos, según lo que representa el valor:
