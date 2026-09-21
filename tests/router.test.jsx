@@ -8,6 +8,7 @@ import { RoomListScreen } from '@/modules/rooms/screens/RoomListScreen';
 import { RoomTypeListScreen } from '@/modules/rooms/screens/RoomTypeListScreen';
 import { OccupancyScreen } from '@/modules/occupancy/screens/OccupancyScreen';
 import { ReceptionScreen } from '@/modules/front-desk/screens/ReceptionScreen';
+import { PrivateSessionWorkspace } from '@/private/workspace/PrivateSessionWorkspace';
 
 /**
  * React Router no rechaza dos rutas hijas con el mismo `path`: cuando
@@ -68,15 +69,12 @@ test('los módulos web de Ronda 1 sin pantalla propia todavía siguen mostrando 
 });
 
 /**
- * Limpieza, Room Service y Conserjería no tienen experiencia web: viven en
- * pms-hotel-mobile (docs/DECISIONES.md, D-008). Sus rutas siguen definidas
- * en routes.ts pero ya no están cableadas en router.tsx (privateNavigation
- * ya no las lista, y placeholderPmsRoutes se deriva de privateNavigation),
- * así que caen al catch-all privado en vez de mostrar un placeholder web
- * que nadie va a construir.
+ * Los workspaces Bolt migrados de Limpieza, Room Service y Conserjeria entran
+ * por rutas dedicadas, fuera del menu PMS clasico, para conservar sus menus
+ * internos por rol.
  */
-test('limpieza, room service y conserjería no tienen ruta web propia', () => {
-  assert.equal(leafElementType('/pms/housekeeping'), PrivateNotFoundPage);
-  assert.equal(leafElementType('/pms/room-service'), PrivateNotFoundPage);
-  assert.equal(leafElementType('/pms/concierge'), PrivateNotFoundPage);
+test('limpieza, room service y conserjeria resuelven al workspace privado dedicado', () => {
+  assert.equal(leafElementType('/pms/housekeeping'), PrivateSessionWorkspace);
+  assert.equal(leafElementType('/pms/room-service'), PrivateSessionWorkspace);
+  assert.equal(leafElementType('/pms/concierge'), PrivateSessionWorkspace);
 });

@@ -8,14 +8,28 @@ import {
 import { BOOKING_STATUS_TRANSITIONS, isRoomAssignable } from '@/shared/constants/statuses';
 import { toDomainCalendarDate, type ID } from '@/shared/types/common';
 import { calculateNights } from '@/shared/utils/date';
+import { validateBookingCapacity } from '@/shared/utils/bookingCapacity';
 import type { GuestAccountDto } from '@/shared/types/entities/guest-account';
-import { bookingsDB, guestAccountsDB, ratesDB, roomsDB } from '@/data/db';
+import { bookingsDB, guestAccountsDB, ratesDB, roomsDB, roomTypesDB } from '@/data/db';
 import { mockUtils, requireCollection, simulateLatency } from './mockUtils';
 
 function assertBookingExists(id: ID): BookingDto {
   const booking = bookingsDB.find((item) => item.id === id);
   if (!booking) throw new Error(`No existe la reserva ${id}.`);
   return booking;
+}
+
+function assertBookingCapacity(data: Pick<BookingDto, 'room_type_id' | 'adults' | 'children'>) {
+  const roomType = roomTypesDB.find((item) => item.id === data.room_type_id);
+  if (!roomType) throw new Error(`No existe el tipo de habitacion ${data.room_type_id}.`);
+
+  const message = validateBookingCapacity({
+    adults: data.adults,
+    children: data.children,
+    capacity: roomType.capacity,
+    roomTypeName: roomType.name,
+  });
+  if (message) throw new Error(message);
 }
 
 function createGuestAccountId(): ID {
@@ -93,6 +107,8 @@ export const bookingService = {
   async createBooking(data: CreateBookingDto): Promise<Booking> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible crear la reserva.');
+    assertBookingCapacity(data);
+
     const now = new Date().toISOString();
     const rate = data.rate_id ? ratesDB.find((item) => item.id === data.rate_id) : undefined;
     const totalAmountCents = rate
@@ -136,6 +152,8 @@ export const bookingService = {
     mockUtils.throwIfSimulatingError('No fue posible actualizar la reserva.');
 
     const booking = assertBookingExists(id);
+    const nextBooking = { ...booking, ...data };
+    assertBookingCapacity(nextBooking);
     Object.assign(booking, data);
 
     if (data.rate_id !== undefined || data.check_in !== undefined || data.check_out !== undefined) {

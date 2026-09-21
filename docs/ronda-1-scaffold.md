@@ -119,6 +119,12 @@ avanza dentro de la misma pantalla por `Datos y habitacion`, `Confirmacion` y
 y ofrece metodos frecuentes para hotel: tarjeta, transferencia, pago en hotel y
 billetera digital, sin procesar cobros reales.
 
+Nota 2026-09-21 (#69): la creacion publica, la reserva manual y la edicion de
+reservas validan capacidad con la misma regla compartida:
+`adults + children <= roomType.capacity`. La UI revalida al cambiar tipo de
+habitacion, adultos o menores, y `bookingService.createBooking/updateBooking`
+rechazan cualquier intento invalido antes de mutar datos mock.
+
 Privadas (`RequireSession` + `RequirePermission`):
 
 | Ruta | Pantalla | Módulo | Permiso |

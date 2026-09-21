@@ -237,27 +237,35 @@ crear huespedes desde el flujo publico de reserva. Escribe en `guestsDB` desde
 la capa de servicios, genera IDs `GST-*` y mantiene el contrato DTO -> Mapper
 -> Model.
 
+Nota 2026-09-21 (#69): `bookingService.createBooking` y
+`bookingService.updateBooking` validan capacidad antes de escribir en
+`bookingsDB`. La regla reusable vive en `shared/utils/bookingCapacity.ts` y
+exige `adults + children <= roomType.capacity`; los formularios publicos y de
+ocupacion la reutilizan para mostrar el limite al cambiar habitacion, adultos o
+menores.
+
 ## Pruebas
 
-`npm run test` corre once suites (`scripts/*.mjs`), todas con el mismo
+`npm run test` corre doce suites (`scripts/*.mjs`), todas con el mismo
 patrón: esbuild empaqueta el módulo a probar a CommonJS y se ejecuta con
 `node --test` — sin ningún framework de pruebas externo.
 
-| Suite                            | Qué cubre                                                                                                        |
-| -------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `test-auth.mjs`                  | Sesión, roles, guardas de ruta, 404 por área (14 pruebas)                                                        |
-| `test-currency.mjs`              | `formatCurrency` (11 pruebas)                                                                                    |
-| `test-date.mjs`                  | `formatDateGT`/`formatTimeGT`/`calculateNights`/mappers de fecha civil (35 pruebas)                              |
-| `test-money-contract.mjs`        | `mockData.ts`: montos enteros, `currency: 'GTQ'`, sufijo `_cents` (13 pruebas)                                   |
-| `test-contract.mjs`              | Una sola definición por entidad, incluidas las nueve de los Lotes C/D (29 pruebas)                               |
-| `test-shared-contract.mjs`       | Fechas ISO, `_cents`, estados dentro de `statuses.ts`, `guest_link_code` único, mappers sin pérdida (34 pruebas) |
-| `test-referential-integrity.mjs` | Ninguna referencia queda colgada entre lotes (bookings, guests, users, cuentas, caja, inventario) (56 pruebas)   |
-| `test-room-status.mjs`           | Separación `status`/`housekeepingStatus` de `room`, `isRoomAssignable()` (9 pruebas)                             |
-| `test-lot-c-d.mjs`               | Aritmética de cuentas/caja/inventario, horario de amenidades, cobertura de casos (WEB-11/WEB-12) (15 pruebas)    |
-| `test-services.mjs`              | Servicios async con latencia, Models, forzado de error, regla de oro y métodos WEB-14 (16 pruebas)               |
-| `test-presentation.mjs`          | Primitivos de `shared/components/` y el catálogo `/components` (6 pruebas)                                       |
+| Suite                            | Qué cubre                                                                                                                 |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `test-auth.mjs`                  | Sesión, roles, guardas de ruta, 404 por área (14 pruebas)                                                                 |
+| `test-currency.mjs`              | `formatCurrency` (11 pruebas)                                                                                             |
+| `test-date.mjs`                  | `formatDateGT`/`formatTimeGT`/`calculateNights`/mappers de fecha civil (44 pruebas)                                       |
+| `test-money-contract.mjs`        | `mockData.ts`: montos enteros, `currency: 'GTQ'`, sufijo `_cents` (13 pruebas)                                            |
+| `test-contract.mjs`              | Una sola definición por entidad, incluidas las nueve de los Lotes C/D (29 pruebas)                                        |
+| `test-shared-contract.mjs`       | Fechas ISO, `_cents`, estados dentro de `statuses.ts`, `guest_link_code` único, mappers sin pérdida (34 pruebas)          |
+| `test-referential-integrity.mjs` | Ninguna referencia queda colgada entre lotes (bookings, guests, users, cuentas, caja, inventario) (56 pruebas)            |
+| `test-room-status.mjs`           | Separación `status`/`housekeepingStatus` de `room`, `isRoomAssignable()` (9 pruebas)                                      |
+| `test-lot-c-d.mjs`               | Aritmética de cuentas/caja/inventario, horario de amenidades, cobertura de casos (WEB-11/WEB-12) (15 pruebas)             |
+| `test-services.mjs`              | Servicios async con latencia, Models, forzado de error, regla de oro, metodos WEB-14 y capacidad de reservas (18 pruebas) |
+| `test-presentation.mjs`          | Primitivos de `shared/components/` y el catálogo `/components` (6 pruebas)                                                |
+| `test-router.mjs`                | Duplicados y resolucion de rutas principales (4 pruebas)                                                                  |
 
-Total: 238 pruebas. `npm run check` encadena
+Total: 253 pruebas. `npm run check` encadena
 `format:check && typecheck && lint && build && test`.
 
 ## `index.css`: pendiente de separar

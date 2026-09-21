@@ -63,6 +63,9 @@ timestamps y devuelven `Room` de dominio; `getRoomTypes()` devuelve
 `assignRoom(bookingId, roomId)`. `checkIn`/`checkOut` validan contra
 `BOOKING_STATUS_TRANSITIONS`; una transición inválida lanza error. `assignRoom`
 solo asigna habitaciones que `isRoomAssignable()` considera aptas.
+`createBooking(data)` y `updateBooking(id, data)` validan la capacidad maxima
+del tipo de habitacion antes de persistir: `adults + children` no puede superar
+`roomType.capacity`, pero una reserva exactamente igual a la capacidad es valida.
 
 `guestAccountService.createCharge(data)` crea un `Charge` real, lo marca como
 `posted`, calcula `amount_cents = quantity * unit_price_cents` y actualiza el
