@@ -7,7 +7,7 @@ import { DataTable, type DataTableColumn } from '@/shared/components/DataTable';
 import { ErrorState } from '@/shared/components/ErrorState';
 import { LoadingState } from '@/shared/components/LoadingState';
 import { Modal } from '@/shared/components/Modal';
-import type { Booking, Charge, GuestAccount } from '@/shared/types/entities';
+import type { Booking, Charge, Deposit, GuestAccount, Payment } from '@/shared/types/entities';
 import { formatCurrency } from '@/shared/utils/currency';
 import { formatDateGT } from '@/shared/utils/date';
 
@@ -20,6 +20,8 @@ export function CheckOutScreen() {
   const [booking, setBooking] = useState<Booking | null>(null);
   const [account, setAccount] = useState<GuestAccount | null>(null);
   const [charges, setCharges] = useState<Charge[]>([]);
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [deposits, setDeposits] = useState<Deposit[]>([]);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
 
@@ -39,15 +41,23 @@ export function CheckOutScreen() {
       const selectedAccount = await guestAccountService.getAccountByBookingId(selectedBooking.id);
       if (!selectedAccount) throw new Error('No encontramos la cuenta asociada a esta reserva.');
 
-      const selectedCharges = await guestAccountService.getChargesByBookingId(selectedBooking.id);
+      const [selectedCharges, selectedPayments, selectedDeposits] = await Promise.all([
+        guestAccountService.getChargesByBookingId(selectedBooking.id),
+        guestAccountService.getPaymentsByBookingId(selectedBooking.id),
+        guestAccountService.getDepositsByBookingId(selectedBooking.id),
+      ]);
       setBooking(selectedBooking);
       setAccount(selectedAccount);
       setCharges(selectedCharges);
+      setPayments(selectedPayments);
+      setDeposits(selectedDeposits);
       setStatus(selectedBooking.status === 'checkedOut' ? 'completed' : 'ready');
     } catch (cause: unknown) {
       setBooking(null);
       setAccount(null);
       setCharges([]);
+      setPayments([]);
+      setDeposits([]);
       setError(cause instanceof Error ? cause.message : 'No fue posible cargar el check-out.');
       setStatus('error');
     }
@@ -89,6 +99,15 @@ export function CheckOutScreen() {
 
   function openConfirm() {
     if (!canCheckOut || isCheckingOut) return;
+    if (account && account.balanceCents > 0) {
+      setError(
+        `No se puede hacer check-out: queda pendiente ${formatCurrency(
+          account.balanceCents,
+          account.currency,
+        )}.`,
+      );
+      return;
+    }
     setError(null);
     setIsConfirmOpen(true);
   }
@@ -114,10 +133,16 @@ export function CheckOutScreen() {
     }
   }
 
-  const canCheckOut = booking
+  const canTransitionToCheckedOut = booking
     ? BOOKING_STATUS_TRANSITIONS[booking.status].includes('checkedOut')
     : false;
+  const hasPendingBalance = account ? account.balanceCents > 0 : true;
+  const canCheckOut = canTransitionToCheckedOut && !hasPendingBalance;
   const chargesTotalCents = charges.reduce((total, charge) => total + charge.amountCents, 0);
+  const paymentsTotalCents = payments.reduce((total, payment) => total + payment.amountCents, 0);
+  const depositsTotalCents = deposits
+    .filter((deposit) => deposit.status !== 'refunded')
+    .reduce((total, deposit) => total + deposit.amountCents, 0);
 
   if (status === 'loading') {
     return (
@@ -177,6 +202,15 @@ export function CheckOutScreen() {
         </div>
       )}
 
+      {account.balanceCents > 0 && (
+        <div className="ui-state ui-state--warning" role="alert">
+          <p className="ui-state__description">
+            Falta liquidar {formatCurrency(account.balanceCents, account.currency)} antes de cerrar
+            la estancia.
+          </p>
+        </div>
+      )}
+
       <div className="metric-grid">
         <article className="metric-card">
           <div>
@@ -190,6 +224,16 @@ export function CheckOutScreen() {
             <p>Cargos registrados</p>
             <h2>{charges.length}</h2>
             <span>Total de cargos: {formatCurrency(chargesTotalCents, account.currency)}</span>
+          </div>
+        </article>
+        <article className="metric-card">
+          <div>
+            <p>Pagos y depósitos</p>
+            <h2>{formatCurrency(paymentsTotalCents + depositsTotalCents, account.currency)}</h2>
+            <span>
+              Pagos {formatCurrency(paymentsTotalCents, account.currency)} · Depósitos{' '}
+              {formatCurrency(depositsTotalCents, account.currency)}
+            </span>
           </div>
         </article>
       </div>
@@ -243,7 +287,9 @@ export function CheckOutScreen() {
               <p>
                 {canCheckOut
                   ? 'Lista para confirmar la salida.'
-                  : 'Esta reserva no permite check-out.'}
+                  : hasPendingBalance
+                    ? 'Tiene saldo pendiente antes de check-out.'
+                    : 'Esta reserva no permite check-out.'}
               </p>
             </div>
           </div>

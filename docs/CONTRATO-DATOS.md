@@ -74,14 +74,20 @@ Servicios habilitados por WEB-14:
   `bookingService.assignRoom`.
 - `bookingCompanionService.getCompanionsByBookingId`,
   `bookingCompanionService.saveCompanionsForBooking`.
-- `guestAccountService.createCharge`.
+- `guestAccountService.createCharge`, `guestAccountService.createPayment`,
+  `guestAccountService.voidCharge`.
 
 `checkIn`/`checkOut` aplican `BOOKING_STATUS_TRANSITIONS`; `assignRoom` usa
-`isRoomAssignable()`; `createCharge` actualiza el `balance_cents` guardado de
-la cuenta abierta.
+`isRoomAssignable()`. El folio calcula `balance_cents` como cargos activos
+menos pagos completados menos depositos no reembolsados. `createCharge`,
+`createPayment` y `voidCharge` recalculan ese saldo guardado.
 `checkIn` marca la habitacion asignada como `occupied`. Los acompañantes se
 persisten por reserva y se validan contra capacidad y composición de adultos/
 niños antes de completar check-in.
+
+`checkOut` se bloquea si `balance_cents > 0`; con saldo saldado cierra el folio,
+marca la reserva como `checked_out` y deja la habitacion `available` con
+`housekeeping_status: 'dirty'`.
 
 ## 3. Entidad por entidad
 
@@ -529,6 +535,10 @@ directamente, no un `account_id` nuevo.
 | `opened_at` | `string` (timestamp) | |
 | `closed_at?` | `string` (timestamp) | Solo si `status === 'closed'` |
 | `created_at` / `updated_at` | `string` | |
+
+Regla vigente #71: `balance_cents` se recalcula como cargos `posted` menos
+pagos `completed` menos depositos no `refunded`. El cargo base de estancia se
+crea de forma idempotente al abrir/sincronizar el folio.
 
 ```json
 {
