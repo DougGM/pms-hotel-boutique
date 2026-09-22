@@ -63,6 +63,7 @@ await build({
       export { personnelService } from './src/services/personnelService';
       export { inventoryService } from './src/services/inventoryService';
       export { auditService } from './src/services/auditService';
+      export { housekeepingService } from './src/services/housekeepingService';
       export { orderService } from './src/services/orderService';
       export { serviceRequestService } from './src/services/serviceRequestService';
       export { notificationService } from './src/services/notificationService';
@@ -81,6 +82,23 @@ await build({
 });
 
 const require = createRequire(import.meta.url);
+
+const storageValues = new Map();
+globalThis.localStorage = {
+  getItem(key) {
+    return storageValues.has(key) ? storageValues.get(key) : null;
+  },
+  setItem(key, value) {
+    storageValues.set(key, String(value));
+  },
+  removeItem(key) {
+    storageValues.delete(key);
+  },
+  clear() {
+    storageValues.clear();
+  },
+};
+
 const {
   bookingService,
   bookingCompanionService,
@@ -93,6 +111,7 @@ const {
   personnelService,
   inventoryService,
   auditService,
+  housekeepingService,
   orderService,
   serviceRequestService,
   notificationService,
@@ -450,6 +469,94 @@ test('bookingService.assignRoom: asigna solo habitaciones asignables con isRoomA
     () => bookingService.assignRoom('BKG-010', 'RM-502'),
     /no esta disponible para asignacion/,
     'available + dirty no es asignable',
+  );
+});
+
+test('housekeeping: persiste estado de habitacion, checklist, solicitudes y desperfectos', async () => {
+  const room = await assertServiceCall('roomService.updateRoom housekeeping cleaning', () =>
+    roomService.updateRoom('RM-101', { housekeeping_status: 'cleaning' }),
+  );
+  assert.equal(room.housekeepingStatus, 'cleaning');
+  assert.match(
+    storageValues.get('PMS_ROOMS_DB'),
+    /"housekeeping_status":"cleaning"/,
+    'el estado de limpieza debe quedar persistido en localStorage',
+  );
+
+  await assertServiceCall('housekeepingService.saveChecklist', () =>
+    housekeepingService.saveChecklist(
+      'RM-101',
+      [
+        { label: 'Cama preparada', done: true },
+        { label: 'Bano limpio', done: false },
+      ],
+      {
+        status: 'cleaning',
+        startTime: '09:00',
+        endTime: null,
+        duration: null,
+      },
+    ),
+  );
+  const tasks = await housekeepingService.getTaskSnapshots();
+  const task = tasks.find((item) => item.roomId === 'RM-101');
+  assert.ok(task);
+  assert.equal(task.checklist[0].done, true);
+  assert.equal(task.checklist[1].done, false);
+
+  await assertServiceCall('housekeepingService.recordHistory', () =>
+    housekeepingService.recordHistory({
+      roomId: 'RM-101',
+      roomNumber: '101',
+      taskType: 'Limpieza de salida',
+      startedAt: '2026-09-22T09:00:00.000Z',
+      completedAt: '2026-09-22T09:30:00.000Z',
+      duration: '30 min',
+    }),
+  );
+  const history = await housekeepingService.getHistory();
+  assert.equal(history[0].roomId, 'RM-101');
+
+  const pending = await assertServiceCall('serviceRequestService.createRequest', () =>
+    serviceRequestService.createRequest({
+      bookingId: 'BKG-016',
+      roomId: 'RM-101',
+      guestId: 'GST-004',
+      type: 'housekeeping',
+      description: 'Toallas adicionales',
+    }),
+  );
+  const accepted = await assertServiceCall(
+    'serviceRequestService.updateRequestStatus accepted',
+    () => serviceRequestService.updateRequestStatus(pending.id, 'accepted'),
+  );
+  assert.equal(accepted.status, 'accepted');
+  const completed = await assertServiceCall(
+    'serviceRequestService.updateRequestStatus completed',
+    () => serviceRequestService.updateRequestStatus(pending.id, 'completed'),
+  );
+  assert.equal(completed.status, 'completed');
+
+  const defect = await assertServiceCall('serviceRequestService.createMaintenanceReport', () =>
+    serviceRequestService.createMaintenanceReport({
+      roomId: 'RM-101',
+      description: 'Lampara sin funcionar',
+      notes: 'Alta',
+    }),
+  );
+  assert.equal(defect.type, 'maintenance');
+  assert.equal(defect.status, 'pending');
+  assert.equal(defect.bookingId, 'BKG-016');
+  assert.match(storageValues.get('PMS_SERVICE_REQUESTS_DB'), /Lampara sin funcionar/);
+
+  await assert.rejects(
+    () =>
+      serviceRequestService.createMaintenanceReport({
+        roomId: 'RM-102',
+        description: 'Reporte sin estancia activa',
+      }),
+    /No existe una reserva activa/,
+    'un reporte de mantenimiento no debe inventar booking_id si no hay reserva real',
   );
 });
 

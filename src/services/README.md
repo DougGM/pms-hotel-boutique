@@ -107,6 +107,19 @@ representa con el estado contractual `rejected` en `service_request`.
 marcas de lectura en `notificationReadsDB`, dentro de `src/data/db.ts`, sin
 crear una entidad `notification` propia.
 
+Actualizacion 2026-09-22 (#73): las operaciones de Limpieza que antes vivian
+solo en estado React ahora persisten en `localStorage` mediante la capa de
+servicios mock. `roomService.updateRoom()` guarda cambios de
+`housekeeping_status` en `PMS_ROOMS_DB`; `serviceRequestService` crea reportes
+de desperfectos (`maintenance`) y cambia estados de solicitudes en
+`PMS_SERVICE_REQUESTS_DB`; `housekeepingService` conserva snapshots de
+checklist, tiempos e historial operativo en `PMS_HOUSEKEEPING_STORE`. Los
+handlers del workspace esperan estos metodos antes de mostrar mensajes de
+exito, por lo que un error conserva el estado anterior visible.
+Los reportes de desperfectos se asocian solo a una reserva real confirmada o
+en check-in para la habitacion; si no existe, el servicio rechaza la operacion
+en vez de crear un `booking_id` ficticio.
+
 ## Forzar errores mock
 
 1. En código: `mockUtils.setForceError(true)` y, al terminar la prueba,

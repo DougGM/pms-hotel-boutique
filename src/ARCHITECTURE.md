@@ -159,6 +159,11 @@ la controla la app móvil). La asignabilidad se consulta con
 [`docs/DECISIONES.md`, D-002](../docs/DECISIONES.md). Cualquier cambio a
 esto pasa por una entrada nueva en ese documento.
 
+Actualizacion 2026-09-22 (#73): dentro de la web, el workspace de Limpieza
+tambien puede escribir `housekeepingStatus` a traves de `roomService` para
+persistir iniciar/finalizar/cambiar estado. Recepcion, Ocupacion y
+Administracion siguen leyendo ese campo como estado operativo compartido.
+
 `shared/types/entities/index.ts` es un barrel de **tipos únicamente**:
 `toDomain`/`toDTO` no se reexportan ahí porque las veinticuatro entidades
 usan exactamente esos dos nombres y colisionarían. Importar un mapper

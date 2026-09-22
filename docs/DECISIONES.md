@@ -132,6 +132,12 @@ Dos campos independientes en la entidad `room`:
 - **`housekeeping_status`/`RoomHousekeepingStatus`** (nuevo) — limpieza. La
   controla la app móvil (personal de limpieza), y la web solo la lee.
   Literales: `dirty | cleaning | clean | inspected`.
+
+  Nota 2026-09-22 (#73): mientras la app movil no sea la unica superficie
+  operativa disponible, el workspace web de Limpieza tambien puede escribir
+  este campo mediante `roomService` para persistir iniciar/finalizar/cambiar
+  estado. Recepcion y los demas modulos web lo siguen consumiendo como lectura
+  del estado actualizado.
 - **Regla de asignabilidad derivada** — `isRoomAssignable()` en
   `shared/constants/statuses.ts`: una habitación es asignable solo si
   `status === 'available'` **y** `housekeepingStatus` es `'clean'` o
