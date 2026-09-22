@@ -568,8 +568,11 @@ transicion a `delivered` pasa por `orderService.updateOrderStatus()`, crea un
 `Charge` real en la cuenta abierta de la reserva con
 `guestAccountService.createCharge()` y guarda el `charge_id` en el pedido. Si
 la operacion se reintenta con el mismo pedido entregado, se reutiliza el mismo
-`charge_id` y no se duplica el folio. Conserjeria conserva sus estados,
-motivos y observaciones en `serviceRequestService`.
+`charge_id` y no se duplica el folio. El creador del cargo solo se guarda si
+la operacion recibe un `createdByUserId` real del directorio operativo
+(`USR-*`); si no existe ese contexto, el cargo queda automatico sin usuario
+inventado. Conserjeria conserva sus estados, motivos y observaciones en
+`serviceRequestService`.
 
 ### Qué NO hacer
 

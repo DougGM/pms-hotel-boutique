@@ -774,6 +774,11 @@ test('room service y conserjeria persisten estados, motivos, observaciones y car
     afterDeliveryCharges.some((charge) => charge.id === delivered.chargeId),
     'el cargo creado debe existir en el folio real de la reserva',
   );
+  assert.equal(
+    afterDeliveryCharges.find((charge) => charge.id === delivered.chargeId)?.createdByUserId,
+    undefined,
+    'un cargo automatico sin usuario operativo no debe inventar createdByUserId',
+  );
 
   const deliveredAgain = await orderService.updateOrderStatus(deliveredOrder.id, 'delivered');
   assert.equal(deliveredAgain.chargeId, delivered.chargeId);
@@ -781,6 +786,48 @@ test('room service y conserjeria persisten estados, motivos, observaciones y car
     (await guestAccountService.getChargesByBookingId('BKG-002')).length,
     afterDeliveryCharges.length,
     'reintentar el mismo estado entregado no debe duplicar cargos',
+  );
+
+  const staffOrder = await orderService.createOrder({
+    bookingId: 'BKG-002',
+    roomId: 'RM-201',
+    guestId: 'GST-002',
+    items: [{ productId: 'PRD-004', quantity: 1 }],
+  });
+  await orderService.updateOrderStatus(staffOrder.id, 'accepted');
+  await orderService.updateOrderStatus(staffOrder.id, 'preparing');
+  await orderService.updateOrderStatus(staffOrder.id, 'ready');
+  await orderService.updateOrderStatus(staffOrder.id, 'onTheWay');
+  const staffDelivered = await orderService.updateOrderStatus(
+    staffOrder.id,
+    'delivered',
+    undefined,
+    { createdByUserId: 'USR-008' },
+  );
+  const afterStaffDeliveryCharges = await guestAccountService.getChargesByBookingId('BKG-002');
+  assert.equal(
+    afterStaffDeliveryCharges.find((charge) => charge.id === staffDelivered.chargeId)
+      ?.createdByUserId,
+    'USR-008',
+    'si el caller envia un usuario operativo real, el cargo debe conservarlo',
+  );
+  const invalidCreatorOrder = await orderService.createOrder({
+    bookingId: 'BKG-002',
+    roomId: 'RM-201',
+    guestId: 'GST-002',
+    items: [{ productId: 'PRD-004', quantity: 1 }],
+  });
+  await orderService.updateOrderStatus(invalidCreatorOrder.id, 'accepted');
+  await orderService.updateOrderStatus(invalidCreatorOrder.id, 'preparing');
+  await orderService.updateOrderStatus(invalidCreatorOrder.id, 'ready');
+  await orderService.updateOrderStatus(invalidCreatorOrder.id, 'onTheWay');
+  await assert.rejects(
+    () =>
+      orderService.updateOrderStatus(invalidCreatorOrder.id, 'delivered', undefined, {
+        createdByUserId: 'user-room-service',
+      }),
+    /usuario operativo/,
+    'no debe guardar IDs de sesion como creador de cargos',
   );
 
   const rejectedOrder = await orderService.createOrder({
@@ -811,7 +858,7 @@ test('room service y conserjeria persisten estados, motivos, observaciones y car
   assert.equal(cancelled.chargeId, undefined);
   assert.equal(
     (await guestAccountService.getChargesByBookingId('BKG-002')).length,
-    afterDeliveryCharges.length,
+    afterStaffDeliveryCharges.length,
     'pedidos rechazados o cancelados no deben crear cargos',
   );
 

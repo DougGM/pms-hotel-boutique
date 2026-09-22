@@ -1110,6 +1110,7 @@ function PrivateWorkspaceReady({
     status: 'Todos',
   });
   const [recSearch, setRecSearch] = useState('');
+  const operationalUserId = sessionUserId?.startsWith('USR-') ? sessionUserId : undefined;
   const hkDetailRoom =
     hkDetailRoomId !== null ? (hkRooms.find((r) => r.id === hkDetailRoomId) ?? null) : null;
   const rsSelectedOrder =
@@ -1613,6 +1614,7 @@ function PrivateWorkspaceReady({
         order.orderId,
         toDomainOrderStatus(status),
         order.note,
+        { createdByUserId: operationalUserId },
       );
 
       if (status === 'Entregado' && updated.chargeId) {

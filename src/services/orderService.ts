@@ -1,7 +1,7 @@
 import { toDomain as toOrder, type Order, type OrderDto } from '@/shared/types/entities/order';
 import type { ID } from '@/shared/types/common';
 import { ORDER_STATUS_TRANSITIONS, type OrderStatus } from '@/shared/constants/statuses';
-import { bookingsDB, ordersDB, productsDB, roomsDB } from '@/data/db';
+import { bookingsDB, ordersDB, productsDB, roomsDB, usersDB } from '@/data/db';
 import { mockUtils, requireCollection, simulateLatency } from './mockUtils';
 import { guestAccountService } from './guestAccountService';
 import { hydrateCollection, persistCollection } from './mockPersistence';
@@ -41,7 +41,14 @@ function toDtoStatus(status: OrderStatus): OrderDto['status'] {
   return status === 'onTheWay' ? 'on_the_way' : status;
 }
 
-function ensureRoomServiceCharge(order: OrderDto): Promise<ID> {
+function validateChargeCreatorId(createdByUserId?: ID): ID | undefined {
+  if (!createdByUserId) return undefined;
+  const user = usersDB.find((item) => item.id === createdByUserId);
+  if (!user) throw new Error(`No existe el usuario operativo ${createdByUserId}.`);
+  return user.id;
+}
+
+function ensureRoomServiceCharge(order: OrderDto, createdByUserId?: ID): Promise<ID> {
   const existingChargeId = order.charge_id;
   if (existingChargeId) return Promise.resolve(existingChargeId);
 
@@ -49,6 +56,7 @@ function ensureRoomServiceCharge(order: OrderDto): Promise<ID> {
     (sum, item) => sum + item.quantity * item.unit_price_cents,
     0,
   );
+  const validCreatedByUserId = validateChargeCreatorId(createdByUserId);
   return guestAccountService
     .createCharge({
       booking_id: order.booking_id,
@@ -57,7 +65,7 @@ function ensureRoomServiceCharge(order: OrderDto): Promise<ID> {
       unit_price_cents: totalCents,
       currency: order.currency,
       category: 'consumption',
-      created_by_user_id: 'USR-007',
+      created_by_user_id: validCreatedByUserId,
     })
     .then((charge) => charge.id);
 }
@@ -153,7 +161,12 @@ export const orderService = {
     persistOrdersDB();
     return toOrder(order);
   },
-  async updateOrderStatus(orderId: ID, status: OrderStatus, notes?: string): Promise<Order> {
+  async updateOrderStatus(
+    orderId: ID,
+    status: OrderStatus,
+    notes?: string,
+    options: { createdByUserId?: ID } = {},
+  ): Promise<Order> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible actualizar el pedido.');
 
@@ -161,7 +174,7 @@ export const orderService = {
     const current = toOrder(order).status;
     ensureValidTransition(current, status);
     if (status === 'delivered') {
-      order.charge_id = await ensureRoomServiceCharge(order);
+      order.charge_id = await ensureRoomServiceCharge(order, options.createdByUserId);
     }
     order.status = toDtoStatus(status);
     if (notes !== undefined) order.notes = notes.trim() || undefined;

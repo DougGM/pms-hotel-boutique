@@ -125,8 +125,10 @@ Actualizacion 2026-09-22 (#74): Room Service y Conserjeria ya no dependen de
 usan `orderService.updateOrderStatus()` y `updateOrderNotes()` sobre
 `PMS_ORDERS_DB`; al pasar a `delivered` crean exactamente un `Charge` real en
 el folio abierto con `guestAccountService.createCharge()` y guardan su
-`charge_id`. Reintentar `delivered` conserva el mismo cargo; `rejected` y
-`cancelled` no crean cargos. Conserjeria usa
+`charge_id`. Si el caller envia un `createdByUserId` operativo real, el cargo
+lo conserva; si no, queda como cargo automatico sin inventar usuario creador.
+Reintentar `delivered` conserva el mismo cargo; `rejected` y `cancelled` no
+crean cargos. Conserjeria usa
 `serviceRequestService.updateRequestStatus()` y `updateRequestNotes()` sobre
 `PMS_SERVICE_REQUESTS_DB` para conservar estados, motivos y observaciones.
 
