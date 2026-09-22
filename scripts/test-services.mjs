@@ -53,6 +53,7 @@ await build({
   stdin: {
     contents: `
       export { bookingService } from './src/services/bookingService';
+      export { bookingCompanionService } from './src/services/bookingCompanionService';
       export { roomService } from './src/services/roomService';
       export { guestService } from './src/services/guestService';
       export { paymentService } from './src/services/paymentService';
@@ -78,6 +79,7 @@ await build({
 const require = createRequire(import.meta.url);
 const {
   bookingService,
+  bookingCompanionService,
   roomService,
   guestService,
   paymentService,
@@ -361,6 +363,61 @@ test('bookingService valida capacidad del tipo de habitacion al crear y editar',
   assert.equal(stillValid.adults, 1, 'una edicion invalida no debe mutar adultos');
   assert.equal(stillValid.children, 1, 'una edicion invalida no debe mutar menores');
   assert.equal(stillValid.roomTypeId, 'RT-01', 'una edicion invalida no debe mutar habitacion');
+});
+
+test('check-in de recepcion persiste acompanantes, titular y ocupacion de habitacion', async () => {
+  await assert.rejects(
+    () =>
+      bookingCompanionService.saveCompanionsForBooking('BKG-007', [
+        {
+          first_name: 'Acompanante',
+          last_name: 'Incorrecto',
+          document_type: 'national_id',
+          document_number: '1111 22222 0101',
+          guest_type: 'child',
+        },
+      ]),
+    /composicion/,
+    'BKG-007 espera un acompanante adulto, no un menor',
+  );
+
+  const companions = await assertServiceCall(
+    'bookingCompanionService.saveCompanionsForBooking',
+    () =>
+      bookingCompanionService.saveCompanionsForBooking('BKG-007', [
+        {
+          first_name: 'Marcos',
+          last_name: 'Rodas',
+          document_type: 'national_id',
+          document_number: '1234 56789 0101',
+          guest_type: 'adult',
+        },
+      ]),
+  );
+  assert.equal(companions.length, 1);
+  assert.equal(companions[0].bookingId, 'BKG-007');
+  assert.equal(companions[0].guestType, 'adult');
+
+  const updatedGuest = await assertServiceCall('guestService.updateGuest', () =>
+    guestService.updateGuest('GST-007', {
+      document_type: 'driver_license',
+      document_number: 'LIC-777',
+    }),
+  );
+  assert.equal(updatedGuest.documentType, 'driverLicense');
+  assert.equal(updatedGuest.documentNumber, 'LIC-777');
+
+  const checkedIn = await assertServiceCall('bookingService.checkIn BKG-007', () =>
+    bookingService.checkIn('BKG-007'),
+  );
+  assert.equal(checkedIn.status, 'checkedIn');
+
+  const room = await roomService.getRoomById('RM-203');
+  assert.equal(room.status, 'occupied', 'el check-in debe marcar la habitacion como ocupada');
+
+  const persisted = await bookingCompanionService.getCompanionsByBookingId('BKG-007');
+  assert.equal(persisted.length, 1);
+  assert.equal(persisted[0].documentNumber, '1234 56789 0101');
 });
 
 test('bookingService.assignRoom: asigna solo habitaciones asignables con isRoomAssignable', async () => {

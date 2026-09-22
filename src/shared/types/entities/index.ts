@@ -28,6 +28,15 @@ export type {
   BookingStatus,
 } from './booking';
 export type {
+  BookingCompanionDTO,
+  BookingCompanionDto,
+  BookingCompanionGuestTypeDto,
+  UpsertBookingCompanionDto,
+  BookingCompanion,
+  BookingCompanionGuestType,
+  UpsertBookingCompanion,
+} from './booking-companion';
+export type {
   CashMovementDTO,
   CashMovementDto,
   CashMovementTypeDto,
@@ -58,7 +67,15 @@ export type {
   DepositMethod,
   DepositStatus,
 } from './deposit';
-export type { GuestDTO, GuestDto, GuestDocumentTypeDto, Guest, GuestDocumentType } from './guest';
+export type {
+  CreateGuestDto,
+  GuestDTO,
+  GuestDto,
+  GuestDocumentTypeDto,
+  UpdateGuestDto,
+  Guest,
+  GuestDocumentType,
+} from './guest';
 export type {
   GuestAccountDTO,
   GuestAccountDto,

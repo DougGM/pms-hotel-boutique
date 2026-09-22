@@ -1,6 +1,7 @@
 import type { AmenityDto } from '@/shared/types/entities/amenity';
 import type { AuditLogDto } from '@/shared/types/entities/audit-log';
 import type { BookingDto } from '@/shared/types/entities/booking';
+import type { BookingCompanionDto } from '@/shared/types/entities/booking-companion';
 import type { CashMovementDto } from '@/shared/types/entities/cash-movement';
 import type { CashSessionDto } from '@/shared/types/entities/cash-session';
 import type { ChargeDto } from '@/shared/types/entities/charge';
@@ -520,6 +521,64 @@ export const guestsDB: GuestDto[] = [
     document_number: '3342 90761 0101',
     created_at: '2026-02-27T00:00:00.000Z',
     updated_at: '2026-02-27T00:00:00.000Z',
+  },
+];
+
+export const bookingCompanionsDB: BookingCompanionDto[] = [
+  {
+    id: 'BCMP-001',
+    booking_id: 'BKG-003',
+    first_name: 'Lucia',
+    last_name: 'Gomez',
+    document_type: 'national_id',
+    document_number: '3012 77890 0101',
+    guest_type: 'adult',
+    created_at: '2026-09-07T14:00:00.000Z',
+    updated_at: '2026-09-07T14:00:00.000Z',
+  },
+  {
+    id: 'BCMP-002',
+    booking_id: 'BKG-003',
+    first_name: 'Mateo',
+    last_name: 'Gomez',
+    document_type: 'passport',
+    document_number: 'GT0112345',
+    guest_type: 'child',
+    created_at: '2026-09-07T14:00:00.000Z',
+    updated_at: '2026-09-07T14:00:00.000Z',
+  },
+  {
+    id: 'BCMP-003',
+    booking_id: 'BKG-004',
+    first_name: 'Andrea',
+    last_name: 'Chavez',
+    document_type: 'national_id',
+    document_number: '2310 11567 0101',
+    guest_type: 'adult',
+    created_at: '2026-08-20T14:00:00.000Z',
+    updated_at: '2026-08-20T14:00:00.000Z',
+  },
+  {
+    id: 'BCMP-004',
+    booking_id: 'BKG-004',
+    first_name: 'Santiago',
+    last_name: 'Chavez',
+    document_type: 'passport',
+    document_number: 'GT0156789',
+    guest_type: 'child',
+    created_at: '2026-08-20T14:00:00.000Z',
+    updated_at: '2026-08-20T14:00:00.000Z',
+  },
+  {
+    id: 'BCMP-005',
+    booking_id: 'BKG-004',
+    first_name: 'Camila',
+    last_name: 'Chavez',
+    document_type: 'passport',
+    document_number: 'GT0156790',
+    guest_type: 'child',
+    created_at: '2026-08-20T14:00:00.000Z',
+    updated_at: '2026-08-20T14:00:00.000Z',
   },
 ];
 

@@ -72,11 +72,16 @@ Servicios habilitados por WEB-14:
 - `roomService.createRoom`, `roomService.updateRoom`, `roomService.getRoomTypes`.
 - `bookingService.checkIn`, `bookingService.checkOut`,
   `bookingService.assignRoom`.
+- `bookingCompanionService.getCompanionsByBookingId`,
+  `bookingCompanionService.saveCompanionsForBooking`.
 - `guestAccountService.createCharge`.
 
 `checkIn`/`checkOut` aplican `BOOKING_STATUS_TRANSITIONS`; `assignRoom` usa
 `isRoomAssignable()`; `createCharge` actualiza el `balance_cents` guardado de
 la cuenta abierta.
+`checkIn` marca la habitacion asignada como `occupied`. Los acompañantes se
+persisten por reserva y se validan contra capacidad y composición de adultos/
+niños antes de completar check-in.
 
 ## 3. Entidad por entidad
 
@@ -261,6 +266,47 @@ ante recepción.
   "notes": "Solicita habitación silenciosa.",
   "created_at": "2026-09-01T00:00:00.000Z",
   "updated_at": "2026-09-01T00:00:00.000Z"
+}
+```
+
+### 3.4b `booking_companion` — web / recepción
+
+Acompañante registrado durante check-in. El huésped principal sigue siendo
+`booking.guest_id`; los acompañantes no son cuentas de usuario ni reemplazan al
+titular. Se relacionan con la reserva mediante `booking_id`.
+
+Reglas:
+
+- `1 huésped principal + booking_companion[] <= roomType.capacity`.
+- El huésped principal cuenta como adulto.
+- `companions adult === booking.adults - 1`.
+- `companions child === booking.children`.
+
+| Campo DTO         | Tipo                                      | Descripción                    |
+| ----------------- | ----------------------------------------- | ------------------------------ |
+| `id`              | `string`                                  |                                |
+| `booking_id`      | `string`                                  | FK a `booking`                 |
+| `first_name`      | `string`                                  |                                |
+| `last_name`       | `string`                                  |                                |
+| `document_type`   | `'passport' \| 'national_id' \| 'driver_license'` |                 |
+| `document_number` | `string`                                  |                                |
+| `guest_type`      | `'adult' \| 'child'`                      | Composición de la reserva      |
+| `created_at`      | `string` (timestamp)                      |                                |
+| `updated_at`      | `string` (timestamp)                      |                                |
+
+Ejemplo DTO:
+
+```json
+{
+  "id": "BCMP-001",
+  "booking_id": "BKG-003",
+  "first_name": "Lucia",
+  "last_name": "Gomez",
+  "document_type": "national_id",
+  "document_number": "3012 77890 0101",
+  "guest_type": "adult",
+  "created_at": "2026-09-07T14:00:00.000Z",
+  "updated_at": "2026-09-07T14:00:00.000Z"
 }
 ```
 

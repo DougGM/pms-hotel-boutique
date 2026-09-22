@@ -31,14 +31,17 @@ documento resume el estado resultante, no el proceso para llegar a él.
   camelCase). Moneda en quetzal, montos como entero en centavos,
   `formatCurrency`/`formatDateGT`/`formatTimeGT` como únicas funciones de
   formato.
-- Servicios (`bookingService`, `roomService`, `guestService`,
-  `paymentService`, `catalogService`, `guestAccountService`, `cashService`,
+- Servicios (`bookingService`, `bookingCompanionService`, `roomService`,
+  `guestService`, `paymentService`, `catalogService`, `guestAccountService`, `cashService`,
   `personnelService`, `inventoryService`, `auditService`, `authService`) async,
   con latencia simulada y forzado de error; todos leen de `src/data/db.ts`,
   salvo `authService`, que además persiste la sesión en `localStorage`.
 - WEB-14 implementado: `roomService.createRoom/updateRoom/getRoomTypes`,
   `bookingService.checkIn/checkOut/assignRoom` y
   `guestAccountService.createCharge`.
+- Check-in de recepción (#70): acompanantes persistentes por reserva,
+  documento del titular actualizable y habitación marcada como ocupada al
+  completar check-in.
 - Lote A implementado en rama apilada sobre WEB-14:
   `#51` (`OccupancyScreen`) muestra disponibilidad por fecha y estados reales
   de habitación/limpieza; `#52` (`ManualBookingScreen`) crea reservas manuales.

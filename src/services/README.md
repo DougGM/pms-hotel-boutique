@@ -39,8 +39,8 @@ export function RoomsView() {
 ```
 
 Servicios disponibles: `authService`, `roomService`, `bookingService`,
-`guestService`, `paymentService`, `catalogService`, `guestAccountService`,
-`cashService`, `personnelService`, `inventoryService` y `auditService`. Las
+`bookingCompanionService`, `guestService`, `paymentService`, `catalogService`,
+`guestAccountService`, `cashService`, `personnelService`, `inventoryService` y `auditService`. Las
 operaciones de creación reciben los DTOs de entrada definidos en
 `src/shared/types/entities`; sus respuestas siempre son modelos de dominio.
 Todos leen de `src/data/db.ts`, la única "base de datos" simulada del
@@ -61,11 +61,19 @@ timestamps y devuelven `Room` de dominio; `getRoomTypes()` devuelve
 
 `bookingService` expone `checkIn(bookingId)`, `checkOut(bookingId)` y
 `assignRoom(bookingId, roomId)`. `checkIn`/`checkOut` validan contra
-`BOOKING_STATUS_TRANSITIONS`; una transición inválida lanza error. `assignRoom`
-solo asigna habitaciones que `isRoomAssignable()` considera aptas.
+`BOOKING_STATUS_TRANSITIONS`; una transición inválida lanza error. `checkIn`
+abre/reutiliza la cuenta de huésped y marca la habitación asignada como
+`occupied`. `assignRoom` solo asigna habitaciones que `isRoomAssignable()`
+considera aptas.
 `createBooking(data)` y `updateBooking(id, data)` validan la capacidad maxima
 del tipo de habitacion antes de persistir: `adults + children` no puede superar
 `roomType.capacity`, pero una reserva exactamente igual a la capacidad es valida.
+
+`bookingCompanionService` expone `getCompanionsByBookingId(bookingId)` y
+`saveCompanionsForBooking(bookingId, data)`. Persiste acompañantes en
+`bookingCompanionsDB`, valida campos requeridos, capacidad de la habitación y
+coherencia con `booking.adults/children` contando al huésped principal como un
+adulto.
 
 `guestAccountService.createCharge(data)` crea un `Charge` real, lo marca como
 `posted`, calcula `amount_cents = quantity * unit_price_cents` y actualiza el
@@ -75,6 +83,8 @@ Actualizacion 2026-09-17: `guestService.createGuest(data)` crea huespedes demo
 en `guestsDB`, genera el siguiente ID `GST-*`, agrega timestamps y devuelve
 `Guest` de dominio. El motor publico de reservas lo usa para no pedir al
 usuario un ID interno antes de crear la reserva.
+`guestService.updateGuest(id, data)` permite conservar cambios válidos del
+titular capturados durante recepción/check-in.
 
 ## Forzar errores mock
 

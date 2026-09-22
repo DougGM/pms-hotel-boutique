@@ -140,6 +140,13 @@ export const bookingService = {
     }
 
     ensureGuestAccount(booking);
+    if (booking.room_id) {
+      const room = roomsDB.find((item) => item.id === booking.room_id);
+      if (room) {
+        room.status = 'occupied';
+        room.updated_at = new Date().toISOString();
+      }
+    }
     return transitionBooking(booking, 'checkedIn');
   },
   async checkOut(bookingId: ID): Promise<Booking> {

@@ -56,6 +56,35 @@
   grid-column: 1 / -1;
 }
 
+.front-desk-companion-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding-top: var(--space-2);
+}
+
+.front-desk-companion-header h3 {
+  margin: 0 0 var(--space-1);
+  font-size: var(--font-size-md);
+  color: var(--color-text-primary);
+}
+
+.front-desk-companion-header p {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.front-desk-companion-row {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr)) auto;
+  gap: var(--space-3);
+  align-items: end;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+}
+
 .front-desk-actions {
   display: flex;
   flex-wrap: wrap;
@@ -88,6 +117,15 @@
   }
 
   .front-desk-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .front-desk-companion-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .front-desk-companion-row {
     grid-template-columns: 1fr;
   }
 }

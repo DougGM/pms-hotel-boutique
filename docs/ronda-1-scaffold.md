@@ -59,13 +59,16 @@ asignada y su estado admite la transición a `checkedIn` según
 `BOOKING_STATUS_TRANSITIONS`; si no la admite, la pantalla lo explica en vez
 de fallar en silencio. Al completar el check-in
 (`bookingService.checkIn`) redirige a `/pms/accounts/:accountId` usando
-`guestAccountService.getAccountByBookingId`. El formulario de documento de
-identificación y acompañantes queda como captura local de recepción: no hay
-todavía un campo de contrato (DTO/Model) para acompañantes ni un método de
-servicio para persistir el documento del huésped desde esta pantalla —
-persistirlo es trabajo de un ticket aparte que agregue esos campos/métodos,
-no algo que este lote de front-desk pueda resolver tocando `shared/` o
-`services/` por su cuenta.
+`guestAccountService.getAccountByBookingId`.
+
+**Actualización 2026-09-21 (#70):** `CheckInScreen` deja de tratar
+acompañantes como texto local. `booking-companion` queda como entidad
+DTO/Model/Mapper y `bookingCompanionService` persiste acompañantes por
+`booking_id`. El check-in guarda documento del titular con
+`guestService.updateGuest`, valida que huésped principal + acompañantes no
+supere `roomType.capacity`, exige coherencia con `booking.adults/children` y
+marca la habitación asignada como `occupied` al pasar la reserva a
+`checkedIn`.
 
 
 ## 1. Reglas de la ronda
