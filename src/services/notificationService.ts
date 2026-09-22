@@ -18,6 +18,14 @@ export interface Notification {
   occurredAt: Date;
 }
 
+const readNotificationIdsByGuest = new Map<ID, Set<ID>>();
+
+function isNotificationRead(guestId: ID, notification: Notification): boolean {
+  return (
+    notification.read || (readNotificationIdsByGuest.get(guestId)?.has(notification.id) ?? false)
+  );
+}
+
 function requestTitle(status: string): string {
   return status === 'completed' ? 'Solicitud completada' : 'Solicitud registrada';
 }
@@ -63,9 +71,29 @@ export const notificationService = {
       occurredAt: order.requestedAt,
     }));
 
-    return [...fromRequests, ...fromOrders].sort(
-      (left, right) => right.occurredAt.getTime() - left.occurredAt.getTime(),
-    );
+    return [...fromRequests, ...fromOrders]
+      .map((notification) => ({
+        ...notification,
+        read: isNotificationRead(guestId, notification),
+      }))
+      .sort((left, right) => right.occurredAt.getTime() - left.occurredAt.getTime());
+  },
+  async markNotificationRead(guestId: ID, notificationId: ID): Promise<Notification> {
+    const notifications = await this.getNotificationsByGuestId(guestId);
+    const notification = notifications.find((item) => item.id === notificationId);
+    if (!notification) throw new Error(`No existe la notificacion ${notificationId}.`);
+
+    const readIds = readNotificationIdsByGuest.get(guestId) ?? new Set<ID>();
+    readIds.add(notificationId);
+    readNotificationIdsByGuest.set(guestId, readIds);
+    return { ...notification, read: true };
+  },
+  async markAllRead(guestId: ID): Promise<Notification[]> {
+    const notifications = await this.getNotificationsByGuestId(guestId);
+    const readIds = readNotificationIdsByGuest.get(guestId) ?? new Set<ID>();
+    notifications.forEach((notification) => readIds.add(notification.id));
+    readNotificationIdsByGuest.set(guestId, readIds);
+    return notifications.map((notification) => ({ ...notification, read: true }));
   },
 };
 export default notificationService;

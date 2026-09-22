@@ -883,6 +883,7 @@ type PrivateWorkspaceProps = {
   initialNav?: string;
   sessionName?: string;
   sessionEmail?: string;
+  sessionUserId?: string;
   sessionRoleLabel?: string;
   onLogout?: () => void;
 };
@@ -976,6 +977,7 @@ function PrivateWorkspaceReady({
   initialNav,
   sessionName,
   sessionEmail,
+  sessionUserId,
   sessionRoleLabel,
   onLogout,
   initialData,
@@ -2107,7 +2109,14 @@ function PrivateWorkspaceReady({
               setFilter={setRsFilter}
             />
           ) : activeRole === 'guest' ? (
-            <GuestContent nav={activeNav} onAction={notify} onLogout={() => onLogout?.()} />
+            <GuestContent
+              nav={activeNav}
+              onAction={notify}
+              onLogout={() => onLogout?.()}
+              sessionUserId={sessionUserId}
+              sessionName={sessionName}
+              sessionEmail={sessionEmail}
+            />
           ) : activeRole === 'admin' ? (
             <AdminContent nav={activeNav} onAction={notify} onNavigate={setActiveNav} />
           ) : (

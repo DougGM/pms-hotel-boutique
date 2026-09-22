@@ -35,6 +35,7 @@ import { serviceRequestService } from '@/services/serviceRequestService';
 import { ErrorState } from '@/shared/components/ErrorState';
 import { LoadingState } from '@/shared/components/LoadingState';
 import type { Booking } from '@/shared/types/entities/booking';
+import type { Guest } from '@/shared/types/entities/guest';
 import type { RoomType as RoomTypeModel } from '@/shared/types/entities/room-type';
 import { toDomainCalendarDate, toDtoCalendarDate } from '@/shared/types/common';
 import { calculateNights } from '@/shared/utils/date';
@@ -77,8 +78,6 @@ const AMENITY_ICONS: LucideIcon[] = [
   FileText,
   Clock,
 ];
-
-const guestRoom = '402';
 
 function parseDbId(id: string, fallback: number) {
   const value = Number(id.replace(/\D/g, ''));
@@ -136,13 +135,84 @@ type ScreenState =
   | {
       status: 'ready';
       profile: GuestInfo;
-      reservations: Reservation[];
+      reservations: PortalReservation[];
       notifications: GuestNotification[];
       serviceRequests: GuestServiceRequest[];
       menu: GuestMenuItem[];
       orders: GuestOrder[];
       amenities: GuestAmenity[];
     };
+
+type PortalReservation = Reservation & {
+  bookingId: string;
+  guestId: string;
+  roomId?: string;
+  roomTypeId: string;
+  adults: number;
+  children: number;
+  balanceCents: number;
+  currency: Booking['currency'];
+};
+
+function normalize(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+function findGuestForSession(guests: Guest[], sessionEmail?: string, sessionName?: string) {
+  const email = sessionEmail?.trim().toLowerCase();
+  if (email) {
+    const byEmail = guests.find((guest) => guest.email?.toLowerCase() === email);
+    if (byEmail) return byEmail;
+  }
+
+  const nameTokens = normalize(sessionName ?? '')
+    .split(/\s+/)
+    .filter(Boolean);
+  if (nameTokens.length === 0) return undefined;
+
+  return guests.find((guest) => {
+    const guestName = normalize(`${guest.firstName} ${guest.lastName}`);
+    return nameTokens.every((token) => guestName.includes(token));
+  });
+}
+
+function isVisibleAsActive(status: Booking['status']) {
+  return status === 'checkedIn' || status === 'confirmed' || status === 'pending';
+}
+
+function sortBookingsForPortal(left: Booking, right: Booking) {
+  const leftActive = isVisibleAsActive(left.status) ? 0 : 1;
+  const rightActive = isVisibleAsActive(right.status) ? 0 : 1;
+  if (leftActive !== rightActive) return leftActive - rightActive;
+  return right.checkIn.getTime() - left.checkIn.getTime();
+}
+
+function calculateReservationBalanceCents(reservation: Reservation) {
+  const active = reservation.folio.filter((item) => item.status === 'Activo');
+  const charges = active
+    .filter((item) => item.type === 'Cargo')
+    .reduce((sum, item) => sum + item.amount, 0);
+  const credits = active
+    .filter((item) => item.type !== 'Cargo')
+    .reduce((sum, item) => sum + item.amount, 0);
+  return Math.round((charges - credits) * 100);
+}
+
+function mapServiceRequestType(type: string) {
+  return type === 'Limpieza' ? 'housekeeping' : 'concierge';
+}
+
+function mapDocumentTypeToDto(type: string) {
+  if (type === 'nationalId' || type === 'DPI' || type === 'INE' || type === 'Cédula') {
+    return 'national_id' as const;
+  }
+  if (type === 'driverLicense') return 'driver_license' as const;
+  return 'passport' as const;
+}
 
 function getErrorMessage(cause: unknown): string {
   return cause instanceof Error ? cause.message : 'No fue posible cargar tu portal de huésped.';
@@ -152,12 +222,18 @@ export function GuestContent({
   nav,
   onAction,
   onLogout,
+  sessionName,
+  sessionEmail,
 }: {
   nav: string;
   onAction: (message: string) => void;
   onLogout: () => void;
+  sessionUserId?: string;
+  sessionName?: string;
+  sessionEmail?: string;
 }) {
   const [screen, setScreen] = useState<ScreenState>({ status: 'loading' });
+  const [reloadToken, setReloadToken] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -187,15 +263,18 @@ export function GuestContent({
           guestAccountService.getDeposits(),
         ]);
 
+        const activeGuest = findGuestForSession(guests, sessionEmail, sessionName);
+        const guestBookings = activeGuest
+          ? bookings
+              .filter((booking) => booking.guestId === activeGuest.id)
+              .sort(sortBookingsForPortal)
+          : [];
         const activeBooking =
-          bookings.find((booking) => booking.status === 'checkedIn') ?? bookings[0];
-        const activeGuest = activeBooking
-          ? guests.find((guest) => guest.id === activeBooking.guestId)
-          : undefined;
+          guestBookings.find((booking) => booking.status === 'checkedIn') ?? guestBookings[0];
         const activeRoom = activeBooking
           ? rooms.find((room) => room.id === activeBooking.roomId)
           : undefined;
-        const activeRoomNumber = activeRoom?.roomNumber ?? guestRoom;
+        const activeRoomNumber = activeRoom?.roomNumber ?? 'Sin asignar';
 
         const profile: GuestInfo = activeGuest
           ? {
@@ -219,14 +298,13 @@ export function GuestContent({
               nationality: '',
             };
 
-        const guestBookings = activeGuest
-          ? bookings.filter((booking) => booking.guestId === activeGuest.id)
-          : [];
+        const accounts = await guestAccountService.getAccounts();
 
-        const reservations: Reservation[] = guestBookings.map((booking, index) => {
+        const reservations: PortalReservation[] = guestBookings.map((booking, index) => {
           const bookingCharges = charges.filter((charge) => charge.bookingId === booking.id);
           const bookingPayments = payments.filter((payment) => payment.bookingId === booking.id);
           const bookingDeposits = deposits.filter((deposit) => deposit.bookingId === booking.id);
+          const bookingAccount = accounts.find((account) => account.bookingId === booking.id);
           const room = rooms.find((item) => item.id === booking.roomId);
           const nights = Math.max(1, calculateNights(booking.checkIn, booking.checkOut));
           const status = mapReservationStatus(booking.status);
@@ -262,8 +340,16 @@ export function GuestContent({
               status: deposit.status === 'refunded' ? ('Anulado' as const) : ('Activo' as const),
             })),
           ];
-          return {
+          const reservation = {
             id: parseDbId(booking.id, index + 1),
+            bookingId: booking.id,
+            guestId: booking.guestId,
+            roomId: booking.roomId,
+            roomTypeId: booking.roomTypeId,
+            adults: booking.adults,
+            children: booking.children,
+            balanceCents: bookingAccount?.balanceCents ?? 0,
+            currency: booking.currency,
             code: booking.confirmationCode,
             checkIn: toDtoCalendarDate(booking.checkIn),
             checkOut: toDtoCalendarDate(booking.checkOut),
@@ -285,6 +371,11 @@ export function GuestContent({
             companions: [],
             folio,
           };
+          return {
+            ...reservation,
+            balanceCents:
+              bookingAccount?.balanceCents ?? calculateReservationBalanceCents(reservation),
+          };
         });
 
         const [requests, guestOrdersRaw, notificationsRaw] = await Promise.all([
@@ -299,6 +390,7 @@ export function GuestContent({
 
         const serviceRequests: GuestServiceRequest[] = requests.map((request, index) => ({
           id: parseDbId(request.id, index + 1),
+          sourceId: request.id,
           type:
             request.type === 'housekeeping'
               ? 'Limpieza'
@@ -313,6 +405,7 @@ export function GuestContent({
 
         const orders: GuestOrder[] = guestOrdersRaw.map((order, index) => ({
           id: parseDbId(order.id, index + 1),
+          sourceId: order.id,
           items: order.items.map((item) => {
             const product = products.find((productItem) => productItem.id === item.productId);
             return {
@@ -329,6 +422,7 @@ export function GuestContent({
 
         const notifications: GuestNotification[] = notificationsRaw.map((item, index) => ({
           id: index + 1,
+          sourceId: item.id,
           title: item.title,
           message: item.message,
           time: formatDbTime(item.occurredAt),
@@ -340,6 +434,7 @@ export function GuestContent({
           .filter((product) => product.category === 'foodAndBeverage')
           .map((product, index) => ({
             id: parseDbId(product.id, index + 1),
+            productId: product.id,
             name: product.name,
             description: product.description ?? product.sku,
             price: centsToAmount(product.priceCents),
@@ -379,7 +474,7 @@ export function GuestContent({
     return () => {
       active = false;
     };
-  }, []);
+  }, [reloadToken, sessionEmail, sessionName]);
 
   if (screen.status === 'loading') {
     return <LoadingState label="Cargando tu portal de huésped..." />;
@@ -390,7 +485,7 @@ export function GuestContent({
       <ErrorState
         title="No pudimos cargar tu portal de huésped"
         description={screen.message}
-        onRetry={() => setScreen({ status: 'loading' })}
+        onRetry={() => setReloadToken((value) => value + 1)}
       />
     );
   }
@@ -427,14 +522,14 @@ function GuestContentReady({
   onAction: (message: string) => void;
   onLogout: () => void;
   initialProfile: GuestInfo;
-  initialReservations: Reservation[];
+  initialReservations: PortalReservation[];
   initialNotifications: GuestNotification[];
   initialServiceRequests: GuestServiceRequest[];
   initialMenu: GuestMenuItem[];
   initialOrders: GuestOrder[];
   amenities: GuestAmenity[];
 }) {
-  const [reservations, setReservations] = useState<Reservation[]>(initialReservations);
+  const [reservations, setReservations] = useState<PortalReservation[]>(initialReservations);
   const [profile, setProfile] = useState<GuestInfo>(initialProfile);
   const [notifications, setNotifications] = useState<GuestNotification[]>(initialNotifications);
   const [serviceRequests, setServiceRequests] =
@@ -474,7 +569,8 @@ function GuestContentReady({
   const cancelledReservations = reservations.filter((r) =>
     ['Cancelada', 'Anulada'].includes(r.status),
   );
-  const currentStay = reservations.find((r) => r.status === 'Check-in') ?? null;
+  const currentStay =
+    reservations.find((r) => r.status === 'Check-in') ?? activeReservations[0] ?? null;
 
   const filteredReservations =
     resFilter === 'Todas'
@@ -494,7 +590,16 @@ function GuestContentReady({
       const existing = prev.find((c) => c.id === item.id);
       if (existing)
         return prev.map((c) => (c.id === item.id ? { ...c, quantity: c.quantity + 1 } : c));
-      return [...prev, { id: item.id, name: item.name, price: item.price, quantity: 1 }];
+      return [
+        ...prev,
+        {
+          id: item.id,
+          productId: item.productId,
+          name: item.name,
+          price: item.price,
+          quantity: 1,
+        },
+      ];
     });
   };
   const removeFromCart = (id: number) => setCart((prev) => prev.filter((c) => c.id !== id));
@@ -503,97 +608,238 @@ function GuestContentReady({
       prev.map((c) => (c.id === id ? { ...c, quantity: Math.max(1, c.quantity + delta) } : c)),
     );
 
-  const submitOrder = () => {
+  const submitOrder = async () => {
     if (cart.length === 0) return;
-    const newOrder: GuestOrder = {
-      id: 1043 + orders.length,
-      items: cart.map((c) => ({ name: c.name, quantity: c.quantity, price: c.price })),
-      time: new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }),
-      status: 'Pendiente',
-      note: orderNote,
-      room: guestRoom,
-    };
-    setOrders((prev) => [newOrder, ...prev]);
-    setCart([]);
-    setOrderNote('');
-    onAction(`Pedido #${newOrder.id} enviado a la habitación ${guestRoom}`);
+    if (!currentStay?.roomId) {
+      onAction('No hay una reserva con habitacion asignada para crear el pedido.');
+      return;
+    }
+    try {
+      const order = await orderService.createOrder({
+        bookingId: currentStay.bookingId,
+        roomId: currentStay.roomId,
+        guestId: currentStay.guestId,
+        items: cart.map((item) => ({ productId: item.productId, quantity: item.quantity })),
+        notes: orderNote,
+      });
+      const newOrder: GuestOrder = {
+        id: parseDbId(order.id, orders.length + 1),
+        sourceId: order.id,
+        items: order.items.map((item) => {
+          const product = initialMenu.find((menuItem) => menuItem.productId === item.productId);
+          return {
+            name: product?.name ?? item.productId,
+            quantity: item.quantity,
+            price: centsToAmount(item.unitPriceCents),
+          };
+        }),
+        time: formatDbTime(order.requestedAt),
+        status: mapOrderStatus(order.status),
+        note: order.notes ?? '',
+        room: currentStay.roomNumber,
+      };
+      setOrders((prev) => [newOrder, ...prev]);
+      setCart([]);
+      setOrderNote('');
+      onAction(`Pedido #${newOrder.id} enviado a la habitacion ${currentStay.roomNumber}`);
+    } catch (cause) {
+      onAction(getErrorMessage(cause));
+    }
   };
 
-  const cancelOrder = (orderId: number) => {
-    setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, status: 'Cancelado' } : o)));
-    setCancelOrderId(null);
-    onAction(`Pedido #${orderId} cancelado correctamente`);
+  const cancelOrder = async (orderId: number) => {
+    const order = orders.find((item) => item.id === orderId);
+    if (!order || !currentStay) return;
+    try {
+      await orderService.cancelOrder(order.sourceId, currentStay.guestId);
+      setOrders((prev) =>
+        prev.map((item) => (item.id === orderId ? { ...item, status: 'Cancelado' } : item)),
+      );
+      setCancelOrderId(null);
+      onAction(`Pedido #${orderId} cancelado correctamente`);
+    } catch (cause) {
+      onAction(getErrorMessage(cause));
+    }
   };
 
-  const submitServiceRequest = (data: { type: string; description: string; time: string }) => {
-    const newReq: GuestServiceRequest = {
-      id: 304 + serviceRequests.length,
-      type: data.type,
-      description: data.description,
-      time: data.time,
-      status: 'Pendiente',
-      room: guestRoom,
-    };
-    setServiceRequests((prev) => [newReq, ...prev]);
-    setShowRequestService(null);
-    onAction('Solicitud enviada correctamente');
+  const submitServiceRequest = async (data: {
+    type: string;
+    description: string;
+    time: string;
+  }) => {
+    if (!currentStay?.roomId) {
+      onAction('No hay una reserva con habitacion asignada para crear la solicitud.');
+      return;
+    }
+    try {
+      const request = await serviceRequestService.createRequest({
+        bookingId: currentStay.bookingId,
+        roomId: currentStay.roomId,
+        guestId: currentStay.guestId,
+        type: mapServiceRequestType(data.type),
+        description: `${data.description} (${data.time})`,
+      });
+      const newReq: GuestServiceRequest = {
+        id: parseDbId(request.id, serviceRequests.length + 1),
+        sourceId: request.id,
+        type: data.type,
+        description: request.description,
+        time: formatDbTime(request.requestedAt),
+        status: mapRequestStatus(request.status),
+        room: currentStay.roomNumber,
+      };
+      setServiceRequests((prev) => [newReq, ...prev]);
+      setShowRequestService(null);
+      onAction('Solicitud enviada correctamente');
+    } catch (cause) {
+      onAction(getErrorMessage(cause));
+    }
   };
 
-  const cancelServiceRequest = (reqId: number) => {
-    setServiceRequests((prev) =>
-      prev.map((r) => (r.id === reqId ? { ...r, status: 'Cancelada' } : r)),
-    );
-    onAction('Solicitud cancelada');
+  const cancelServiceRequest = async (reqId: number) => {
+    const request = serviceRequests.find((item) => item.id === reqId);
+    if (!request || !currentStay) return;
+    try {
+      await serviceRequestService.cancelRequest(request.sourceId, currentStay.guestId);
+      setServiceRequests((prev) =>
+        prev.map((item) => (item.id === reqId ? { ...item, status: 'Cancelada' } : item)),
+      );
+      onAction('Solicitud cancelada');
+    } catch (cause) {
+      onAction(getErrorMessage(cause));
+    }
   };
 
-  const saveProfile = (updated: GuestInfo) => {
-    setProfile(updated);
-    setShowEditProfile(false);
-    onAction('Perfil actualizado correctamente');
+  const saveProfile = async (updated: GuestInfo) => {
+    const guestId = reservations[0]?.guestId;
+    if (!guestId) return;
+    try {
+      const guest = await guestService.updateGuest(guestId, {
+        first_name: updated.name,
+        last_name: updated.lastName,
+        phone: updated.phone,
+        email: updated.email,
+        document_type: mapDocumentTypeToDto(updated.docType),
+        document_number: updated.docNumber,
+        nationality: updated.nationality,
+      });
+      setProfile({
+        ...updated,
+        name: guest.firstName,
+        lastName: guest.lastName,
+        phone: guest.phone ?? '',
+        email: guest.email ?? '',
+        docType: guest.documentType ?? updated.docType,
+        docNumber: guest.documentNumber ?? '',
+        nationality: guest.nationality ?? '',
+      });
+      setShowEditProfile(false);
+      onAction('Perfil actualizado correctamente');
+    } catch (cause) {
+      onAction(getErrorMessage(cause));
+    }
   };
 
-  const saveReservationModify = (
+  const saveReservationModify = async (
     id: number,
     updates: { checkIn: string; checkOut: string; guestCount: number; observations: string },
   ) => {
-    setReservations((prev) =>
-      prev.map((r) =>
-        r.id === id
-          ? {
-              ...r,
-              checkIn: updates.checkIn,
-              checkOut: updates.checkOut,
-              guestCount: updates.guestCount,
-              observations: updates.observations,
-            }
-          : r,
-      ),
-    );
-    setModifyResId(null);
-    setDetailResId(null);
-    onAction('Modificación de reserva solicitada. El hotel confirmará los cambios.');
+    const reservation = reservations.find((item) => item.id === id);
+    if (!reservation) return;
+    const children = Math.min(reservation.children, Math.max(0, updates.guestCount - 1));
+    const adults = updates.guestCount - children;
+    try {
+      const booking = await bookingService.updateBooking(reservation.bookingId, {
+        check_in: updates.checkIn,
+        check_out: updates.checkOut,
+        adults,
+        children,
+        notes: updates.observations,
+      });
+      setReservations((prev) =>
+        prev.map((item) =>
+          item.id === id
+            ? {
+                ...item,
+                checkIn: toDtoCalendarDate(booking.checkIn),
+                checkOut: toDtoCalendarDate(booking.checkOut),
+                adults: booking.adults,
+                children: booking.children,
+                guestCount: booking.adults + booking.children,
+                observations: booking.notes ?? '',
+              }
+            : item,
+        ),
+      );
+      setModifyResId(null);
+      setDetailResId(null);
+      onAction('Modificacion de reserva guardada correctamente.');
+    } catch (cause) {
+      onAction(getErrorMessage(cause));
+    }
   };
 
-  const confirmCancelReservation = (id: number, reason: string) => {
-    setReservations((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, status: 'Cancelada', cancelReason: reason } : r)),
-    );
-    setCancelResId(null);
-    setDetailResId(null);
-    onAction('Reserva cancelada correctamente');
+  const confirmCancelReservation = async (id: number, reason: string) => {
+    const reservation = reservations.find((item) => item.id === id);
+    if (!reservation) return;
+    try {
+      await bookingService.cancelBooking(reservation.bookingId, reason);
+      setReservations((prev) =>
+        prev.map((item) =>
+          item.id === id ? { ...item, status: 'Cancelada', cancelReason: reason } : item,
+        ),
+      );
+      setCancelResId(null);
+      setDetailResId(null);
+      onAction('Reserva cancelada correctamente');
+    } catch (cause) {
+      onAction(getErrorMessage(cause));
+    }
   };
 
-  const linkReservation = (code: string) => {
-    setShowLink(false);
-    onAction(`Reserva ${code} vinculada a tu cuenta`);
+  const linkReservation = async (code: string) => {
+    const guestId = reservations[0]?.guestId;
+    if (!guestId) return;
+    try {
+      const bookings = await bookingService.getBookings();
+      const booking = bookings.find(
+        (item) =>
+          item.confirmationCode.toUpperCase() === code.toUpperCase() ||
+          item.guestLinkCode.toUpperCase() === code.toUpperCase(),
+      );
+      if (!booking || booking.guestId !== guestId) {
+        throw new Error('No encontramos una reserva vigente para este huesped con ese codigo.');
+      }
+      setShowLink(false);
+      onAction(`Reserva ${booking.confirmationCode} vinculada a tu cuenta`);
+    } catch (cause) {
+      onAction(getErrorMessage(cause));
+    }
   };
 
-  const markNotificationRead = (id: number) => {
-    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
+  const markNotificationRead = async (id: number) => {
+    const notification = notifications.find((item) => item.id === id);
+    const guestId = reservations[0]?.guestId;
+    if (!notification || !guestId) return;
+    try {
+      await notificationService.markNotificationRead(guestId, notification.sourceId);
+      setNotifications((prev) =>
+        prev.map((item) => (item.id === id ? { ...item, read: true } : item)),
+      );
+    } catch (cause) {
+      onAction(getErrorMessage(cause));
+    }
   };
-  const markAllRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-    onAction('Todas las notificaciones marcadas como leídas');
+  const markAllRead = async () => {
+    const guestId = reservations[0]?.guestId;
+    if (!guestId) return;
+    try {
+      await notificationService.markAllRead(guestId);
+      setNotifications((prev) => prev.map((item) => ({ ...item, read: true })));
+      onAction('Todas las notificaciones marcadas como leidas');
+    } catch (cause) {
+      onAction(getErrorMessage(cause));
+    }
   };
 
   // ─── HOME / OVERVIEW ───────────────────────────────────────────
@@ -604,9 +850,27 @@ function GuestContentReady({
           <div className="gs-overview-main">
             <div className="gs-overview-hero">
               <div>
-                <span className="status-pill success">Reserva confirmada</span>
-                <h4>Suite Aurora · Habitación {guestRoom}</h4>
-                <p>21 ago — 28 ago, 2024 · 2 adultos</p>
+                {currentStay ? (
+                  <>
+                    <span className={`status-pill ${resStatusClass(currentStay.status)}`}>
+                      {currentStay.status}
+                    </span>
+                    <h4>
+                      {currentStay.roomType} · Habitacion {currentStay.roomNumber}
+                    </h4>
+                    <p>
+                      {fmtDate(currentStay.checkIn)} — {fmtDate(currentStay.checkOut)} ·{' '}
+                      {currentStay.adults} adultos
+                      {currentStay.children > 0 ? ` · ${currentStay.children} menores` : ''}
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <span className="status-pill warning">Sin reserva activa</span>
+                    <h4>Vincula una reserva</h4>
+                    <p>Ingresa tu codigo para ver tu estancia.</p>
+                  </>
+                )}
               </div>
               <div className="stay-art">
                 <BedDouble size={48} strokeWidth={1.2} />
@@ -614,13 +878,15 @@ function GuestContentReady({
             </div>
             <div className="gs-overview-details">
               <div>
-                <span>Próximo evento</span>
-                <strong>Check-out</strong>
-                <small>28 ago · 12:00 hrs</small>
+                <span>Proximo evento</span>
+                <strong>{currentStay ? 'Check-out' : 'Reserva'}</strong>
+                <small>
+                  {currentStay ? `${fmtDate(currentStay.checkOut)} · 12:00 hrs` : 'Pendiente'}
+                </small>
               </div>
               <div>
                 <span>Saldo pendiente</span>
-                <strong>$420.00</strong>
+                <strong>{money(Math.max(0, (currentStay?.balanceCents ?? 0) / 100))}</strong>
                 <small>Se carga al finalizar tu estancia</small>
               </div>
             </div>
@@ -659,7 +925,7 @@ function GuestContentReady({
             <div className="gs-overview-notif-head">
               <div>
                 <h3>Actividad reciente</h3>
-                <p>Últimos movimientos de tu estancia</p>
+                <p>Ãšltimos movimientos de tu estancia</p>
               </div>
               {unreadCount > 0 && (
                 <span className="status-pill warning">{unreadCount} sin leer</span>
@@ -882,7 +1148,9 @@ function GuestContentReady({
                 <BedDouble size={48} strokeWidth={1.2} />
               </div>
               <div>
-                <h4>Suite Aurora · Habitación {currentStay.roomNumber}</h4>
+                <h4>
+                  {currentStay.roomType} · Habitacion {currentStay.roomNumber}
+                </h4>
                 <p>
                   {fmtDate(currentStay.checkIn)} — {fmtDate(currentStay.checkOut)}
                 </p>
@@ -984,7 +1252,9 @@ function GuestContentReady({
             </div>
             <div className="gs-stay-side-info">
               <strong>Saldo pendiente</strong>
-              <span className="gs-stay-balance">{money(420)}</span>
+              <span className="gs-stay-balance">
+                {money(Math.max(0, currentStay.balanceCents / 100))}
+              </span>
               <small>Se carga al finalizar tu estancia</small>
             </div>
           </aside>
@@ -1226,7 +1496,7 @@ function GuestContentReady({
             <div className="panel-heading">
               <div>
                 <h3>Mi pedido</h3>
-                <p>Habitación {guestRoom}</p>
+                <p>Habitacion {currentStay?.roomNumber ?? 'Sin asignar'}</p>
               </div>
               {cart.length > 0 && <span className="status-pill warning">{cart.length} items</span>}
             </div>
@@ -1277,8 +1547,8 @@ function GuestContentReady({
                   <strong>{money(cartTotal)}</strong>
                 </div>
                 <button className="button primary gs-cart-submit" onClick={submitOrder}>
-                  <ClipboardList size={16} /> Enviar pedido a habitación {guestRoom}{' '}
-                  <ArrowRight size={16} />
+                  <ClipboardList size={16} /> Enviar pedido a habitacion{' '}
+                  {currentStay?.roomNumber ?? 'Sin asignar'} <ArrowRight size={16} />
                 </button>
               </>
             )}

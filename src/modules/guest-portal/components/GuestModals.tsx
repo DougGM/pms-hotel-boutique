@@ -20,6 +20,7 @@ import { calculateNights } from '@/shared/utils/date';
 
 export type GuestNotification = {
   id: number;
+  sourceId: string;
   title: string;
   message: string;
   time: string;
@@ -29,6 +30,7 @@ export type GuestNotification = {
 
 export type GuestServiceRequest = {
   id: number;
+  sourceId: string;
   type: string;
   description: string;
   time: string;
@@ -38,6 +40,7 @@ export type GuestServiceRequest = {
 
 export type GuestMenuItem = {
   id: number;
+  productId: string;
   name: string;
   description: string;
   price: number;
@@ -47,6 +50,7 @@ export type GuestMenuItem = {
 
 export type GuestCartItem = {
   id: number;
+  productId: string;
   name: string;
   price: number;
   quantity: number;
@@ -54,6 +58,7 @@ export type GuestCartItem = {
 
 export type GuestOrder = {
   id: number;
+  sourceId: string;
   items: { name: string; quantity: number; price: number }[];
   time: string;
   status: 'Pendiente' | 'Aceptado' | 'En preparación' | 'En camino' | 'Entregado' | 'Cancelado';

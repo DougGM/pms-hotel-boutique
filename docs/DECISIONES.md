@@ -424,8 +424,9 @@ sesion. `usersDB` queda como directorio operativo historico del Lote D.
   operativo.
 - No mezclar `HOUSEKEEPING` con `CONCIERGE`: limpieza y conserjeria son flujos
   distintos.
-- No asumir que `GUEST` ya tiene portal completo; por ahora solo existe la
-  cuenta/rol de sesion y el portal queda pendiente.
+- No tratar el portal `GUEST` como backend real de produccion: existe como
+  portal funcional sobre servicios mock, con reservas/pedidos/solicitudes/
+  perfil/notificaciones persistiendo en `src/data/db.ts` durante la sesion.
 - No cambiar roles sin actualizar permisos, mocks, navegacion, tests y docs en
   el mismo cambio.
 
