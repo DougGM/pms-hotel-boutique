@@ -743,3 +743,112 @@ test('portal de huesped persiste pedidos, solicitudes, perfil y notificaciones',
     'markAllRead debe conservar las marcas en notificationReadsDB',
   );
 });
+
+test('room service y conserjeria persisten estados, motivos, observaciones y cargos reales', async () => {
+  const beforeCharges = await guestAccountService.getChargesByBookingId('BKG-002');
+  const deliveredOrder = await assertServiceCall('orderService.createOrder room-service', () =>
+    orderService.createOrder({
+      bookingId: 'BKG-002',
+      roomId: 'RM-201',
+      guestId: 'GST-002',
+      items: [{ productId: 'PRD-001', quantity: 1 }],
+      notes: 'Subir con cubiertos.',
+    }),
+  );
+
+  await orderService.updateOrderStatus(deliveredOrder.id, 'accepted');
+  await orderService.updateOrderStatus(deliveredOrder.id, 'preparing');
+  await orderService.updateOrderStatus(deliveredOrder.id, 'ready');
+  await orderService.updateOrderStatus(deliveredOrder.id, 'onTheWay');
+  const delivered = await orderService.updateOrderStatus(deliveredOrder.id, 'delivered');
+  assert.equal(delivered.status, 'delivered');
+  assert.ok(delivered.chargeId, 'un pedido entregado debe guardar el chargeId real');
+
+  const afterDeliveryCharges = await guestAccountService.getChargesByBookingId('BKG-002');
+  assert.equal(
+    afterDeliveryCharges.length,
+    beforeCharges.length + 1,
+    'entregar un pedido debe crear exactamente un cargo',
+  );
+  assert.ok(
+    afterDeliveryCharges.some((charge) => charge.id === delivered.chargeId),
+    'el cargo creado debe existir en el folio real de la reserva',
+  );
+
+  const deliveredAgain = await orderService.updateOrderStatus(deliveredOrder.id, 'delivered');
+  assert.equal(deliveredAgain.chargeId, delivered.chargeId);
+  assert.equal(
+    (await guestAccountService.getChargesByBookingId('BKG-002')).length,
+    afterDeliveryCharges.length,
+    'reintentar el mismo estado entregado no debe duplicar cargos',
+  );
+
+  const rejectedOrder = await orderService.createOrder({
+    bookingId: 'BKG-002',
+    roomId: 'RM-201',
+    guestId: 'GST-002',
+    items: [{ productId: 'PRD-007', quantity: 1 }],
+  });
+  const rejected = await orderService.updateOrderStatus(
+    rejectedOrder.id,
+    'rejected',
+    'Producto agotado.',
+  );
+  assert.equal(rejected.status, 'rejected');
+  assert.equal(rejected.notes, 'Producto agotado.');
+  assert.equal(rejected.chargeId, undefined);
+
+  const cancelledOrder = await orderService.createOrder({
+    bookingId: 'BKG-002',
+    roomId: 'RM-201',
+    guestId: 'GST-002',
+    items: [{ productId: 'PRD-009', quantity: 1 }],
+  });
+  const noted = await orderService.updateOrderNotes(cancelledOrder.id, 'Cancelar por llamada.');
+  const cancelled = await orderService.cancelOrder(cancelledOrder.id);
+  assert.equal(noted.notes, 'Cancelar por llamada.');
+  assert.equal(cancelled.status, 'cancelled');
+  assert.equal(cancelled.chargeId, undefined);
+  assert.equal(
+    (await guestAccountService.getChargesByBookingId('BKG-002')).length,
+    afterDeliveryCharges.length,
+    'pedidos rechazados o cancelados no deben crear cargos',
+  );
+
+  const concierge = await serviceRequestService.createRequest({
+    bookingId: 'BKG-002',
+    roomId: 'RM-201',
+    guestId: 'GST-002',
+    type: 'concierge',
+    description: 'Reservar cena',
+  });
+  const conciergeAccepted = await serviceRequestService.updateRequestStatus(
+    concierge.id,
+    'accepted',
+  );
+  assert.equal(conciergeAccepted.status, 'accepted');
+  const observed = await serviceRequestService.updateRequestNotes(
+    concierge.id,
+    'Mesa junto a ventana.',
+  );
+  assert.equal(observed.notes, 'Mesa junto a ventana.');
+  const inProgress = await serviceRequestService.updateRequestStatus(concierge.id, 'inProgress');
+  assert.equal(inProgress.status, 'inProgress');
+  const completed = await serviceRequestService.updateRequestStatus(concierge.id, 'completed');
+  assert.equal(completed.status, 'completed');
+
+  const rejectedConcierge = await serviceRequestService.createRequest({
+    bookingId: 'BKG-002',
+    roomId: 'RM-201',
+    guestId: 'GST-002',
+    type: 'concierge',
+    description: 'Traslado privado',
+  });
+  const conciergeRejected = await serviceRequestService.updateRequestStatus(
+    rejectedConcierge.id,
+    'rejected',
+    'Proveedor no disponible.',
+  );
+  assert.equal(conciergeRejected.status, 'rejected');
+  assert.equal(conciergeRejected.notes, 'Proveedor no disponible.');
+});

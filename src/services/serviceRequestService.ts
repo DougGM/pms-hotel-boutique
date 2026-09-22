@@ -166,6 +166,16 @@ export const serviceRequestService = {
     persistServiceRequestsDB();
     return toServiceRequest(request);
   },
+  async updateRequestNotes(id: ID, notes: string): Promise<ServiceRequest> {
+    await simulateLatency();
+    mockUtils.throwIfSimulatingError('No fue posible guardar la observacion de la solicitud.');
+
+    const request = assertRequestExists(id);
+    request.notes = notes.trim() || undefined;
+    request.updated_at = new Date().toISOString();
+    persistServiceRequestsDB();
+    return toServiceRequest(request);
+  },
   async cancelRequest(requestId: ID, guestId?: ID): Promise<ServiceRequest> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cancelar la solicitud.');
