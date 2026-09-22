@@ -42,6 +42,9 @@ documento resume el estado resultante, no el proceso para llegar a él.
 - Check-in de recepción (#70): acompanantes persistentes por reserva,
   documento del titular actualizable y habitación marcada como ocupada al
   completar check-in.
+- Check-out de recepcion (#71): el folio integra estancia, consumos, pagos y
+  depositos; bloquea salida con saldo pendiente y cierra cuenta/reserva enviando
+  la habitacion a limpieza cuando el saldo queda saldado.
 - Lote A implementado en rama apilada sobre WEB-14:
   `#51` (`OccupancyScreen`) muestra disponibilidad por fecha y estados reales
   de habitación/limpieza; `#52` (`ManualBookingScreen`) crea reservas manuales.
@@ -91,3 +94,7 @@ scripts y 238 pruebas; `test-services` cubre 16 casos, incluidos los siete
 métodos de WEB-14. Para #50/#51/#52 también se validan `typecheck`, `lint`,
 `build` y respuesta HTTP 200 en dev server para `/pms/occupancy` y
 `/pms/bookings/new`.
+
+Actualizacion 2026-09-21 (#71): el conteo documentado para esta rama es 12
+scripts y 259 pruebas; `test-services` cubre 20 casos incluyendo folio y
+check-out.

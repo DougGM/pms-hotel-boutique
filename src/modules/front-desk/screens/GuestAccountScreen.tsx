@@ -8,7 +8,7 @@ import { Input } from '@/shared/components/Input';
 import { LoadingState } from '@/shared/components/LoadingState';
 import { Modal } from '@/shared/components/Modal';
 import { guestAccountService } from '@/services/guestAccountService';
-import type { Charge, GuestAccount } from '@/shared/types/entities';
+import type { Charge, Deposit, GuestAccount, Payment } from '@/shared/types/entities';
 import { formatCurrency } from '@/shared/utils/currency';
 
 type FormErrors = { description?: string; amount?: string };
@@ -42,11 +42,16 @@ export function GuestAccountScreen() {
   const { accountId } = useParams<'accountId'>();
   const [account, setAccount] = useState<GuestAccount | null>(null);
   const [charges, setCharges] = useState<Charge[]>([]);
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [deposits, setDeposits] = useState<Deposit[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentReference, setPaymentReference] = useState('');
   const [formErrors, setFormErrors] = useState<FormErrors>({});
   const [isSaving, setIsSaving] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -68,14 +73,20 @@ export function GuestAccountScreen() {
       );
       if (!selectedAccount)
         throw new Error('No encontramos una cuenta para la estadía seleccionada.');
-      const selectedCharges = await guestAccountService.getChargesByBookingId(
-        selectedAccount.bookingId,
-      );
+      const [selectedCharges, selectedPayments, selectedDeposits] = await Promise.all([
+        guestAccountService.getChargesByBookingId(selectedAccount.bookingId),
+        guestAccountService.getPaymentsByBookingId(selectedAccount.bookingId),
+        guestAccountService.getDepositsByBookingId(selectedAccount.bookingId),
+      ]);
       setAccount(selectedAccount);
       setCharges(selectedCharges);
+      setPayments(selectedPayments);
+      setDeposits(selectedDeposits);
     } catch (cause: unknown) {
       setAccount(null);
       setCharges([]);
+      setPayments([]);
+      setDeposits([]);
       setError(cause instanceof Error ? cause.message : 'No fue posible cargar la cuenta.');
     } finally {
       setLoading(false);
@@ -129,8 +140,23 @@ export function GuestAccountScreen() {
     setIsModalOpen(true);
   }
 
+  function openPaymentModal() {
+    setPaymentAmount(
+      account?.balanceCents && account.balanceCents > 0 ? String(account.balanceCents / 100) : '',
+    );
+    setPaymentReference('');
+    setFormErrors({});
+    setSaveError(null);
+    setFeedback(null);
+    setIsPaymentModalOpen(true);
+  }
+
   function closeChargeModal() {
     if (!isSaving) setIsModalOpen(false);
+  }
+
+  function closePaymentModal() {
+    if (!isSaving) setIsPaymentModalOpen(false);
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -163,6 +189,41 @@ export function GuestAccountScreen() {
       setIsModalOpen(false);
     } catch (cause: unknown) {
       setSaveError(cause instanceof Error ? cause.message : 'No fue posible registrar el consumo.');
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function handlePaymentSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!account) return;
+
+    const nextErrors: FormErrors = {};
+    const amountCents = amountToCents(paymentAmount);
+    if (amountCents === null || amountCents < 1) nextErrors.amount = 'Ingresa un monto mayor a 0.';
+    setFormErrors(nextErrors);
+    setSaveError(null);
+    if (Object.keys(nextErrors).length > 0 || amountCents === null) return;
+
+    setIsSaving(true);
+    try {
+      const payment = await guestAccountService.createPayment({
+        booking_id: account.bookingId,
+        amount_cents: amountCents,
+        currency: account.currency,
+        method: 'cash',
+        transaction_reference: paymentReference.trim() || undefined,
+      });
+      setPayments((current) => [...current, payment]);
+      setAccount((current) =>
+        current
+          ? { ...current, balanceCents: current.balanceCents - payment.amountCents }
+          : current,
+      );
+      setFeedback(`Pago de ${formatCurrency(payment.amountCents, payment.currency)} aplicado.`);
+      setIsPaymentModalOpen(false);
+    } catch (cause: unknown) {
+      setSaveError(cause instanceof Error ? cause.message : 'No fue posible registrar el pago.');
     } finally {
       setIsSaving(false);
     }
@@ -214,6 +275,14 @@ export function GuestAccountScreen() {
           >
             Registrar consumo
           </button>
+          <button
+            className="button secondary"
+            type="button"
+            onClick={openPaymentModal}
+            disabled={account.status !== 'open'}
+          >
+            Registrar pago
+          </button>
         </div>
       </div>
 
@@ -236,6 +305,23 @@ export function GuestAccountScreen() {
             <p>Cargos registrados</p>
             <h2>{charges.length}</h2>
             <span>Desde {formatDate(account.openedAt)}</span>
+          </div>
+        </article>
+        <article className="metric-card">
+          <div>
+            <p>Créditos aplicados</p>
+            <h2>
+              {formatCurrency(
+                payments.reduce((total, payment) => total + payment.amountCents, 0) +
+                  deposits
+                    .filter((deposit) => deposit.status !== 'refunded')
+                    .reduce((total, deposit) => total + deposit.amountCents, 0),
+                account.currency,
+              )}
+            </h2>
+            <span>
+              {payments.length} pago(s) · {deposits.length} depósito(s)
+            </span>
           </div>
         </article>
       </div>
@@ -297,6 +383,50 @@ export function GuestAccountScreen() {
             </button>
             <button className="button primary" type="submit" disabled={isSaving}>
               {isSaving ? 'Guardando…' : 'Agregar a la cuenta'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal open={isPaymentModalOpen} onClose={closePaymentModal} title="Registrar pago">
+        <form onSubmit={handlePaymentSubmit} noValidate>
+          <Input
+            label="Monto (GTQ)"
+            type="number"
+            min="0.01"
+            step="0.01"
+            inputMode="decimal"
+            placeholder="0.00"
+            value={paymentAmount}
+            onChange={(event) => setPaymentAmount(event.target.value)}
+            error={formErrors.amount}
+            required
+            autoFocus
+            disabled={isSaving}
+          />
+          <Input
+            label="Referencia"
+            placeholder="Ej. recibo, autorización o nota de caja"
+            value={paymentReference}
+            onChange={(event) => setPaymentReference(event.target.value)}
+            disabled={isSaving}
+          />
+          {saveError && (
+            <div className="ui-state ui-state--error" role="alert">
+              <p className="ui-state__description">{saveError}</p>
+            </div>
+          )}
+          <div className="modal-foot">
+            <button
+              className="button secondary"
+              type="button"
+              onClick={closePaymentModal}
+              disabled={isSaving}
+            >
+              Cancelar
+            </button>
+            <button className="button primary" type="submit" disabled={isSaving}>
+              {isSaving ? 'Guardando…' : 'Aplicar pago'}
             </button>
           </div>
         </form>

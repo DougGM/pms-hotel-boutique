@@ -42,6 +42,14 @@ solo permite ejecutar `bookingService.checkOut` cuando la reserva está en
 `checkedIn`; los estados loading, error con reintento, listo y confirmado
 quedan reflejados en pantalla.
 
+**Actualizacion 2026-09-21 (#71):** el check-out ya no depende solo del estado
+de reserva. `CheckOutScreen` carga cargos, pagos y depositos; bloquea el cierre
+si el folio conserva `balance_cents !== 0` e informa el saldo actual. El cierre llama
+a `bookingService.checkOut`, que cierra el folio, pasa la reserva a
+`checkedOut` y devuelve la habitacion al flujo de limpieza (`available` +
+`dirty`). `GuestAccountScreen` permite registrar pagos en el folio ademas de
+consumos.
+
 **Actualización WEB-29 (2026-09-13):** `GuestAccountScreen` dejó de ser stub.
 Carga la cuenta por `GACC-*` y sus cargos por `booking_id`, muestra el desglose
 con saldo y estado, y permite registrar consumos mediante

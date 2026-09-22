@@ -5,6 +5,7 @@ import {
 } from '@/shared/types/entities/payment';
 import type { ID } from '@/shared/types/common';
 import { paymentsDB } from '@/data/db';
+import { guestAccountService } from './guestAccountService';
 import { mockUtils, requireCollection, simulateLatency } from './mockUtils';
 export const paymentService = {
   async getPaymentsByBookingId(bookingId: ID): Promise<Payment[]> {
@@ -15,17 +16,7 @@ export const paymentService = {
       .map(toPayment);
   },
   async addCharge(data: AddPaymentDto): Promise<Payment> {
-    await simulateLatency();
-    mockUtils.throwIfSimulatingError('No fue posible agregar el cargo.');
-    const dto = {
-      ...data,
-      id: `payment-${paymentsDB.length + 1}`,
-      method: 'cash' as const,
-      status: 'pending' as const,
-      created_at: new Date().toISOString(),
-    };
-    paymentsDB.push(dto);
-    return toPayment(dto);
+    return guestAccountService.createPayment(data);
   },
 };
 export default paymentService;

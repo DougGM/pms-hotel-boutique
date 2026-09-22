@@ -258,18 +258,18 @@ test('roomService.createRoom/updateRoom/getRoomTypes: escriben roomsDB y devuelv
 
 test('bookingService.checkIn/checkOut: validan transiciones con BOOKING_STATUS_TRANSITIONS', async () => {
   const checkedIn = await assertServiceCall('bookingService.checkIn', () =>
-    bookingService.checkIn('BKG-002'),
+    bookingService.checkIn('BKG-009'),
   );
   assert.equal(checkedIn.status, 'checkedIn');
 
   const checkedOut = await assertServiceCall('bookingService.checkOut', () =>
-    bookingService.checkOut('BKG-002'),
+    bookingService.checkOut('BKG-009'),
   );
   assert.equal(checkedOut.status, 'checkedOut');
 
   await assert.rejects(
-    () => bookingService.checkIn('BKG-002'),
-    /Transición inválida de reserva/,
+    () => bookingService.checkIn('BKG-009'),
+    /Transicion invalida de reserva/,
     'no debe permitir salir de checkedOut hacia checkedIn',
   );
 });
@@ -303,11 +303,15 @@ test('ciclo completo de una reserva nueva: crear, confirmar, check-in abre la cu
   const account = await guestAccountService.getAccountByBookingId(booking.id);
   assert.ok(account, 'el check-in debe crear la cuenta del huésped si no existía');
   assert.equal(account.status, 'open');
-  assert.equal(account.balanceCents, 0, 'la cuenta nueva nace con saldo cero');
+  assert.equal(
+    account.balanceCents,
+    booking.totalAmountCents,
+    'la cuenta nueva nace con el cargo base de estancia',
+  );
 
   await assert.rejects(
     () => bookingService.checkIn(booking.id),
-    /Transición inválida de reserva/,
+    /Transicion invalida de reserva/,
     'un segundo check-in sobre una reserva ya checkedIn debe rechazar, no duplicar la cuenta',
   );
 
@@ -318,6 +322,14 @@ test('ciclo completo de una reserva nueva: crear, confirmar, check-in abre la cu
     accountsForBooking.length,
     1,
     'no debe crear una segunda cuenta para la misma reserva',
+  );
+  const stayCharges = (await guestAccountService.getChargesByBookingId(booking.id)).filter(
+    (charge) => charge.category === 'stay' && charge.status !== 'voided',
+  );
+  assert.equal(
+    stayCharges.length,
+    booking.totalAmountCents > 0 ? 1 : 0,
+    'el cargo de estancia no debe duplicarse',
   );
 });
 
@@ -428,7 +440,7 @@ test('bookingService.assignRoom: asigna solo habitaciones asignables con isRoomA
 
   await assert.rejects(
     () => bookingService.assignRoom('BKG-010', 'RM-502'),
-    /no está disponible para asignación/,
+    /no esta disponible para asignacion/,
     'available + dirty no es asignable',
   );
 });
@@ -457,4 +469,64 @@ test('guestAccountService.createCharge: crea Charge y actualiza el balance guard
     guestAccountService.getAccountByBookingId('BKG-002'),
   );
   assert.equal(after.balanceCents, before.balanceCents + 2500);
+});
+
+test('check-out exige saldo exactamente cero, cierra folio y envia habitacion a limpieza', async () => {
+  const overpaid = await assertServiceCall(
+    'guestAccountService.getAccountByBookingId BKG-002',
+    () => guestAccountService.getAccountByBookingId('BKG-002'),
+  );
+  assert.ok(overpaid);
+  assert.ok(overpaid.balanceCents < 0, 'BKG-002 debe iniciar con saldo a favor');
+
+  await assert.rejects(
+    () => bookingService.checkOut('BKG-002'),
+    /exactamente en 0 centavos/,
+    'no debe permitir check-out con saldo negativo',
+  );
+
+  const before = await assertServiceCall('guestAccountService.getAccountByBookingId BKG-003', () =>
+    guestAccountService.getAccountByBookingId('BKG-003'),
+  );
+  assert.ok(before);
+  assert.ok(before.balanceCents > 0, 'BKG-003 debe iniciar con saldo pendiente');
+
+  await assert.rejects(
+    () => bookingService.checkOut('BKG-003'),
+    /exactamente en 0 centavos/,
+    'no debe permitir check-out con saldo pendiente',
+  );
+
+  const payment = await assertServiceCall('guestAccountService.createPayment', () =>
+    guestAccountService.createPayment({
+      booking_id: 'BKG-003',
+      amount_cents: before.balanceCents,
+      currency: before.currency,
+      method: 'cash',
+      transaction_reference: 'RCB-ISSUE-71',
+    }),
+  );
+  assert.equal(payment.status, 'completed');
+
+  const settled = await guestAccountService.getAccountByBookingId('BKG-003');
+  assert.equal(settled.balanceCents, 0);
+
+  const checkedOut = await assertServiceCall('bookingService.checkOut BKG-003', () =>
+    bookingService.checkOut('BKG-003'),
+  );
+  assert.equal(checkedOut.status, 'checkedOut');
+
+  const closed = await guestAccountService.getAccountByBookingId('BKG-003');
+  assert.equal(closed.status, 'closed');
+  assert.equal(closed.balanceCents, 0);
+
+  const room = await roomService.getRoomById('RM-301');
+  assert.equal(room.status, 'available');
+  assert.equal(room.housekeepingStatus, 'dirty');
+
+  await assert.rejects(
+    () => bookingService.checkOut('BKG-003'),
+    /ya esta cerrada|Transicion invalida/,
+    'no debe permitir un segundo check-out de la misma estancia',
+  );
 });

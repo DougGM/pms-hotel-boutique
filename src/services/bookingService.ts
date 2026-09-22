@@ -9,8 +9,8 @@ import { BOOKING_STATUS_TRANSITIONS, isRoomAssignable } from '@/shared/constants
 import { toDomainCalendarDate, type ID } from '@/shared/types/common';
 import { calculateNights } from '@/shared/utils/date';
 import { validateBookingCapacity } from '@/shared/utils/bookingCapacity';
-import type { GuestAccountDto } from '@/shared/types/entities/guest-account';
-import { bookingsDB, guestAccountsDB, ratesDB, roomsDB, roomTypesDB } from '@/data/db';
+import { bookingsDB, ratesDB, roomsDB, roomTypesDB } from '@/data/db';
+import { closeAccountForCheckout, openOrSyncAccountForBooking } from './guestAccountService';
 import { mockUtils, requireCollection, simulateLatency } from './mockUtils';
 
 function assertBookingExists(id: ID): BookingDto {
@@ -30,35 +30,6 @@ function assertBookingCapacity(data: Pick<BookingDto, 'room_type_id' | 'adults' 
     roomTypeName: roomType.name,
   });
   if (message) throw new Error(message);
-}
-
-function createGuestAccountId(): ID {
-  return `GACC-${String(guestAccountsDB.length + 1).padStart(3, '0')}`;
-}
-
-/**
- * El check-in es el único punto que abre la cuenta de una estadía — una
- * reserva que nunca llega al hotel no debe tener cuenta. Reutiliza la
- * cuenta si ya existe (reservas sembradas en el mock) en vez de duplicarla.
- */
-function ensureGuestAccount(booking: BookingDto): GuestAccountDto {
-  const existing = guestAccountsDB.find((item) => item.booking_id === booking.id);
-  if (existing) return existing;
-
-  const now = new Date().toISOString();
-  const account: GuestAccountDto = {
-    id: createGuestAccountId(),
-    booking_id: booking.id,
-    guest_id: booking.guest_id,
-    status: 'open',
-    balance_cents: 0,
-    currency: booking.currency,
-    opened_at: now,
-    created_at: now,
-    updated_at: now,
-  };
-  guestAccountsDB.push(account);
-  return account;
 }
 
 function toDomainStatus(status: BookingDto['status']): Booking['status'] {
@@ -84,7 +55,7 @@ function toDtoStatus(status: Booking['status']): BookingDto['status'] {
 function transitionBooking(booking: BookingDto, nextStatus: Booking['status']): Booking {
   const currentStatus = toDomainStatus(booking.status);
   if (!BOOKING_STATUS_TRANSITIONS[currentStatus].includes(nextStatus)) {
-    throw new Error(`Transición inválida de reserva: ${currentStatus} → ${nextStatus}.`);
+    throw new Error(`Transicion invalida de reserva: ${currentStatus} -> ${nextStatus}.`);
   }
 
   booking.status = toDtoStatus(nextStatus);
@@ -136,10 +107,10 @@ export const bookingService = {
     const booking = assertBookingExists(bookingId);
     const currentStatus = toDomainStatus(booking.status);
     if (!BOOKING_STATUS_TRANSITIONS[currentStatus].includes('checkedIn')) {
-      throw new Error(`Transición inválida de reserva: ${currentStatus} → checkedIn.`);
+      throw new Error(`Transicion invalida de reserva: ${currentStatus} -> checkedIn.`);
     }
 
-    ensureGuestAccount(booking);
+    openOrSyncAccountForBooking(booking);
     if (booking.room_id) {
       const room = roomsDB.find((item) => item.id === booking.room_id);
       if (room) {
@@ -152,7 +123,21 @@ export const bookingService = {
   async checkOut(bookingId: ID): Promise<Booking> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible hacer check-out.');
-    return transitionBooking(assertBookingExists(bookingId), 'checkedOut');
+
+    const booking = assertBookingExists(bookingId);
+    closeAccountForCheckout(booking);
+    const checkedOut = transitionBooking(booking, 'checkedOut');
+
+    if (booking.room_id) {
+      const room = roomsDB.find((item) => item.id === booking.room_id);
+      if (room) {
+        room.status = 'available';
+        room.housekeeping_status = 'dirty';
+        room.updated_at = new Date().toISOString();
+      }
+    }
+
+    return checkedOut;
   },
   async updateBooking(id: ID, data: UpdateBookingDto): Promise<Booking> {
     await simulateLatency();
@@ -199,15 +184,15 @@ export const bookingService = {
   },
   async assignRoom(bookingId: ID, roomId: ID): Promise<Booking> {
     await simulateLatency();
-    mockUtils.throwIfSimulatingError('No fue posible asignar la habitación.');
+    mockUtils.throwIfSimulatingError('No fue posible asignar la habitacion.');
 
     const booking = assertBookingExists(bookingId);
     const room = roomsDB.find((item) => item.id === roomId);
-    if (!room) throw new Error(`No existe la habitación ${roomId}.`);
+    if (!room) throw new Error(`No existe la habitacion ${roomId}.`);
 
     const status = room.status === 'out_of_service' ? 'outOfService' : room.status;
     if (!isRoomAssignable({ status, housekeepingStatus: room.housekeeping_status })) {
-      throw new Error(`La habitación ${roomId} no está disponible para asignación.`);
+      throw new Error(`La habitacion ${roomId} no esta disponible para asignacion.`);
     }
 
     booking.room_id = roomId;

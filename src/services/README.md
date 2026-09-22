@@ -79,6 +79,15 @@ adulto.
 `posted`, calcula `amount_cents = quantity * unit_price_cents` y actualiza el
 `balance_cents` guardado de la cuenta abierta de esa reserva.
 
+Actualizacion 2026-09-21 (#71): el folio es la fuente de verdad financiera de
+la estancia. `checkIn` abre/sincroniza la cuenta y crea el cargo base de
+estancia de forma idempotente con `category: 'stay'`; `createCharge`,
+`createPayment` y `voidCharge`
+recalculan `balance_cents` como cargos `posted` menos pagos `completed` menos
+depositos no `refunded`. `checkOut` bloquea si queda saldo pendiente; cuando el
+saldo esta exactamente en cero cierra la cuenta, marca la reserva como
+`checkedOut` y deja la habitacion `available` + `dirty` para limpieza.
+
 Actualizacion 2026-09-17: `guestService.createGuest(data)` crea huespedes demo
 en `guestsDB`, genera el siguiente ID `GST-*`, agrega timestamps y devuelve
 `Guest` de dominio. El motor publico de reservas lo usa para no pedir al
