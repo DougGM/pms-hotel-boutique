@@ -44,6 +44,9 @@ tipo `Currency` alternativo.
 regla compartida de capacidad de reservas: `adults + children <= roomType.capacity`.
 Los formularios la usan para feedback inmediato y `bookingService` la aplica
 antes de crear o actualizar una reserva, de modo que ningun flujo pueda saltarla.
+El check-in usa la misma regla para validar `booking-companion`: el titular
+cuenta como adulto y los acompañantes deben completar exactamente la composición
+`booking.adults/children` sin superar la capacidad del tipo de habitación.
 
 ### Fechas
 

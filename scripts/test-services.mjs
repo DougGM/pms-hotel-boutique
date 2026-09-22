@@ -53,6 +53,7 @@ await build({
   stdin: {
     contents: `
       export { bookingService } from './src/services/bookingService';
+      export { bookingCompanionService } from './src/services/bookingCompanionService';
       export { roomService } from './src/services/roomService';
       export { guestService } from './src/services/guestService';
       export { paymentService } from './src/services/paymentService';
@@ -63,7 +64,10 @@ await build({
       export { inventoryService } from './src/services/inventoryService';
       export { auditService } from './src/services/auditService';
       export { housekeepingService } from './src/services/housekeepingService';
+      export { orderService } from './src/services/orderService';
       export { serviceRequestService } from './src/services/serviceRequestService';
+      export { notificationService } from './src/services/notificationService';
+      export { notificationReadsDB } from './src/data/db';
       export { mockUtils } from './src/services/mockUtils';
     `,
     resolveDir: '.',
@@ -97,6 +101,7 @@ globalThis.localStorage = {
 
 const {
   bookingService,
+  bookingCompanionService,
   roomService,
   guestService,
   paymentService,
@@ -107,7 +112,10 @@ const {
   inventoryService,
   auditService,
   housekeepingService,
+  orderService,
   serviceRequestService,
+  notificationService,
+  notificationReadsDB,
   mockUtils,
 } = require(require.resolve('../.cache/services-harness.cjs'));
 
@@ -277,18 +285,18 @@ test('roomService.createRoom/updateRoom/getRoomTypes: escriben roomsDB y devuelv
 
 test('bookingService.checkIn/checkOut: validan transiciones con BOOKING_STATUS_TRANSITIONS', async () => {
   const checkedIn = await assertServiceCall('bookingService.checkIn', () =>
-    bookingService.checkIn('BKG-002'),
+    bookingService.checkIn('BKG-009'),
   );
   assert.equal(checkedIn.status, 'checkedIn');
 
   const checkedOut = await assertServiceCall('bookingService.checkOut', () =>
-    bookingService.checkOut('BKG-002'),
+    bookingService.checkOut('BKG-009'),
   );
   assert.equal(checkedOut.status, 'checkedOut');
 
   await assert.rejects(
-    () => bookingService.checkIn('BKG-002'),
-    /Transición inválida de reserva/,
+    () => bookingService.checkIn('BKG-009'),
+    /Transicion invalida de reserva/,
     'no debe permitir salir de checkedOut hacia checkedIn',
   );
 });
@@ -322,11 +330,15 @@ test('ciclo completo de una reserva nueva: crear, confirmar, check-in abre la cu
   const account = await guestAccountService.getAccountByBookingId(booking.id);
   assert.ok(account, 'el check-in debe crear la cuenta del huésped si no existía');
   assert.equal(account.status, 'open');
-  assert.equal(account.balanceCents, 0, 'la cuenta nueva nace con saldo cero');
+  assert.equal(
+    account.balanceCents,
+    booking.totalAmountCents,
+    'la cuenta nueva nace con el cargo base de estancia',
+  );
 
   await assert.rejects(
     () => bookingService.checkIn(booking.id),
-    /Transición inválida de reserva/,
+    /Transicion invalida de reserva/,
     'un segundo check-in sobre una reserva ya checkedIn debe rechazar, no duplicar la cuenta',
   );
 
@@ -337,6 +349,14 @@ test('ciclo completo de una reserva nueva: crear, confirmar, check-in abre la cu
     accountsForBooking.length,
     1,
     'no debe crear una segunda cuenta para la misma reserva',
+  );
+  const stayCharges = (await guestAccountService.getChargesByBookingId(booking.id)).filter(
+    (charge) => charge.category === 'stay' && charge.status !== 'voided',
+  );
+  assert.equal(
+    stayCharges.length,
+    booking.totalAmountCents > 0 ? 1 : 0,
+    'el cargo de estancia no debe duplicarse',
   );
 });
 
@@ -384,6 +404,61 @@ test('bookingService valida capacidad del tipo de habitacion al crear y editar',
   assert.equal(stillValid.roomTypeId, 'RT-01', 'una edicion invalida no debe mutar habitacion');
 });
 
+test('check-in de recepcion persiste acompanantes, titular y ocupacion de habitacion', async () => {
+  await assert.rejects(
+    () =>
+      bookingCompanionService.saveCompanionsForBooking('BKG-007', [
+        {
+          first_name: 'Acompanante',
+          last_name: 'Incorrecto',
+          document_type: 'national_id',
+          document_number: '1111 22222 0101',
+          guest_type: 'child',
+        },
+      ]),
+    /composicion/,
+    'BKG-007 espera un acompanante adulto, no un menor',
+  );
+
+  const companions = await assertServiceCall(
+    'bookingCompanionService.saveCompanionsForBooking',
+    () =>
+      bookingCompanionService.saveCompanionsForBooking('BKG-007', [
+        {
+          first_name: 'Marcos',
+          last_name: 'Rodas',
+          document_type: 'national_id',
+          document_number: '1234 56789 0101',
+          guest_type: 'adult',
+        },
+      ]),
+  );
+  assert.equal(companions.length, 1);
+  assert.equal(companions[0].bookingId, 'BKG-007');
+  assert.equal(companions[0].guestType, 'adult');
+
+  const updatedGuest = await assertServiceCall('guestService.updateGuest', () =>
+    guestService.updateGuest('GST-007', {
+      document_type: 'driver_license',
+      document_number: 'LIC-777',
+    }),
+  );
+  assert.equal(updatedGuest.documentType, 'driverLicense');
+  assert.equal(updatedGuest.documentNumber, 'LIC-777');
+
+  const checkedIn = await assertServiceCall('bookingService.checkIn BKG-007', () =>
+    bookingService.checkIn('BKG-007'),
+  );
+  assert.equal(checkedIn.status, 'checkedIn');
+
+  const room = await roomService.getRoomById('RM-203');
+  assert.equal(room.status, 'occupied', 'el check-in debe marcar la habitacion como ocupada');
+
+  const persisted = await bookingCompanionService.getCompanionsByBookingId('BKG-007');
+  assert.equal(persisted.length, 1);
+  assert.equal(persisted[0].documentNumber, '1234 56789 0101');
+});
+
 test('bookingService.assignRoom: asigna solo habitaciones asignables con isRoomAssignable', async () => {
   const booking = await assertServiceCall('bookingService.assignRoom', () =>
     bookingService.assignRoom('BKG-008', 'RM-403'),
@@ -392,7 +467,7 @@ test('bookingService.assignRoom: asigna solo habitaciones asignables con isRoomA
 
   await assert.rejects(
     () => bookingService.assignRoom('BKG-010', 'RM-502'),
-    /no está disponible para asignación/,
+    /no esta disponible para asignacion/,
     'available + dirty no es asignable',
   );
 });
@@ -444,8 +519,9 @@ test('housekeeping: persiste estado de habitacion, checklist, solicitudes y desp
 
   const pending = await assertServiceCall('serviceRequestService.createRequest', () =>
     serviceRequestService.createRequest({
-      booking_id: 'BKG-002',
-      room_id: 'RM-101',
+      bookingId: 'BKG-016',
+      roomId: 'RM-101',
+      guestId: 'GST-004',
       type: 'housekeeping',
       description: 'Toallas adicionales',
     }),
@@ -508,4 +584,162 @@ test('guestAccountService.createCharge: crea Charge y actualiza el balance guard
     guestAccountService.getAccountByBookingId('BKG-002'),
   );
   assert.equal(after.balanceCents, before.balanceCents + 2500);
+});
+
+test('check-out exige saldo exactamente cero, cierra folio y envia habitacion a limpieza', async () => {
+  const overpaid = await assertServiceCall(
+    'guestAccountService.getAccountByBookingId BKG-002',
+    () => guestAccountService.getAccountByBookingId('BKG-002'),
+  );
+  assert.ok(overpaid);
+  assert.ok(overpaid.balanceCents < 0, 'BKG-002 debe iniciar con saldo a favor');
+
+  await assert.rejects(
+    () => bookingService.checkOut('BKG-002'),
+    /exactamente en 0 centavos/,
+    'no debe permitir check-out con saldo negativo',
+  );
+
+  const before = await assertServiceCall('guestAccountService.getAccountByBookingId BKG-003', () =>
+    guestAccountService.getAccountByBookingId('BKG-003'),
+  );
+  assert.ok(before);
+  assert.ok(before.balanceCents > 0, 'BKG-003 debe iniciar con saldo pendiente');
+
+  await assert.rejects(
+    () => bookingService.checkOut('BKG-003'),
+    /exactamente en 0 centavos/,
+    'no debe permitir check-out con saldo pendiente',
+  );
+
+  const payment = await assertServiceCall('guestAccountService.createPayment', () =>
+    guestAccountService.createPayment({
+      booking_id: 'BKG-003',
+      amount_cents: before.balanceCents,
+      currency: before.currency,
+      method: 'cash',
+      transaction_reference: 'RCB-ISSUE-71',
+    }),
+  );
+  assert.equal(payment.status, 'completed');
+
+  const settled = await guestAccountService.getAccountByBookingId('BKG-003');
+  assert.equal(settled.balanceCents, 0);
+
+  const checkedOut = await assertServiceCall('bookingService.checkOut BKG-003', () =>
+    bookingService.checkOut('BKG-003'),
+  );
+  assert.equal(checkedOut.status, 'checkedOut');
+
+  const closed = await guestAccountService.getAccountByBookingId('BKG-003');
+  assert.equal(closed.status, 'closed');
+  assert.equal(closed.balanceCents, 0);
+
+  const room = await roomService.getRoomById('RM-301');
+  assert.equal(room.status, 'available');
+  assert.equal(room.housekeepingStatus, 'dirty');
+
+  await assert.rejects(
+    () => bookingService.checkOut('BKG-003'),
+    /ya esta cerrada|Transicion invalida/,
+    'no debe permitir un segundo check-out de la misma estancia',
+  );
+});
+
+test('portal de huesped persiste pedidos, solicitudes, perfil y notificaciones', async () => {
+  const order = await assertServiceCall('orderService.createOrder', () =>
+    orderService.createOrder({
+      bookingId: 'BKG-002',
+      roomId: 'RM-201',
+      guestId: 'GST-002',
+      items: [{ productId: 'PRD-001', quantity: 2 }],
+      notes: 'Sin hielo.',
+    }),
+  );
+  assert.equal(order.bookingId, 'BKG-002');
+  assert.equal(order.guestId, 'GST-002');
+  assert.equal(order.status, 'pending');
+  assert.equal(order.items[0].unitPriceCents, 1500);
+
+  const guestOrders = await orderService.getOrdersByGuestId('GST-002');
+  assert.ok(
+    guestOrders.some((item) => item.id === order.id),
+    'el pedido creado debe sobrevivir una recarga desde el servicio',
+  );
+
+  const cancelledOrder = await assertServiceCall('orderService.cancelOrder', () =>
+    orderService.cancelOrder(order.id, 'GST-002'),
+  );
+  assert.equal(cancelledOrder.status, 'cancelled');
+  await assert.rejects(
+    () => orderService.cancelOrder('ORD-001', 'GST-002'),
+    /no pertenece/,
+    'un huesped no debe cancelar pedidos de otra reserva',
+  );
+
+  const request = await assertServiceCall('serviceRequestService.createRequest', () =>
+    serviceRequestService.createRequest({
+      bookingId: 'BKG-002',
+      roomId: 'RM-201',
+      guestId: 'GST-002',
+      type: 'housekeeping',
+      description: 'Toallas extra',
+    }),
+  );
+  assert.equal(request.status, 'pending');
+  assert.equal(request.guestId, 'GST-002');
+
+  const guestRequests = await serviceRequestService.getRequestsByGuestId('GST-002');
+  assert.ok(
+    guestRequests.some((item) => item.id === request.id),
+    'la solicitud creada debe sobrevivir una recarga desde el servicio',
+  );
+
+  const cancelledRequest = await assertServiceCall('serviceRequestService.cancelRequest', () =>
+    serviceRequestService.cancelRequest(request.id, 'GST-002'),
+  );
+  assert.equal(cancelledRequest.status, 'rejected');
+  await assert.rejects(
+    () => serviceRequestService.cancelRequest('SR-001', 'GST-002'),
+    /no pertenece/,
+    'un huesped no debe cancelar solicitudes de otra reserva',
+  );
+
+  const updatedGuest = await assertServiceCall('guestService.updateGuest portal', () =>
+    guestService.updateGuest('GST-002', {
+      phone: '+502 5555-7272',
+      nationality: 'Guatemalteca',
+    }),
+  );
+  assert.equal(updatedGuest.phone, '+502 5555-7272');
+  assert.equal((await guestService.getGuestById('GST-002')).phone, '+502 5555-7272');
+
+  const notifications = await notificationService.getNotificationsByGuestId('GST-002');
+  assert.ok(notifications.length > 0);
+  const unread = notifications.find((item) => !item.read) ?? notifications[0];
+  const marked = await notificationService.markNotificationRead('GST-002', unread.id);
+  assert.equal(marked.read, true);
+  assert.ok(
+    notificationReadsDB.some(
+      (item) => item.guest_id === 'GST-002' && item.notification_id === unread.id,
+    ),
+    'la marca de lectura debe persistir en notificationReadsDB',
+  );
+  const reloaded = await notificationService.getNotificationsByGuestId('GST-002');
+  assert.equal(
+    reloaded.find((item) => item.id === unread.id)?.read,
+    true,
+    'la marca de lectura debe sobrevivir una recarga desde notificationService',
+  );
+
+  const beforeMarkAllCount = notificationReadsDB.filter(
+    (item) => item.guest_id === 'GST-002',
+  ).length;
+  await notificationService.markAllRead('GST-002');
+  const afterMarkAll = await notificationService.getNotificationsByGuestId('GST-002');
+  assert.ok(afterMarkAll.every((item) => item.read));
+  assert.ok(
+    notificationReadsDB.filter((item) => item.guest_id === 'GST-002').length >= beforeMarkAllCount,
+    'markAllRead debe conservar las marcas en notificationReadsDB',
+  );
 });

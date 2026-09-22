@@ -1,4 +1,5 @@
 import type { ID } from '@/shared/types/common';
+import { notificationReadsDB } from '@/data/db';
 import { orderService } from './orderService';
 import { serviceRequestService } from './serviceRequestService';
 
@@ -16,6 +17,30 @@ export interface Notification {
   category: 'service' | 'order';
   read: boolean;
   occurredAt: Date;
+}
+
+function isNotificationRead(guestId: ID, notification: Notification): boolean {
+  return (
+    notification.read ||
+    notificationReadsDB.some(
+      (item) => item.guest_id === guestId && item.notification_id === notification.id,
+    )
+  );
+}
+
+function markReadInDb(guestId: ID, notificationId: ID) {
+  const existing = notificationReadsDB.find(
+    (item) => item.guest_id === guestId && item.notification_id === notificationId,
+  );
+  if (existing) {
+    existing.read_at = new Date().toISOString();
+    return;
+  }
+  notificationReadsDB.push({
+    guest_id: guestId,
+    notification_id: notificationId,
+    read_at: new Date().toISOString(),
+  });
 }
 
 function requestTitle(status: string): string {
@@ -63,9 +88,25 @@ export const notificationService = {
       occurredAt: order.requestedAt,
     }));
 
-    return [...fromRequests, ...fromOrders].sort(
-      (left, right) => right.occurredAt.getTime() - left.occurredAt.getTime(),
-    );
+    return [...fromRequests, ...fromOrders]
+      .map((notification) => ({
+        ...notification,
+        read: isNotificationRead(guestId, notification),
+      }))
+      .sort((left, right) => right.occurredAt.getTime() - left.occurredAt.getTime());
+  },
+  async markNotificationRead(guestId: ID, notificationId: ID): Promise<Notification> {
+    const notifications = await this.getNotificationsByGuestId(guestId);
+    const notification = notifications.find((item) => item.id === notificationId);
+    if (!notification) throw new Error(`No existe la notificacion ${notificationId}.`);
+
+    markReadInDb(guestId, notificationId);
+    return { ...notification, read: true };
+  },
+  async markAllRead(guestId: ID): Promise<Notification[]> {
+    const notifications = await this.getNotificationsByGuestId(guestId);
+    notifications.forEach((notification) => markReadInDb(guestId, notification.id));
+    return notifications.map((notification) => ({ ...notification, read: true }));
   },
 };
 export default notificationService;

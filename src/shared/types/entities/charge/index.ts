@@ -1,3 +1,9 @@
-export type { ChargeDTO, ChargeDto, ChargeStatusDto, CreateChargeDto } from './charge.dto';
-export type { Charge, ChargeStatus } from './charge.model';
+export type {
+  ChargeCategoryDto,
+  ChargeDTO,
+  ChargeDto,
+  ChargeStatusDto,
+  CreateChargeDto,
+} from './charge.dto';
+export type { Charge, ChargeCategory, ChargeStatus } from './charge.model';
 export { toDomain, toDTO } from './charge.mapper';

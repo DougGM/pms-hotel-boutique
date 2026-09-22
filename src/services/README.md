@@ -39,8 +39,9 @@ export function RoomsView() {
 ```
 
 Servicios disponibles: `authService`, `roomService`, `bookingService`,
-`guestService`, `paymentService`, `catalogService`, `guestAccountService`,
-`cashService`, `personnelService`, `inventoryService` y `auditService`. Las
+`bookingCompanionService`, `guestService`, `paymentService`, `catalogService`,
+`guestAccountService`, `cashService`, `personnelService`, `inventoryService`,
+`auditService`, `orderService`, `serviceRequestService` y `notificationService`. Las
 operaciones de creación reciben los DTOs de entrada definidos en
 `src/shared/types/entities`; sus respuestas siempre son modelos de dominio.
 Todos leen de `src/data/db.ts`, la única "base de datos" simulada del
@@ -61,20 +62,50 @@ timestamps y devuelven `Room` de dominio; `getRoomTypes()` devuelve
 
 `bookingService` expone `checkIn(bookingId)`, `checkOut(bookingId)` y
 `assignRoom(bookingId, roomId)`. `checkIn`/`checkOut` validan contra
-`BOOKING_STATUS_TRANSITIONS`; una transición inválida lanza error. `assignRoom`
-solo asigna habitaciones que `isRoomAssignable()` considera aptas.
+`BOOKING_STATUS_TRANSITIONS`; una transición inválida lanza error. `checkIn`
+abre/reutiliza la cuenta de huésped y marca la habitación asignada como
+`occupied`. `assignRoom` solo asigna habitaciones que `isRoomAssignable()`
+considera aptas.
 `createBooking(data)` y `updateBooking(id, data)` validan la capacidad maxima
 del tipo de habitacion antes de persistir: `adults + children` no puede superar
 `roomType.capacity`, pero una reserva exactamente igual a la capacidad es valida.
+
+`bookingCompanionService` expone `getCompanionsByBookingId(bookingId)` y
+`saveCompanionsForBooking(bookingId, data)`. Persiste acompañantes en
+`bookingCompanionsDB`, valida campos requeridos, capacidad de la habitación y
+coherencia con `booking.adults/children` contando al huésped principal como un
+adulto.
 
 `guestAccountService.createCharge(data)` crea un `Charge` real, lo marca como
 `posted`, calcula `amount_cents = quantity * unit_price_cents` y actualiza el
 `balance_cents` guardado de la cuenta abierta de esa reserva.
 
+Actualizacion 2026-09-21 (#71): el folio es la fuente de verdad financiera de
+la estancia. `checkIn` abre/sincroniza la cuenta y crea el cargo base de
+estancia de forma idempotente con `category: 'stay'`; `createCharge`,
+`createPayment` y `voidCharge`
+recalculan `balance_cents` como cargos `posted` menos pagos `completed` menos
+depositos no `refunded`. `checkOut` bloquea si queda saldo pendiente; cuando el
+saldo esta exactamente en cero cierra la cuenta, marca la reserva como
+`checkedOut` y deja la habitacion `available` + `dirty` para limpieza.
+
 Actualizacion 2026-09-17: `guestService.createGuest(data)` crea huespedes demo
 en `guestsDB`, genera el siguiente ID `GST-*`, agrega timestamps y devuelve
 `Guest` de dominio. El motor publico de reservas lo usa para no pedir al
 usuario un ID interno antes de crear la reserva.
+`guestService.updateGuest(id, data)` permite conservar cambios válidos del
+titular capturados durante recepción/check-in.
+
+Actualizacion 2026-09-22 (#72): el portal de huesped ya no confirma acciones
+solo en estado local. `orderService.createOrder()` persiste pedidos de Room
+Service contra `booking_id`/`room_id`/`guest_id`, valida productos activos y
+`cancelOrder()` solo permite cancelar pedidos `pending` o `accepted` del mismo
+huesped. `serviceRequestService.createRequest()` y `cancelRequest()` hacen lo
+mismo para solicitudes de habitacion; la cancelacion de solicitudes se
+representa con el estado contractual `rejected` en `service_request`.
+`notificationService.markNotificationRead()` y `markAllRead()` conservan las
+marcas de lectura en `notificationReadsDB`, dentro de `src/data/db.ts`, sin
+crear una entidad `notification` propia.
 
 Actualizacion 2026-09-22 (#73): las operaciones de Limpieza que antes vivian
 solo en estado React ahora persisten en `localStorage` mediante la capa de

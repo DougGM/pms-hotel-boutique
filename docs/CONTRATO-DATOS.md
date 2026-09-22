@@ -64,7 +64,7 @@ siempre son Models.
 - `CreateBookingDto`: `guest_id`, `room_type_id`, `rate_id?`, `check_in`,
   `check_out`, `adults`, `children`, `notes?`.
 - `CreateChargeDto`: `booking_id`, `product_id?`, `description`, `quantity`,
-  `unit_price_cents`, `currency`, `charged_at?`, `created_by_user_id?`. El
+  `unit_price_cents`, `currency`, `category?`, `charged_at?`, `created_by_user_id?`. El
   servicio calcula `amount_cents` y fija `status: 'posted'`.
 
 Servicios habilitados por WEB-14:
@@ -72,11 +72,22 @@ Servicios habilitados por WEB-14:
 - `roomService.createRoom`, `roomService.updateRoom`, `roomService.getRoomTypes`.
 - `bookingService.checkIn`, `bookingService.checkOut`,
   `bookingService.assignRoom`.
-- `guestAccountService.createCharge`.
+- `bookingCompanionService.getCompanionsByBookingId`,
+  `bookingCompanionService.saveCompanionsForBooking`.
+- `guestAccountService.createCharge`, `guestAccountService.createPayment`,
+  `guestAccountService.voidCharge`.
 
 `checkIn`/`checkOut` aplican `BOOKING_STATUS_TRANSITIONS`; `assignRoom` usa
-`isRoomAssignable()`; `createCharge` actualiza el `balance_cents` guardado de
-la cuenta abierta.
+`isRoomAssignable()`. El folio calcula `balance_cents` como cargos activos
+menos pagos completados menos depositos no reembolsados. `createCharge`,
+`createPayment` y `voidCharge` recalculan ese saldo guardado.
+`checkIn` marca la habitacion asignada como `occupied`. Los acompañantes se
+persisten por reserva y se validan contra capacidad y composición de adultos/
+niños antes de completar check-in.
+
+`checkOut` se bloquea si `balance_cents !== 0`; solo con saldo exactamente en cero cierra el folio,
+marca la reserva como `checked_out` y deja la habitacion `available` con
+`housekeeping_status: 'dirty'`.
 
 ## 3. Entidad por entidad
 
@@ -264,6 +275,47 @@ ante recepción.
 }
 ```
 
+### 3.4b `booking_companion` — web / recepción
+
+Acompañante registrado durante check-in. El huésped principal sigue siendo
+`booking.guest_id`; los acompañantes no son cuentas de usuario ni reemplazan al
+titular. Se relacionan con la reserva mediante `booking_id`.
+
+Reglas:
+
+- `1 huésped principal + booking_companion[] <= roomType.capacity`.
+- El huésped principal cuenta como adulto.
+- `companions adult === booking.adults - 1`.
+- `companions child === booking.children`.
+
+| Campo DTO         | Tipo                                      | Descripción                    |
+| ----------------- | ----------------------------------------- | ------------------------------ |
+| `id`              | `string`                                  |                                |
+| `booking_id`      | `string`                                  | FK a `booking`                 |
+| `first_name`      | `string`                                  |                                |
+| `last_name`       | `string`                                  |                                |
+| `document_type`   | `'passport' \| 'national_id' \| 'driver_license'` |                 |
+| `document_number` | `string`                                  |                                |
+| `guest_type`      | `'adult' \| 'child'`                      | Composición de la reserva      |
+| `created_at`      | `string` (timestamp)                      |                                |
+| `updated_at`      | `string` (timestamp)                      |                                |
+
+Ejemplo DTO:
+
+```json
+{
+  "id": "BCMP-001",
+  "booking_id": "BKG-003",
+  "first_name": "Lucia",
+  "last_name": "Gomez",
+  "document_type": "national_id",
+  "document_number": "3012 77890 0101",
+  "guest_type": "adult",
+  "created_at": "2026-09-07T14:00:00.000Z",
+  "updated_at": "2026-09-07T14:00:00.000Z"
+}
+```
+
 ### 3.5 `product` — compartida
 
 | Campo DTO         | Tipo                                                            | Descripción              |
@@ -444,7 +496,7 @@ No las necesita móvil. Se listan solo por completitud del inventario:
 - **`rate`**: tarifa por tipo de habitación y vigencia (`room_type_id`,
   `valid_from`/`valid_to`, `price_cents`, `minimum_nights`, `refundable`).
 - **`charge`**: cargo a la cuenta de una reserva (`booking_id`,
-  `product_id?`, `quantity`, `unit_price_cents`, `amount_cents`, `status`,
+  `product_id?`, `quantity`, `unit_price_cents`, `amount_cents`, `category?`, `status`,
   `void_reason?` — **nuevo**, el motivo cuando `status === 'voided'`; el
   registro original se conserva, nunca se borra). Es el destino de
   `order.charge_id`/`service_request.charge_id`. Ya tiene dataset real y
@@ -483,6 +535,12 @@ directamente, no un `account_id` nuevo.
 | `opened_at` | `string` (timestamp) | |
 | `closed_at?` | `string` (timestamp) | Solo si `status === 'closed'` |
 | `created_at` / `updated_at` | `string` | |
+
+Regla vigente #71: `balance_cents` se recalcula como cargos `posted` menos
+pagos `completed` menos depositos no `refunded`. El cargo base de estancia se
+identifica con `charge.category === 'stay'` y se crea de forma idempotente al
+abrir/sincronizar el folio; consumos operativos usan `category: 'consumption'`.
+El check-out exige `balance_cents === 0`.
 
 ```json
 {

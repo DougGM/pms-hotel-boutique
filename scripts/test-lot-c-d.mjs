@@ -36,6 +36,7 @@ const {
   guestAccountsDB,
   chargesDB,
   paymentsDB,
+  depositsDB,
   cashSessionsDB,
   cashMovementsDB,
   inventoryItemsDB,
@@ -48,7 +49,7 @@ const { isAmenityOpenAt } = load('shared/utils/amenitySchedule');
 
 // --- A. Cuentas del huésped: cargos - pagos = saldo -----------------------
 
-test('guestAccount: balance_cents coincide con cargos (no anulados) menos pagos completados', () => {
+test('guestAccount: balance_cents coincide con cargos menos pagos y depositos activos', () => {
   for (const account of guestAccountsDB) {
     const charges = chargesDB.filter(
       (charge) => charge.booking_id === account.booking_id && charge.status !== 'voided',
@@ -56,12 +57,16 @@ test('guestAccount: balance_cents coincide con cargos (no anulados) menos pagos 
     const payments = paymentsDB.filter(
       (payment) => payment.booking_id === account.booking_id && payment.status === 'completed',
     );
+    const deposits = depositsDB.filter(
+      (deposit) => deposit.booking_id === account.booking_id && deposit.status !== 'refunded',
+    );
     const chargesTotal = charges.reduce((sum, charge) => sum + charge.amount_cents, 0);
     const paymentsTotal = payments.reduce((sum, payment) => sum + payment.amount_cents, 0);
+    const depositsTotal = deposits.reduce((sum, deposit) => sum + deposit.amount_cents, 0);
     assert.equal(
       account.balance_cents,
-      chargesTotal - paymentsTotal,
-      `${account.id}: balance_cents guardado (${account.balance_cents}) no coincide con cargos (${chargesTotal}) - pagos (${paymentsTotal})`,
+      chargesTotal - paymentsTotal - depositsTotal,
+      `${account.id}: balance_cents guardado (${account.balance_cents}) no coincide con cargos (${chargesTotal}) - pagos (${paymentsTotal}) - depositos (${depositsTotal})`,
     );
   }
 });

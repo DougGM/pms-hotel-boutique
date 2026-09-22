@@ -1,6 +1,7 @@
 import type { Currency } from '@/shared/types/common';
 
 export type ChargeStatusDto = 'pending' | 'posted' | 'voided';
+export type ChargeCategoryDto = 'stay' | 'consumption';
 
 export interface ChargeDTO {
   id: string;
@@ -11,6 +12,7 @@ export interface ChargeDTO {
   unit_price_cents: number;
   amount_cents: number;
   currency: Currency;
+  category?: ChargeCategoryDto;
   status: ChargeStatusDto;
   charged_at: string;
   created_by_user_id?: string;
@@ -28,6 +30,7 @@ export interface CreateChargeDto {
   quantity: number;
   unit_price_cents: number;
   currency: Currency;
+  category?: ChargeCategoryDto;
   charged_at?: string;
   created_by_user_id?: string;
 }

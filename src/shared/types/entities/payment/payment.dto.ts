@@ -22,4 +22,8 @@ export interface AddPaymentDto {
   booking_id: string;
   amount_cents: number;
   currency: Currency;
+  method?: PaymentMethodDto;
+  transaction_reference?: string;
+  paid_at?: string;
+  processed_by_user_id?: string;
 }

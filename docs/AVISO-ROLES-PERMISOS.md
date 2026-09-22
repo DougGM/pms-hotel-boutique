@@ -67,7 +67,9 @@ Todas usan la contrasena publica de demo `AuroraDemo2026!`.
 
 ## Notas de alcance
 
-- `GUEST` ya puede iniciar sesion, pero el portal de huesped sigue pendiente.
+- `GUEST` inicia sesion y entra al portal de huesped. El portal usa servicios
+  mock para reservas, pedidos, solicitudes, perfil y notificaciones; no es
+  autenticacion de produccion.
 - `CONCIERGE` se conserva como literal interno; la UI puede mostrar
   "Conserjeria" para mantener el termino hotelero.
 - No mezclar `HOUSEKEEPING` con `CONCIERGE`: limpieza y conserjeria son flujos

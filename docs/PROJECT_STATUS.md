@@ -31,14 +31,20 @@ documento resume el estado resultante, no el proceso para llegar a él.
   camelCase). Moneda en quetzal, montos como entero en centavos,
   `formatCurrency`/`formatDateGT`/`formatTimeGT` como únicas funciones de
   formato.
-- Servicios (`bookingService`, `roomService`, `guestService`,
-  `paymentService`, `catalogService`, `guestAccountService`, `cashService`,
+- Servicios (`bookingService`, `bookingCompanionService`, `roomService`,
+  `guestService`, `paymentService`, `catalogService`, `guestAccountService`, `cashService`,
   `personnelService`, `inventoryService`, `auditService`, `authService`) async,
   con latencia simulada y forzado de error; todos leen de `src/data/db.ts`,
   salvo `authService`, que además persiste la sesión en `localStorage`.
 - WEB-14 implementado: `roomService.createRoom/updateRoom/getRoomTypes`,
   `bookingService.checkIn/checkOut/assignRoom` y
   `guestAccountService.createCharge`.
+- Check-in de recepción (#70): acompanantes persistentes por reserva,
+  documento del titular actualizable y habitación marcada como ocupada al
+  completar check-in.
+- Check-out de recepcion (#71): el folio integra estancia, consumos, pagos y
+  depositos; bloquea salida con saldo pendiente y cierra cuenta/reserva enviando
+  la habitacion a limpieza cuando el saldo queda saldado.
 - Lote A implementado en rama apilada sobre WEB-14:
   `#51` (`OccupancyScreen`) muestra disponibilidad por fecha y estados reales
   de habitación/limpieza; `#52` (`ManualBookingScreen`) crea reservas manuales.
@@ -88,3 +94,7 @@ scripts y 238 pruebas; `test-services` cubre 16 casos, incluidos los siete
 métodos de WEB-14. Para #50/#51/#52 también se validan `typecheck`, `lint`,
 `build` y respuesta HTTP 200 en dev server para `/pms/occupancy` y
 `/pms/bookings/new`.
+
+Actualizacion 2026-09-21 (#71): el conteo documentado para esta rama es 12
+scripts y 259 pruebas; `test-services` cubre 20 casos incluyendo folio y
+check-out.
