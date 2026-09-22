@@ -563,6 +563,17 @@ Room Service no requiere un cobro manual separado: cuando un pedido pasa a
 de esa habitacion y el pedido queda marcado como cargado. Si el pedido se
 cancela o rechaza antes de entregarse, no genera cargo.
 
+Actualizacion 2026-09-22 (#74): ese cargo no es una entrada visual local. La
+transicion a `delivered` pasa por `orderService.updateOrderStatus()`, crea un
+`Charge` real en la cuenta abierta de la reserva con
+`guestAccountService.createCharge()` y guarda el `charge_id` en el pedido. Si
+la operacion se reintenta con el mismo pedido entregado, se reutiliza el mismo
+`charge_id` y no se duplica el folio. El creador del cargo solo se guarda si
+la operacion recibe un `createdByUserId` real del directorio operativo
+(`USR-*`); si no existe ese contexto, el cargo queda automatico sin usuario
+inventado. Conserjeria conserva sus estados, motivos y observaciones en
+`serviceRequestService`.
+
 ### Qué NO hacer
 
 - No restaurar el login de Bolt: el login profesional actual es el contrato.

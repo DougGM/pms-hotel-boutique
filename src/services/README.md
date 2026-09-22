@@ -120,6 +120,18 @@ Los reportes de desperfectos se asocian solo a una reserva real confirmada o
 en check-in para la habitacion; si no existe, el servicio rechaza la operacion
 en vez de crear un `booking_id` ficticio.
 
+Actualizacion 2026-09-22 (#74): Room Service y Conserjeria ya no dependen de
+`setState` para aceptar, rechazar, cancelar, observar o completar. Los pedidos
+usan `orderService.updateOrderStatus()` y `updateOrderNotes()` sobre
+`PMS_ORDERS_DB`; al pasar a `delivered` crean exactamente un `Charge` real en
+el folio abierto con `guestAccountService.createCharge()` y guardan su
+`charge_id`. Si el caller envia un `createdByUserId` operativo real, el cargo
+lo conserva; si no, queda como cargo automatico sin inventar usuario creador.
+Reintentar `delivered` conserva el mismo cargo; `rejected` y `cancelled` no
+crean cargos. Conserjeria usa
+`serviceRequestService.updateRequestStatus()` y `updateRequestNotes()` sobre
+`PMS_SERVICE_REQUESTS_DB` para conservar estados, motivos y observaciones.
+
 ## Forzar errores mock
 
 1. En código: `mockUtils.setForceError(true)` y, al terminar la prueba,

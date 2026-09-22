@@ -20,9 +20,29 @@ import type { BookingDto } from '@/shared/types/entities/booking';
 import type { ID } from '@/shared/types/common';
 import { chargesDB, depositsDB, guestAccountsDB, paymentsDB } from '@/data/db';
 import { mockUtils, requireCollection, simulateLatency } from './mockUtils';
+import { hydrateCollection, persistCollection } from './mockPersistence';
+
+const guestAccountsStorageKey = 'PMS_GUEST_ACCOUNTS_DB';
+const chargesStorageKey = 'PMS_CHARGES_DB';
+
+function getGuestAccountsDB(): GuestAccountDto[] {
+  return hydrateCollection(guestAccountsStorageKey, guestAccountsDB);
+}
+
+function persistGuestAccountsDB(): void {
+  persistCollection(guestAccountsStorageKey, guestAccountsDB);
+}
+
+function getChargesDB(): ChargeDto[] {
+  return hydrateCollection(chargesStorageKey, chargesDB);
+}
+
+function persistChargesDB(): void {
+  persistCollection(chargesStorageKey, chargesDB);
+}
 
 function createChargeId(): ID {
-  return `CHG-${String(chargesDB.length + 1).padStart(3, '0')}`;
+  return `CHG-${String(getChargesDB().length + 1).padStart(3, '0')}`;
 }
 
 function createPaymentId(): ID {
@@ -34,7 +54,7 @@ function isStayCharge(charge: ChargeDto): boolean {
 }
 
 export function calculateAccountBalanceCents(bookingId: ID): number {
-  const chargesTotal = chargesDB
+  const chargesTotal = getChargesDB()
     .filter((charge) => charge.booking_id === bookingId && charge.status === 'posted')
     .reduce((sum, charge) => sum + charge.amount_cents, 0);
   const paymentsTotal = paymentsDB
@@ -50,12 +70,13 @@ export function calculateAccountBalanceCents(bookingId: ID): number {
 function syncAccountBalance(account: GuestAccountDto, now = new Date().toISOString()) {
   account.balance_cents = calculateAccountBalanceCents(account.booking_id);
   account.updated_at = now;
+  persistGuestAccountsDB();
 }
 
 function ensureStayCharge(booking: BookingDto, now = new Date().toISOString()): ChargeDto | null {
   if (booking.total_amount_cents <= 0) return null;
 
-  const existingStayTotal = chargesDB
+  const existingStayTotal = getChargesDB()
     .filter(
       (charge) =>
         charge.booking_id === booking.id && charge.status !== 'voided' && isStayCharge(charge),
@@ -76,17 +97,18 @@ function ensureStayCharge(booking: BookingDto, now = new Date().toISOString()): 
     charged_at: now,
     created_at: now,
   };
-  chargesDB.push(charge);
+  getChargesDB().push(charge);
+  persistChargesDB();
   return charge;
 }
 
 export function openOrSyncAccountForBooking(booking: BookingDto): GuestAccountDto {
   const now = new Date().toISOString();
-  let account = guestAccountsDB.find((item) => item.booking_id === booking.id);
+  let account = getGuestAccountsDB().find((item) => item.booking_id === booking.id);
 
   if (!account) {
     account = {
-      id: `GACC-${String(guestAccountsDB.length + 1).padStart(3, '0')}`,
+      id: `GACC-${String(getGuestAccountsDB().length + 1).padStart(3, '0')}`,
       booking_id: booking.id,
       guest_id: booking.guest_id,
       status: 'open',
@@ -96,7 +118,8 @@ export function openOrSyncAccountForBooking(booking: BookingDto): GuestAccountDt
       created_at: now,
       updated_at: now,
     };
-    guestAccountsDB.push(account);
+    getGuestAccountsDB().push(account);
+    persistGuestAccountsDB();
   }
 
   if (account.status !== 'open') {
@@ -110,7 +133,7 @@ export function openOrSyncAccountForBooking(booking: BookingDto): GuestAccountDt
 
 export function closeAccountForCheckout(booking: BookingDto): GuestAccountDto {
   const now = new Date().toISOString();
-  const account = guestAccountsDB.find((item) => item.booking_id === booking.id);
+  const account = getGuestAccountsDB().find((item) => item.booking_id === booking.id);
   if (!account) throw new Error(`No existe una cuenta para la reserva ${booking.id}.`);
   if (account.status !== 'open') {
     throw new Error(`La cuenta de la reserva ${booking.id} ya esta cerrada.`);
@@ -127,6 +150,7 @@ export function closeAccountForCheckout(booking: BookingDto): GuestAccountDto {
   account.status = 'closed';
   account.closed_at = now;
   account.updated_at = now;
+  persistGuestAccountsDB();
   return account;
 }
 
@@ -135,23 +159,23 @@ export const guestAccountService = {
   async getAccounts(): Promise<GuestAccount[]> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar las cuentas de huesped.');
-    return requireCollection(guestAccountsDB, 'guestAccountsDB').map(toGuestAccount);
+    return requireCollection(getGuestAccountsDB(), 'guestAccountsDB').map(toGuestAccount);
   },
   async getAccountByBookingId(bookingId: ID): Promise<GuestAccount | undefined> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar la cuenta del huesped.');
-    const account = guestAccountsDB.find((item) => item.booking_id === bookingId);
+    const account = getGuestAccountsDB().find((item) => item.booking_id === bookingId);
     return account ? toGuestAccount(account) : undefined;
   },
   async getCharges(): Promise<Charge[]> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar los cargos.');
-    return requireCollection(chargesDB, 'chargesDB').map(toCharge);
+    return requireCollection(getChargesDB(), 'chargesDB').map(toCharge);
   },
   async getChargesByBookingId(bookingId: ID): Promise<Charge[]> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar los cargos.');
-    return requireCollection(chargesDB, 'chargesDB')
+    return requireCollection(getChargesDB(), 'chargesDB')
       .filter((item) => item.booking_id === bookingId)
       .map(toCharge);
   },
@@ -159,7 +183,7 @@ export const guestAccountService = {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible crear el cargo.');
 
-    const account = guestAccountsDB.find((item) => item.booking_id === data.booking_id);
+    const account = getGuestAccountsDB().find((item) => item.booking_id === data.booking_id);
     if (!account) throw new Error(`No existe una cuenta para la reserva ${data.booking_id}.`);
     if (account.status !== 'open') {
       throw new Error(`La cuenta de la reserva ${data.booking_id} no esta abierta.`);
@@ -177,7 +201,8 @@ export const guestAccountService = {
       created_at: now,
     };
 
-    chargesDB.push(charge);
+    getChargesDB().push(charge);
+    persistChargesDB();
     syncAccountBalance(account, now);
     return toCharge(charge);
   },
@@ -185,12 +210,12 @@ export const guestAccountService = {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible anular el cargo.');
 
-    const charge = chargesDB.find((item) => item.id === chargeId);
+    const charge = getChargesDB().find((item) => item.id === chargeId);
     if (!charge) throw new Error(`No existe el cargo ${chargeId}.`);
     if (charge.status === 'voided') throw new Error(`El cargo ${chargeId} ya esta anulado.`);
     if (!reason.trim()) throw new Error('Se requiere un motivo para anular el cargo.');
 
-    const account = guestAccountsDB.find((item) => item.booking_id === charge.booking_id);
+    const account = getGuestAccountsDB().find((item) => item.booking_id === charge.booking_id);
     if (!account) throw new Error(`No existe una cuenta para la reserva ${charge.booking_id}.`);
     if (account.status !== 'open') {
       throw new Error('No se puede anular un cargo de una cuenta cerrada.');
@@ -198,6 +223,7 @@ export const guestAccountService = {
 
     charge.status = 'voided';
     charge.void_reason = reason.trim();
+    persistChargesDB();
     syncAccountBalance(account);
     return toCharge(charge);
   },
@@ -217,7 +243,7 @@ export const guestAccountService = {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible registrar el pago.');
 
-    const account = guestAccountsDB.find((item) => item.booking_id === data.booking_id);
+    const account = getGuestAccountsDB().find((item) => item.booking_id === data.booking_id);
     if (!account) throw new Error(`No existe una cuenta para la reserva ${data.booking_id}.`);
     if (account.status !== 'open') {
       throw new Error(`La cuenta de la reserva ${data.booking_id} no esta abierta.`);

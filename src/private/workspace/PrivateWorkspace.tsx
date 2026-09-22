@@ -60,9 +60,14 @@ import { ErrorState } from '@/shared/components/ErrorState';
 import { LoadingState } from '@/shared/components/LoadingState';
 import { toDomainCalendarDate, toDtoCalendarDate } from '@/shared/types/common';
 import { calculateNights } from '@/shared/utils/date';
-import type { RoomHousekeepingStatus } from '@/shared/constants/statuses';
+import type {
+  OrderStatus as DomainOrderStatus,
+  RoomHousekeepingStatus,
+  ServiceRequestStatus,
+} from '@/shared/constants/statuses';
 import type { AuditLog } from '@/shared/types/entities/audit-log';
 import type { Booking } from '@/shared/types/entities/booking';
+import type { Charge } from '@/shared/types/entities/charge';
 import type { Guest } from '@/shared/types/entities/guest';
 import type { Order } from '@/shared/types/entities/order';
 import type { Product } from '@/shared/types/entities/product';
@@ -158,6 +163,8 @@ export type OrderStatus =
   | 'Cancelado';
 export type RoomServiceOrder = {
   id: number;
+  orderId: string;
+  bookingId: string;
   room: string;
   guest: string;
   time: string;
@@ -166,11 +173,13 @@ export type RoomServiceOrder = {
   note: string;
   rejectionReason: string;
   charged: boolean;
+  chargeId?: string;
 };
 
 export type ConciergeStatus = 'Pendiente' | 'Aceptada' | 'En proceso' | 'Completada' | 'Rechazada';
 type ConciergeRequest = {
   id: number;
+  requestId: string;
   room: string;
   guest: string;
   time: string;
@@ -223,6 +232,7 @@ export type FolioEntry = {
 
 export type Reservation = {
   id: number;
+  bookingId?: string;
   code: string;
   guest: GuestInfo;
   companions: Companion[];
@@ -382,6 +392,31 @@ const mapOrderStatus = (status: string): OrderStatus => {
   return statuses[status] ?? 'Pendiente';
 };
 
+const toDomainOrderStatus = (status: OrderStatus): DomainOrderStatus => {
+  const statuses: Record<OrderStatus, DomainOrderStatus> = {
+    Pendiente: 'pending',
+    Aceptado: 'accepted',
+    'En preparación': 'preparing',
+    Listo: 'ready',
+    'En camino': 'onTheWay',
+    Entregado: 'delivered',
+    Rechazado: 'rejected',
+    Cancelado: 'cancelled',
+  };
+  return statuses[status];
+};
+
+const toDomainConciergeStatus = (status: ConciergeStatus): ServiceRequestStatus => {
+  const statuses: Record<ConciergeStatus, ServiceRequestStatus> = {
+    Pendiente: 'pending',
+    Aceptada: 'accepted',
+    'En proceso': 'inProgress',
+    Completada: 'completed',
+    Rechazada: 'rejected',
+  };
+  return statuses[status];
+};
+
 const mapServiceStatus = (status: string): GuestRequest['status'] => {
   if (status === 'completed') return 'Completada';
   if (status === 'accepted' || status === 'inProgress') return 'En proceso';
@@ -507,6 +542,7 @@ async function loadWorkspaceData(): Promise<WorkspaceState> {
 
     return {
       id: index + 1,
+      bookingId: booking.id,
       code: booking.confirmationCode,
       checkIn: toDtoCalendarDate(booking.checkIn),
       checkOut: toDtoCalendarDate(booking.checkOut),
@@ -556,6 +592,8 @@ async function loadWorkspaceData(): Promise<WorkspaceState> {
 
     return {
       id: parseDbId(order.id, index + 1),
+      orderId: order.id,
+      bookingId: order.bookingId,
       room: room?.roomNumber ?? 'Sin habitación',
       guest: guest ? `${guest.firstName} ${guest.lastName}` : 'Huésped',
       time: formatDbTime(order.requestedAt),
@@ -570,7 +608,8 @@ async function loadWorkspaceData(): Promise<WorkspaceState> {
       status: mapOrderStatus(order.status),
       note: order.notes ?? '',
       rejectionReason: order.status === 'rejected' ? (order.notes ?? '') : '',
-      charged: order.status === 'delivered',
+      charged: Boolean(order.chargeId),
+      chargeId: order.chargeId,
     };
   });
 
@@ -681,6 +720,7 @@ async function loadWorkspaceData(): Promise<WorkspaceState> {
       const guest = guests.find((item) => item.id === request.guestId);
       return {
         id: parseDbId(request.id, index + 1),
+        requestId: request.id,
         room: room?.roomNumber ?? 'Sin habitación',
         guest: guest ? `${guest.firstName} ${guest.lastName}` : 'Huésped',
         time: formatDbTime(request.requestedAt),
@@ -1070,6 +1110,7 @@ function PrivateWorkspaceReady({
     status: 'Todos',
   });
   const [recSearch, setRecSearch] = useState('');
+  const operationalUserId = sessionUserId?.startsWith('USR-') ? sessionUserId : undefined;
   const hkDetailRoom =
     hkDetailRoomId !== null ? (hkRooms.find((r) => r.id === hkDetailRoomId) ?? null) : null;
   const rsSelectedOrder =
@@ -1532,24 +1573,29 @@ function PrivateWorkspaceReady({
     }
   };
 
-  const addRoomServiceChargeToFolio = (order: RoomServiceOrder) => {
-    const concept = `Room service — Pedido #${order.id}`;
-    const amount = order.items.reduce((sum, item) => sum + item.quantity * item.price, 0);
+  const addRoomServiceChargeToFolio = (order: RoomServiceOrder, charge: Charge) => {
     setRecReservationList((current) =>
       current.map((reservation) => {
         const isActiveStay = !['Cancelada', 'Anulada', 'Check-out'].includes(reservation.status);
-        if (reservation.roomNumber !== order.room || !isActiveStay) return reservation;
-        if (reservation.folio.some((entry) => entry.concept === concept)) return reservation;
+        if (
+          reservation.roomNumber !== order.room ||
+          (reservation.bookingId !== undefined && reservation.bookingId !== order.bookingId) ||
+          !isActiveStay
+        ) {
+          return reservation;
+        }
+        if (reservation.folio.some((entry) => entry.id === parseDbId(charge.id, 0)))
+          return reservation;
         return {
           ...reservation,
           folio: [
             ...reservation.folio,
             {
-              id: Date.now() + order.id,
-              concept,
+              id: parseDbId(charge.id, Date.now() + order.id),
+              concept: charge.description,
               category: 'Room service',
-              amount,
-              date: toDtoCalendarDate(new Date()),
+              amount: centsToAmount(charge.amountCents),
+              date: toDtoCalendarDate(charge.chargedAt),
               type: 'Cargo' as const,
               status: 'Activo' as const,
             },
@@ -1559,82 +1605,197 @@ function PrivateWorkspaceReady({
     );
   };
 
-  const updateRoomServiceOrder = (orderId: number, status: OrderStatus) => {
+  const updateRoomServiceOrder = async (orderId: number, status: OrderStatus) => {
     const order = rsOrders.find((item) => item.id === orderId);
-    if (status === 'Entregado' && order && !order.charged) {
-      addRoomServiceChargeToFolio(order);
+    if (!order) return;
+
+    try {
+      const updated = await orderService.updateOrderStatus(
+        order.orderId,
+        toDomainOrderStatus(status),
+        order.note,
+        { createdByUserId: operationalUserId },
+      );
+
+      if (status === 'Entregado' && updated.chargeId) {
+        const charges = await guestAccountService.getChargesByBookingId(order.bookingId);
+        const charge = charges.find((item) => item.id === updated.chargeId);
+        if (charge) addRoomServiceChargeToFolio(order, charge);
+      }
+
+      setRsOrders((current) =>
+        current.map((item) =>
+          item.id === orderId
+            ? {
+                ...item,
+                status,
+                charged: Boolean(updated.chargeId),
+                chargeId: updated.chargeId,
+                note: updated.notes ?? item.note,
+              }
+            : item,
+        ),
+      );
+      notify(
+        status === 'Entregado'
+          ? `Pedido #${orderId} entregado y cargado al folio`
+          : `Pedido #${orderId} actualizado: ${status}`,
+      );
+    } catch (cause) {
+      notifyError(cause);
     }
-    setRsOrders((current) =>
-      current.map((item) =>
-        item.id === orderId
-          ? { ...item, status, charged: status === 'Entregado' ? true : item.charged }
-          : item,
-      ),
-    );
-    notify(
-      status === 'Entregado'
-        ? `Pedido #${orderId} entregado y cargado al folio`
-        : `Pedido #${orderId} actualizado: ${status}`,
-    );
   };
 
-  const updateRoomServiceNote = (orderId: number, note: string) => {
-    setRsOrders((current) =>
-      current.map((order) => (order.id === orderId ? { ...order, note } : order)),
-    );
-    notify('Observación guardada');
+  const updateRoomServiceNote = async (orderId: number, note: string) => {
+    const order = rsOrders.find((item) => item.id === orderId);
+    if (!order) return;
+
+    try {
+      const updated = await orderService.updateOrderNotes(order.orderId, note);
+      setRsOrders((current) =>
+        current.map((item) =>
+          item.id === orderId ? { ...item, note: updated.notes ?? '' } : item,
+        ),
+      );
+      notify('Observación guardada');
+    } catch (cause) {
+      notifyError(cause);
+    }
   };
 
-  const rejectRoomServiceOrder = (orderId: number, reason: string) => {
-    setRsOrders((current) =>
-      current.map((order) =>
-        order.id === orderId ? { ...order, status: 'Rechazado', rejectionReason: reason } : order,
-      ),
-    );
-    notify(`Pedido #${orderId} rechazado`);
+  const rejectRoomServiceOrder = async (orderId: number, reason: string) => {
+    const order = rsOrders.find((item) => item.id === orderId);
+    if (!order) return;
+
+    try {
+      const updated = await orderService.updateOrderStatus(order.orderId, 'rejected', reason);
+      setRsOrders((current) =>
+        current.map((item) =>
+          item.id === orderId
+            ? {
+                ...item,
+                status: 'Rechazado',
+                rejectionReason: reason,
+                note: updated.notes ?? item.note,
+                charged: Boolean(updated.chargeId),
+                chargeId: updated.chargeId,
+              }
+            : item,
+        ),
+      );
+      notify(`Pedido #${orderId} rechazado`);
+    } catch (cause) {
+      notifyError(cause);
+    }
   };
 
-  const cancelRoomServiceOrder = (orderId: number, reason: string) => {
-    setRsOrders((current) =>
-      current.map((order) =>
-        order.id === orderId ? { ...order, status: 'Cancelado', rejectionReason: reason } : order,
-      ),
-    );
-    notify(`Pedido #${orderId} cancelado`);
+  const cancelRoomServiceOrder = async (orderId: number, reason: string) => {
+    const order = rsOrders.find((item) => item.id === orderId);
+    if (!order) return;
+
+    try {
+      const noted = await orderService.updateOrderNotes(order.orderId, reason);
+      const updated = await orderService.cancelOrder(order.orderId);
+      setRsOrders((current) =>
+        current.map((item) =>
+          item.id === orderId
+            ? {
+                ...item,
+                status: 'Cancelado',
+                rejectionReason: reason,
+                note: noted.notes ?? item.note,
+                charged: Boolean(updated.chargeId),
+                chargeId: updated.chargeId,
+              }
+            : item,
+        ),
+      );
+      notify(`Pedido #${orderId} cancelado`);
+    } catch (cause) {
+      notifyError(cause);
+    }
   };
 
-  const updateConciergeStatus = (requestId: number, status: ConciergeStatus) => {
-    setCgRequests((current) =>
-      current.map((req) =>
-        req.id === requestId
-          ? {
-              ...req,
-              status,
-              completedAt:
-                status === 'Completada'
-                  ? new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
-                  : req.completedAt,
-            }
-          : req,
-      ),
-    );
-    notify(`Solicitud #${requestId} actualizada: ${status}`);
+  const updateConciergeStatus = async (requestId: number, status: ConciergeStatus) => {
+    const request = cgRequests.find((item) => item.id === requestId);
+    if (!request) return;
+
+    try {
+      const updated = await serviceRequestService.updateRequestStatus(
+        request.requestId,
+        toDomainConciergeStatus(status),
+        request.observation,
+      );
+      setCgRequests((current) =>
+        current.map((req) =>
+          req.id === requestId
+            ? {
+                ...req,
+                status,
+                observation: updated.notes ?? req.observation,
+                completedAt:
+                  status === 'Completada'
+                    ? new Date().toLocaleTimeString('es-MX', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })
+                    : req.completedAt,
+              }
+            : req,
+        ),
+      );
+      notify(`Solicitud #${requestId} actualizada: ${status}`);
+    } catch (cause) {
+      notifyError(cause);
+    }
   };
 
-  const updateConciergeObservation = (requestId: number, observation: string) => {
-    setCgRequests((current) =>
-      current.map((req) => (req.id === requestId ? { ...req, observation } : req)),
-    );
-    notify('Observación guardada correctamente');
+  const updateConciergeObservation = async (requestId: number, observation: string) => {
+    const request = cgRequests.find((item) => item.id === requestId);
+    if (!request) return;
+
+    try {
+      const updated = await serviceRequestService.updateRequestNotes(
+        request.requestId,
+        observation,
+      );
+      setCgRequests((current) =>
+        current.map((req) =>
+          req.id === requestId ? { ...req, observation: updated.notes ?? '' } : req,
+        ),
+      );
+      notify('Observación guardada correctamente');
+    } catch (cause) {
+      notifyError(cause);
+    }
   };
 
-  const rejectConciergeRequest = (requestId: number, reason: string) => {
-    setCgRequests((current) =>
-      current.map((req) =>
-        req.id === requestId ? { ...req, status: 'Rechazada', rejectionReason: reason } : req,
-      ),
-    );
-    notify(`Solicitud #${requestId} rechazada`);
+  const rejectConciergeRequest = async (requestId: number, reason: string) => {
+    const request = cgRequests.find((item) => item.id === requestId);
+    if (!request) return;
+
+    try {
+      const updated = await serviceRequestService.updateRequestStatus(
+        request.requestId,
+        'rejected',
+        reason,
+      );
+      setCgRequests((current) =>
+        current.map((req) =>
+          req.id === requestId
+            ? {
+                ...req,
+                status: 'Rechazada',
+                rejectionReason: reason,
+                observation: updated.notes ?? req.observation,
+              }
+            : req,
+        ),
+      );
+      notify(`Solicitud #${requestId} rechazada`);
+    } catch (cause) {
+      notifyError(cause);
+    }
   };
 
   const recUpdateReservation = (id: number, updates: Partial<Reservation>) => {
