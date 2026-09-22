@@ -99,12 +99,12 @@ export function CheckOutScreen() {
 
   function openConfirm() {
     if (!canCheckOut || isCheckingOut) return;
-    if (account && account.balanceCents > 0) {
+    if (account && account.balanceCents !== 0) {
       setError(
-        `No se puede hacer check-out: queda pendiente ${formatCurrency(
-          account.balanceCents,
+        `No se puede hacer check-out: el saldo debe quedar exactamente en ${formatCurrency(
+          0,
           account.currency,
-        )}.`,
+        )}. Saldo actual: ${formatCurrency(account.balanceCents, account.currency)}.`,
       );
       return;
     }
@@ -136,8 +136,8 @@ export function CheckOutScreen() {
   const canTransitionToCheckedOut = booking
     ? BOOKING_STATUS_TRANSITIONS[booking.status].includes('checkedOut')
     : false;
-  const hasPendingBalance = account ? account.balanceCents > 0 : true;
-  const canCheckOut = canTransitionToCheckedOut && !hasPendingBalance;
+  const hasNonZeroBalance = account ? account.balanceCents !== 0 : true;
+  const canCheckOut = canTransitionToCheckedOut && !hasNonZeroBalance;
   const chargesTotalCents = charges.reduce((total, charge) => total + charge.amountCents, 0);
   const paymentsTotalCents = payments.reduce((total, payment) => total + payment.amountCents, 0);
   const depositsTotalCents = deposits
@@ -202,11 +202,12 @@ export function CheckOutScreen() {
         </div>
       )}
 
-      {account.balanceCents > 0 && (
+      {account.balanceCents !== 0 && (
         <div className="ui-state ui-state--warning" role="alert">
           <p className="ui-state__description">
-            Falta liquidar {formatCurrency(account.balanceCents, account.currency)} antes de cerrar
-            la estancia.
+            El saldo debe quedar exactamente en {formatCurrency(0, account.currency)} antes de
+            cerrar la estancia. Saldo actual:{' '}
+            {formatCurrency(account.balanceCents, account.currency)}.
           </p>
         </div>
       )}
@@ -287,8 +288,8 @@ export function CheckOutScreen() {
               <p>
                 {canCheckOut
                   ? 'Lista para confirmar la salida.'
-                  : hasPendingBalance
-                    ? 'Tiene saldo pendiente antes de check-out.'
+                  : hasNonZeroBalance
+                    ? 'El saldo debe quedar exactamente en cero.'
                     : 'Esta reserva no permite check-out.'}
               </p>
             </div>

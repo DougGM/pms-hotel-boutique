@@ -44,7 +44,7 @@ quedan reflejados en pantalla.
 
 **Actualizacion 2026-09-21 (#71):** el check-out ya no depende solo del estado
 de reserva. `CheckOutScreen` carga cargos, pagos y depositos; bloquea el cierre
-si el folio conserva `balance_cents > 0` e informa el pendiente. El cierre llama
+si el folio conserva `balance_cents !== 0` e informa el saldo actual. El cierre llama
 a `bookingService.checkOut`, que cierra el folio, pasa la reserva a
 `checkedOut` y devuelve la habitacion al flujo de limpieza (`available` +
 `dirty`). `GuestAccountScreen` permite registrar pagos en el folio ademas de

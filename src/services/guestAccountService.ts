@@ -30,9 +30,7 @@ function createPaymentId(): ID {
 }
 
 function isStayCharge(charge: ChargeDto): boolean {
-  return (
-    charge.description.startsWith('Estancia base') || charge.description.startsWith('Hospedaje')
-  );
+  return charge.category === 'stay';
 }
 
 export function calculateAccountBalanceCents(bookingId: ID): number {
@@ -73,6 +71,7 @@ function ensureStayCharge(booking: BookingDto, now = new Date().toISOString()): 
     unit_price_cents: booking.total_amount_cents,
     amount_cents: booking.total_amount_cents,
     currency: booking.currency,
+    category: 'stay',
     status: 'posted',
     charged_at: now,
     created_at: now,
@@ -119,9 +118,9 @@ export function closeAccountForCheckout(booking: BookingDto): GuestAccountDto {
 
   ensureStayCharge(booking, now);
   syncAccountBalance(account, now);
-  if (account.balance_cents > 0) {
+  if (account.balance_cents !== 0) {
     throw new Error(
-      `No se puede hacer check-out: quedan ${account.balance_cents} centavos pendientes.`,
+      `No se puede hacer check-out: el saldo debe quedar exactamente en 0 centavos; saldo actual ${account.balance_cents} centavos.`,
     );
   }
 
@@ -172,6 +171,7 @@ export const guestAccountService = {
       ...data,
       id: createChargeId(),
       amount_cents: amountCents,
+      category: data.category ?? 'consumption',
       status: 'posted',
       charged_at: data.charged_at ?? now,
       created_at: now,

@@ -258,17 +258,17 @@ test('roomService.createRoom/updateRoom/getRoomTypes: escriben roomsDB y devuelv
 
 test('bookingService.checkIn/checkOut: validan transiciones con BOOKING_STATUS_TRANSITIONS', async () => {
   const checkedIn = await assertServiceCall('bookingService.checkIn', () =>
-    bookingService.checkIn('BKG-002'),
+    bookingService.checkIn('BKG-009'),
   );
   assert.equal(checkedIn.status, 'checkedIn');
 
   const checkedOut = await assertServiceCall('bookingService.checkOut', () =>
-    bookingService.checkOut('BKG-002'),
+    bookingService.checkOut('BKG-009'),
   );
   assert.equal(checkedOut.status, 'checkedOut');
 
   await assert.rejects(
-    () => bookingService.checkIn('BKG-002'),
+    () => bookingService.checkIn('BKG-009'),
     /Transicion invalida de reserva/,
     'no debe permitir salir de checkedOut hacia checkedIn',
   );
@@ -324,10 +324,7 @@ test('ciclo completo de una reserva nueva: crear, confirmar, check-in abre la cu
     'no debe crear una segunda cuenta para la misma reserva',
   );
   const stayCharges = (await guestAccountService.getChargesByBookingId(booking.id)).filter(
-    (charge) =>
-      (charge.description.startsWith('Estancia base') ||
-        charge.description.startsWith('Hospedaje')) &&
-      charge.status !== 'voided',
+    (charge) => charge.category === 'stay' && charge.status !== 'voided',
   );
   assert.equal(
     stayCharges.length,
@@ -450,13 +447,13 @@ test('bookingService.assignRoom: asigna solo habitaciones asignables con isRoomA
 
 test('guestAccountService.createCharge: crea Charge y actualiza el balance guardado', async () => {
   const before = await assertServiceCall('guestAccountService.getAccountByBookingId', () =>
-    guestAccountService.getAccountByBookingId('BKG-009'),
+    guestAccountService.getAccountByBookingId('BKG-002'),
   );
   assert.ok(before);
 
   const charge = await assertServiceCall('guestAccountService.createCharge', () =>
     guestAccountService.createCharge({
-      booking_id: 'BKG-009',
+      booking_id: 'BKG-002',
       description: 'Cargo de prueba WEB-14',
       quantity: 2,
       unit_price_cents: 1250,
@@ -469,12 +466,25 @@ test('guestAccountService.createCharge: crea Charge y actualiza el balance guard
   assert.ok(!('amount_cents' in charge), 'createCharge debe devolver Model, no DTO');
 
   const after = await assertServiceCall('guestAccountService.getAccountByBookingId', () =>
-    guestAccountService.getAccountByBookingId('BKG-009'),
+    guestAccountService.getAccountByBookingId('BKG-002'),
   );
   assert.equal(after.balanceCents, before.balanceCents + 2500);
 });
 
-test('check-out bloquea saldo pendiente, cierra folio y envia habitacion a limpieza', async () => {
+test('check-out exige saldo exactamente cero, cierra folio y envia habitacion a limpieza', async () => {
+  const overpaid = await assertServiceCall(
+    'guestAccountService.getAccountByBookingId BKG-002',
+    () => guestAccountService.getAccountByBookingId('BKG-002'),
+  );
+  assert.ok(overpaid);
+  assert.ok(overpaid.balanceCents < 0, 'BKG-002 debe iniciar con saldo a favor');
+
+  await assert.rejects(
+    () => bookingService.checkOut('BKG-002'),
+    /exactamente en 0 centavos/,
+    'no debe permitir check-out con saldo negativo',
+  );
+
   const before = await assertServiceCall('guestAccountService.getAccountByBookingId BKG-003', () =>
     guestAccountService.getAccountByBookingId('BKG-003'),
   );
@@ -483,7 +493,7 @@ test('check-out bloquea saldo pendiente, cierra folio y envia habitacion a limpi
 
   await assert.rejects(
     () => bookingService.checkOut('BKG-003'),
-    /pendientes/,
+    /exactamente en 0 centavos/,
     'no debe permitir check-out con saldo pendiente',
   );
 
