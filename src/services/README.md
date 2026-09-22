@@ -85,6 +85,9 @@ de desperfectos (`maintenance`) y cambia estados de solicitudes en
 checklist, tiempos e historial operativo en `PMS_HOUSEKEEPING_STORE`. Los
 handlers del workspace esperan estos metodos antes de mostrar mensajes de
 exito, por lo que un error conserva el estado anterior visible.
+Los reportes de desperfectos se asocian solo a una reserva real confirmada o
+en check-in para la habitacion; si no existe, el servicio rechaza la operacion
+en vez de crear un `booking_id` ficticio.
 
 ## Forzar errores mock
 

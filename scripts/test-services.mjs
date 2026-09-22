@@ -470,7 +470,18 @@ test('housekeeping: persiste estado de habitacion, checklist, solicitudes y desp
   );
   assert.equal(defect.type, 'maintenance');
   assert.equal(defect.status, 'pending');
+  assert.equal(defect.bookingId, 'BKG-016');
   assert.match(storageValues.get('PMS_SERVICE_REQUESTS_DB'), /Lampara sin funcionar/);
+
+  await assert.rejects(
+    () =>
+      serviceRequestService.createMaintenanceReport({
+        roomId: 'RM-102',
+        description: 'Reporte sin estancia activa',
+      }),
+    /No existe una reserva activa/,
+    'un reporte de mantenimiento no debe inventar booking_id si no hay reserva real',
+  );
 });
 
 test('guestAccountService.createCharge: crea Charge y actualiza el balance guardado', async () => {

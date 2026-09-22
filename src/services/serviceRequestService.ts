@@ -38,14 +38,12 @@ function ensureValidTransition(current: ServiceRequestStatus, next: ServiceReque
   }
 }
 
-function findBookingIdForRoom(roomId: ID): ID {
-  return (
-    bookingsDB.find(
-      (booking) =>
-        booking.room_id === roomId &&
-        (booking.status === 'checked_in' || booking.status === 'confirmed'),
-    )?.id ?? 'BKG-HOUSEKEEPING'
-  );
+function findActiveBookingIdForRoom(roomId: ID): ID | undefined {
+  return bookingsDB.find(
+    (booking) =>
+      booking.room_id === roomId &&
+      (booking.status === 'checked_in' || booking.status === 'confirmed'),
+  )?.id;
 }
 
 export const serviceRequestService = {
@@ -94,8 +92,15 @@ export const serviceRequestService = {
     description: string;
     notes?: string;
   }): Promise<ServiceRequest> {
+    const bookingId = findActiveBookingIdForRoom(data.roomId);
+    if (!bookingId) {
+      throw new Error(
+        `No existe una reserva activa para la habitacion ${data.roomId}; no se creo el reporte de mantenimiento.`,
+      );
+    }
+
     return this.createRequest({
-      booking_id: findBookingIdForRoom(data.roomId),
+      booking_id: bookingId,
       room_id: data.roomId,
       type: 'maintenance',
       description: data.description,
