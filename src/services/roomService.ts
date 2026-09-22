@@ -17,9 +17,20 @@ import {
 import type { ID } from '@/shared/types/common';
 import { ratesDB, roomFeaturesDB, roomTypesDB, roomsDB } from '@/data/db';
 import { mockUtils, requireCollection, simulateLatency } from './mockUtils';
+import { hydrateCollection, persistCollection } from './mockPersistence';
+
+const roomsStorageKey = 'PMS_ROOMS_DB';
+
+function getRoomsDB(): RoomDto[] {
+  return hydrateCollection(roomsStorageKey, roomsDB);
+}
+
+function persistRoomsDB(): void {
+  persistCollection(roomsStorageKey, roomsDB);
+}
 
 function createRoomId(): ID {
-  return `RM-${String(roomsDB.length + 1).padStart(3, '0')}`;
+  return `RM-${String(getRoomsDB().length + 1).padStart(3, '0')}`;
 }
 
 function createRoomTypeId(): ID {
@@ -40,12 +51,12 @@ export const roomService = {
   async getRooms(): Promise<Room[]> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar las habitaciones.');
-    return requireCollection(roomsDB, 'roomsDB').map(toRoom);
+    return requireCollection(getRoomsDB(), 'roomsDB').map(toRoom);
   },
   async getRoomById(id: ID): Promise<Room | undefined> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar la habitación.');
-    const room = roomsDB.find((item) => item.id === id);
+    const room = getRoomsDB().find((item) => item.id === id);
     return room ? toRoom(room) : undefined;
   },
   async createRoom(data: CreateRoomDto): Promise<Room> {
@@ -64,17 +75,19 @@ export const roomService = {
       created_at: now,
       updated_at: now,
     };
-    roomsDB.push(room);
+    getRoomsDB().push(room);
+    persistRoomsDB();
     return toRoom(room);
   },
   async updateRoom(id: ID, data: UpdateRoomDto): Promise<Room> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible actualizar la habitación.');
 
-    const room = roomsDB.find((item) => item.id === id);
+    const room = getRoomsDB().find((item) => item.id === id);
     if (!room) throw new Error(`No existe la habitación ${id}.`);
 
     Object.assign(room, data, { updated_at: new Date().toISOString() });
+    persistRoomsDB();
     return toRoom(room);
   },
   async getRoomTypes(): Promise<RoomType[]> {

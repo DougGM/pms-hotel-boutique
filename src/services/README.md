@@ -76,6 +76,16 @@ en `guestsDB`, genera el siguiente ID `GST-*`, agrega timestamps y devuelve
 `Guest` de dominio. El motor publico de reservas lo usa para no pedir al
 usuario un ID interno antes de crear la reserva.
 
+Actualizacion 2026-09-22 (#73): las operaciones de Limpieza que antes vivian
+solo en estado React ahora persisten en `localStorage` mediante la capa de
+servicios mock. `roomService.updateRoom()` guarda cambios de
+`housekeeping_status` en `PMS_ROOMS_DB`; `serviceRequestService` crea reportes
+de desperfectos (`maintenance`) y cambia estados de solicitudes en
+`PMS_SERVICE_REQUESTS_DB`; `housekeepingService` conserva snapshots de
+checklist, tiempos e historial operativo en `PMS_HOUSEKEEPING_STORE`. Los
+handlers del workspace esperan estos metodos antes de mostrar mensajes de
+exito, por lo que un error conserva el estado anterior visible.
+
 ## Forzar errores mock
 
 1. En código: `mockUtils.setForceError(true)` y, al terminar la prueba,
