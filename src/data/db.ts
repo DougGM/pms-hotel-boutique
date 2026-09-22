@@ -24,6 +24,12 @@ import type { ServiceRequestDto } from '@/shared/types/entities/service-request'
 import type { SessionUserDTO } from '@/shared/types/entities/session';
 import type { UserDto } from '@/shared/types/entities/user';
 
+export interface NotificationReadDto {
+  guest_id: string;
+  notification_id: string;
+  read_at: string;
+}
+
 // Única "base de datos" simulada del proyecto. Todo dato inventado del
 // frontend vive aquí — ningún componente, pantalla ni hook la importa
 // directamente (regla de oro): solo los servicios de `src/services/` (y de
@@ -3176,3 +3182,5 @@ export const serviceRequestsDB: ServiceRequestDto[] = [
     updated_at: '2026-08-17T09:30:00.000Z',
   },
 ];
+
+export const notificationReadsDB: NotificationReadDto[] = [];

@@ -31,6 +31,7 @@ export function PrivateSessionWorkspace({ role, initialNav }: PrivateSessionWork
       initialNav={initialNav}
       sessionName={session.user.name}
       sessionEmail={session.user.email}
+      sessionUserId={session.user.id}
       sessionRoleLabel={roleLabels[session.role]}
       onLogout={() => {
         logout();

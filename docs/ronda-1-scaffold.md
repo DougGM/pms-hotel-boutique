@@ -50,6 +50,13 @@ a `bookingService.checkOut`, que cierra el folio, pasa la reserva a
 `dirty`). `GuestAccountScreen` permite registrar pagos en el folio ademas de
 consumos.
 
+**Actualizacion 2026-09-22 (#72):** `GuestContent` resuelve al huesped desde la
+sesion, muestra sus reservas reales y ya no usa habitacion 402, fechas 2024 ni
+estancia fija del prototipo. Crear/cancelar pedidos y solicitudes, editar perfil,
+modificar/cancelar reservas, vincular codigos del mismo huesped y marcar
+notificaciones como leidas pasan por servicios; el boton de reintento vuelve a
+consultar datos.
+
 **Actualización WEB-29 (2026-09-13):** `GuestAccountScreen` dejó de ser stub.
 Carga la cuenta por `GACC-*` y sus cargos por `booking_id`, muestra el desglose
 con saldo y estado, y permite registrar consumos mediante

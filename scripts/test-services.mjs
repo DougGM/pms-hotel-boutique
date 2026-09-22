@@ -63,6 +63,10 @@ await build({
       export { personnelService } from './src/services/personnelService';
       export { inventoryService } from './src/services/inventoryService';
       export { auditService } from './src/services/auditService';
+      export { orderService } from './src/services/orderService';
+      export { serviceRequestService } from './src/services/serviceRequestService';
+      export { notificationService } from './src/services/notificationService';
+      export { notificationReadsDB } from './src/data/db';
       export { mockUtils } from './src/services/mockUtils';
     `,
     resolveDir: '.',
@@ -89,6 +93,10 @@ const {
   personnelService,
   inventoryService,
   auditService,
+  orderService,
+  serviceRequestService,
+  notificationService,
+  notificationReadsDB,
   mockUtils,
 } = require(require.resolve('../.cache/services-harness.cjs'));
 
@@ -528,5 +536,103 @@ test('check-out exige saldo exactamente cero, cierra folio y envia habitacion a 
     () => bookingService.checkOut('BKG-003'),
     /ya esta cerrada|Transicion invalida/,
     'no debe permitir un segundo check-out de la misma estancia',
+  );
+});
+
+test('portal de huesped persiste pedidos, solicitudes, perfil y notificaciones', async () => {
+  const order = await assertServiceCall('orderService.createOrder', () =>
+    orderService.createOrder({
+      bookingId: 'BKG-002',
+      roomId: 'RM-201',
+      guestId: 'GST-002',
+      items: [{ productId: 'PRD-001', quantity: 2 }],
+      notes: 'Sin hielo.',
+    }),
+  );
+  assert.equal(order.bookingId, 'BKG-002');
+  assert.equal(order.guestId, 'GST-002');
+  assert.equal(order.status, 'pending');
+  assert.equal(order.items[0].unitPriceCents, 1500);
+
+  const guestOrders = await orderService.getOrdersByGuestId('GST-002');
+  assert.ok(
+    guestOrders.some((item) => item.id === order.id),
+    'el pedido creado debe sobrevivir una recarga desde el servicio',
+  );
+
+  const cancelledOrder = await assertServiceCall('orderService.cancelOrder', () =>
+    orderService.cancelOrder(order.id, 'GST-002'),
+  );
+  assert.equal(cancelledOrder.status, 'cancelled');
+  await assert.rejects(
+    () => orderService.cancelOrder('ORD-001', 'GST-002'),
+    /no pertenece/,
+    'un huesped no debe cancelar pedidos de otra reserva',
+  );
+
+  const request = await assertServiceCall('serviceRequestService.createRequest', () =>
+    serviceRequestService.createRequest({
+      bookingId: 'BKG-002',
+      roomId: 'RM-201',
+      guestId: 'GST-002',
+      type: 'housekeeping',
+      description: 'Toallas extra',
+    }),
+  );
+  assert.equal(request.status, 'pending');
+  assert.equal(request.guestId, 'GST-002');
+
+  const guestRequests = await serviceRequestService.getRequestsByGuestId('GST-002');
+  assert.ok(
+    guestRequests.some((item) => item.id === request.id),
+    'la solicitud creada debe sobrevivir una recarga desde el servicio',
+  );
+
+  const cancelledRequest = await assertServiceCall('serviceRequestService.cancelRequest', () =>
+    serviceRequestService.cancelRequest(request.id, 'GST-002'),
+  );
+  assert.equal(cancelledRequest.status, 'rejected');
+  await assert.rejects(
+    () => serviceRequestService.cancelRequest('SR-001', 'GST-002'),
+    /no pertenece/,
+    'un huesped no debe cancelar solicitudes de otra reserva',
+  );
+
+  const updatedGuest = await assertServiceCall('guestService.updateGuest portal', () =>
+    guestService.updateGuest('GST-002', {
+      phone: '+502 5555-7272',
+      nationality: 'Guatemalteca',
+    }),
+  );
+  assert.equal(updatedGuest.phone, '+502 5555-7272');
+  assert.equal((await guestService.getGuestById('GST-002')).phone, '+502 5555-7272');
+
+  const notifications = await notificationService.getNotificationsByGuestId('GST-002');
+  assert.ok(notifications.length > 0);
+  const unread = notifications.find((item) => !item.read) ?? notifications[0];
+  const marked = await notificationService.markNotificationRead('GST-002', unread.id);
+  assert.equal(marked.read, true);
+  assert.ok(
+    notificationReadsDB.some(
+      (item) => item.guest_id === 'GST-002' && item.notification_id === unread.id,
+    ),
+    'la marca de lectura debe persistir en notificationReadsDB',
+  );
+  const reloaded = await notificationService.getNotificationsByGuestId('GST-002');
+  assert.equal(
+    reloaded.find((item) => item.id === unread.id)?.read,
+    true,
+    'la marca de lectura debe sobrevivir una recarga desde notificationService',
+  );
+
+  const beforeMarkAllCount = notificationReadsDB.filter(
+    (item) => item.guest_id === 'GST-002',
+  ).length;
+  await notificationService.markAllRead('GST-002');
+  const afterMarkAll = await notificationService.getNotificationsByGuestId('GST-002');
+  assert.ok(afterMarkAll.every((item) => item.read));
+  assert.ok(
+    notificationReadsDB.filter((item) => item.guest_id === 'GST-002').length >= beforeMarkAllCount,
+    'markAllRead debe conservar las marcas en notificationReadsDB',
   );
 });

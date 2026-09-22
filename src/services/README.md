@@ -40,7 +40,8 @@ export function RoomsView() {
 
 Servicios disponibles: `authService`, `roomService`, `bookingService`,
 `bookingCompanionService`, `guestService`, `paymentService`, `catalogService`,
-`guestAccountService`, `cashService`, `personnelService`, `inventoryService` y `auditService`. Las
+`guestAccountService`, `cashService`, `personnelService`, `inventoryService`,
+`auditService`, `orderService`, `serviceRequestService` y `notificationService`. Las
 operaciones de creación reciben los DTOs de entrada definidos en
 `src/shared/types/entities`; sus respuestas siempre son modelos de dominio.
 Todos leen de `src/data/db.ts`, la única "base de datos" simulada del
@@ -94,6 +95,17 @@ en `guestsDB`, genera el siguiente ID `GST-*`, agrega timestamps y devuelve
 usuario un ID interno antes de crear la reserva.
 `guestService.updateGuest(id, data)` permite conservar cambios válidos del
 titular capturados durante recepción/check-in.
+
+Actualizacion 2026-09-22 (#72): el portal de huesped ya no confirma acciones
+solo en estado local. `orderService.createOrder()` persiste pedidos de Room
+Service contra `booking_id`/`room_id`/`guest_id`, valida productos activos y
+`cancelOrder()` solo permite cancelar pedidos `pending` o `accepted` del mismo
+huesped. `serviceRequestService.createRequest()` y `cancelRequest()` hacen lo
+mismo para solicitudes de habitacion; la cancelacion de solicitudes se
+representa con el estado contractual `rejected` en `service_request`.
+`notificationService.markNotificationRead()` y `markAllRead()` conservan las
+marcas de lectura en `notificationReadsDB`, dentro de `src/data/db.ts`, sin
+crear una entidad `notification` propia.
 
 ## Forzar errores mock
 

@@ -200,6 +200,12 @@ locales que leen `src/data/db.ts` para poblar el workspace beta mientras se
 estabilizan sus servicios finales. No agregar nuevas excepciones sin
 documentarlas aqui.
 
+Nota 2026-09-22 (#72): el portal de huesped conserva la UI Bolt pero sus
+operaciones soportadas escriben mediante servicios (`orderService`,
+`serviceRequestService`, `guestService`, `bookingService` y
+`notificationService`). La pantalla resuelve sesion -> huesped -> reserva activa
+-> habitacion y no debe volver a introducir datos fijos de prototipo.
+
 Ningún componente ni pantalla importa `src/data/db.ts` directamente — todo
 pasa por un servicio en `services/`. Cada servicio es `async`, devuelve
 Models (nunca DTOs), simula una latencia de 300 a 600 ms
