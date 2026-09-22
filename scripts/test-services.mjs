@@ -66,6 +66,7 @@ await build({
       export { orderService } from './src/services/orderService';
       export { serviceRequestService } from './src/services/serviceRequestService';
       export { notificationService } from './src/services/notificationService';
+      export { notificationReadsDB } from './src/data/db';
       export { mockUtils } from './src/services/mockUtils';
     `,
     resolveDir: '.',
@@ -95,6 +96,7 @@ const {
   orderService,
   serviceRequestService,
   notificationService,
+  notificationReadsDB,
   mockUtils,
 } = require(require.resolve('../.cache/services-harness.cjs'));
 
@@ -610,10 +612,27 @@ test('portal de huesped persiste pedidos, solicitudes, perfil y notificaciones',
   const unread = notifications.find((item) => !item.read) ?? notifications[0];
   const marked = await notificationService.markNotificationRead('GST-002', unread.id);
   assert.equal(marked.read, true);
+  assert.ok(
+    notificationReadsDB.some(
+      (item) => item.guest_id === 'GST-002' && item.notification_id === unread.id,
+    ),
+    'la marca de lectura debe persistir en notificationReadsDB',
+  );
   const reloaded = await notificationService.getNotificationsByGuestId('GST-002');
   assert.equal(
     reloaded.find((item) => item.id === unread.id)?.read,
     true,
     'la marca de lectura debe sobrevivir una recarga desde notificationService',
+  );
+
+  const beforeMarkAllCount = notificationReadsDB.filter(
+    (item) => item.guest_id === 'GST-002',
+  ).length;
+  await notificationService.markAllRead('GST-002');
+  const afterMarkAll = await notificationService.getNotificationsByGuestId('GST-002');
+  assert.ok(afterMarkAll.every((item) => item.read));
+  assert.ok(
+    notificationReadsDB.filter((item) => item.guest_id === 'GST-002').length >= beforeMarkAllCount,
+    'markAllRead debe conservar las marcas en notificationReadsDB',
   );
 });

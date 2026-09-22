@@ -925,7 +925,7 @@ function GuestContentReady({
             <div className="gs-overview-notif-head">
               <div>
                 <h3>Actividad reciente</h3>
-                <p>Ãšltimos movimientos de tu estancia</p>
+                <p>Últimos movimientos de tu estancia</p>
               </div>
               {unreadCount > 0 && (
                 <span className="status-pill warning">{unreadCount} sin leer</span>

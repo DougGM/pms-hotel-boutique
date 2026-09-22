@@ -1,4 +1,5 @@
 import type { ID } from '@/shared/types/common';
+import { notificationReadsDB } from '@/data/db';
 import { orderService } from './orderService';
 import { serviceRequestService } from './serviceRequestService';
 
@@ -18,12 +19,28 @@ export interface Notification {
   occurredAt: Date;
 }
 
-const readNotificationIdsByGuest = new Map<ID, Set<ID>>();
-
 function isNotificationRead(guestId: ID, notification: Notification): boolean {
   return (
-    notification.read || (readNotificationIdsByGuest.get(guestId)?.has(notification.id) ?? false)
+    notification.read ||
+    notificationReadsDB.some(
+      (item) => item.guest_id === guestId && item.notification_id === notification.id,
+    )
   );
+}
+
+function markReadInDb(guestId: ID, notificationId: ID) {
+  const existing = notificationReadsDB.find(
+    (item) => item.guest_id === guestId && item.notification_id === notificationId,
+  );
+  if (existing) {
+    existing.read_at = new Date().toISOString();
+    return;
+  }
+  notificationReadsDB.push({
+    guest_id: guestId,
+    notification_id: notificationId,
+    read_at: new Date().toISOString(),
+  });
 }
 
 function requestTitle(status: string): string {
@@ -83,16 +100,12 @@ export const notificationService = {
     const notification = notifications.find((item) => item.id === notificationId);
     if (!notification) throw new Error(`No existe la notificacion ${notificationId}.`);
 
-    const readIds = readNotificationIdsByGuest.get(guestId) ?? new Set<ID>();
-    readIds.add(notificationId);
-    readNotificationIdsByGuest.set(guestId, readIds);
+    markReadInDb(guestId, notificationId);
     return { ...notification, read: true };
   },
   async markAllRead(guestId: ID): Promise<Notification[]> {
     const notifications = await this.getNotificationsByGuestId(guestId);
-    const readIds = readNotificationIdsByGuest.get(guestId) ?? new Set<ID>();
-    notifications.forEach((notification) => readIds.add(notification.id));
-    readNotificationIdsByGuest.set(guestId, readIds);
+    notifications.forEach((notification) => markReadInDb(guestId, notification.id));
     return notifications.map((notification) => ({ ...notification, read: true }));
   },
 };

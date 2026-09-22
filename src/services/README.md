@@ -103,9 +103,9 @@ Service contra `booking_id`/`room_id`/`guest_id`, valida productos activos y
 huesped. `serviceRequestService.createRequest()` y `cancelRequest()` hacen lo
 mismo para solicitudes de habitacion; la cancelacion de solicitudes se
 representa con el estado contractual `rejected` en `service_request`.
-`notificationService.markNotificationRead()` y
-`markAllRead()` conservan las marcas de lectura dentro del servicio compuesto
-actual.
+`notificationService.markNotificationRead()` y `markAllRead()` conservan las
+marcas de lectura en `notificationReadsDB`, dentro de `src/data/db.ts`, sin
+crear una entidad `notification` propia.
 
 ## Forzar errores mock
 
