@@ -45,6 +45,12 @@ documento resume el estado resultante, no el proceso para llegar a él.
 - Check-out de recepcion (#71): el folio integra estancia, consumos, pagos y
   depositos; bloquea salida con saldo pendiente y cierra cuenta/reserva enviando
   la habitacion a limpieza cuando el saldo queda saldado.
+- Administracion (#75): el workspace administrativo calcula dashboard/reportes
+  desde servicios y persiste operaciones soportadas de habitaciones, tipos,
+  tarifas, promociones, inventario y caja en las colecciones mock persistibles.
+  Usuarios/roles, amenidades, catalogo de Room Service y tarifas dinamicas
+  quedan diferenciados como fuera de alcance cuando no existe contrato de
+  escritura, sin simular guardados locales.
 - Lote A implementado en rama apilada sobre WEB-14:
   `#51` (`OccupancyScreen`) muestra disponibilidad por fecha y estados reales
   de habitación/limpieza; `#52` (`ManualBookingScreen`) crea reservas manuales.
@@ -75,7 +81,7 @@ documento resume el estado resultante, no el proceso para llegar a él.
 | Reservaciones y recepción                                               | Lote A implementado              | Revisar/mergear #50/#51/#52; seguir con lotes B/C/D           |
 | Caja (WEB-11)                                                           | Dataset y servicios base listos  | Construir pantallas                                           |
 | Catálogos e inventario (WEB-12)                                         | Dataset y servicios base listos  | Construir pantallas                                           |
-| Housekeeping / Room service / Conserjería / Huésped / Administración    | Sin pantallas                    | Implementar según prioridad del equipo                        |
+| Housekeeping / Room service / Conserjería / Huésped / Administración    | Workspaces operativos en curso   | Completar contratos pendientes y revisiones por issue          |
 
 ## Decisiones
 
