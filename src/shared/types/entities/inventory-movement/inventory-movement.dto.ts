@@ -9,7 +9,7 @@ export interface InventoryMovementDTO {
   type: InventoryMovementTypeDto;
   reason: InventoryMovementReasonDto;
   quantity: number;
-  responsible_user_id: string;
+  responsible_user_id?: string;
   occurred_at: string;
   notes?: string;
   created_at: string;

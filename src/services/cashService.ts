@@ -48,13 +48,10 @@ function createCashMovementId(): ID {
   return `CM-${String(max + 1).padStart(3, '0')}`;
 }
 
-function resolveResponsibleUserId(responsibleUserId?: ID): ID {
-  if (responsibleUserId && usersDB.some((user) => user.id === responsibleUserId)) {
-    return responsibleUserId;
-  }
-  return (
-    usersDB.find((user) => user.status === 'active' && user.role === 'reception')?.id ?? 'USR-001'
-  );
+function resolveResponsibleUserId(responsibleUserId?: ID): ID | undefined {
+  if (!responsibleUserId) return undefined;
+  if (usersDB.some((user) => user.id === responsibleUserId)) return responsibleUserId;
+  throw new Error(`No existe el usuario responsable ${responsibleUserId}.`);
 }
 
 function getOpenSession(): CashSessionDto | undefined {

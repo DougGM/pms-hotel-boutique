@@ -145,6 +145,10 @@ promociones usan `promotionService` (`PMS_PROMOTIONS_DB`), inventario usa
 amenidades, catalogo de Room Service y tarifas dinamicas no mutan porque no
 tienen contrato de escritura vigente en esta rama; la UI informa fuera de
 alcance en vez de simular guardados locales.
+Inventario y caja solo guardan `responsible_user_id`/`opened_by_user_id`
+cuando el caller envia un `User.id` existente; si no hay usuario de sesion, el
+campo queda ausente y nunca se reemplaza por un administrador o recepcionista
+por defecto.
 
 ## Forzar errores mock
 

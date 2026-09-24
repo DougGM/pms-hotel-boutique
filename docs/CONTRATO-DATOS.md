@@ -596,7 +596,7 @@ Jornada de caja: apertura, movimientos, cierre con saldo contado.
 | Campo DTO | Tipo | Descripción |
 | --- | --- | --- |
 | `id` | `string` | |
-| `opened_by_user_id` | `string` | FK a `user` |
+| `opened_by_user_id?` | `string` | FK a `user`; solo si la operacion trae usuario real de sesion |
 | `opened_at` | `string` (timestamp) | |
 | `opening_balance_cents` | `number` (entero) | |
 | `currency` | `'GTQ'` | |
@@ -639,7 +639,7 @@ Ingreso o egreso dentro de una jornada.
 | `concept` | `string` | |
 | `amount_cents` | `number` (entero) | |
 | `currency` | `'GTQ'` | |
-| `responsible_user_id` | `string` | FK a `user` |
+| `responsible_user_id?` | `string` | FK a `user`; solo si la operacion trae usuario real de sesion |
 | `occurred_at` | `string` (timestamp) | |
 | `payment_id?` | `string` | FK a `payment`, cuando el ingreso viene de un pago de huésped |
 | `created_at` | `string` | |
@@ -717,7 +717,10 @@ DTO**; ninguna pantalla debe recalcularlo).
 
 `inventory_movement`: `id, inventory_item_id, type('in'|'out'),
 reason('purchase'|'restock'|'consumption'|'sale'|'shrinkage'),
-quantity, responsible_user_id, occurred_at, notes?, created_at`.
+quantity, responsible_user_id?, occurred_at, notes?, created_at`. Los campos
+de usuario operativo (`opened_by_user_id`, `responsible_user_id`) no usan
+fallbacks: si se envia un ID inexistente, el servicio rechaza la operacion; si
+no se envia, quedan ausentes.
 
 ```json
 {

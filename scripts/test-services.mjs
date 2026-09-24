@@ -633,6 +633,22 @@ test('administracion: promociones, tarifas, inventario y caja persisten operacio
   });
   assert.equal(movement.inventoryItemId, item.id);
   assert.equal(movement.quantity, 3);
+  assert.equal(
+    movement.responsibleUserId,
+    undefined,
+    'un movimiento sin usuario operativo no debe atribuirse a un fallback',
+  );
+  await assert.rejects(
+    () =>
+      inventoryService.createMovement({
+        inventoryItemId: item.id,
+        type: 'in',
+        reason: 'restock',
+        quantity: 1,
+        responsibleUserId: 'USR-NO-EXISTE',
+      }),
+    /usuario responsable/,
+  );
 
   const updatedItem = await inventoryService.getItemById(item.id);
   assert.equal(updatedItem.currentQuantity, item.currentQuantity + 3);
@@ -644,6 +660,21 @@ test('administracion: promociones, tarifas, inventario y caja persisten operacio
     amountCents: 1500,
   });
   assert.equal(cashMovement.amountCents, 1500);
+  assert.equal(
+    cashMovement.responsibleUserId,
+    undefined,
+    'un movimiento de caja sin usuario operativo no debe atribuirse a un fallback',
+  );
+  await assert.rejects(
+    () =>
+      cashService.createMovement({
+        type: 'income',
+        concept: 'Usuario invalido',
+        amountCents: 100,
+        responsibleUserId: 'USR-NO-EXISTE',
+      }),
+    /usuario responsable/,
+  );
   assert.equal((await cashService.getMovements()).length, beforeCashMovements.length + 1);
 });
 

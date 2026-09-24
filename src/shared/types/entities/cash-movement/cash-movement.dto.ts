@@ -17,7 +17,7 @@ export interface CashMovementDTO {
   concept: string;
   amount_cents: number;
   currency: Currency;
-  responsible_user_id: string;
+  responsible_user_id?: string;
   occurred_at: string;
   payment_id?: string;
   created_at: string;

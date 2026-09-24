@@ -9,7 +9,7 @@ export interface CashMovement {
   concept: string;
   amountCents: number;
   currency: Currency;
-  responsibleUserId: string;
+  responsibleUserId?: string;
   occurredAt: Date;
   paymentId?: string;
   createdAt: Date;
