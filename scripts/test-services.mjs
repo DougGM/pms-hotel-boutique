@@ -63,6 +63,7 @@ await build({
       export { personnelService } from './src/services/personnelService';
       export { inventoryService } from './src/services/inventoryService';
       export { auditService } from './src/services/auditService';
+      export { promotionService } from './src/services/promotionService';
       export { housekeepingService } from './src/services/housekeepingService';
       export { orderService } from './src/services/orderService';
       export { serviceRequestService } from './src/services/serviceRequestService';
@@ -111,6 +112,7 @@ const {
   personnelService,
   inventoryService,
   auditService,
+  promotionService,
   housekeepingService,
   orderService,
   serviceRequestService,
@@ -584,6 +586,65 @@ test('guestAccountService.createCharge: crea Charge y actualiza el balance guard
     guestAccountService.getAccountByBookingId('BKG-002'),
   );
   assert.equal(after.balanceCents, before.balanceCents + 2500);
+});
+
+test('administracion: promociones, tarifas, inventario y caja persisten operaciones soportadas', async () => {
+  const roomTypes = await roomService.getRoomTypes();
+  assert.ok(roomTypes.length > 0, 'debe existir al menos un tipo de habitacion para crear tarifa');
+
+  const rate = await roomService.createRate({
+    room_type_id: roomTypes[0].id,
+    name: 'Prueba Administracion',
+    valid_from: '2026-12-01',
+    valid_to: '2026-12-15',
+    price_cents: 199900,
+    active: true,
+  });
+  assert.equal(rate.currency, 'GTQ');
+  assert.equal(rate.priceCents, 199900);
+
+  const inactiveRate = await roomService.updateRate(rate.id, { active: false });
+  assert.equal(inactiveRate.active, false);
+
+  const promotion = await promotionService.createPromotion({
+    code: 'ADMIN75',
+    name: 'Prueba administracion',
+    description: 'Persistencia de promociones desde Administracion',
+    discount_percent: 12,
+    valid_from: '2026-12-01',
+    valid_to: '2026-12-31',
+    active: true,
+  });
+  assert.equal(promotion.code, 'ADMIN75');
+
+  const disabledPromotion = await promotionService.updatePromotion(promotion.id, {
+    active: false,
+  });
+  assert.equal(disabledPromotion.active, false);
+
+  const inventoryItems = await inventoryService.getItems();
+  const item = inventoryItems.find((entry) => entry.active);
+  assert.ok(item, 'debe existir un item activo para registrar movimiento');
+  const movement = await inventoryService.createMovement({
+    inventoryItemId: item.id,
+    type: 'in',
+    reason: 'restock',
+    quantity: 3,
+  });
+  assert.equal(movement.inventoryItemId, item.id);
+  assert.equal(movement.quantity, 3);
+
+  const updatedItem = await inventoryService.getItemById(item.id);
+  assert.equal(updatedItem.currentQuantity, item.currentQuantity + 3);
+
+  const beforeCashMovements = await cashService.getMovements();
+  const cashMovement = await cashService.createMovement({
+    type: 'income',
+    concept: 'Prueba administracion',
+    amountCents: 1500,
+  });
+  assert.equal(cashMovement.amountCents, 1500);
+  assert.equal((await cashService.getMovements()).length, beforeCashMovements.length + 1);
 });
 
 test('check-out exige saldo exactamente cero, cierra folio y envia habitacion a limpieza', async () => {

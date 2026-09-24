@@ -132,6 +132,20 @@ crean cargos. Conserjeria usa
 `serviceRequestService.updateRequestStatus()` y `updateRequestNotes()` sobre
 `PMS_SERVICE_REQUESTS_DB` para conservar estados, motivos y observaciones.
 
+Actualizacion 2026-09-24 (#75): Administracion ya no muestra metricas
+operativas hardcodeadas como si fueran actuales. `AdminContent` calcula
+dashboard/reportes desde habitaciones, reservas, caja, inventario y auditoria
+cargadas por servicios, con moneda GTQ. Las operaciones soportadas esperan a
+servicios persistibles antes de mostrar exito: habitaciones/tipos/tarifas usan
+`roomService` (`PMS_ROOMS_DB`, `PMS_ROOM_TYPES_DB`, `PMS_RATES_DB`),
+promociones usan `promotionService` (`PMS_PROMOTIONS_DB`), inventario usa
+`inventoryService` (`PMS_INVENTORY_ITEMS_DB`,
+`PMS_INVENTORY_MOVEMENTS_DB`) y caja usa `cashService`
+(`PMS_CASH_SESSIONS_DB`, `PMS_CASH_MOVEMENTS_DB`). Usuarios/roles,
+amenidades, catalogo de Room Service y tarifas dinamicas no mutan porque no
+tienen contrato de escritura vigente en esta rama; la UI informa fuera de
+alcance en vez de simular guardados locales.
+
 ## Forzar errores mock
 
 1. En código: `mockUtils.setForceError(true)` y, al terminar la prueba,

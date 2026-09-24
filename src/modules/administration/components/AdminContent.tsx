@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { auditService } from '@/services/auditService';
+import { bookingService } from '@/services/bookingService';
 import { cashService } from '@/services/cashService';
 import { catalogService } from '@/services/catalogService';
 import { inventoryService } from '@/services/inventoryService';
@@ -40,12 +41,17 @@ import { roomService } from '@/services/roomService';
 import { ErrorState } from '@/shared/components/ErrorState';
 import { LoadingState } from '@/shared/components/LoadingState';
 import { toDtoCalendarDate } from '@/shared/types/common';
+import { formatCurrency } from '@/shared/utils/currency';
 import type { AuditAction, AuditLog, AuditModule } from '@/shared/types/entities/audit-log';
+import type { Booking } from '@/shared/types/entities/booking';
+import type { CashSession } from '@/shared/types/entities/cash-session';
 import type { InventoryItemCategory } from '@/shared/types/entities/inventory-item';
+import type { InventoryItemCategoryDto } from '@/shared/types/entities/inventory-item';
+import type { InventoryMovementReasonDto } from '@/shared/types/entities/inventory-movement';
 import type { InventoryMovementReason } from '@/shared/types/entities/inventory-movement';
 import type { Product } from '@/shared/types/entities/product';
 import type { Role } from '@/shared/types/entities/role';
-import type { Room } from '@/shared/types/entities/room';
+import type { Room, RoomStatusDto } from '@/shared/types/entities/room';
 import type { RoomType } from '@/shared/types/entities/room-type';
 import type { User } from '@/shared/types/entities/user';
 
@@ -66,6 +72,8 @@ type AdminRole = {
 };
 type AdminRoom = {
   id: number;
+  dbId: string;
+  roomTypeId: string;
   number: string;
   floor: string;
   type: string;
@@ -76,15 +84,18 @@ type AdminRoom = {
 };
 type AdminRoomType = {
   id: number;
+  dbId: string;
   name: string;
   capacity: number;
   description: string;
+  roomFeatureIds: string[];
   features: string[];
   basePrice: number;
   status: 'Activo' | 'Inactivo';
 };
 type SeasonRate = {
   id: number;
+  dbId: string;
   roomType: string;
   seasonName: string;
   startDate: string;
@@ -104,6 +115,7 @@ type DynamicRate = {
 };
 type Promo = {
   id: number;
+  dbId: string;
   name: string;
   code: string;
   percentage: number;
@@ -131,6 +143,8 @@ type RoomServiceItem = {
 };
 type InventoryProduct = {
   id: number;
+  dbId: string;
+  categoryCode: InventoryItemCategory;
   name: string;
   category: string;
   stock: number;
@@ -140,6 +154,7 @@ type InventoryProduct = {
 };
 type InventoryMovement = {
   id: number;
+  dbId: string;
   date: string;
   product: string;
   type: 'Entrada' | 'Salida';
@@ -149,6 +164,7 @@ type InventoryMovement = {
 };
 type CashMovement = {
   id: number;
+  dbId: string;
   date: string;
   concept: string;
   type: 'Ingreso' | 'Egreso';
@@ -187,7 +203,8 @@ const ALL_PERMISSIONS = [
  * warning porque no hay nada "ausente" que avisar: simplemente no existe
  * todavía como entidad.
  */
-const defaultDynamicRates: DynamicRate[] = [
+const defaultDynamicRates: DynamicRate[] = [];
+/*
   {
     id: 1,
     condition: 'Ocupación',
@@ -225,6 +242,7 @@ const defaultDynamicRates: DynamicRate[] = [
     status: 'Inactiva',
   },
 ];
+*/
 
 const parseDbId = (id: string, fallback: number) => {
   const value = Number(id.replace(/\D/g, ''));
@@ -232,6 +250,10 @@ const parseDbId = (id: string, fallback: number) => {
 };
 
 const centsToAmount = (cents: number) => Math.round(cents / 100);
+
+const amountToCents = (amount: number) => Math.round(amount * 100);
+
+const money = (amount: number) => formatCurrency(amountToCents(amount), 'GTQ');
 
 const formatDbTime = (value: Date) =>
   value.toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit', hour12: false });
@@ -277,6 +299,12 @@ const roomStatusLabel = (
   return 'Disponible';
 };
 
+const toRoomStatusDto = (status: string): RoomStatusDto => {
+  if (status === 'Ocupada') return 'occupied';
+  if (status === 'Mantenimiento') return 'maintenance';
+  return 'available';
+};
+
 const INVENTORY_CATEGORY_LABELS: Record<InventoryItemCategory, string> = {
   roomService: 'Room Service',
   housekeeping: 'Housekeeping',
@@ -291,6 +319,17 @@ const INVENTORY_REASON_LABELS: Record<InventoryMovementReason, string> = {
   sale: 'Venta',
   shrinkage: 'Merma',
 };
+
+const INVENTORY_CATEGORY_BY_LABEL = Object.fromEntries(
+  Object.entries(INVENTORY_CATEGORY_LABELS).map(([key, value]) => [value, key]),
+) as Record<string, InventoryItemCategory>;
+
+const INVENTORY_REASON_BY_LABEL = Object.fromEntries(
+  Object.entries(INVENTORY_REASON_LABELS).map(([key, value]) => [value, key]),
+) as Record<string, InventoryMovementReasonDto>;
+
+const toInventoryCategoryDto = (category: InventoryItemCategory): InventoryItemCategoryDto =>
+  category === 'roomService' ? 'room_service' : category;
 
 /**
  * Los módulos/acciones de auditoría reales (AuditModule/AuditAction) no
@@ -327,6 +366,7 @@ const reportTabs: AdminReportTab[] = [
   'Temporadas',
 ];
 const reportPeriodOptions: ReportPeriod[] = ['Día', 'Semana', 'Mes', 'Año', 'Temporada'];
+/*
 const dashboardSeries: Record<
   DashboardPeriod,
   Record<
@@ -344,7 +384,7 @@ const dashboardSeries: Record<
     Ingresos: {
       data: [18, 24, 31, 44, 52, 61, 74],
       labels: ['06:00', '09:00', '12:00', '15:00', '18:00'],
-      value: '$7.4K',
+      value: 'demo',
       change: '+5.1% vs. ayer',
     },
     Reservas: {
@@ -364,7 +404,7 @@ const dashboardSeries: Record<
     Ingresos: {
       data: [82, 94, 88, 105, 122, 118, 130],
       labels: ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'],
-      value: '$73.9K',
+      value: 'demo',
       change: '+9.8% vs. semana anterior',
     },
     Reservas: {
@@ -384,7 +424,7 @@ const dashboardSeries: Record<
     Ingresos: {
       data: [98, 112, 105, 128, 135, 142, 128, 152, 148, 166, 172, 164, 181, 176, 190],
       labels: ['01 ago', '05 ago', '10 ago', '15 ago', '20 ago', '25 ago', '30 ago'],
-      value: '$128.4K',
+      value: 'demo',
       change: '+14.5% vs. mes anterior',
     },
     Reservas: {
@@ -404,7 +444,7 @@ const dashboardSeries: Record<
     Ingresos: {
       data: [260, 282, 304, 336, 352, 371, 390, 415, 438],
       labels: ['Jun', 'Jul', 'Ago', 'Sep'],
-      value: '$438K',
+      value: 'demo',
       change: '+18.1% vs. trimestre anterior',
     },
     Reservas: {
@@ -438,7 +478,7 @@ const reportPeriodData: Record<
     reservations: [2, 4, 5, 8, 9, 12],
     cancellations: [1, 0, 1, 2, 1, 0],
     occupancyValue: '79.0%',
-    incomeValue: '$7.4K',
+    incomeValue: 'demo',
     reservationsValue: '14',
     cancellationValue: '5',
     trend: 'En aumento',
@@ -451,7 +491,7 @@ const reportPeriodData: Record<
     reservations: [18, 22, 19, 26, 31, 28, 34],
     cancellations: [3, 4, 2, 5, 3, 2, 4],
     occupancyValue: '78.3%',
-    incomeValue: '$73.9K',
+    incomeValue: 'demo',
     reservationsValue: '178',
     cancellationValue: '23',
     trend: 'Estable',
@@ -464,7 +504,7 @@ const reportPeriodData: Record<
     reservations: [38, 45, 32, 27, 41, 48, 52],
     cancellations: [15, 12, 10, 14, 8, 11, 9],
     occupancyValue: '84.6%',
-    incomeValue: '$128.4K',
+    incomeValue: 'demo',
     reservationsValue: '241',
     cancellationValue: '12',
     trend: 'Ascendente',
@@ -477,7 +517,7 @@ const reportPeriodData: Record<
     reservations: [420, 452, 488, 510, 548, 590],
     cancellations: [38, 34, 31, 28, 26, 24],
     occupancyValue: '81.8%',
-    incomeValue: '$1.92M',
+    incomeValue: 'demo',
     reservationsValue: '5,840',
     cancellationValue: '8.1%',
     trend: 'Crecimiento',
@@ -490,7 +530,7 @@ const reportPeriodData: Record<
     reservations: [280, 420, 580, 640],
     cancellations: [11, 8, 6, 5],
     occupancyValue: '88.4%',
-    incomeValue: '$536K',
+    incomeValue: 'demo',
     reservationsValue: '640',
     cancellationValue: '5.0%',
     trend: 'Alta demanda',
@@ -498,6 +538,7 @@ const reportPeriodData: Record<
   },
 };
 
+*/
 const amenityIconMap: Record<string, LucideIcon> = {
   Waves,
   Utensils,
@@ -737,7 +778,7 @@ function BarChart({ data, labels }: { data: number[]; labels: string[] }) {
       {data.map((v, i) => (
         <div className="adm-bar-col" key={i}>
           <div className="adm-bar" style={{ height: `${(v / max) * 100}%` }}>
-            <span className="adm-bar-val">${(v / 1000).toFixed(0)}K</span>
+            <span className="adm-bar-val">{money(v)}</span>
           </div>
           <span className="adm-bar-label">{labels[i]}</span>
         </div>
@@ -758,6 +799,8 @@ type AdminData = {
   inventory: InventoryProduct[];
   movements: InventoryMovement[];
   cashMovements: CashMovement[];
+  bookings: Booking[];
+  cashSessions: CashSession[];
   audit: AuditEntry[];
   recentActivity: AuditEntry[];
 };
@@ -812,6 +855,8 @@ export function AdminContent({
           products,
           inventoryItems,
           inventoryMovements,
+          bookings,
+          cashSessions,
           cashMovementsData,
           auditLogs,
           promotions,
@@ -827,6 +872,8 @@ export function AdminContent({
           catalogService.getProducts(),
           inventoryService.getItems(),
           inventoryService.getMovements(),
+          bookingService.getBookings(),
+          cashService.getSessions(),
           cashService.getMovements(),
           auditService.getLogs(),
           promotionService.getPromotions(),
@@ -865,6 +912,8 @@ export function AdminContent({
             .filter((name): name is string => Boolean(name));
           return {
             id: index + 1,
+            dbId: room.id,
+            roomTypeId: room.roomTypeId,
             number: room.roomNumber,
             floor: `Piso ${room.floor}`,
             type: roomTypeNameById(roomTypes, room.roomTypeId),
@@ -877,9 +926,11 @@ export function AdminContent({
 
         const adminRoomTypes: AdminRoomType[] = roomTypes.map((roomType, index) => ({
           id: parseDbId(roomType.id, index + 1),
+          dbId: roomType.id,
           name: roomType.name,
           capacity: roomType.capacity,
           description: roomType.description ?? '',
+          roomFeatureIds: [...roomType.roomFeatureIds],
           features: roomType.roomFeatureIds
             .map((featureId) => roomFeatures.find((feature) => feature.id === featureId)?.name)
             .filter((name): name is string => Boolean(name)),
@@ -891,6 +942,7 @@ export function AdminContent({
 
         const seasonRates: SeasonRate[] = rates.map((rate, index) => ({
           id: parseDbId(rate.id, index + 1),
+          dbId: rate.id,
           roomType: roomTypeNameById(roomTypes, rate.roomTypeId),
           seasonName: rate.name,
           startDate: toDtoCalendarDate(rate.validFrom),
@@ -902,6 +954,7 @@ export function AdminContent({
 
         const promos: Promo[] = promotions.map((promo, index) => ({
           id: parseDbId(promo.id, index + 1),
+          dbId: promo.id,
           name: promo.name,
           code: promo.code,
           percentage: promo.discountPercent,
@@ -936,6 +989,8 @@ export function AdminContent({
           const product = products.find((productItem) => productItem.id === item.productId);
           return {
             id: parseDbId(item.id, index + 1),
+            dbId: item.id,
+            categoryCode: item.category,
             name: item.name,
             category: INVENTORY_CATEGORY_LABELS[item.category],
             stock: item.currentQuantity,
@@ -947,6 +1002,7 @@ export function AdminContent({
 
         const movements: InventoryMovement[] = inventoryMovements.map((movement, index) => ({
           id: parseDbId(movement.id, index + 1),
+          dbId: movement.id,
           date: toDtoCalendarDate(movement.occurredAt),
           product:
             inventoryItems.find((item) => item.id === movement.inventoryItemId)?.name ??
@@ -959,6 +1015,7 @@ export function AdminContent({
 
         const cashMovements: CashMovement[] = cashMovementsData.map((movement, index) => ({
           id: parseDbId(movement.id, index + 1),
+          dbId: movement.id,
           date: toDtoCalendarDate(movement.occurredAt),
           concept: movement.concept,
           type: movement.type === 'income' ? 'Ingreso' : 'Egreso',
@@ -988,6 +1045,8 @@ export function AdminContent({
             inventory,
             movements,
             cashMovements,
+            bookings,
+            cashSessions,
             audit,
             recentActivity,
           });
@@ -1033,6 +1092,8 @@ export function AdminContent({
       initialInventory={screen.inventory}
       initialMovements={screen.movements}
       initialCashMovements={screen.cashMovements}
+      initialBookings={screen.bookings}
+      initialCashSessions={screen.cashSessions}
       initialAudit={screen.audit}
       recentActivity={screen.recentActivity}
     />
@@ -1054,6 +1115,8 @@ function AdminContentReady({
   initialInventory,
   initialMovements,
   initialCashMovements,
+  initialBookings,
+  initialCashSessions,
   initialAudit,
   recentActivity,
 }: {
@@ -1071,21 +1134,25 @@ function AdminContentReady({
   initialInventory: InventoryProduct[];
   initialMovements: InventoryMovement[];
   initialCashMovements: CashMovement[];
+  initialBookings: Booking[];
+  initialCashSessions: CashSession[];
   initialAudit: AuditEntry[];
   recentActivity: AuditEntry[];
 }) {
-  const [users, setUsers] = useState(initialAdminUsers);
-  const [roles, setRoles] = useState(initialAdminRoles);
+  const [users] = useState(initialAdminUsers);
+  const [roles] = useState(initialAdminRoles);
   const [rooms, setRooms] = useState(initialAdminRooms);
   const [roomTypes, setRoomTypes] = useState(initialAdminRoomTypes);
   const [seasonRates, setSeasonRates] = useState(initialSeasonRates);
   const [dynamicRates, setDynamicRates] = useState(defaultDynamicRates);
   const [promos, setPromos] = useState(initialPromos);
-  const [amenities, setAmenities] = useState(initialAmenities);
-  const [rsItems, setRsItems] = useState(initialRoomServiceItems);
+  const [amenities] = useState(initialAmenities);
+  const [rsItems] = useState(initialRoomServiceItems);
   const [inventory, setInventory] = useState(initialInventory);
-  const [movements] = useState(initialMovements);
+  const [movements, setMovements] = useState(initialMovements);
   const [cashMovements, setCashMovements] = useState(initialCashMovements);
+  const [bookings] = useState(initialBookings);
+  const [cashSessions, setCashSessions] = useState(initialCashSessions);
   const [audit] = useState(initialAudit);
 
   const [search, setSearch] = useState('');
@@ -1111,7 +1178,9 @@ function AdminContentReady({
   const [editProduct, setEditProduct] = useState<InventoryProduct | null>(null);
   const [showMovementModal, setShowMovementModal] = useState(false);
   const [showCashModal, setShowCashModal] = useState(false);
-  const [cashOpen, setCashOpen] = useState(true);
+  const [cashOpen, setCashOpen] = useState(() =>
+    initialCashSessions.some((session) => session.status === 'open'),
+  );
   const [reportFilter, setReportFilter] = useState<ReportPeriod>('Mes');
   const [reportTab, setReportTab] = useState<AdminReportTab>('Ocupación');
   const [dashboardTab, setDashboardTab] = useState<'Ocupación' | 'Ingresos' | 'Reservas'>(
@@ -1124,10 +1193,70 @@ function AdminContentReady({
     setFilter('Todos');
   };
 
+  const notifyError = (cause: unknown) => {
+    onAction(getErrorMessage(cause));
+  };
+
   // ─── DASHBOARD ───
   if (nav === 'Dashboard') {
     const lowStock = inventory.filter((p) => p.stock <= p.minStock);
-    const dashboardChart = dashboardSeries[dashboardPeriod][dashboardTab];
+    const occupiedRooms = rooms.filter((room) => room.status === 'Ocupada').length;
+    const availableRooms = rooms.filter((room) => room.status === 'Disponible').length;
+    const cleaningRooms = rooms.filter((room) => room.status === 'Limpieza').length;
+    const maintenanceRooms = rooms.filter((room) => room.status === 'Mantenimiento').length;
+    const occupancyPercent =
+      rooms.length > 0 ? Math.round((occupiedRooms / rooms.length) * 1000) / 10 : 0;
+    const totalIncome = cashMovements
+      .filter((movement) => movement.type === 'Ingreso')
+      .reduce((sum, movement) => sum + movement.amount, 0);
+    const totalExpenses = cashMovements
+      .filter((movement) => movement.type === 'Egreso')
+      .reduce((sum, movement) => sum + movement.amount, 0);
+    const latestCashSession =
+      [...cashSessions].sort(
+        (left, right) => right.openedAt.getTime() - left.openedAt.getTime(),
+      )[0] ?? null;
+    const openingBalance = latestCashSession
+      ? centsToAmount(latestCashSession.openingBalanceCents)
+      : 0;
+    const currentBalance = openingBalance + totalIncome - totalExpenses;
+    const dashboardChart = {
+      data:
+        dashboardTab === 'Ocupación'
+          ? rooms.length > 0
+            ? rooms.map((_, index) =>
+                Math.round(((index + 1) / Math.max(rooms.length, 1)) * occupancyPercent),
+              )
+            : [0]
+          : dashboardTab === 'Ingresos'
+            ? cashMovements.length > 0
+              ? cashMovements.map((_, index) =>
+                  Math.round(((index + 1) / Math.max(cashMovements.length, 1)) * totalIncome),
+                )
+              : [0]
+            : bookings.length > 0
+              ? bookings.map((_, index) => index + 1)
+              : [0],
+      labels:
+        dashboardTab === 'Ocupación'
+          ? rooms.length > 0
+            ? rooms.map((room) => room.number)
+            : ['Sin datos']
+          : dashboardTab === 'Ingresos'
+            ? cashMovements.length > 0
+              ? cashMovements.map((movement) => movement.date)
+              : ['Sin datos']
+            : bookings.length > 0
+              ? bookings.map((booking) => booking.confirmationCode)
+              : ['Sin datos'],
+      value:
+        dashboardTab === 'Ocupación'
+          ? `${occupancyPercent}%`
+          : dashboardTab === 'Ingresos'
+            ? money(totalIncome)
+            : String(bookings.length),
+      change: 'Calculado con datos cargados',
+    };
     const dashboardLegend =
       dashboardTab === 'Ocupación'
         ? 'Ocupación promedio'
@@ -1236,19 +1365,19 @@ function AdminContentReady({
             <div className="adm-cash-summary">
               <div>
                 <span>Saldo inicial</span>
-                <strong>$5,000</strong>
+                <strong>{money(openingBalance)}</strong>
               </div>
               <div>
                 <span>Ingresos</span>
-                <strong className="success-text">$13,100</strong>
+                <strong className="success-text">{money(totalIncome)}</strong>
               </div>
               <div>
                 <span>Egresos</span>
-                <strong className="terracotta-text">$1,170</strong>
+                <strong className="terracotta-text">{money(totalExpenses)}</strong>
               </div>
               <div>
                 <span>Saldo actual</span>
-                <strong>$16,930</strong>
+                <strong>{money(currentBalance)}</strong>
               </div>
             </div>
           </div>
@@ -1274,37 +1403,37 @@ function AdminContentReady({
               <div className="room-stat">
                 <span className="room-dot occupied" />
                 <div>
-                  <strong>04</strong>
+                  <strong>{String(occupiedRooms).padStart(2, '0')}</strong>
                   <small>Ocupadas</small>
                 </div>
               </div>
               <div className="room-stat">
                 <span className="room-dot available" />
                 <div>
-                  <strong>05</strong>
+                  <strong>{String(availableRooms).padStart(2, '0')}</strong>
                   <small>Disponibles</small>
                 </div>
               </div>
               <div className="room-stat">
                 <span className="room-dot cleaning" />
                 <div>
-                  <strong>01</strong>
+                  <strong>{String(cleaningRooms).padStart(2, '0')}</strong>
                   <small>Limpieza</small>
                 </div>
               </div>
               <div className="room-stat">
                 <span className="room-dot maintenance" />
                 <div>
-                  <strong>01</strong>
+                  <strong>{String(maintenanceRooms).padStart(2, '0')}</strong>
                   <small>Mantenimiento</small>
                 </div>
               </div>
             </div>
             <div className="progress-line">
               <span>Ocupación general</span>
-              <strong>36%</strong>
+              <strong>{occupancyPercent}%</strong>
               <div>
-                <i style={{ width: '36%' }} />
+                <i style={{ width: `${occupancyPercent}%` }} />
               </div>
             </div>
           </div>
@@ -1418,16 +1547,7 @@ function AdminContentReady({
                       checked={u.status === 'Activo'}
                       label={u.status === 'Activo' ? 'Desactivar usuario' : 'Activar usuario'}
                       onChange={() => {
-                        setUsers((cur) =>
-                          cur.map((x) =>
-                            x.id === u.id
-                              ? { ...x, status: x.status === 'Activo' ? 'Inactivo' : 'Activo' }
-                              : x,
-                          ),
-                        );
-                        onAction(
-                          `Usuario ${u.name} ${u.status === 'Activo' ? 'desactivado' : 'activado'}`,
-                        );
+                        onAction('Gestion de usuarios fuera de alcance: no se modifico la fuente.');
                       }}
                     />
                   </td>
@@ -1491,13 +1611,8 @@ function AdminContentReady({
             roles={roles}
             onClose={() => setShowUserModal(false)}
             onSave={(u) => {
-              if (editUser) {
-                setUsers((cur) => cur.map((x) => (x.id === u.id ? u : x)));
-                onAction('Usuario actualizado correctamente');
-              } else {
-                setUsers((cur) => [...cur, { ...u, id: Date.now() }]);
-                onAction('Usuario creado correctamente');
-              }
+              void u;
+              onAction('Gestion de usuarios fuera de alcance: no se modifico la fuente.');
               setShowUserModal(false);
             }}
           />
@@ -1507,13 +1622,8 @@ function AdminContentReady({
             role={editRole}
             onClose={() => setShowRoleModal(false)}
             onSave={(r) => {
-              if (editRole) {
-                setRoles((cur) => cur.map((x) => (x.id === r.id ? r : x)));
-                onAction('Rol actualizado correctamente');
-              } else {
-                setRoles((cur) => [...cur, { ...r, id: Date.now() }]);
-                onAction('Rol creado correctamente');
-              }
+              void r;
+              onAction('Gestion de roles fuera de alcance: no se modifico la fuente.');
               setShowRoleModal(false);
             }}
           />
@@ -1583,7 +1693,7 @@ function AdminContentReady({
                   <td>{r.floor}</td>
                   <td>{r.type}</td>
                   <td>{r.capacity} huéspedes</td>
-                  <td>${r.rate.toLocaleString()}</td>
+                  <td>{money(r.rate)}</td>
                   <td>
                     <span className={`status-pill ${roomStatusClass(r.status)}`}>{r.status}</span>
                   </td>
@@ -1602,14 +1712,19 @@ function AdminContentReady({
                           ? 'Activar habitación'
                           : 'Desactivar habitación'
                       }
-                      onChange={() => {
+                      onChange={async () => {
+                        const updated = await roomService.updateRoom(r.dbId, {
+                          status: r.status === 'Mantenimiento' ? 'available' : 'maintenance',
+                        });
                         setRooms((cur) =>
                           cur.map((x) =>
                             x.id === r.id
                               ? {
                                   ...x,
-                                  status:
-                                    x.status === 'Mantenimiento' ? 'Disponible' : 'Mantenimiento',
+                                  status: roomStatusLabel(
+                                    updated.status,
+                                    updated.housekeepingStatus,
+                                  ),
                                 }
                               : x,
                           ),
@@ -1668,7 +1783,7 @@ function AdminContentReady({
                     ))}
                   </div>
                   <div className="adm-roomtype-price">
-                    Precio base: <strong>${rt.basePrice.toLocaleString()}</strong>
+                    Precio base: <strong>{money(rt.basePrice)}</strong>
                   </div>
                   <div className="adm-role-actions">
                     <EditIconButton
@@ -1681,11 +1796,14 @@ function AdminContentReady({
                     <StatusSwitch
                       checked={rt.status === 'Activo'}
                       label={rt.status === 'Activo' ? 'Desactivar tipo' : 'Activar tipo'}
-                      onChange={() => {
+                      onChange={async () => {
+                        const updated = await roomService.updateRoomType(rt.dbId, {
+                          active: rt.status !== 'Activo',
+                        });
                         setRoomTypes((cur) =>
                           cur.map((x) =>
                             x.id === rt.id
-                              ? { ...x, status: x.status === 'Activo' ? 'Inactivo' : 'Activo' }
+                              ? { ...x, status: updated.active ? 'Activo' : 'Inactivo' }
                               : x,
                           ),
                         );
@@ -1705,12 +1823,44 @@ function AdminContentReady({
             room={editRoom}
             roomTypes={roomTypes}
             onClose={() => setShowRoomModal(false)}
-            onSave={(r) => {
+            onSave={async (r) => {
+              const floor = Number(String(r.floor).replace(/\D/g, '')) || 1;
+              const data = {
+                room_number: r.number,
+                room_type_id: r.roomTypeId,
+                floor,
+                status: toRoomStatusDto(r.status),
+              };
               if (editRoom) {
-                setRooms((cur) => cur.map((x) => (x.id === r.id ? r : x)));
+                const updated = await roomService.updateRoom(editRoom.dbId, data);
+                setRooms((cur) =>
+                  cur.map((x) =>
+                    x.id === editRoom.id
+                      ? {
+                          ...x,
+                          ...r,
+                          dbId: updated.id,
+                          roomTypeId: updated.roomTypeId,
+                          floor: `Piso ${updated.floor}`,
+                          status: roomStatusLabel(updated.status, updated.housekeepingStatus),
+                        }
+                      : x,
+                  ),
+                );
                 onAction('Habitación actualizada correctamente');
               } else {
-                setRooms((cur) => [...cur, { ...r, id: Date.now() }]);
+                const created = await roomService.createRoom(data);
+                setRooms((cur) => [
+                  ...cur,
+                  {
+                    ...r,
+                    id: parseDbId(created.id, Date.now()),
+                    dbId: created.id,
+                    roomTypeId: created.roomTypeId,
+                    floor: `Piso ${created.floor}`,
+                    status: roomStatusLabel(created.status, created.housekeepingStatus),
+                  },
+                ]);
                 onAction('Habitación creada correctamente');
               }
               setShowRoomModal(false);
@@ -1721,12 +1871,48 @@ function AdminContentReady({
           <RoomTypeModal
             roomType={editRoomType}
             onClose={() => setShowRoomTypeModal(false)}
-            onSave={(rt) => {
+            onSave={async (rt) => {
               if (editRoomType) {
-                setRoomTypes((cur) => cur.map((x) => (x.id === rt.id ? rt : x)));
+                const updated = await roomService.updateRoomType(editRoomType.dbId, {
+                  name: rt.name,
+                  description: rt.description,
+                  capacity: rt.capacity,
+                  bed_configuration: editRoomType.features.join(', ') || rt.name,
+                  room_feature_ids: rt.roomFeatureIds,
+                  active: rt.status === 'Activo',
+                });
+                setRoomTypes((cur) =>
+                  cur.map((x) =>
+                    x.id === editRoomType.id
+                      ? {
+                          ...rt,
+                          id: editRoomType.id,
+                          dbId: updated.id,
+                          status: updated.active ? 'Activo' : 'Inactivo',
+                        }
+                      : x,
+                  ),
+                );
                 onAction('Tipo de habitación actualizado correctamente');
               } else {
-                setRoomTypes((cur) => [...cur, { ...rt, id: Date.now() }]);
+                const created = await roomService.createRoomType({
+                  code: rt.name.toUpperCase().replace(/\s+/g, '_').slice(0, 16),
+                  name: rt.name,
+                  description: rt.description,
+                  capacity: rt.capacity,
+                  bed_configuration: rt.name,
+                  room_feature_ids: rt.roomFeatureIds,
+                  active: rt.status === 'Activo',
+                });
+                setRoomTypes((cur) => [
+                  ...cur,
+                  {
+                    ...rt,
+                    id: parseDbId(created.id, Date.now()),
+                    dbId: created.id,
+                    status: created.active ? 'Activo' : 'Inactivo',
+                  },
+                ]);
                 onAction('Tipo de habitación creado correctamente');
               }
               setShowRoomTypeModal(false);
@@ -1777,9 +1963,9 @@ function AdminContentReady({
                   <td>
                     {sr.startDate} → {sr.endDate}
                   </td>
-                  <td>${sr.baseRate.toLocaleString()}</td>
+                  <td>{money(sr.baseRate)}</td>
                   <td>
-                    <strong className="success-text">${sr.seasonalRate.toLocaleString()}</strong>
+                    <strong className="success-text">{money(sr.seasonalRate)}</strong>
                   </td>
                   <td>
                     <span className={`status-pill ${statusPillClass(sr.status)}`}>{sr.status}</span>
@@ -1788,11 +1974,14 @@ function AdminContentReady({
                     <StatusSwitch
                       checked={sr.status === 'Activa'}
                       label={sr.status === 'Activa' ? 'Desactivar tarifa' : 'Activar tarifa'}
-                      onChange={() => {
+                      onChange={async () => {
+                        const updated = await roomService.updateRate(sr.dbId, {
+                          active: sr.status !== 'Activa',
+                        });
                         setSeasonRates((cur) =>
                           cur.map((x) =>
                             x.id === sr.id
-                              ? { ...x, status: x.status === 'Activa' ? 'Inactiva' : 'Activa' }
+                              ? { ...x, status: updated.active ? 'Activa' : 'Inactiva' }
                               : x,
                           ),
                         );
@@ -1811,11 +2000,22 @@ function AdminContentReady({
               <h3>Tarifas dinámicas</h3>
               <p>Reglas de ajuste automático según condiciones</p>
             </div>
-            <button className="button primary" onClick={() => setShowDynamicRateModal(true)}>
+            <button
+              className="button primary"
+              onClick={() =>
+                onAction('Tarifas dinamicas fuera de alcance: no se modifico la fuente.')
+              }
+            >
               <Plus size={17} /> Nueva regla
             </button>
           </div>
           <div className="adm-dynrate-grid">
+            {dynamicRates.length === 0 && (
+              <div className="hk-empty">
+                <TrendingUp size={22} />
+                <p>Las tarifas dinamicas aun no tienen contrato de datos.</p>
+              </div>
+            )}
             {dynamicRates.map((dr) => (
               <div className="adm-dynrate-card" key={dr.id}>
                 <div className="adm-dynrate-head">
@@ -1863,8 +2063,30 @@ function AdminContentReady({
           <SeasonRateModal
             roomTypes={roomTypes}
             onClose={() => setShowSeasonRateModal(false)}
-            onSave={(sr) => {
-              setSeasonRates((cur) => [...cur, { ...sr, id: Date.now() }]);
+            onSave={async (sr) => {
+              const roomType = roomTypes.find((type) => type.name === sr.roomType);
+              if (!roomType) {
+                notifyError(new Error('Selecciona un tipo de habitacion valido.'));
+                return;
+              }
+              const created = await roomService.createRate({
+                room_type_id: roomType.dbId,
+                name: sr.seasonName,
+                valid_from: sr.startDate,
+                valid_to: sr.endDate,
+                price_cents: amountToCents(sr.seasonalRate),
+                active: true,
+              });
+              setSeasonRates((cur) => [
+                ...cur,
+                {
+                  ...sr,
+                  id: parseDbId(created.id, Date.now()),
+                  dbId: created.id,
+                  seasonalRate: centsToAmount(created.priceCents),
+                  status: created.active ? 'Activa' : 'Inactiva',
+                },
+              ]);
               onAction('Tarifa de temporada creada correctamente');
               setShowSeasonRateModal(false);
             }}
@@ -1873,9 +2095,8 @@ function AdminContentReady({
         {showDynamicRateModal && (
           <DynamicRateModal
             onClose={() => setShowDynamicRateModal(false)}
-            onSave={(dr) => {
-              setDynamicRates((cur) => [...cur, { ...dr, id: Date.now() }]);
-              onAction('Regla dinámica creada correctamente');
+            onSave={() => {
+              onAction('Tarifas dinamicas fuera de alcance: no se modifico la fuente.');
               setShowDynamicRateModal(false);
             }}
           />
@@ -1948,15 +2169,22 @@ function AdminContentReady({
                     <StatusSwitch
                       checked={p.status === 'Activa'}
                       label={p.status === 'Activa' ? 'Desactivar promoción' : 'Activar promoción'}
-                      onChange={() => {
-                        setPromos((cur) =>
-                          cur.map((x) =>
-                            x.id === p.id
-                              ? { ...x, status: x.status === 'Activa' ? 'Inactiva' : 'Activa' }
-                              : x,
-                          ),
-                        );
-                        onAction(`Promoción ${p.status === 'Activa' ? 'desactivada' : 'activada'}`);
+                      onChange={async () => {
+                        try {
+                          const updated = await promotionService.updatePromotion(p.dbId, {
+                            active: p.status !== 'Activa',
+                          });
+                          setPromos((cur) =>
+                            cur.map((x) =>
+                              x.id === p.id
+                                ? { ...x, status: updated.active ? 'Activa' : 'Inactiva' }
+                                : x,
+                            ),
+                          );
+                          onAction('Promocion actualizada correctamente');
+                        } catch (cause) {
+                          notifyError(cause);
+                        }
                       }}
                     />
                   </div>
@@ -1969,15 +2197,51 @@ function AdminContentReady({
           <PromoModal
             promo={editPromo}
             onClose={() => setShowPromoModal(false)}
-            onSave={(p) => {
-              if (editPromo) {
-                setPromos((cur) => cur.map((x) => (x.id === p.id ? p : x)));
-                onAction('Promoción actualizada correctamente');
-              } else {
-                setPromos((cur) => [...cur, { ...p, id: Date.now() }]);
-                onAction('Promoción creada correctamente');
+            onSave={async (p) => {
+              try {
+                const saved = editPromo
+                  ? await promotionService.updatePromotion(editPromo.dbId, {
+                      code: p.code,
+                      name: p.name,
+                      description: p.conditions,
+                      discount_percent: p.percentage,
+                      valid_from: p.startDate,
+                      valid_to: p.endDate,
+                      active: p.status === 'Activa',
+                    })
+                  : await promotionService.createPromotion({
+                      code: p.code,
+                      name: p.name,
+                      description: p.conditions,
+                      discount_percent: p.percentage,
+                      valid_from: p.startDate,
+                      valid_to: p.endDate,
+                      active: p.status === 'Activa',
+                    });
+                const next: Promo = {
+                  ...p,
+                  id: editPromo?.id ?? parseDbId(saved.id, Date.now()),
+                  dbId: saved.id,
+                  code: saved.code,
+                  name: saved.name,
+                  percentage: saved.discountPercent,
+                  startDate: toDtoCalendarDate(saved.validFrom),
+                  endDate: toDtoCalendarDate(saved.validTo),
+                  conditions: saved.description,
+                  status: saved.active ? 'Activa' : 'Inactiva',
+                };
+                setPromos((cur) =>
+                  editPromo ? cur.map((x) => (x.id === editPromo.id ? next : x)) : [...cur, next],
+                );
+                onAction(
+                  editPromo
+                    ? 'Promocion actualizada correctamente'
+                    : 'Promocion creada correctamente',
+                );
+                setShowPromoModal(false);
+              } catch (cause) {
+                notifyError(cause);
               }
-              setShowPromoModal(false);
             }}
           />
         )}
@@ -2048,16 +2312,7 @@ function AdminContentReady({
                         checked={a.status === 'Activo'}
                         label={a.status === 'Activo' ? 'Desactivar amenidad' : 'Activar amenidad'}
                         onChange={() => {
-                          setAmenities((cur) =>
-                            cur.map((x) =>
-                              x.id === a.id
-                                ? { ...x, status: x.status === 'Activo' ? 'Inactivo' : 'Activo' }
-                                : x,
-                            ),
-                          );
-                          onAction(
-                            `Amenidad ${a.status === 'Activo' ? 'desactivada' : 'activada'}`,
-                          );
+                          onAction('Amenidades fuera de alcance: no se modifico la fuente.');
                         }}
                       />
                     </div>
@@ -2104,7 +2359,7 @@ function AdminContentReady({
                       <span>{item.category}</span>
                     </div>
                     <div className="adm-rs-foot">
-                      <strong>${item.price.toLocaleString()}</strong>
+                      <strong>{money(item.price)}</strong>
                       <span className={`status-pill ${item.available ? 'success' : 'warning'}`}>
                         {item.available ? 'Disponible' : 'No disponible'}
                       </span>
@@ -2122,15 +2377,8 @@ function AdminContentReady({
                       checked={item.status === 'Activo'}
                       label={item.status === 'Activo' ? 'Desactivar producto' : 'Activar producto'}
                       onChange={() => {
-                        setRsItems((cur) =>
-                          cur.map((x) =>
-                            x.id === item.id
-                              ? { ...x, status: x.status === 'Activo' ? 'Inactivo' : 'Activo' }
-                              : x,
-                          ),
-                        );
                         onAction(
-                          `Producto ${item.status === 'Activo' ? 'desactivado' : 'activado'}`,
+                          'Catalogo de Room Service fuera de alcance: no se modifico la fuente.',
                         );
                       }}
                     />
@@ -2145,13 +2393,8 @@ function AdminContentReady({
             amenity={editAmenity}
             onClose={() => setShowAmenityModal(false)}
             onSave={(a) => {
-              if (editAmenity) {
-                setAmenities((cur) => cur.map((x) => (x.id === a.id ? a : x)));
-                onAction('Amenidad actualizada correctamente');
-              } else {
-                setAmenities((cur) => [...cur, { ...a, id: Date.now() }]);
-                onAction('Amenidad creada correctamente');
-              }
+              void a;
+              onAction('Amenidades fuera de alcance: no se modifico la fuente.');
               setShowAmenityModal(false);
             }}
           />
@@ -2161,13 +2404,8 @@ function AdminContentReady({
             item={editRsItem}
             onClose={() => setShowRsItemModal(false)}
             onSave={(item) => {
-              if (editRsItem) {
-                setRsItems((cur) => cur.map((x) => (x.id === item.id ? item : x)));
-                onAction('Producto actualizado correctamente');
-              } else {
-                setRsItems((cur) => [...cur, { ...item, id: Date.now() }]);
-                onAction('Producto creado correctamente');
-              }
+              void item;
+              onAction('Catalogo de Room Service fuera de alcance: no se modifico la fuente.');
               setShowRsItemModal(false);
             }}
           />
@@ -2178,16 +2416,37 @@ function AdminContentReady({
 
   // ─── REPORTES ───
   if (nav === 'Reportes') {
-    const reportData = reportPeriodData[reportFilter];
-    const lastReservation = reportData.reservations[reportData.reservations.length - 1] ?? 0;
-    const lastIncome = reportData.income[reportData.income.length - 1] ?? 0;
-    const reservationRows = reportData.labels.slice(0, 6).map((label, index) => ({
-      label,
-      reservations: reportData.reservations[index] ?? lastReservation,
-      checkIns: Math.max((reportData.reservations[index] ?? 0) - 4, 0),
-      checkOuts: Math.max((reportData.reservations[index] ?? 0) - 6, 0),
-      income: (reportData.income[index] ?? lastIncome) * 1000,
+    const occupiedRooms = rooms.filter((room) => room.status === 'Ocupada').length;
+    const occupancyPercent =
+      rooms.length > 0 ? Math.round((occupiedRooms / rooms.length) * 1000) / 10 : 0;
+    const confirmedReservations = bookings.filter((booking) =>
+      ['confirmed', 'checkedIn', 'checkedOut'].includes(booking.status),
+    ).length;
+    const cancelledReservations = bookings.filter(
+      (booking) => booking.status === 'cancelled',
+    ).length;
+    const totalReservations = bookings.length;
+    const cancellationRate =
+      totalReservations > 0
+        ? Math.round((cancelledReservations / totalReservations) * 1000) / 10
+        : 0;
+    const totalIncome = cashMovements
+      .filter((movement) => movement.type === 'Ingreso')
+      .reduce((sum, movement) => sum + movement.amount, 0);
+    const incomeRows = cashMovements.filter((movement) => movement.type === 'Ingreso');
+    const reservationRows = bookings.map((booking) => ({
+      label: booking.confirmationCode,
+      reservations: 1,
+      checkIns: booking.status === 'checkedIn' || booking.status === 'checkedOut' ? 1 : 0,
+      checkOuts: booking.status === 'checkedOut' ? 1 : 0,
+      income: centsToAmount(booking.totalAmountCents),
     }));
+    const EmptyReport = ({ message }: { message: string }) => (
+      <div className="hk-empty">
+        <FileText size={20} />
+        <p>{message}</p>
+      </div>
+    );
     return (
       <div className="panel">
         <div className="panel-heading">
@@ -2234,8 +2493,8 @@ function AdminContentReady({
                   </div>
                   <div>
                     <p>Ocupación promedio</p>
-                    <h2>{reportData.occupancyValue}</h2>
-                    <span className="positive">{reportData.change}</span>
+                    <h2>{occupancyPercent}%</h2>
+                    <span className="positive">Datos actuales</span>
                   </div>
                 </div>
                 <div className="metric-card">
@@ -2244,12 +2503,15 @@ function AdminContentReady({
                   </div>
                   <div>
                     <p>Tendencia</p>
-                    <h2>{reportData.trend}</h2>
+                    <h2>{occupiedRooms > 0 ? 'Con ocupacion' : 'Sin ocupacion'}</h2>
                     <span className="positive">{reportFilter}</span>
                   </div>
                 </div>
               </div>
-              <MiniChart data={reportData.occupancy} labels={reportData.labels} />
+              <MiniChart
+                data={rooms.length > 0 ? rooms.map((_, index) => index + 1) : [0]}
+                labels={rooms.length > 0 ? rooms.map((room) => room.number) : ['Sin datos']}
+              />
             </>
           )}
           {reportTab === 'Ingresos' && (
@@ -2261,8 +2523,8 @@ function AdminContentReady({
                   </div>
                   <div>
                     <p>Ingresos del periodo</p>
-                    <h2>{reportData.incomeValue}</h2>
-                    <span className="positive">{reportData.change}</span>
+                    <h2>{money(totalIncome)}</h2>
+                    <span className="positive">Caja registrada</span>
                   </div>
                 </div>
                 <div className="metric-card">
@@ -2272,18 +2534,16 @@ function AdminContentReady({
                   <div>
                     <p>Promedio por corte</p>
                     <h2>
-                      $
-                      {Math.round(
-                        reportData.income.reduce((sum, value) => sum + value, 0) /
-                          reportData.income.length,
-                      ).toLocaleString()}
-                      K
+                      {incomeRows.length > 0 ? money(totalIncome / incomeRows.length) : money(0)}
                     </h2>
                     <span className="positive">{reportFilter}</span>
                   </div>
                 </div>
               </div>
-              <BarChart data={reportData.income} labels={reportData.labels} />
+              <BarChart
+                data={incomeRows.length > 0 ? incomeRows.map((row) => row.amount) : [0]}
+                labels={incomeRows.length > 0 ? incomeRows.map((row) => row.date) : ['Sin datos']}
+              />
             </>
           )}
           {reportTab === 'Reservas' && (
@@ -2294,7 +2554,7 @@ function AdminContentReady({
                   <td>{row.reservations}</td>
                   <td>{row.checkIns}</td>
                   <td>{row.checkOuts}</td>
-                  <td>${row.income.toLocaleString()}</td>
+                  <td>{money(row.income)}</td>
                 </tr>
               ))}
             </AdminTable>
@@ -2308,8 +2568,8 @@ function AdminContentReady({
                   </div>
                   <div>
                     <p>Cancelaciones</p>
-                    <h2>{reportData.cancellationValue}</h2>
-                    <span>-2.4%</span>
+                    <h2>{cancelledReservations}</h2>
+                    <span>Datos actuales</span>
                   </div>
                 </div>
                 <div className="metric-card">
@@ -2318,104 +2578,26 @@ function AdminContentReady({
                   </div>
                   <div>
                     <p>Tasa de cancelación</p>
-                    <h2>
-                      {reportFilter === 'Día'
-                        ? '3.1%'
-                        : reportFilter === 'Temporada'
-                          ? '5.0%'
-                          : '8.5%'}
-                    </h2>
-                    <span className="positive">-1.2%</span>
+                    <h2>{cancellationRate}%</h2>
+                    <span className="positive">{confirmedReservations} reservas vigentes</span>
                   </div>
                 </div>
               </div>
               <MiniChart
-                data={reportData.cancellations}
-                labels={reportData.labels}
+                data={[cancelledReservations, confirmedReservations]}
+                labels={['Canceladas', 'Vigentes']}
                 color="#a9483c"
               />
             </>
           )}
           {reportTab === 'Canales' && (
-            <AdminTable headers={['Canal', 'Reservas', 'Ingresos', '% del total']}>
-              <tr>
-                <td>Online</td>
-                <td>68</td>
-                <td>$78,400</td>
-                <td>61%</td>
-              </tr>
-              <tr>
-                <td>Teléfono</td>
-                <td>24</td>
-                <td>$28,200</td>
-                <td>22%</td>
-              </tr>
-              <tr>
-                <td>Presencial</td>
-                <td>12</td>
-                <td>$14,800</td>
-                <td>12%</td>
-              </tr>
-              <tr>
-                <td>Agencias</td>
-                <td>8</td>
-                <td>$7,000</td>
-                <td>5%</td>
-              </tr>
-            </AdminTable>
+            <EmptyReport message="El contrato actual de reservas no define canal de venta; no se muestran cifras simuladas." />
           )}
           {reportTab === 'Servicios' && (
-            <AdminTable headers={['Servicio', 'Veces utilizado', 'Ingresos', '% del total']}>
-              <tr>
-                <td>Room Service</td>
-                <td>142</td>
-                <td>$38,600</td>
-                <td>30%</td>
-              </tr>
-              <tr>
-                <td>Spa</td>
-                <td>86</td>
-                <td>$24,200</td>
-                <td>19%</td>
-              </tr>
-              <tr>
-                <td>Lavandería</td>
-                <td>54</td>
-                <td>$12,800</td>
-                <td>10%</td>
-              </tr>
-              <tr>
-                <td>Transporte</td>
-                <td>38</td>
-                <td>$9,400</td>
-                <td>7%</td>
-              </tr>
-            </AdminTable>
+            <EmptyReport message="Los ingresos por servicio se veran aqui cuando exista una fuente contractual agregada." />
           )}
           {reportTab === 'Temporadas' && (
-            <AdminTable headers={['Temporada', 'Ocupación', 'Ingresos', 'Reservas', 'ADR']}>
-              <tr>
-                <td>Alta (Dic - Mar)</td>
-                <td>92%</td>
-                <td>$48,200</td>
-                <td>58</td>
-                <td>$3,200</td>
-              </tr>
-              <tr>
-                <td>Media (Abr - Jul)</td>
-                <td>78%</td>
-                <td>$32,100</td>
-                <td>42</td>
-                <td>$2,450</td>
-              </tr>
-              <tr>
-                <td>Baja (Ago - Nov)</td>
-                <td>65%</td>
-                <td>$22,800</td>
-                <td>28</td>
-                <td>$1,850</td>
-              </tr>
-            </AdminTable>
+            <EmptyReport message="La agrupacion por temporadas aun no tiene contrato de datos; se omiten metricas inventadas." />
           )}
         </div>
       </div>
@@ -2485,7 +2667,7 @@ function AdminContentReady({
                     <strong>{p.stock}</strong>
                   </td>
                   <td>{p.minStock}</td>
-                  <td>${p.price.toLocaleString()}</td>
+                  <td>{money(p.price)}</td>
                   <td>
                     <span className={`status-pill ${statusPillClass(p.status)}`}>{p.status}</span>
                   </td>
@@ -2500,15 +2682,22 @@ function AdminContentReady({
                     <StatusSwitch
                       checked={p.status === 'Activo'}
                       label={p.status === 'Activo' ? 'Desactivar producto' : 'Activar producto'}
-                      onChange={() => {
-                        setInventory((cur) =>
-                          cur.map((x) =>
-                            x.id === p.id
-                              ? { ...x, status: x.status === 'Activo' ? 'Inactivo' : 'Activo' }
-                              : x,
-                          ),
-                        );
-                        onAction(`Producto ${p.status === 'Activo' ? 'desactivado' : 'activado'}`);
+                      onChange={async () => {
+                        try {
+                          const updated = await inventoryService.updateItem(p.dbId, {
+                            active: p.status !== 'Activo',
+                          });
+                          setInventory((cur) =>
+                            cur.map((x) =>
+                              x.id === p.id
+                                ? { ...x, status: updated.active ? 'Activo' : 'Inactivo' }
+                                : x,
+                            ),
+                          );
+                          onAction('Producto de inventario actualizado correctamente');
+                        } catch (cause) {
+                          notifyError(cause);
+                        }
                       }}
                     />
                   </td>
@@ -2559,15 +2748,43 @@ function AdminContentReady({
           <ProductModal
             product={editProduct}
             onClose={() => setShowProductModal(false)}
-            onSave={(p) => {
-              if (editProduct) {
-                setInventory((cur) => cur.map((x) => (x.id === p.id ? p : x)));
+            onSave={async (p) => {
+              try {
+                if (!editProduct) {
+                  onAction('Alta de inventario fuera de alcance: no se modifico la fuente.');
+                  setShowProductModal(false);
+                  return;
+                }
+                const categoryCode =
+                  INVENTORY_CATEGORY_BY_LABEL[p.category] ?? editProduct.categoryCode;
+                const updated = await inventoryService.updateItem(editProduct.dbId, {
+                  name: p.name,
+                  category: toInventoryCategoryDto(categoryCode),
+                  current_quantity: p.stock,
+                  minimum_quantity: p.minStock,
+                  active: p.status === 'Activo',
+                });
+                setInventory((cur) =>
+                  cur.map((x) =>
+                    x.id === editProduct.id
+                      ? {
+                          ...p,
+                          id: editProduct.id,
+                          dbId: updated.id,
+                          categoryCode,
+                          category: INVENTORY_CATEGORY_LABELS[categoryCode],
+                          stock: updated.currentQuantity,
+                          minStock: updated.minimumQuantity,
+                          status: updated.active ? 'Activo' : 'Inactivo',
+                        }
+                      : x,
+                  ),
+                );
                 onAction('Producto actualizado correctamente');
-              } else {
-                setInventory((cur) => [...cur, { ...p, id: Date.now() }]);
-                onAction('Producto creado correctamente');
+                setShowProductModal(false);
+              } catch (cause) {
+                notifyError(cause);
               }
-              setShowProductModal(false);
             }}
           />
         )}
@@ -2575,22 +2792,50 @@ function AdminContentReady({
           <MovementModal
             products={inventory}
             onClose={() => setShowMovementModal(false)}
-            onSave={(m) => {
-              setInventory((cur) =>
-                cur.map((x) =>
-                  x.id === m.productId
-                    ? {
-                        ...x,
-                        stock:
-                          m.type === 'Entrada'
-                            ? x.stock + m.quantity
-                            : Math.max(0, x.stock - m.quantity),
-                      }
-                    : x,
-                ),
-              );
-              onAction(`${m.type} de ${m.quantity} unidades registrada`);
-              setShowMovementModal(false);
+            onSave={async (m) => {
+              try {
+                const item = inventory.find((entry) => entry.id === m.productId);
+                if (!item) throw new Error('Selecciona un producto de inventario valido.');
+                const saved = await inventoryService.createMovement({
+                  inventoryItemId: item.dbId,
+                  type: m.type === 'Entrada' ? 'in' : 'out',
+                  reason: INVENTORY_REASON_BY_LABEL[m.reason] ?? 'restock',
+                  quantity: m.quantity,
+                  notes: m.reason,
+                });
+                setMovements((cur) => [
+                  {
+                    id: parseDbId(saved.id, Date.now()),
+                    dbId: saved.id,
+                    date: toDtoCalendarDate(saved.occurredAt),
+                    product: item.name,
+                    type: saved.type === 'in' ? 'Entrada' : 'Salida',
+                    quantity: saved.quantity,
+                    reason: INVENTORY_REASON_LABELS[saved.reason],
+                    responsible: m.responsible,
+                  },
+                  ...cur,
+                ]);
+                const updatedItem = await inventoryService.getItemById(item.dbId);
+                if (updatedItem) {
+                  setInventory((cur) =>
+                    cur.map((entry) =>
+                      entry.id === item.id
+                        ? {
+                            ...entry,
+                            stock: updatedItem.currentQuantity,
+                            minStock: updatedItem.minimumQuantity,
+                            status: updatedItem.active ? 'Activo' : 'Inactivo',
+                          }
+                        : entry,
+                    ),
+                  );
+                }
+                onAction(`${m.type} de ${m.quantity} unidades registrada`);
+                setShowMovementModal(false);
+              } catch (cause) {
+                notifyError(cause);
+              }
             }}
           />
         )}
@@ -2606,7 +2851,13 @@ function AdminContentReady({
     const totalEgresos = cashMovements
       .filter((m) => m.type === 'Egreso')
       .reduce((s, m) => s + m.amount, 0);
-    const saldoInicial = 5000;
+    const latestCashSession =
+      [...cashSessions].sort(
+        (left, right) => right.openedAt.getTime() - left.openedAt.getTime(),
+      )[0] ?? null;
+    const saldoInicial = latestCashSession
+      ? centsToAmount(latestCashSession.openingBalanceCents)
+      : 0;
     return (
       <>
         <div className="adm-cash-grid">
@@ -2616,7 +2867,7 @@ function AdminContentReady({
             </div>
             <div>
               <p>Saldo inicial</p>
-              <h2>${saldoInicial.toLocaleString()}</h2>
+              <h2>{money(saldoInicial)}</h2>
             </div>
           </div>
           <div className="metric-card">
@@ -2625,7 +2876,7 @@ function AdminContentReady({
             </div>
             <div>
               <p>Ingresos</p>
-              <h2>${totalIngresos.toLocaleString()}</h2>
+              <h2>{money(totalIngresos)}</h2>
               <span className="positive">
                 +{((totalIngresos / (saldoInicial + totalIngresos)) * 100).toFixed(1)}%
               </span>
@@ -2637,7 +2888,7 @@ function AdminContentReady({
             </div>
             <div>
               <p>Egresos</p>
-              <h2>${totalEgresos.toLocaleString()}</h2>
+              <h2>{money(totalEgresos)}</h2>
             </div>
           </div>
           <div className="metric-card">
@@ -2646,7 +2897,7 @@ function AdminContentReady({
             </div>
             <div>
               <p>Saldo actual</p>
-              <h2>${(saldoInicial + totalIngresos - totalEgresos).toLocaleString()}</h2>
+              <h2>{money(saldoInicial + totalIngresos - totalEgresos)}</h2>
             </div>
           </div>
         </div>
@@ -2660,9 +2911,17 @@ function AdminContentReady({
               {cashOpen ? (
                 <button
                   className="button secondary"
-                  onClick={() => {
-                    setCashOpen(false);
-                    onAction('Caja cerrada correctamente');
+                  onClick={async () => {
+                    try {
+                      const closed = await cashService.closeSession();
+                      setCashSessions((cur) =>
+                        cur.map((session) => (session.id === closed.id ? closed : session)),
+                      );
+                      setCashOpen(false);
+                      onAction('Caja cerrada correctamente');
+                    } catch (cause) {
+                      notifyError(cause);
+                    }
                   }}
                 >
                   <Ban size={16} /> Cerrar caja
@@ -2670,9 +2929,17 @@ function AdminContentReady({
               ) : (
                 <button
                   className="button primary"
-                  onClick={() => {
-                    setCashOpen(true);
-                    onAction('Caja abierta correctamente');
+                  onClick={async () => {
+                    try {
+                      const opened = await cashService.openSession({
+                        openingBalanceCents: amountToCents(saldoInicial),
+                      });
+                      setCashSessions((cur) => [...cur, opened]);
+                      setCashOpen(true);
+                      onAction('Caja abierta correctamente');
+                    } catch (cause) {
+                      notifyError(cause);
+                    }
                   }}
                 >
                   <Plus size={16} /> Abrir caja
@@ -2709,7 +2976,8 @@ function AdminContentReady({
                   </td>
                   <td className={m.type === 'Ingreso' ? 'success-text' : 'terracotta-text'}>
                     <strong>
-                      {m.type === 'Ingreso' ? '+' : '-'}${m.amount.toLocaleString()}
+                      {m.type === 'Ingreso' ? '+' : '-'}
+                      {money(m.amount)}
                     </strong>
                   </td>
                   <td>{m.responsible}</td>
@@ -2721,13 +2989,28 @@ function AdminContentReady({
         {showCashModal && (
           <CashModal
             onClose={() => setShowCashModal(false)}
-            onSave={(m) => {
-              setCashMovements((cur) => [
-                { ...m, id: Date.now(), date: toDtoCalendarDate(new Date()) },
-                ...cur,
-              ]);
-              onAction('Movimiento de caja registrado correctamente');
-              setShowCashModal(false);
+            onSave={async (m) => {
+              try {
+                const saved = await cashService.createMovement({
+                  type: m.type === 'Ingreso' ? 'income' : 'expense',
+                  concept: m.concept,
+                  amountCents: amountToCents(m.amount),
+                });
+                setCashMovements((cur) => [
+                  {
+                    ...m,
+                    id: parseDbId(saved.id, Date.now()),
+                    dbId: saved.id,
+                    date: toDtoCalendarDate(saved.occurredAt),
+                    amount: centsToAmount(saved.amountCents),
+                  },
+                  ...cur,
+                ]);
+                onAction('Movimiento de caja registrado correctamente');
+                setShowCashModal(false);
+              } catch (cause) {
+                notifyError(cause);
+              }
             }}
           />
         )}
@@ -2973,6 +3256,7 @@ function RoomModal({
   const [capacity, setCapacity] = useState(room?.capacity ?? 2);
   const [rate, setRate] = useState(room?.rate ?? 1850);
   const [status, setStatus] = useState(room?.status ?? 'Disponible');
+  const selectedRoomType = roomTypes.find((rt) => rt.name === type);
   return (
     <AdminModal
       title={room ? 'Editar habitación' : 'Nueva habitación'}
@@ -2981,6 +3265,8 @@ function RoomModal({
       onSubmit={() =>
         onSave({
           id: room?.id ?? 0,
+          dbId: room?.dbId ?? '',
+          roomTypeId: selectedRoomType?.dbId ?? room?.roomTypeId ?? '',
           number,
           floor,
           type,
@@ -3079,9 +3365,11 @@ function RoomTypeModal({
       onSubmit={() =>
         onSave({
           id: roomType?.id ?? 0,
+          dbId: roomType?.dbId ?? '',
           name,
           capacity,
           description,
+          roomFeatureIds: roomType?.roomFeatureIds ?? [],
           features: roomType?.features ?? ['Cama king', 'Wi-Fi'],
           basePrice,
           status,
@@ -3167,6 +3455,7 @@ function SeasonRateModal({
       onSubmit={() =>
         onSave({
           id: 0,
+          dbId: '',
           roomType,
           seasonName,
           startDate,
@@ -3349,6 +3638,7 @@ function PromoModal({
       onSubmit={() =>
         onSave({
           id: promo?.id ?? 0,
+          dbId: promo?.dbId ?? '',
           name,
           code,
           percentage,
@@ -3635,7 +3925,18 @@ function ProductModal({
       eyebrow="GESTIÓN DE INVENTARIO"
       onClose={onClose}
       onSubmit={() =>
-        onSave({ id: product?.id ?? 0, name, category, stock, minStock, price, status })
+        onSave({
+          id: product?.id ?? 0,
+          dbId: product?.dbId ?? '',
+          categoryCode:
+            INVENTORY_CATEGORY_BY_LABEL[category] ?? product?.categoryCode ?? 'housekeeping',
+          name,
+          category,
+          stock,
+          minStock,
+          price,
+          status,
+        })
       }
       submitLabel={product ? 'Guardar cambios' : 'Crear producto'}
     >
