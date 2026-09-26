@@ -2,12 +2,20 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { bookingService } from '@/services/bookingService';
 import { guestAccountService } from '@/services/guestAccountService';
+import { guestService } from '@/services/guestService';
 import { BOOKING_STATUS_TRANSITIONS } from '@/shared/constants/statuses';
 import { DataTable, type DataTableColumn } from '@/shared/components/DataTable';
 import { ErrorState } from '@/shared/components/ErrorState';
 import { LoadingState } from '@/shared/components/LoadingState';
 import { Modal } from '@/shared/components/Modal';
-import type { Booking, Charge, Deposit, GuestAccount, Payment } from '@/shared/types/entities';
+import type {
+  Booking,
+  Charge,
+  Deposit,
+  Guest,
+  GuestAccount,
+  Payment,
+} from '@/shared/types/entities';
 import { formatCurrency } from '@/shared/utils/currency';
 import { formatDateGT } from '@/shared/utils/date';
 
@@ -18,6 +26,7 @@ export function CheckOutScreen() {
   const [status, setStatus] = useState<CheckOutStatus>('loading');
   const [error, setError] = useState<string | null>(null);
   const [booking, setBooking] = useState<Booking | null>(null);
+  const [guest, setGuest] = useState<Guest | null>(null);
   const [account, setAccount] = useState<GuestAccount | null>(null);
   const [charges, setCharges] = useState<Charge[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -38,7 +47,10 @@ export function CheckOutScreen() {
       const selectedBooking = await bookingService.getBookingById(bookingId);
       if (!selectedBooking) throw new Error('No encontramos la reserva seleccionada.');
 
-      const selectedAccount = await guestAccountService.getAccountByBookingId(selectedBooking.id);
+      const [selectedGuest, selectedAccount] = await Promise.all([
+        guestService.getGuestById(selectedBooking.guestId),
+        guestAccountService.getAccountByBookingId(selectedBooking.id),
+      ]);
       if (!selectedAccount) throw new Error('No encontramos la cuenta asociada a esta reserva.');
 
       const [selectedCharges, selectedPayments, selectedDeposits] = await Promise.all([
@@ -47,6 +59,7 @@ export function CheckOutScreen() {
         guestAccountService.getDepositsByBookingId(selectedBooking.id),
       ]);
       setBooking(selectedBooking);
+      setGuest(selectedGuest ?? null);
       setAccount(selectedAccount);
       setCharges(selectedCharges);
       setPayments(selectedPayments);
@@ -54,6 +67,7 @@ export function CheckOutScreen() {
       setStatus(selectedBooking.status === 'checkedOut' ? 'completed' : 'ready');
     } catch (cause: unknown) {
       setBooking(null);
+      setGuest(null);
       setAccount(null);
       setCharges([]);
       setPayments([]);
@@ -143,6 +157,7 @@ export function CheckOutScreen() {
   const depositsTotalCents = deposits
     .filter((deposit) => deposit.status !== 'refunded')
     .reduce((total, deposit) => total + deposit.amountCents, 0);
+  const guestName = guest ? `${guest.firstName} ${guest.lastName}` : booking?.guestId;
 
   if (status === 'loading') {
     return (
@@ -171,7 +186,8 @@ export function CheckOutScreen() {
           <span className="eyebrow">Front desk · Comprobante de salida</span>
           <h1>Check-out</h1>
           <p className="muted">
-            Reserva {booking.id} · Confirmación {booking.confirmationCode}
+            {guestName ? `${guestName} · ` : ''}Reserva {booking.id} · Confirmación{' '}
+            {booking.confirmationCode}
           </p>
         </div>
         <div className="welcome-actions">
@@ -251,7 +267,8 @@ export function CheckOutScreen() {
             <article className="metric-card">
               <div>
                 <p>Huésped</p>
-                <h2>{booking.guestId}</h2>
+                <h2>{guestName ?? booking.guestId}</h2>
+                {guest && <span>Referencia {guest.id}</span>}
               </div>
             </article>
             <article className="metric-card">
@@ -322,8 +339,8 @@ export function CheckOutScreen() {
 
       <Modal open={isConfirmOpen} onClose={closeConfirm} title="Confirmar salida del huésped">
         <p>
-          Vas a cerrar la estadía y la cuenta de la reserva {booking.confirmationCode}. Esta acción
-          no se puede deshacer.
+          Vas a cerrar la estadía de {guestName ?? 'este huésped'} y la cuenta de la reserva{' '}
+          {booking.confirmationCode}. Esta acción no se puede deshacer.
         </p>
         <p>
           <strong>Saldo a liquidar:</strong>{' '}

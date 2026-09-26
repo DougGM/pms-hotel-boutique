@@ -7,9 +7,19 @@ import { ErrorState } from '@/shared/components/ErrorState';
 import { Input } from '@/shared/components/Input';
 import { LoadingState } from '@/shared/components/LoadingState';
 import { Modal } from '@/shared/components/Modal';
+import { bookingService } from '@/services/bookingService';
 import { guestAccountService } from '@/services/guestAccountService';
-import type { Charge, Deposit, GuestAccount, Payment } from '@/shared/types/entities';
+import { guestService } from '@/services/guestService';
+import type {
+  Booking,
+  Charge,
+  Deposit,
+  Guest,
+  GuestAccount,
+  Payment,
+} from '@/shared/types/entities';
 import { formatCurrency } from '@/shared/utils/currency';
+import { formatDateGT, formatTimeGT } from '@/shared/utils/date';
 
 type FormErrors = { description?: string; amount?: string };
 
@@ -26,9 +36,7 @@ const CHARGE_STATUS_TONES: Record<Charge['status'], BadgeTone> = {
 };
 
 function formatDate(value: Date) {
-  return new Intl.DateTimeFormat('es-GT', { dateStyle: 'medium', timeStyle: 'short' }).format(
-    value,
-  );
+  return `${formatDateGT(value)} ${formatTimeGT(value)}`;
 }
 
 function amountToCents(value: string) {
@@ -41,6 +49,8 @@ export function GuestAccountScreen() {
   const navigate = useNavigate();
   const { accountId } = useParams<'accountId'>();
   const [account, setAccount] = useState<GuestAccount | null>(null);
+  const [booking, setBooking] = useState<Booking | null>(null);
+  const [guest, setGuest] = useState<Guest | null>(null);
   const [charges, setCharges] = useState<Charge[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [deposits, setDeposits] = useState<Deposit[]>([]);
@@ -73,17 +83,26 @@ export function GuestAccountScreen() {
       );
       if (!selectedAccount)
         throw new Error('No encontramos una cuenta para la estadía seleccionada.');
-      const [selectedCharges, selectedPayments, selectedDeposits] = await Promise.all([
-        guestAccountService.getChargesByBookingId(selectedAccount.bookingId),
-        guestAccountService.getPaymentsByBookingId(selectedAccount.bookingId),
-        guestAccountService.getDepositsByBookingId(selectedAccount.bookingId),
-      ]);
+      const [selectedBooking, selectedCharges, selectedPayments, selectedDeposits] =
+        await Promise.all([
+          bookingService.getBookingById(selectedAccount.bookingId),
+          guestAccountService.getChargesByBookingId(selectedAccount.bookingId),
+          guestAccountService.getPaymentsByBookingId(selectedAccount.bookingId),
+          guestAccountService.getDepositsByBookingId(selectedAccount.bookingId),
+        ]);
+      const selectedGuest = selectedBooking
+        ? await guestService.getGuestById(selectedBooking.guestId)
+        : undefined;
       setAccount(selectedAccount);
+      setBooking(selectedBooking ?? null);
+      setGuest(selectedGuest ?? null);
       setCharges(selectedCharges);
       setPayments(selectedPayments);
       setDeposits(selectedDeposits);
     } catch (cause: unknown) {
       setAccount(null);
+      setBooking(null);
+      setGuest(null);
       setCharges([]);
       setPayments([]);
       setDeposits([]);
@@ -249,13 +268,17 @@ export function GuestAccountScreen() {
     );
   }
 
+  const guestName = guest ? `${guest.firstName} ${guest.lastName}` : booking?.guestId;
+
   return (
     <section className="content">
       <div className="welcome-row">
         <div>
           <span className="eyebrow">Front desk · Cuenta de estadía</span>
           <h1>Cuenta del huésped</h1>
-          <p className="muted">Reserva {account.bookingId}</p>
+          <p className="muted">
+            {guestName ? `${guestName} · ` : ''}Reserva {account.bookingId}
+          </p>
         </div>
         <div className="welcome-actions">
           <button
@@ -293,6 +316,15 @@ export function GuestAccountScreen() {
       )}
 
       <div className="metric-grid">
+        {guestName && (
+          <article className="metric-card">
+            <div>
+              <p>Huésped</p>
+              <h2>{guestName}</h2>
+              {guest && <span>Referencia {guest.id}</span>}
+            </div>
+          </article>
+        )}
         <article className="metric-card">
           <div>
             <p>Saldo actual</p>

@@ -94,6 +94,12 @@ recien al final llama a `guestService.createGuest` para usar el ID generado en
 hotel (tarjeta, transferencia, pago en hotel y billetera digital), pero no
 procesa cobros reales en esta fase.
 
+Nota 2026-09-26 (#76): en pantallas orientadas a personas, el nombre completo
+del huesped es la etiqueta primaria cuando puede resolverse por `guestService`;
+`GST-*` se mantiene solo como referencia secundaria. La galeria publica de
+habitaciones vive en `modules/booking-engine/screens/room-media.ts`, se
+reutiliza entre buscador y detalle, y debe conservar fallback si no hay fotos.
+
 - Una vista sin sesión se crea en `public/pages/`.
 - Una vista autenticada se crea en `private/pages/`; su lógica de negocio se
   consume desde el módulo correspondiente.

@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { bookingService } from '@/services/bookingService';
+import { guestService } from '@/services/guestService';
 import { roomService } from '@/services/roomService';
 import { EmptyState } from '@/shared/components/EmptyState';
 import { ErrorState } from '@/shared/components/ErrorState';
 import { LoadingState } from '@/shared/components/LoadingState';
 import type { Booking } from '@/shared/types/entities/booking';
+import type { Guest } from '@/shared/types/entities/guest';
 import type { Rate } from '@/shared/types/entities/rate';
 import type { RoomType } from '@/shared/types/entities/room-type';
 import { formatCurrency } from '@/shared/utils/currency';
@@ -16,6 +18,7 @@ type ConfirmationStatus = 'loading' | 'success' | 'error';
 
 type ConfirmationState = {
   booking?: Booking;
+  guest?: Guest;
   roomType?: RoomType;
   rate?: Rate;
 };
@@ -66,8 +69,9 @@ export function BookingConfirmationScreen() {
         ? roomTypes.find((item) => item.id === booking.roomTypeId)
         : undefined;
       const rate = booking ? findRateForBooking(rates, booking) : undefined;
+      const guest = booking ? await guestService.getGuestById(booking.guestId) : undefined;
 
-      setConfirmation({ booking, roomType, rate });
+      setConfirmation({ booking, guest, roomType, rate });
       setStatus('success');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'No fue posible cargar la reserva.');
@@ -112,6 +116,9 @@ export function BookingConfirmationScreen() {
   }
 
   const { booking } = confirmation;
+  const guestName = confirmation.guest
+    ? `${confirmation.guest.firstName} ${confirmation.guest.lastName}`
+    : booking.guestId;
   const nights = calculateNights(booking.checkIn, booking.checkOut);
   const computedAmount = confirmation.rate ? confirmation.rate.priceCents * nights : 0;
   const amountToShow = booking.totalAmountCents > 0 ? booking.totalAmountCents : computedAmount;
@@ -122,19 +129,19 @@ export function BookingConfirmationScreen() {
         <div>
           <p className="eyebrow">Reserva registrada</p>
           <h1>Reserva confirmada</h1>
-          <p>Tu reservacion quedo registrada correctamente.</p>
+          <p>Tu reservación quedó registrada correctamente.</p>
         </div>
         <Link className="ui-action" to="/">
-          Nueva busqueda
+          Nueva búsqueda
         </Link>
       </div>
 
       <div className="booking-confirmation-layout">
         <article className="booking-confirmation-card">
-          <h2>Codigo de confirmacion</h2>
+          <h2>Código de confirmación</h2>
           <div className="booking-confirmation-code">{booking.confirmationCode}</div>
           <p className="booking-muted">
-            Conserva este codigo para consultar tu reserva en recepcion.
+            Conserva este código para consultar tu reserva en recepción.
           </p>
 
           <div className="booking-rate-summary">
@@ -155,9 +162,15 @@ export function BookingConfirmationScreen() {
               <strong>{confirmation.roomType?.name ?? booking.roomTypeId}</strong>
             </div>
             <div>
-              <span>Huesped</span>
-              <strong>{booking.guestId}</strong>
+              <span>Huésped</span>
+              <strong>{guestName}</strong>
             </div>
+            {confirmation.guest && (
+              <div>
+                <span>Referencia</span>
+                <strong>{booking.guestId}</strong>
+              </div>
+            )}
             <div>
               <span>Monto</span>
               <strong>{formatCurrency(amountToShow, booking.currency)}</strong>
@@ -172,7 +185,7 @@ export function BookingConfirmationScreen() {
           </p>
           <div className="booking-form-actions">
             <Link className="ui-action" to={`/rooms/${booking.roomTypeId}`}>
-              Ver habitacion
+              Ver habitación
             </Link>
           </div>
         </aside>
