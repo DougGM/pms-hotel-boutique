@@ -85,6 +85,14 @@ supere `roomType.capacity`, exige coherencia con `booking.adults/children` y
 marca la habitación asignada como `occupied` al pasar la reserva a
 `checkedIn`.
 
+**Actualización 2026-09-26 (#76):** la pasada de consistencia visual mantiene
+el contrato Bolt sin rediseño: `RoomDetailScreen` reutiliza una galería de
+imágenes del motor público mediante `room-media.ts` y conserva un fallback
+visual cuando un tipo no tiene fotos. En confirmación pública, cuenta y
+check-out se muestra el nombre completo del huésped cuando se puede resolver
+con `guestService`; los IDs `GST-*` quedan como referencia secundaria cuando
+aportan valor operativo.
+
 
 ## 1. Reglas de la ronda
 

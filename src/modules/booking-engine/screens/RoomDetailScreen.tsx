@@ -11,6 +11,7 @@ import type { RoomFeature } from '@/shared/types/entities/room-feature';
 import type { RoomType } from '@/shared/types/entities/room-type';
 import { formatCurrency } from '@/shared/utils/currency';
 import { calculateNights, formatDateGT } from '@/shared/utils/date';
+import { getRoomTypeGallery } from './room-media';
 import './booking-engine.css';
 
 type DetailStatus = 'loading' | 'success' | 'error';
@@ -170,6 +171,7 @@ export function RoomDetailScreen() {
   const bookingUrl = hasValidDates
     ? `/booking/new?roomTypeId=${detail.roomType.id}&checkIn=${dateKey(checkIn)}&checkOut=${dateKey(checkOut!)}`
     : `/booking/new?roomTypeId=${detail.roomType.id}`;
+  const galleryImages = getRoomTypeGallery(detail.roomType);
 
   return (
     <section className="content booking-detail-page">
@@ -187,15 +189,17 @@ export function RoomDetailScreen() {
       <div className="booking-detail-layout">
         <div className="booking-detail-main">
           <div className="booking-photo-grid" aria-label="Fotografías de la habitación">
-            <div className="booking-photo-card">
-              <span>{detail.roomType.name}</span>
-            </div>
-            <div className="booking-photo-card">
-              <span>Descanso</span>
-            </div>
-            <div className="booking-photo-card">
-              <span>Ambiente</span>
-            </div>
+            {galleryImages.length > 0 ? (
+              galleryImages.map((image) => (
+                <figure className="booking-photo-card" key={image.src}>
+                  <img src={image.src} alt={image.alt} />
+                </figure>
+              ))
+            ) : (
+              <div className="booking-photo-card booking-photo-card--fallback">
+                <span>{detail.roomType.name}</span>
+              </div>
+            )}
           </div>
 
           <article className="booking-detail-card">
