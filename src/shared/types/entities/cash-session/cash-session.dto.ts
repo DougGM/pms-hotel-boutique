@@ -12,7 +12,7 @@ export type CashSessionStatusDto = 'open' | 'closed';
  */
 export interface CashSessionDTO {
   id: string;
-  opened_by_user_id: string;
+  opened_by_user_id?: string;
   opened_at: string;
   opening_balance_cents: number;
   currency: Currency;

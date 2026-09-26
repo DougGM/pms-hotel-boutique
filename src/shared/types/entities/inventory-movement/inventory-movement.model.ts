@@ -7,7 +7,7 @@ export interface InventoryMovement {
   type: InventoryMovementType;
   reason: InventoryMovementReason;
   quantity: number;
-  responsibleUserId: string;
+  responsibleUserId?: string;
   occurredAt: Date;
   notes?: string;
   createdAt: Date;

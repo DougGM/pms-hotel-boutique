@@ -175,6 +175,7 @@ const FK_CHECKS = [
     records: cashSessionsDB,
     field: 'opened_by_user_id',
     target: idsOf(usersDB),
+    optional: true,
   },
   {
     label: 'cashSession.closed_by_user_id -> user',
@@ -194,6 +195,7 @@ const FK_CHECKS = [
     records: cashMovementsDB,
     field: 'responsible_user_id',
     target: idsOf(usersDB),
+    optional: true,
   },
   {
     label: 'cashMovement.payment_id -> payment',
@@ -234,6 +236,7 @@ const FK_CHECKS = [
     records: inventoryMovementsDB,
     field: 'responsible_user_id',
     target: idsOf(usersDB),
+    optional: true,
   },
   {
     label: 'auditLog.user_id -> user',

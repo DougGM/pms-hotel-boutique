@@ -5,7 +5,7 @@ export type { CashSessionStatus };
 
 export interface CashSession {
   id: string;
-  openedByUserId: string;
+  openedByUserId?: string;
   openedAt: Date;
   openingBalanceCents: number;
   currency: Currency;
