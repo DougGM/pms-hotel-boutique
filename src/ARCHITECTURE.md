@@ -74,6 +74,12 @@ quedar como lapiz y activar/desactivar debe representarse como switch.
 El nombre visible, saludo y preferencias de vista inicial deben salir de la
 sesion y del menu disponible para el rol actual, no de nombres fijos heredados
 del prototipo Bolt.
+Nota 2026-09-27 (#89): la navegacion persistente pertenece al shell. En
+escritorio, `PrivatePage` y el workspace Bolt mantienen sidebar y header
+visibles mientras `.main-area` concentra el scroll; el sidebar reserva su
+cabecera y ayuda al fondo, con scroll interno solo en `.side-nav`. En la web
+publica, `PublicLayout` mantiene `.visitor-header` sticky y aplica un estado
+visual discreto al comenzar el scroll.
 Los controles visibles del backoffice deben ejecutar una accion real o no
 renderizarse. En administracion, los tabs y filtros de reportes/dashboard
 deben cambiar metricas, grafica o filas visibles; no deben ser decorativos.

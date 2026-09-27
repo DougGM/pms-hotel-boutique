@@ -1063,6 +1063,7 @@ function PrivateWorkspaceReady({
   const [tasks, setTasks] = useState(initialData.tasks);
   const [search, setSearch] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [headerScrolled, setHeaderScrolled] = useState(false);
   const [hkRooms, setHkRooms] = useState(initialData.cleaningRooms);
   const [hkRequests, setHkRequests] = useState(initialData.guestRequests);
   const [hkHistory, setHkHistory] = useState(initialData.history);
@@ -2112,8 +2113,14 @@ function PrivateWorkspaceReady({
         </div>
       </aside>
       {sidebarOpen && <div className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} />}
-      <main className="main-area">
-        <header className="topbar">
+      <main
+        className="main-area"
+        onScroll={(event) => {
+          const nextScrolled = event.currentTarget.scrollTop > 8;
+          setHeaderScrolled((current) => (current === nextScrolled ? current : nextScrolled));
+        }}
+      >
+        <header className={`topbar ${headerScrolled ? 'is-scrolled' : ''}`}>
           <button className="hamburger" onClick={() => setSidebarOpen(true)}>
             <Menu size={22} />
           </button>

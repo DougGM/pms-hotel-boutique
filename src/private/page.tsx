@@ -1,5 +1,13 @@
 import { useState, type ReactNode } from 'react';
-import { Bell, ChevronDown, LogOut, Settings, UserRound } from 'lucide-react';
+import {
+  ArrowRight,
+  Bell,
+  ChevronDown,
+  Headphones,
+  LogOut,
+  Settings,
+  UserRound,
+} from 'lucide-react';
 import { AccountPreferencesModal, AccountProfileModal } from '@/private/workspace/AccountPanels';
 import './staff-shell.css';
 
@@ -25,7 +33,8 @@ export function PrivatePage({
 }: PrivatePageProps) {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [accountPanel, setAccountPanel] = useState<'profile' | 'preferences' | null>(null);
-  const [name, role = 'Equipo'] = sessionLabel?.split(/\s*(?:·|Â·)\s*/) ?? [];
+  const [headerScrolled, setHeaderScrolled] = useState(false);
+  const [name, role = 'Equipo'] = sessionLabel?.split(/\s*·\s*/, 2) ?? [];
   const accountName = name || 'Hotel Aurora';
   const accountInitials = accountName.slice(0, 2).toUpperCase();
   const preferenceViews = menuItems.length > 0 ? menuItems : [activeItem || 'Panel operativo'];
@@ -51,9 +60,27 @@ export function PrivatePage({
             </button>
           ))}
         </nav>
+        <div className="sidebar-bottom">
+          <div className="support-card">
+            <div className="support-dot">
+              <Headphones size={15} />
+            </div>
+            <div>
+              <strong>¿Necesitas ayuda?</strong>
+              <span>Habla con soporte</span>
+            </div>
+            <ArrowRight size={15} />
+          </div>
+        </div>
       </aside>
-      <main className="main-area">
-        <header className="topbar staff-topbar">
+      <main
+        className="main-area"
+        onScroll={(event) => {
+          const nextScrolled = event.currentTarget.scrollTop > 8;
+          setHeaderScrolled((current) => (current === nextScrolled ? current : nextScrolled));
+        }}
+      >
+        <header className={`topbar staff-topbar ${headerScrolled ? 'is-scrolled' : ''}`}>
           <div className="crumbs">
             <span>Hotel Aurora</span>
             {activeItem && (

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { BedDouble, Percent, ShieldCheck, Sparkles } from 'lucide-react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { routePaths } from '@/app/routes';
@@ -7,16 +7,31 @@ import { PublicAuthModal, type PublicAuthMode } from '@/public/components/Public
 export function PublicLayout() {
   const location = useLocation();
   const [authMode, setAuthMode] = useState<PublicAuthMode | null>(null);
+  const [headerScrolled, setHeaderScrolled] = useState(false);
   const isLoginPage =
     location.pathname === routePaths.public.login ||
     location.pathname === routePaths.public.register ||
     location.pathname === routePaths.public.legacyLogin;
   const activeSection = location.hash.replace('#', '') || 'habitaciones';
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    const updateHeaderState = () => {
+      const nextScrolled = window.scrollY > 8;
+      setHeaderScrolled((current) => (current === nextScrolled ? current : nextScrolled));
+    };
+
+    updateHeaderState();
+    window.addEventListener('scroll', updateHeaderState, { passive: true });
+
+    return () => window.removeEventListener('scroll', updateHeaderState);
+  }, []);
+
   return (
     <div className="visitor-page">
       {!isLoginPage ? (
-        <header className="visitor-header">
+        <header className={`visitor-header ${headerScrolled ? 'is-scrolled' : ''}`}>
           <Link className="brand visitor-brand" to={routePaths.public.home}>
             <span className="brand-mark" aria-hidden="true">
               <Sparkles size={18} />
