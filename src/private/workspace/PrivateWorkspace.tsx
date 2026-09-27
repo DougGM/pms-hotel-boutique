@@ -841,6 +841,16 @@ const navByRole: Record<RoleId, NavItem[]> = {
   ],
 };
 
+// Pestaña única donde se muestran los KPI de cada rol; el resto no los repite (#85).
+const summaryNavByRole: Record<RoleId, string> = {
+  reception: 'Resumen',
+  admin: 'Dashboard',
+  housekeeping: 'Inicio',
+  'room-service': 'Pedidos activos',
+  concierge: 'Solicitudes',
+  guest: 'Inicio',
+};
+
 const metricsByRole: Record<
   RoleId,
   { label: string; value: string; change: string; icon: IconType; tone: string }[]
@@ -2276,7 +2286,7 @@ function PrivateWorkspaceReady({
               </div>
             )}
           </section>
-          {!(activeRole === 'admin' && activeNav !== 'Dashboard') && (
+          {activeRole && activeNav === summaryNavByRole[activeRole] && (
             <section className="metric-grid">
               {currentMetrics.map((metric) => {
                 const Icon = metric.icon;
