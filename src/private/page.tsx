@@ -34,7 +34,7 @@ export function PrivatePage({
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [accountPanel, setAccountPanel] = useState<'profile' | 'preferences' | null>(null);
   const [headerScrolled, setHeaderScrolled] = useState(false);
-  const [name, role = 'Equipo'] = sessionLabel?.split(/\s*(?:·|Â·)\s*/) ?? [];
+  const [name, role = 'Equipo'] = sessionLabel?.split(/\s*·\s*/, 2) ?? [];
   const accountName = name || 'Hotel Aurora';
   const accountInitials = accountName.slice(0, 2).toUpperCase();
   const preferenceViews = menuItems.length > 0 ? menuItems : [activeItem || 'Panel operativo'];
