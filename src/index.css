@@ -260,9 +260,9 @@ button {
     backdrop-filter 0.22s ease;
 }
 .topbar.is-scrolled {
-  background: color-mix(in srgb, var(--color-surface) 88%, transparent);
-  border-bottom-color: var(--color-legacy-e1d5c9);
-  box-shadow: 0 var(--size-legacy-10) var(--size-legacy-26) var(--color-legacy-3b2a1a14);
+  background: color-mix(in srgb, var(--color-surface) 82%, transparent);
+  border-bottom-color: transparent;
+  box-shadow: 0 var(--size-legacy-14) var(--size-legacy-34) var(--color-legacy-3b2a1a08);
   backdrop-filter: blur(var(--size-legacy-12));
 }
 .crumbs {
@@ -1472,7 +1472,7 @@ button {
     backdrop-filter 0.22s ease;
 }
 .visitor-header.is-scrolled {
-  background: color-mix(in srgb, var(--color-text-primary) 88%, transparent);
+  background: color-mix(in srgb, var(--color-text-primary) 78%, transparent);
   border-bottom: var(--size-legacy-1) solid var(--color-legacy-6c5140);
   box-shadow: 0 var(--size-legacy-12) var(--size-legacy-30) var(--color-legacy-2e211a22);
   backdrop-filter: blur(var(--size-legacy-12));
