@@ -184,6 +184,9 @@ type ReportPeriod = 'Día' | 'Semana' | 'Mes' | 'Año' | 'Temporada';
 type AdminReportTab =
   'Ocupación' | 'Ingresos' | 'Reservas' | 'Cancelaciones' | 'Canales' | 'Servicios' | 'Temporadas';
 type DashboardPeriod = 'Hoy' | '7 días' | '30 días' | '90 días';
+type UsersSection = 'Gestión de usuarios' | 'Roles y permisos';
+type RoomsSection = 'Gestión de habitaciones' | 'Tipos de habitación';
+type InventorySection = 'Gestión de inventario' | 'Movimientos de inventario';
 
 const ALL_PERMISSIONS = [
   'Recepción',
@@ -654,6 +657,34 @@ function AdminToolbar({
           <Settings size={18} />
         </button>
       )}
+    </div>
+  );
+}
+
+// Navegación interna de una pestaña con varias secciones grandes (#85); reusa el estilo de .chart-tabs.
+function AdminSectionTabs<T extends string>({
+  tabs,
+  active,
+  onChange,
+}: {
+  tabs: readonly T[];
+  active: T;
+  onChange: (tab: T) => void;
+}) {
+  return (
+    <div className="chart-tabs" role="tablist">
+      {tabs.map((tab) => (
+        <button
+          key={tab}
+          type="button"
+          role="tab"
+          aria-selected={active === tab}
+          className={active === tab ? 'active' : ''}
+          onClick={() => onChange(tab)}
+        >
+          {tab}
+        </button>
+      ))}
     </div>
   );
 }
@@ -1187,6 +1218,10 @@ function AdminContentReady({
     'Ocupación',
   );
   const [dashboardPeriod, setDashboardPeriod] = useState<DashboardPeriod>('30 días');
+  const [usersSection, setUsersSection] = useState<UsersSection>('Gestión de usuarios');
+  const [roomsSection, setRoomsSection] = useState<RoomsSection>('Gestión de habitaciones');
+  const [inventorySection, setInventorySection] =
+    useState<InventorySection>('Gestión de inventario');
 
   const resetSearch = () => {
     setSearch('');
@@ -1489,122 +1524,137 @@ function AdminContentReady({
         (filter === 'Inactivo' && u.status === 'Inactivo');
       return ms && mf;
     });
+    const sectionTabs = (
+      <AdminSectionTabs
+        tabs={['Gestión de usuarios', 'Roles y permisos'] as const}
+        active={usersSection}
+        onChange={setUsersSection}
+      />
+    );
     return (
       <>
-        <div className="panel">
-          <div className="panel-heading">
-            <div>
-              <h3>Gestión de usuarios</h3>
-              <p>Administra los usuarios del sistema y sus permisos</p>
-            </div>
-            <button
-              className="button primary"
-              onClick={() => {
-                setEditUser(null);
-                setShowUserModal(true);
-              }}
-            >
-              <Plus size={17} /> Nuevo usuario
-            </button>
-          </div>
-          <AdminToolbar
-            search={search}
-            setSearch={setSearch}
-            filterLabel="Filtrar"
-            filterValue={filter}
-            setFilter={setFilter}
-            filterOptions={roleFilterOptions}
-          />
-          {filtered.length === 0 ? (
-            <div className="hk-empty">
-              <UsersIcon size={22} />
-              <p>No hay usuarios registrados</p>
-            </div>
-          ) : (
-            <AdminTable
-              headers={['Nombre', 'Correo', 'Rol', 'Estado', 'Último acceso', 'Acciones']}
-            >
-              {filtered.map((u) => (
-                <tr key={u.id}>
-                  <td>
-                    <strong>{u.name}</strong>
-                  </td>
-                  <td>{u.email}</td>
-                  <td>{u.role}</td>
-                  <td>
-                    <span className={`status-pill ${statusPillClass(u.status)}`}>{u.status}</span>
-                  </td>
-                  <td>{u.lastAccess}</td>
-                  <td className="adm-actions">
-                    <EditIconButton
-                      label="Editar usuario"
-                      onClick={() => {
-                        setEditUser(u);
-                        setShowUserModal(true);
-                      }}
-                    />
-                    <StatusSwitch
-                      checked={u.status === 'Activo'}
-                      label={u.status === 'Activo' ? 'Desactivar usuario' : 'Activar usuario'}
-                      onChange={() => {
-                        onAction('Gestion de usuarios fuera de alcance: no se modifico la fuente.');
-                      }}
-                    />
-                  </td>
-                </tr>
-              ))}
-            </AdminTable>
-          )}
-        </div>
-        <div className="panel">
-          <div className="panel-heading">
-            <div>
-              <h3>Roles y permisos</h3>
-              <p>Configura los permisos de cada rol</p>
-            </div>
-            <button
-              className="button primary"
-              onClick={() => {
-                setEditRole(null);
-                setShowRoleModal(true);
-              }}
-            >
-              <Plus size={17} /> Nuevo rol
-            </button>
-          </div>
-          <div className="adm-role-grid">
-            {roles.map((r) => (
-              <div className="adm-role-card" key={r.id}>
-                <div className="adm-role-head">
-                  <div>
-                    <strong>{r.name}</strong>
-                    <span>{r.description}</span>
-                  </div>
-                  <span className="status-pill info">{r.userCount} usuarios</span>
-                </div>
-                <div className="adm-perm-list">
-                  {ALL_PERMISSIONS.map((p) => (
-                    <div className="adm-perm-item" key={p}>
-                      <span className={`adm-perm-check ${r.permissions[p] ? 'on' : ''}`}>
-                        {r.permissions[p] && <Check size={12} />}
-                      </span>
-                      <span>{p}</span>
-                    </div>
-                  ))}
-                </div>
-                <div className="adm-role-actions">
-                  <EditIconButton
-                    label="Editar rol"
-                    onClick={() => {
-                      setEditRole(r);
-                      setShowRoleModal(true);
-                    }}
-                  />
-                </div>
+        {usersSection === 'Gestión de usuarios' && (
+          <div className="panel">
+            <div className="panel-heading">
+              <div>
+                <h3>Gestión de usuarios</h3>
+                <p>Administra los usuarios del sistema y sus permisos</p>
               </div>
-            ))}
+              <button
+                className="button primary"
+                onClick={() => {
+                  setEditUser(null);
+                  setShowUserModal(true);
+                }}
+              >
+                <Plus size={17} /> Nuevo usuario
+              </button>
+            </div>
+            {sectionTabs}
+            <AdminToolbar
+              search={search}
+              setSearch={setSearch}
+              filterLabel="Filtrar"
+              filterValue={filter}
+              setFilter={setFilter}
+              filterOptions={roleFilterOptions}
+            />
+            {filtered.length === 0 ? (
+              <div className="hk-empty">
+                <UsersIcon size={22} />
+                <p>No hay usuarios registrados</p>
+              </div>
+            ) : (
+              <AdminTable
+                headers={['Nombre', 'Correo', 'Rol', 'Estado', 'Último acceso', 'Acciones']}
+              >
+                {filtered.map((u) => (
+                  <tr key={u.id}>
+                    <td>
+                      <strong>{u.name}</strong>
+                    </td>
+                    <td>{u.email}</td>
+                    <td>{u.role}</td>
+                    <td>
+                      <span className={`status-pill ${statusPillClass(u.status)}`}>{u.status}</span>
+                    </td>
+                    <td>{u.lastAccess}</td>
+                    <td className="adm-actions">
+                      <EditIconButton
+                        label="Editar usuario"
+                        onClick={() => {
+                          setEditUser(u);
+                          setShowUserModal(true);
+                        }}
+                      />
+                      <StatusSwitch
+                        checked={u.status === 'Activo'}
+                        label={u.status === 'Activo' ? 'Desactivar usuario' : 'Activar usuario'}
+                        onChange={() => {
+                          onAction(
+                            'Gestion de usuarios fuera de alcance: no se modifico la fuente.',
+                          );
+                        }}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </AdminTable>
+            )}
           </div>
-        </div>
+        )}
+        {usersSection === 'Roles y permisos' && (
+          <div className="panel">
+            <div className="panel-heading">
+              <div>
+                <h3>Roles y permisos</h3>
+                <p>Configura los permisos de cada rol</p>
+              </div>
+              <button
+                className="button primary"
+                onClick={() => {
+                  setEditRole(null);
+                  setShowRoleModal(true);
+                }}
+              >
+                <Plus size={17} /> Nuevo rol
+              </button>
+            </div>
+            {sectionTabs}
+            <div className="adm-role-grid">
+              {roles.map((r) => (
+                <div className="adm-role-card" key={r.id}>
+                  <div className="adm-role-head">
+                    <div>
+                      <strong>{r.name}</strong>
+                      <span>{r.description}</span>
+                    </div>
+                    <span className="status-pill info">{r.userCount} usuarios</span>
+                  </div>
+                  <div className="adm-perm-list">
+                    {ALL_PERMISSIONS.map((p) => (
+                      <div className="adm-perm-item" key={p}>
+                        <span className={`adm-perm-check ${r.permissions[p] ? 'on' : ''}`}>
+                          {r.permissions[p] && <Check size={12} />}
+                        </span>
+                        <span>{p}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="adm-role-actions">
+                    <EditIconButton
+                      label="Editar rol"
+                      onClick={() => {
+                        setEditRole(r);
+                        setShowRoleModal(true);
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         {showUserModal && (
           <UserModal
             user={editUser}
@@ -1641,183 +1691,198 @@ function AdminContentReady({
       const mf = filter === 'Todos' || r.status === filter || r.type === filter;
       return ms && mf;
     });
+    const sectionTabs = (
+      <AdminSectionTabs
+        tabs={['Gestión de habitaciones', 'Tipos de habitación'] as const}
+        active={roomsSection}
+        onChange={setRoomsSection}
+      />
+    );
     return (
       <>
-        <div className="panel">
-          <div className="panel-heading">
-            <div>
-              <h3>Gestión de habitaciones</h3>
-              <p>Administra las habitaciones del hotel</p>
+        {roomsSection === 'Gestión de habitaciones' && (
+          <div className="panel">
+            <div className="panel-heading">
+              <div>
+                <h3>Gestión de habitaciones</h3>
+                <p>Administra las habitaciones del hotel</p>
+              </div>
+              <button
+                className="button primary"
+                onClick={() => {
+                  setEditRoom(null);
+                  setShowRoomModal(true);
+                }}
+              >
+                <Plus size={17} /> Nueva habitación
+              </button>
             </div>
-            <button
-              className="button primary"
-              onClick={() => {
-                setEditRoom(null);
-                setShowRoomModal(true);
-              }}
-            >
-              <Plus size={17} /> Nueva habitación
-            </button>
+            {sectionTabs}
+            <AdminToolbar
+              search={search}
+              setSearch={setSearch}
+              filterLabel="Filtrar"
+              filterValue={filter}
+              setFilter={setFilter}
+              filterOptions={[
+                'Todos',
+                'Disponible',
+                'Ocupada',
+                'Limpieza',
+                'Mantenimiento',
+                'Estándar',
+                'Deluxe',
+                'Suite',
+              ]}
+            />
+            {filtered.length === 0 ? (
+              <div className="hk-empty">
+                <BedDouble size={22} />
+                <p>No hay habitaciones registradas</p>
+              </div>
+            ) : (
+              <AdminTable
+                headers={['Número', 'Piso', 'Tipo', 'Capacidad', 'Tarifa', 'Estado', 'Acciones']}
+              >
+                {filtered.map((r) => (
+                  <tr key={r.id}>
+                    <td>
+                      <strong>{r.number}</strong>
+                    </td>
+                    <td>{r.floor}</td>
+                    <td>{r.type}</td>
+                    <td>{r.capacity} huéspedes</td>
+                    <td>{money(r.rate)}</td>
+                    <td>
+                      <span className={`status-pill ${roomStatusClass(r.status)}`}>{r.status}</span>
+                    </td>
+                    <td className="adm-actions">
+                      <EditIconButton
+                        label="Editar habitación"
+                        onClick={() => {
+                          setEditRoom(r);
+                          setShowRoomModal(true);
+                        }}
+                      />
+                      <StatusSwitch
+                        checked={r.status !== 'Mantenimiento'}
+                        label={
+                          r.status === 'Mantenimiento'
+                            ? 'Activar habitación'
+                            : 'Desactivar habitación'
+                        }
+                        onChange={async () => {
+                          const updated = await roomService.updateRoom(r.dbId, {
+                            status: r.status === 'Mantenimiento' ? 'available' : 'maintenance',
+                          });
+                          setRooms((cur) =>
+                            cur.map((x) =>
+                              x.id === r.id
+                                ? {
+                                    ...x,
+                                    status: roomStatusLabel(
+                                      updated.status,
+                                      updated.housekeepingStatus,
+                                    ),
+                                  }
+                                : x,
+                            ),
+                          );
+                          onAction(
+                            `Habitación ${r.number} ${r.status === 'Mantenimiento' ? 'activada' : 'desactivada'}`,
+                          );
+                        }}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </AdminTable>
+            )}
           </div>
-          <AdminToolbar
-            search={search}
-            setSearch={setSearch}
-            filterLabel="Filtrar"
-            filterValue={filter}
-            setFilter={setFilter}
-            filterOptions={[
-              'Todos',
-              'Disponible',
-              'Ocupada',
-              'Limpieza',
-              'Mantenimiento',
-              'Estándar',
-              'Deluxe',
-              'Suite',
-            ]}
-          />
-          {filtered.length === 0 ? (
-            <div className="hk-empty">
-              <BedDouble size={22} />
-              <p>No hay habitaciones registradas</p>
+        )}
+        {roomsSection === 'Tipos de habitación' && (
+          <div className="panel">
+            <div className="panel-heading">
+              <div>
+                <h3>Tipos de habitación</h3>
+                <p>Configura los tipos y sus características</p>
+              </div>
+              <button
+                className="button primary"
+                onClick={() => {
+                  setEditRoomType(null);
+                  setShowRoomTypeModal(true);
+                }}
+              >
+                <Plus size={17} /> Nuevo tipo
+              </button>
             </div>
-          ) : (
-            <AdminTable
-              headers={['Número', 'Piso', 'Tipo', 'Capacidad', 'Tarifa', 'Estado', 'Acciones']}
-            >
-              {filtered.map((r) => (
-                <tr key={r.id}>
-                  <td>
-                    <strong>{r.number}</strong>
-                  </td>
-                  <td>{r.floor}</td>
-                  <td>{r.type}</td>
-                  <td>{r.capacity} huéspedes</td>
-                  <td>{money(r.rate)}</td>
-                  <td>
-                    <span className={`status-pill ${roomStatusClass(r.status)}`}>{r.status}</span>
-                  </td>
-                  <td className="adm-actions">
-                    <EditIconButton
-                      label="Editar habitación"
-                      onClick={() => {
-                        setEditRoom(r);
-                        setShowRoomModal(true);
-                      }}
-                    />
-                    <StatusSwitch
-                      checked={r.status !== 'Mantenimiento'}
-                      label={
-                        r.status === 'Mantenimiento'
-                          ? 'Activar habitación'
-                          : 'Desactivar habitación'
-                      }
-                      onChange={async () => {
-                        const updated = await roomService.updateRoom(r.dbId, {
-                          status: r.status === 'Mantenimiento' ? 'available' : 'maintenance',
-                        });
-                        setRooms((cur) =>
-                          cur.map((x) =>
-                            x.id === r.id
-                              ? {
-                                  ...x,
-                                  status: roomStatusLabel(
-                                    updated.status,
-                                    updated.housekeepingStatus,
-                                  ),
-                                }
-                              : x,
-                          ),
-                        );
-                        onAction(
-                          `Habitación ${r.number} ${r.status === 'Mantenimiento' ? 'activada' : 'desactivada'}`,
-                        );
-                      }}
-                    />
-                  </td>
-                </tr>
-              ))}
-            </AdminTable>
-          )}
-        </div>
-        <div className="panel">
-          <div className="panel-heading">
-            <div>
-              <h3>Tipos de habitación</h3>
-              <p>Configura los tipos y sus características</p>
-            </div>
-            <button
-              className="button primary"
-              onClick={() => {
-                setEditRoomType(null);
-                setShowRoomTypeModal(true);
-              }}
-            >
-              <Plus size={17} /> Nuevo tipo
-            </button>
-          </div>
-          {roomTypes.length === 0 ? (
-            <div className="hk-empty">
-              <Building2 size={22} />
-              <p>No hay tipos de habitación registrados</p>
-            </div>
-          ) : (
-            <div className="adm-roomtype-grid">
-              {roomTypes.map((rt) => (
-                <div className="adm-roomtype-card" key={rt.id}>
-                  <div className="adm-roomtype-head">
-                    <div>
-                      <strong>{rt.name}</strong>
-                      <span>
-                        {rt.capacity} huéspedes · {rt.features.length} características
+            {sectionTabs}
+            {roomTypes.length === 0 ? (
+              <div className="hk-empty">
+                <Building2 size={22} />
+                <p>No hay tipos de habitación registrados</p>
+              </div>
+            ) : (
+              <div className="adm-roomtype-grid">
+                {roomTypes.map((rt) => (
+                  <div className="adm-roomtype-card" key={rt.id}>
+                    <div className="adm-roomtype-head">
+                      <div>
+                        <strong>{rt.name}</strong>
+                        <span>
+                          {rt.capacity} huéspedes · {rt.features.length} características
+                        </span>
+                      </div>
+                      <span className={`status-pill ${statusPillClass(rt.status)}`}>
+                        {rt.status}
                       </span>
                     </div>
-                    <span className={`status-pill ${statusPillClass(rt.status)}`}>{rt.status}</span>
+                    <p className="adm-roomtype-desc">{rt.description}</p>
+                    <div className="adm-roomtype-features">
+                      {rt.features.map((f) => (
+                        <span key={f} className="adm-feature-tag">
+                          {f}
+                        </span>
+                      ))}
+                    </div>
+                    <div className="adm-roomtype-price">
+                      Precio base: <strong>{money(rt.basePrice)}</strong>
+                    </div>
+                    <div className="adm-role-actions">
+                      <EditIconButton
+                        label="Editar tipo de habitación"
+                        onClick={() => {
+                          setEditRoomType(rt);
+                          setShowRoomTypeModal(true);
+                        }}
+                      />
+                      <StatusSwitch
+                        checked={rt.status === 'Activo'}
+                        label={rt.status === 'Activo' ? 'Desactivar tipo' : 'Activar tipo'}
+                        onChange={async () => {
+                          const updated = await roomService.updateRoomType(rt.dbId, {
+                            active: rt.status !== 'Activo',
+                          });
+                          setRoomTypes((cur) =>
+                            cur.map((x) =>
+                              x.id === rt.id
+                                ? { ...x, status: updated.active ? 'Activo' : 'Inactivo' }
+                                : x,
+                            ),
+                          );
+                          onAction(
+                            `Tipo ${rt.name} ${rt.status === 'Activo' ? 'desactivado' : 'activado'}`,
+                          );
+                        }}
+                      />
+                    </div>
                   </div>
-                  <p className="adm-roomtype-desc">{rt.description}</p>
-                  <div className="adm-roomtype-features">
-                    {rt.features.map((f) => (
-                      <span key={f} className="adm-feature-tag">
-                        {f}
-                      </span>
-                    ))}
-                  </div>
-                  <div className="adm-roomtype-price">
-                    Precio base: <strong>{money(rt.basePrice)}</strong>
-                  </div>
-                  <div className="adm-role-actions">
-                    <EditIconButton
-                      label="Editar tipo de habitación"
-                      onClick={() => {
-                        setEditRoomType(rt);
-                        setShowRoomTypeModal(true);
-                      }}
-                    />
-                    <StatusSwitch
-                      checked={rt.status === 'Activo'}
-                      label={rt.status === 'Activo' ? 'Desactivar tipo' : 'Activar tipo'}
-                      onChange={async () => {
-                        const updated = await roomService.updateRoomType(rt.dbId, {
-                          active: rt.status !== 'Activo',
-                        });
-                        setRoomTypes((cur) =>
-                          cur.map((x) =>
-                            x.id === rt.id
-                              ? { ...x, status: updated.active ? 'Activo' : 'Inactivo' }
-                              : x,
-                          ),
-                        );
-                        onAction(
-                          `Tipo ${rt.name} ${rt.status === 'Activo' ? 'desactivado' : 'activado'}`,
-                        );
-                      }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         {showRoomModal && (
           <RoomModal
             room={editRoom}
@@ -2610,140 +2675,155 @@ function AdminContentReady({
       `${p.name} ${p.category}`.toLowerCase().includes(search.toLowerCase()),
     );
     const lowStock = inventory.filter((p) => p.stock <= p.minStock);
+    const sectionTabs = (
+      <AdminSectionTabs
+        tabs={['Gestión de inventario', 'Movimientos de inventario'] as const}
+        active={inventorySection}
+        onChange={setInventorySection}
+      />
+    );
     return (
       <>
-        <div className="panel">
-          <div className="panel-heading">
-            <div>
-              <h3>Gestión de inventario</h3>
-              <p>Administra los productos y existencias del hotel</p>
+        {inventorySection === 'Gestión de inventario' && (
+          <div className="panel">
+            <div className="panel-heading">
+              <div>
+                <h3>Gestión de inventario</h3>
+                <p>Administra los productos y existencias del hotel</p>
+              </div>
+              <div className="adm-heading-actions">
+                <button className="button secondary" onClick={() => setShowMovementModal(true)}>
+                  <ArrowRight size={16} /> Registrar movimiento
+                </button>
+                <button
+                  className="button primary"
+                  onClick={() => {
+                    setEditProduct(null);
+                    setShowProductModal(true);
+                  }}
+                >
+                  <Plus size={17} /> Nuevo producto
+                </button>
+              </div>
             </div>
-            <div className="adm-heading-actions">
-              <button className="button secondary" onClick={() => setShowMovementModal(true)}>
-                <ArrowRight size={16} /> Registrar movimiento
-              </button>
-              <button
-                className="button primary"
-                onClick={() => {
-                  setEditProduct(null);
-                  setShowProductModal(true);
-                }}
+            {sectionTabs}
+            {lowStock.length > 0 && (
+              <div className="adm-inv-alerts">
+                <TriangleAlert size={18} />
+                <span>{lowStock.length} producto(s) con stock bajo el mínimo</span>
+              </div>
+            )}
+            <AdminToolbar search={search} setSearch={setSearch} />
+            {filtered.length === 0 ? (
+              <div className="hk-empty">
+                <Package size={22} />
+                <p>No hay productos en el inventario</p>
+              </div>
+            ) : (
+              <AdminTable
+                headers={[
+                  'Producto',
+                  'Categoría',
+                  'Stock',
+                  'Stock mínimo',
+                  'Precio',
+                  'Estado',
+                  'Acciones',
+                ]}
               >
-                <Plus size={17} /> Nuevo producto
-              </button>
-            </div>
+                {filtered.map((p) => (
+                  <tr key={p.id} className={p.stock <= p.minStock ? 'adm-row-alert' : ''}>
+                    <td>
+                      <strong>{p.name}</strong>
+                    </td>
+                    <td>{p.category}</td>
+                    <td className={p.stock <= p.minStock ? 'terracotta-text' : ''}>
+                      <strong>{p.stock}</strong>
+                    </td>
+                    <td>{p.minStock}</td>
+                    <td>{money(p.price)}</td>
+                    <td>
+                      <span className={`status-pill ${statusPillClass(p.status)}`}>{p.status}</span>
+                    </td>
+                    <td className="adm-actions">
+                      <EditIconButton
+                        label="Editar producto"
+                        onClick={() => {
+                          setEditProduct(p);
+                          setShowProductModal(true);
+                        }}
+                      />
+                      <StatusSwitch
+                        checked={p.status === 'Activo'}
+                        label={p.status === 'Activo' ? 'Desactivar producto' : 'Activar producto'}
+                        onChange={async () => {
+                          try {
+                            const updated = await inventoryService.updateItem(p.dbId, {
+                              active: p.status !== 'Activo',
+                            });
+                            setInventory((cur) =>
+                              cur.map((x) =>
+                                x.id === p.id
+                                  ? { ...x, status: updated.active ? 'Activo' : 'Inactivo' }
+                                  : x,
+                              ),
+                            );
+                            onAction('Producto de inventario actualizado correctamente');
+                          } catch (cause) {
+                            notifyError(cause);
+                          }
+                        }}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </AdminTable>
+            )}
           </div>
-          {lowStock.length > 0 && (
-            <div className="adm-inv-alerts">
-              <TriangleAlert size={18} />
-              <span>{lowStock.length} producto(s) con stock bajo el mínimo</span>
+        )}
+        {inventorySection === 'Movimientos de inventario' && (
+          <div className="panel">
+            <div className="panel-heading">
+              <div>
+                <h3>Movimientos de inventario</h3>
+                <p>Historial de entradas y salidas</p>
+              </div>
             </div>
-          )}
-          <AdminToolbar search={search} setSearch={setSearch} />
-          {filtered.length === 0 ? (
-            <div className="hk-empty">
-              <Package size={22} />
-              <p>No hay productos en el inventario</p>
-            </div>
-          ) : (
-            <AdminTable
-              headers={[
-                'Producto',
-                'Categoría',
-                'Stock',
-                'Stock mínimo',
-                'Precio',
-                'Estado',
-                'Acciones',
-              ]}
-            >
-              {filtered.map((p) => (
-                <tr key={p.id} className={p.stock <= p.minStock ? 'adm-row-alert' : ''}>
-                  <td>
-                    <strong>{p.name}</strong>
-                  </td>
-                  <td>{p.category}</td>
-                  <td className={p.stock <= p.minStock ? 'terracotta-text' : ''}>
-                    <strong>{p.stock}</strong>
-                  </td>
-                  <td>{p.minStock}</td>
-                  <td>{money(p.price)}</td>
-                  <td>
-                    <span className={`status-pill ${statusPillClass(p.status)}`}>{p.status}</span>
-                  </td>
-                  <td className="adm-actions">
-                    <EditIconButton
-                      label="Editar producto"
-                      onClick={() => {
-                        setEditProduct(p);
-                        setShowProductModal(true);
-                      }}
-                    />
-                    <StatusSwitch
-                      checked={p.status === 'Activo'}
-                      label={p.status === 'Activo' ? 'Desactivar producto' : 'Activar producto'}
-                      onChange={async () => {
-                        try {
-                          const updated = await inventoryService.updateItem(p.dbId, {
-                            active: p.status !== 'Activo',
-                          });
-                          setInventory((cur) =>
-                            cur.map((x) =>
-                              x.id === p.id
-                                ? { ...x, status: updated.active ? 'Activo' : 'Inactivo' }
-                                : x,
-                            ),
-                          );
-                          onAction('Producto de inventario actualizado correctamente');
-                        } catch (cause) {
-                          notifyError(cause);
-                        }
-                      }}
-                    />
-                  </td>
-                </tr>
-              ))}
-            </AdminTable>
-          )}
-        </div>
-        <div className="panel">
-          <div className="panel-heading">
-            <div>
-              <h3>Movimientos de inventario</h3>
-              <p>Historial de entradas y salidas</p>
-            </div>
+            {sectionTabs}
+            {movements.length === 0 ? (
+              <div className="hk-empty">
+                <ArrowRight size={22} />
+                <p>Sin movimientos registrados</p>
+              </div>
+            ) : (
+              <AdminTable
+                headers={['Fecha', 'Producto', 'Tipo', 'Cantidad', 'Motivo', 'Responsable']}
+              >
+                {movements.map((m) => (
+                  <tr key={m.id}>
+                    <td>{m.date}</td>
+                    <td>
+                      <strong>{m.product}</strong>
+                    </td>
+                    <td>
+                      <span
+                        className={`status-pill ${m.type === 'Entrada' ? 'success' : 'warning'}`}
+                      >
+                        {m.type}
+                      </span>
+                    </td>
+                    <td>
+                      {m.type === 'Entrada' ? '+' : '-'}
+                      {m.quantity}
+                    </td>
+                    <td>{m.reason}</td>
+                    <td>{m.responsible}</td>
+                  </tr>
+                ))}
+              </AdminTable>
+            )}
           </div>
-          {movements.length === 0 ? (
-            <div className="hk-empty">
-              <ArrowRight size={22} />
-              <p>Sin movimientos registrados</p>
-            </div>
-          ) : (
-            <AdminTable
-              headers={['Fecha', 'Producto', 'Tipo', 'Cantidad', 'Motivo', 'Responsable']}
-            >
-              {movements.map((m) => (
-                <tr key={m.id}>
-                  <td>{m.date}</td>
-                  <td>
-                    <strong>{m.product}</strong>
-                  </td>
-                  <td>
-                    <span className={`status-pill ${m.type === 'Entrada' ? 'success' : 'warning'}`}>
-                      {m.type}
-                    </span>
-                  </td>
-                  <td>
-                    {m.type === 'Entrada' ? '+' : '-'}
-                    {m.quantity}
-                  </td>
-                  <td>{m.reason}</td>
-                  <td>{m.responsible}</td>
-                </tr>
-              ))}
-            </AdminTable>
-          )}
-        </div>
+        )}
         {showProductModal && (
           <ProductModal
             product={editProduct}
