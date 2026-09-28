@@ -566,6 +566,41 @@ const statusPillClass = (status: string) =>
       ? 'terracotta'
       : 'info';
 
+function getReportPeriodRange(period: ReportPeriod, anchor = new Date()) {
+  const start = new Date(anchor);
+  const end = new Date(anchor);
+  start.setHours(0, 0, 0, 0);
+  end.setHours(23, 59, 59, 999);
+
+  if (period === 'Día') {
+    return { start, end };
+  }
+
+  if (period === 'Semana') {
+    start.setDate(start.getDate() - 6);
+    return { start, end };
+  }
+
+  if (period === 'Mes') {
+    start.setDate(1);
+    return { start, end };
+  }
+
+  if (period === 'Año') {
+    start.setMonth(0, 1);
+    return { start, end };
+  }
+
+  const quarterStartMonth = Math.floor(start.getMonth() / 3) * 3;
+  start.setMonth(quarterStartMonth, 1);
+  return { start, end };
+}
+
+function isDateInReportPeriod(date: Date, period: ReportPeriod) {
+  const { start, end } = getReportPeriodRange(period);
+  return date >= start && date <= end;
+}
+
 function AdminModal({
   title,
   eyebrow,
@@ -1245,6 +1280,15 @@ function AdminContentReady({
 
   const exportAdminReport = () => {
     const period = reportFilter;
+    const periodCashMovements = cashMovements.filter((movement) =>
+      isDateInReportPeriod(new Date(`${movement.date}T12:00:00`), period),
+    );
+    const periodBookings = bookings.filter((booking) =>
+      isDateInReportPeriod(booking.checkIn, period),
+    );
+    const periodCancelledBookings = bookings.filter(
+      (booking) => booking.status === 'cancelled' && isDateInReportPeriod(booking.updatedAt, period),
+    );
     let data: Record<string, unknown>[] = [];
     let headers: { key: string; label: string }[] = [];
 
@@ -1260,7 +1304,7 @@ function AdminContentReady({
         { key: 'estado', label: 'Estado' },
       ];
     } else if (reportTab === 'Ingresos') {
-      data = cashMovements
+      data = periodCashMovements
         .filter((movement) => movement.type === 'Ingreso')
         .map((movement) => ({
           periodo: period,
@@ -1277,7 +1321,7 @@ function AdminContentReady({
         { key: 'responsable', label: 'Responsable' },
       ];
     } else if (reportTab === 'Reservas') {
-      data = bookings.map((booking) => ({
+      data = periodBookings.map((booking) => ({
         periodo: period,
         codigo: booking.confirmationCode,
         estado: booking.status,
@@ -1294,14 +1338,12 @@ function AdminContentReady({
         { key: 'monto', label: 'Monto' },
       ];
     } else if (reportTab === 'Cancelaciones') {
-      data = bookings
-        .filter((booking) => booking.status === 'cancelled')
-        .map((booking) => ({
-          periodo: period,
-          codigo: booking.confirmationCode,
-          fecha: toDtoCalendarDate(booking.updatedAt),
-          motivo: booking.notes ?? '',
-        }));
+      data = periodCancelledBookings.map((booking) => ({
+        periodo: period,
+        codigo: booking.confirmationCode,
+        fecha: toDtoCalendarDate(booking.updatedAt),
+        motivo: booking.notes ?? '',
+      }));
       headers = [
         { key: 'periodo', label: 'Periodo' },
         { key: 'codigo', label: 'Código' },
@@ -1318,9 +1360,12 @@ function AdminContentReady({
     );
   };
 
-  const exportCashReport = () => {
+  const exportCashReport = (
+    visibleCashMovements = cashMovements,
+    visibleCashSessions = cashSessions,
+  ) => {
     const rows: Record<string, unknown>[] = [
-      ...cashMovements.map((movement) => ({
+      ...visibleCashMovements.map((movement) => ({
         registro: 'Movimiento',
         fecha: movement.date,
         concepto: movement.concept,
@@ -1328,7 +1373,7 @@ function AdminContentReady({
         monto: movement.amount,
         responsable: movement.responsible,
       })),
-      ...cashSessions.map((session) => ({
+      ...visibleCashSessions.map((session) => ({
         registro: 'Corte',
         fecha: toDtoCalendarDate(session.closedAt ?? session.openedAt),
         concepto: session.status === 'closed' ? 'Cierre de caja' : 'Apertura de caja',
@@ -2625,25 +2670,33 @@ function AdminContentReady({
 
   // ─── REPORTES ───
   if (nav === 'Reportes') {
+    const periodCashMovements = cashMovements.filter((movement) =>
+      isDateInReportPeriod(new Date(`${movement.date}T12:00:00`), reportFilter),
+    );
+    const periodBookings = bookings.filter((booking) =>
+      isDateInReportPeriod(booking.checkIn, reportFilter),
+    );
+    const periodCancelledBookings = bookings.filter(
+      (booking) =>
+        booking.status === 'cancelled' && isDateInReportPeriod(booking.updatedAt, reportFilter),
+    );
     const occupiedRooms = rooms.filter((room) => room.status === 'Ocupada').length;
     const occupancyPercent =
       rooms.length > 0 ? Math.round((occupiedRooms / rooms.length) * 1000) / 10 : 0;
-    const confirmedReservations = bookings.filter((booking) =>
+    const confirmedReservations = periodBookings.filter((booking) =>
       ['confirmed', 'checkedIn', 'checkedOut'].includes(booking.status),
     ).length;
-    const cancelledReservations = bookings.filter(
-      (booking) => booking.status === 'cancelled',
-    ).length;
-    const totalReservations = bookings.length;
+    const cancelledReservations = periodCancelledBookings.length;
+    const totalReservations = periodBookings.length;
     const cancellationRate =
       totalReservations > 0
         ? Math.round((cancelledReservations / totalReservations) * 1000) / 10
         : 0;
-    const totalIncome = cashMovements
+    const totalIncome = periodCashMovements
       .filter((movement) => movement.type === 'Ingreso')
       .reduce((sum, movement) => sum + movement.amount, 0);
-    const incomeRows = cashMovements.filter((movement) => movement.type === 'Ingreso');
-    const reservationRows = bookings.map((booking) => ({
+    const incomeRows = periodCashMovements.filter((movement) => movement.type === 'Ingreso');
+    const reservationRows = periodBookings.map((booking) => ({
       label: booking.confirmationCode,
       reservations: 1,
       checkIns: booking.status === 'checkedIn' || booking.status === 'checkedOut' ? 1 : 0,
@@ -3066,14 +3119,16 @@ function AdminContentReady({
 
   // ─── CAJA ───
   if (nav === 'Caja') {
-    const totalIngresos = cashMovements
+    const visibleCashMovements = cashMovements;
+    const visibleCashSessions = cashSessions;
+    const totalIngresos = visibleCashMovements
       .filter((m) => m.type === 'Ingreso')
       .reduce((s, m) => s + m.amount, 0);
-    const totalEgresos = cashMovements
+    const totalEgresos = visibleCashMovements
       .filter((m) => m.type === 'Egreso')
       .reduce((s, m) => s + m.amount, 0);
     const latestCashSession =
-      [...cashSessions].sort(
+      [...visibleCashSessions].sort(
         (left, right) => right.openedAt.getTime() - left.openedAt.getTime(),
       )[0] ?? null;
     const saldoInicial = latestCashSession
@@ -3166,7 +3221,10 @@ function AdminContentReady({
                   <Plus size={16} /> Abrir caja
                 </button>
               )}
-              <button className="button secondary" onClick={exportCashReport}>
+              <button
+                className="button secondary"
+                onClick={() => exportCashReport(visibleCashMovements, visibleCashSessions)}
+              >
                 <FileText size={16} /> Reporte
               </button>
               <button className="button primary" onClick={() => setShowCashModal(true)}>
@@ -3174,14 +3232,14 @@ function AdminContentReady({
               </button>
             </div>
           </div>
-          {cashMovements.length === 0 ? (
+          {visibleCashMovements.length === 0 ? (
             <div className="hk-empty">
               <Wallet size={22} />
               <p>Sin movimientos de caja registrados</p>
             </div>
           ) : (
             <AdminTable headers={['Fecha', 'Concepto', 'Tipo', 'Monto', 'Responsable']}>
-              {cashMovements.map((m) => (
+              {visibleCashMovements.map((m) => (
                 <tr key={m.id}>
                   <td>{m.date}</td>
                   <td>
