@@ -826,8 +826,8 @@ const navByRole: Record<RoleId, NavItem[]> = {
   ],
   housekeeping: [
     { label: 'Inicio', icon: Gauge },
-    { label: 'Habitaciones', icon: BedDouble, badge: '4' },
-    { label: 'Solicitudes', icon: ClipboardList, badge: '3' },
+    { label: 'Habitaciones', icon: BedDouble },
+    { label: 'Solicitudes', icon: ClipboardList },
     { label: 'Historial', icon: FileText },
   ],
   'room-service': [
@@ -1184,6 +1184,20 @@ function PrivateWorkspaceReady({
   const accountRoleLabel = sessionRoleLabel ?? role.name;
   const greetingName = accountName.trim().split(/\s+/)[0] || role.person;
   const preferenceViews = nav.map((item) => item.label);
+  // Badges de Limpieza derivados del estado, con los mismos conteos que su KPI y sus
+  // notificaciones: habitaciones pendientes y solicitudes activas. Sin trabajo, sin badge.
+  const hkNavBadges: Record<string, number> =
+    activeRole === 'housekeeping'
+      ? {
+          Habitaciones: hkRooms.filter((room) => room.status === 'Pendiente').length,
+          Solicitudes: hkRequests.filter(isOpenGuestRequest).length,
+        }
+      : {};
+  const sidebarNav = nav.map((item) =>
+    item.label in hkNavBadges
+      ? { ...item, badge: hkNavBadges[item.label] ? String(hkNavBadges[item.label]) : undefined }
+      : item,
+  );
   const showsGreeting = [
     'Resumen',
     'Dashboard',
@@ -2099,7 +2113,7 @@ function PrivateWorkspaceReady({
         </button>
         <nav className="side-nav">
           <div className="workspace-label">OPERACIÓN</div>
-          {nav.map((item) => {
+          {sidebarNav.map((item) => {
             const Icon = item.icon;
             return (
               <button

@@ -156,6 +156,10 @@ const navItem = (label) =>
   view.root.find(
     (node) => node.type === 'button' && hasClass(node, 'nav-item') && text(node).startsWith(label),
   );
+const navBadge = (label) =>
+  navItem(label)
+    .findAll((node) => node.type === 'b')
+    .map(text)[0];
 const goTo = async (label) => {
   await act(async () => navItem(label).props.onClick());
   await settle(100);
@@ -215,9 +219,10 @@ test('limpieza: cada solicitud ofrece solo la acción que su estado permite', as
   }
 });
 
-test('limpieza: atender y completar una solicitud avanza sin transición inválida', async () => {
+test('limpieza: atender y completar una solicitud avanza sin transición inválida y actualiza el badge', async () => {
   await mountHousekeeping();
   const openBefore = await expectedOpenRequests();
+  assert.equal(navBadge('Solicitudes'), openBefore ? String(openBefore) : undefined);
 
   await goTo('Solicitudes');
   const pending = requestRows().find((row) => row.status === 'Pendiente');
@@ -230,6 +235,7 @@ test('limpieza: atender y completar una solicitud avanza sin transición inváli
   await settle();
   assert.equal(rowFor().status, 'En proceso');
   assert.ok(!toasts().some((toast) => /Transici[oó]n inv[aá]lida/i.test(toast)), toasts().join());
+  assert.equal(navBadge('Solicitudes'), String(openBefore), 'sigue abierta: el badge no cambia');
 
   await act(async () => buttons('Completar solicitud', rowFor().row)[0].props.onClick());
   await settle();
@@ -237,4 +243,22 @@ test('limpieza: atender y completar una solicitud avanza sin transición inváli
   assert.ok(!toasts().some((toast) => /Transici[oó]n inv[aá]lida/i.test(toast)), toasts().join());
   const openAfter = await expectedOpenRequests();
   assert.equal(openAfter, openBefore - 1);
+  assert.equal(navBadge('Solicitudes'), openAfter ? String(openAfter) : undefined);
+});
+
+test('limpieza: el badge de Habitaciones cuenta las pendientes y baja al iniciar una limpieza', async () => {
+  await mountHousekeeping();
+  await goTo('Habitaciones');
+  const pendingRooms = () =>
+    view.root.findAll(
+      (node) => node.type === 'span' && hasClass(node, 'status-pill') && text(node) === 'Pendiente',
+    ).length;
+  const before = pendingRooms();
+  assert.ok(before > 0, 'hay habitaciones pendientes');
+  assert.equal(navBadge('Habitaciones'), String(before));
+
+  await act(async () => buttons('Iniciar limpieza')[0].props.onClick());
+  await settle();
+  assert.equal(pendingRooms(), before - 1);
+  assert.equal(navBadge('Habitaciones'), before - 1 ? String(before - 1) : undefined);
 });
