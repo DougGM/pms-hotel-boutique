@@ -408,7 +408,7 @@ export function ReceiptModal({
   return (
     <div className="modal-backdrop" onMouseDown={onClose}>
       <div
-        className="modal"
+        className="modal gs-receipt-modal"
         style={{ width: 460, maxWidth: 'calc(100vw - 32px)' }}
         onMouseDown={(e) => e.stopPropagation()}
       >

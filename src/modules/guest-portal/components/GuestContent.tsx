@@ -221,12 +221,14 @@ function getErrorMessage(cause: unknown): string {
 export function GuestContent({
   nav,
   onAction,
+  onNavigate,
   onLogout,
   sessionName,
   sessionEmail,
 }: {
   nav: string;
   onAction: (message: string) => void;
+  onNavigate: (nav: string) => void;
   onLogout: () => void;
   sessionUserId?: string;
   sessionName?: string;
@@ -494,6 +496,7 @@ export function GuestContent({
     <GuestContentReady
       nav={nav}
       onAction={onAction}
+      onNavigate={onNavigate}
       onLogout={onLogout}
       initialProfile={screen.profile}
       initialReservations={screen.reservations}
@@ -509,6 +512,7 @@ export function GuestContent({
 function GuestContentReady({
   nav,
   onAction,
+  onNavigate,
   onLogout,
   initialProfile,
   initialReservations,
@@ -520,6 +524,7 @@ function GuestContentReady({
 }: {
   nav: string;
   onAction: (message: string) => void;
+  onNavigate: (nav: string) => void;
   onLogout: () => void;
   initialProfile: GuestInfo;
   initialReservations: PortalReservation[];
@@ -905,7 +910,7 @@ function GuestContentReady({
                 <strong>Artículos</strong>
                 <small>Toallas, almohadas</small>
               </button>
-              <button onClick={() => onAction('Redirigiendo a Room Service')}>
+              <button onClick={() => onNavigate('Room service')}>
                 <span className="gs-quick-icon terracotta">
                   <ClipboardList size={18} />
                 </span>
@@ -1092,8 +1097,9 @@ function GuestContentReady({
             reservation={receiptRes}
             onClose={() => setReceiptResId(null)}
             onDownload={() => {
+              window.print();
               setReceiptResId(null);
-              onAction('Recibo descargado en formato PDF');
+              onAction('Recibo enviado a impresión');
             }}
           />
         )}
@@ -1240,10 +1246,7 @@ function GuestContentReady({
               >
                 <Package size={15} /> Pedir artículos
               </button>
-              <button
-                className="button secondary"
-                onClick={() => onAction('Redirigiendo a Room Service')}
-              >
+              <button className="button secondary" onClick={() => onNavigate('Room service')}>
                 <ClipboardList size={15} /> Room Service
               </button>
               <button className="button secondary" onClick={() => setDetailResId(currentStay.id)}>
@@ -1281,6 +1284,31 @@ function GuestContentReady({
             onReceipt={() => {
               setDetailResId(null);
               setReceiptResId(detailRes.id);
+            }}
+          />
+        )}
+        {modifyRes && (
+          <ModifyReservationModal
+            reservation={modifyRes}
+            onClose={() => setModifyResId(null)}
+            onSave={(updates) => saveReservationModify(modifyRes.id, updates)}
+          />
+        )}
+        {cancelRes && (
+          <CancelReservationModal
+            reservation={cancelRes}
+            onClose={() => setCancelResId(null)}
+            onConfirm={(reason) => confirmCancelReservation(cancelRes.id, reason)}
+          />
+        )}
+        {receiptRes && (
+          <ReceiptModal
+            reservation={receiptRes}
+            onClose={() => setReceiptResId(null)}
+            onDownload={() => {
+              window.print();
+              setReceiptResId(null);
+              onAction('Recibo enviado a impresión');
             }}
           />
         )}

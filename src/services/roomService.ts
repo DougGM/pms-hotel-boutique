@@ -17,7 +17,7 @@ import {
 import type { ID } from '@/shared/types/common';
 import { ratesDB, roomFeaturesDB, roomTypesDB, roomsDB } from '@/data/db';
 import { mockUtils, requireCollection, simulateLatency } from './mockUtils';
-import { hydrateCollection, persistCollection } from './mockPersistence';
+import { hydrateCollection, persistCollection, refreshCollection } from './mockPersistence';
 
 const roomsStorageKey = 'PMS_ROOMS_DB';
 const roomTypesStorageKey = 'PMS_ROOM_TYPES_DB';
@@ -119,7 +119,9 @@ export const roomService = {
   async getRooms(): Promise<Room[]> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar las habitaciones.');
-    return requireCollection(getRoomsDB(), 'roomsDB').map(toRoom);
+    return requireCollection(refreshCollection(roomsStorageKey, getRoomsDB()), 'roomsDB').map(
+      toRoom,
+    );
   },
   async getRoomById(id: ID): Promise<Room | undefined> {
     await simulateLatency();

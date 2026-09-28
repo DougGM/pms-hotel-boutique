@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unused-vars -- Migracion controlada del prototipo Bolt; se conserva la logica original para portarla incrementalmente. */
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Activity,
   ArrowRight,
@@ -43,6 +44,7 @@ import {
   X,
 } from 'lucide-react';
 import { ReceptionContent } from '@/modules/front-desk/components/workspace/ReceptionContent';
+import { routePaths } from '@/app/routes';
 import { GuestContent } from '@/modules/guest-portal/components/GuestContent';
 import { RoomServiceContent } from '@/modules/room-service/components/RoomServiceContent';
 import { AdminContent } from '@/modules/administration/components/AdminContent';
@@ -1075,6 +1077,7 @@ function PrivateWorkspaceReady({
   initialData,
 }: PrivateWorkspaceProps & { initialData: WorkspaceState }) {
   const activeRole = workspaceRole;
+  const navigate = useNavigate();
   const [activeNav, setActiveNav] = useState(() => getInitialNav(workspaceRole, initialNav));
   const [showRoleMenu, setShowRoleMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -1356,12 +1359,28 @@ function PrivateWorkspaceReady({
                   ];
 
   const notify = (message: string) => {
+    if (activeRole === 'reception' && message.startsWith('Edición') && recSelectedResId !== null) {
+      navigate(routePaths.pms.bookingEdit.replace(':bookingId', recSelectedRes?.bookingId ?? ''));
+      return;
+    }
     setToast(message);
     window.setTimeout(() => setToast(''), 2800);
   };
 
   const notifyError = (cause: unknown) => {
     notify(getErrorMessage(cause));
+  };
+
+  const refreshReception = async () => {
+    try {
+      const data = await loadWorkspaceData();
+      setRecReservationList(data.recReservations);
+      setRecRoomList(data.recRooms);
+      setRecBlockList(data.recRoomBlocks);
+      notify('Calendario actualizado');
+    } catch (cause) {
+      notifyError(cause);
+    }
   };
 
   const toHousekeepingStatus = (status: RoomStatus): RoomHousekeepingStatus => {
@@ -2442,6 +2461,7 @@ function PrivateWorkspaceReady({
               setSearch={setRecSearch}
               onAction={notify}
               onNavigate={setActiveNav}
+              onRefresh={refreshReception}
             />
           ) : activeRole === 'room-service' ? (
             <RoomServiceContent
@@ -2464,6 +2484,7 @@ function PrivateWorkspaceReady({
             <GuestContent
               nav={activeNav}
               onAction={notify}
+              onNavigate={setActiveNav}
               onLogout={() => onLogout?.()}
               sessionUserId={sessionUserId}
               sessionName={sessionName}

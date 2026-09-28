@@ -8,6 +8,13 @@ import {
 import type { ID } from '@/shared/types/common';
 import { guestsDB } from '@/data/db';
 import { mockUtils, requireCollection, simulateLatency } from './mockUtils';
+import { hydrateCollection, persistCollection, refreshCollection } from './mockPersistence';
+
+const guestsStorageKey = 'pms.guests';
+
+function getGuestsCollection() {
+  return hydrateCollection(guestsStorageKey, guestsDB);
+}
 
 function nextGuestId(): string {
   const max = guestsDB.reduce((currentMax, guest) => {
@@ -21,12 +28,15 @@ export const guestService = {
   async getGuests(): Promise<Guest[]> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar los huéspedes.');
-    return requireCollection(guestsDB, 'guestsDB').map(toGuest);
+    return requireCollection(
+      refreshCollection(guestsStorageKey, getGuestsCollection()),
+      'guestsDB',
+    ).map(toGuest);
   },
   async getGuestById(id: ID): Promise<Guest | undefined> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar el huésped.');
-    const guest = guestsDB.find((item) => item.id === id);
+    const guest = getGuestsCollection().find((item) => item.id === id);
     return guest ? toGuest(guest) : undefined;
   },
   async createGuest(data: CreateGuestDto): Promise<Guest> {
@@ -39,7 +49,8 @@ export const guestService = {
       created_at: now,
       updated_at: now,
     };
-    guestsDB.push(guest);
+    getGuestsCollection().push(guest);
+    persistCollection(guestsStorageKey, getGuestsCollection());
     return toGuest(guest);
   },
   async updateGuest(id: ID, data: UpdateGuestDto): Promise<Guest> {
@@ -50,6 +61,7 @@ export const guestService = {
     if (!guest) throw new Error(`No existe el huesped ${id}.`);
 
     Object.assign(guest, data, { updated_at: new Date().toISOString() });
+    persistCollection(guestsStorageKey, getGuestsCollection());
     return toGuest(guest);
   },
 };

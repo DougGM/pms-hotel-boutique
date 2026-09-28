@@ -1,5 +1,24 @@
 # Progreso de pantallas — Ronda 1
 
+## Ticket 2 — acciones de Recepción (2026-09-27)
+
+En la rama `fix/recepcion-huesped-acciones`, el botón **Actualizar** del
+calendario del workspace vuelve a cargar reservas, habitaciones y bloqueos
+mediante `loadWorkspaceData`, por lo que la vista ya no depende solo de un
+toast; la recarga relee las colecciones persistidas de reservas, huéspedes y
+habitaciones desde `localStorage`. El botón **Editar** del detalle navega a la pantalla de edición
+existente (`bookingService.updateBooking`), y las mutaciones de reservas y
+huéspedes se persisten en `localStorage` desde sus servicios mock. Se
+mantienen los flujos existentes de check-in, check-out y cambio de habitación.
+
+### Ticket 2 — acciones del portal de Huésped (2026-09-27)
+
+Las acciones rápidas de **Room Service** navegan a la sección existente del
+portal. El recibo de reserva usa la vista recibible existente y `window.print`,
+con estilos de impresión que aíslan el comprobante. Modificar y cancelar
+consumen `bookingService.updateBooking` y `bookingService.cancelBooking`,
+respectivamente, actualizando la UI solo después de persistir el cambio.
+
 Bitácora de la rama `feat/pantallas-ronda-1`. Contexto completo en la
 conversación que originó esta rama: antes de escribir código se hizo un
 inventario que encontró que 13 de las 14 pantallas de la Ronda 1 ya
