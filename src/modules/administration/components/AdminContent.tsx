@@ -42,6 +42,7 @@ import { ErrorState } from '@/shared/components/ErrorState';
 import { LoadingState } from '@/shared/components/LoadingState';
 import { toDtoCalendarDate } from '@/shared/types/common';
 import { formatCurrency } from '@/shared/utils/currency';
+import { exportDateSuffix, exportToCSV } from '@/shared/utils/exportCsv';
 import type { AuditAction, AuditLog, AuditModule } from '@/shared/types/entities/audit-log';
 import type { Booking } from '@/shared/types/entities/booking';
 import type { CashSession } from '@/shared/types/entities/cash-session';
@@ -564,6 +565,41 @@ const statusPillClass = (status: string) =>
     : status === 'Inactivo' || status === 'Inactiva'
       ? 'terracotta'
       : 'info';
+
+function getReportPeriodRange(period: ReportPeriod, anchor = new Date()) {
+  const start = new Date(anchor);
+  const end = new Date(anchor);
+  start.setHours(0, 0, 0, 0);
+  end.setHours(23, 59, 59, 999);
+
+  if (period === 'Día') {
+    return { start, end };
+  }
+
+  if (period === 'Semana') {
+    start.setDate(start.getDate() - 6);
+    return { start, end };
+  }
+
+  if (period === 'Mes') {
+    start.setDate(1);
+    return { start, end };
+  }
+
+  if (period === 'Año') {
+    start.setMonth(0, 1);
+    return { start, end };
+  }
+
+  const quarterStartMonth = Math.floor(start.getMonth() / 3) * 3;
+  start.setMonth(quarterStartMonth, 1);
+  return { start, end };
+}
+
+function isDateInReportPeriod(date: Date, period: ReportPeriod) {
+  const { start, end } = getReportPeriodRange(period);
+  return date >= start && date <= end;
+}
 
 function AdminModal({
   title,
@@ -1230,6 +1266,159 @@ function AdminContentReady({
 
   const notifyError = (cause: unknown) => {
     onAction(getErrorMessage(cause));
+  };
+
+  const downloadCsv = (
+    fileName: string,
+    data: Record<string, unknown>[],
+    headers: { key: string; label: string }[],
+    emptyMessage: string,
+  ) => {
+    if (!exportToCSV(fileName, data, headers)) onAction(emptyMessage);
+    else onAction(`Archivo ${fileName}.csv descargado`);
+  };
+
+  const exportAdminReport = () => {
+    const period = reportFilter;
+    const periodCashMovements = cashMovements.filter((movement) =>
+      isDateInReportPeriod(new Date(`${movement.date}T12:00:00`), period),
+    );
+    const periodBookings = bookings.filter((booking) =>
+      isDateInReportPeriod(booking.checkIn, period),
+    );
+    const periodCancelledBookings = bookings.filter(
+      (booking) => booking.status === 'cancelled' && isDateInReportPeriod(booking.updatedAt, period),
+    );
+    let data: Record<string, unknown>[] = [];
+    let headers: { key: string; label: string }[] = [];
+
+    if (reportTab === 'Ocupación') {
+      data = rooms.map((room) => ({
+        periodo: period,
+        habitacion: room.number,
+        estado: room.status,
+      }));
+      headers = [
+        { key: 'periodo', label: 'Periodo' },
+        { key: 'habitacion', label: 'Habitación' },
+        { key: 'estado', label: 'Estado' },
+      ];
+    } else if (reportTab === 'Ingresos') {
+      data = periodCashMovements
+        .filter((movement) => movement.type === 'Ingreso')
+        .map((movement) => ({
+          periodo: period,
+          fecha: movement.date,
+          concepto: movement.concept,
+          monto: movement.amount,
+          responsable: movement.responsible,
+        }));
+      headers = [
+        { key: 'periodo', label: 'Periodo' },
+        { key: 'fecha', label: 'Fecha' },
+        { key: 'concepto', label: 'Concepto' },
+        { key: 'monto', label: 'Monto' },
+        { key: 'responsable', label: 'Responsable' },
+      ];
+    } else if (reportTab === 'Reservas') {
+      data = periodBookings.map((booking) => ({
+        periodo: period,
+        codigo: booking.confirmationCode,
+        estado: booking.status,
+        entrada: toDtoCalendarDate(booking.checkIn),
+        salida: toDtoCalendarDate(booking.checkOut),
+        monto: centsToAmount(booking.totalAmountCents),
+      }));
+      headers = [
+        { key: 'periodo', label: 'Periodo' },
+        { key: 'codigo', label: 'Código' },
+        { key: 'estado', label: 'Estado' },
+        { key: 'entrada', label: 'Entrada' },
+        { key: 'salida', label: 'Salida' },
+        { key: 'monto', label: 'Monto' },
+      ];
+    } else if (reportTab === 'Cancelaciones') {
+      data = periodCancelledBookings.map((booking) => ({
+        periodo: period,
+        codigo: booking.confirmationCode,
+        fecha: toDtoCalendarDate(booking.updatedAt),
+        motivo: booking.notes ?? '',
+      }));
+      headers = [
+        { key: 'periodo', label: 'Periodo' },
+        { key: 'codigo', label: 'Código' },
+        { key: 'fecha', label: 'Fecha' },
+        { key: 'motivo', label: 'Motivo' },
+      ];
+    }
+
+    downloadCsv(
+      `reportes-${reportTab.toLowerCase()}-${exportDateSuffix()}`,
+      data,
+      headers,
+      `No hay datos de ${reportTab.toLowerCase()} para exportar`,
+    );
+  };
+
+  const exportCashReport = (
+    visibleCashMovements = cashMovements,
+    visibleCashSessions = cashSessions,
+  ) => {
+    const rows: Record<string, unknown>[] = [
+      ...visibleCashMovements.map((movement) => ({
+        registro: 'Movimiento',
+        fecha: movement.date,
+        concepto: movement.concept,
+        tipo: movement.type,
+        monto: movement.amount,
+        responsable: movement.responsible,
+      })),
+      ...visibleCashSessions.map((session) => ({
+        registro: 'Corte',
+        fecha: toDtoCalendarDate(session.closedAt ?? session.openedAt),
+        concepto: session.status === 'closed' ? 'Cierre de caja' : 'Apertura de caja',
+        tipo: session.status,
+        monto: centsToAmount(session.countedBalanceCents ?? session.openingBalanceCents),
+        responsable: session.closedByUserId ?? session.openedByUserId ?? '',
+      })),
+    ];
+    downloadCsv(
+      `caja-${exportDateSuffix()}`,
+      rows,
+      [
+        { key: 'registro', label: 'Registro' },
+        { key: 'fecha', label: 'Fecha' },
+        { key: 'concepto', label: 'Concepto' },
+        { key: 'tipo', label: 'Tipo' },
+        { key: 'monto', label: 'Monto' },
+        { key: 'responsable', label: 'Responsable' },
+      ],
+      'No hay movimientos ni cierres de caja para exportar',
+    );
+  };
+
+  const exportAuditReport = () => {
+    const filtered = audit.filter((entry) => {
+      const matchesSearch = `${entry.user} ${entry.module} ${entry.action} ${entry.description}`
+        .toLowerCase()
+        .includes(search.toLowerCase());
+      const matchesFilter =
+        filter === 'Todos' || entry.module === filter || entry.action === filter;
+      return matchesSearch && matchesFilter;
+    });
+    downloadCsv(
+      `auditoria-${exportDateSuffix()}`,
+      filtered,
+      [
+        { key: 'user', label: 'Usuario' },
+        { key: 'date', label: 'Fecha' },
+        { key: 'time', label: 'Hora' },
+        { key: 'module', label: 'Módulo' },
+        { key: 'action', label: 'Acción' },
+        { key: 'description', label: 'Descripción' },
+      ],
+      'No hay registros de auditoría para exportar',
+    );
   };
 
   // ─── DASHBOARD ───
@@ -2481,25 +2670,33 @@ function AdminContentReady({
 
   // ─── REPORTES ───
   if (nav === 'Reportes') {
+    const periodCashMovements = cashMovements.filter((movement) =>
+      isDateInReportPeriod(new Date(`${movement.date}T12:00:00`), reportFilter),
+    );
+    const periodBookings = bookings.filter((booking) =>
+      isDateInReportPeriod(booking.checkIn, reportFilter),
+    );
+    const periodCancelledBookings = bookings.filter(
+      (booking) =>
+        booking.status === 'cancelled' && isDateInReportPeriod(booking.updatedAt, reportFilter),
+    );
     const occupiedRooms = rooms.filter((room) => room.status === 'Ocupada').length;
     const occupancyPercent =
       rooms.length > 0 ? Math.round((occupiedRooms / rooms.length) * 1000) / 10 : 0;
-    const confirmedReservations = bookings.filter((booking) =>
+    const confirmedReservations = periodBookings.filter((booking) =>
       ['confirmed', 'checkedIn', 'checkedOut'].includes(booking.status),
     ).length;
-    const cancelledReservations = bookings.filter(
-      (booking) => booking.status === 'cancelled',
-    ).length;
-    const totalReservations = bookings.length;
+    const cancelledReservations = periodCancelledBookings.length;
+    const totalReservations = periodBookings.length;
     const cancellationRate =
       totalReservations > 0
         ? Math.round((cancelledReservations / totalReservations) * 1000) / 10
         : 0;
-    const totalIncome = cashMovements
+    const totalIncome = periodCashMovements
       .filter((movement) => movement.type === 'Ingreso')
       .reduce((sum, movement) => sum + movement.amount, 0);
-    const incomeRows = cashMovements.filter((movement) => movement.type === 'Ingreso');
-    const reservationRows = bookings.map((booking) => ({
+    const incomeRows = periodCashMovements.filter((movement) => movement.type === 'Ingreso');
+    const reservationRows = periodBookings.map((booking) => ({
       label: booking.confirmationCode,
       reservations: 1,
       checkIns: booking.status === 'checkedIn' || booking.status === 'checkedOut' ? 1 : 0,
@@ -2519,10 +2716,7 @@ function AdminContentReady({
             <h3>Reportes del hotel</h3>
             <p>Analiza el rendimiento y la operación del hotel</p>
           </div>
-          <button
-            className="button secondary"
-            onClick={() => onAction('Reporte preparado para descargar')}
-          >
+          <button className="button secondary" onClick={exportAdminReport}>
             <Download size={16} /> Exportar
           </button>
         </div>
@@ -2925,14 +3119,16 @@ function AdminContentReady({
 
   // ─── CAJA ───
   if (nav === 'Caja') {
-    const totalIngresos = cashMovements
+    const visibleCashMovements = cashMovements;
+    const visibleCashSessions = cashSessions;
+    const totalIngresos = visibleCashMovements
       .filter((m) => m.type === 'Ingreso')
       .reduce((s, m) => s + m.amount, 0);
-    const totalEgresos = cashMovements
+    const totalEgresos = visibleCashMovements
       .filter((m) => m.type === 'Egreso')
       .reduce((s, m) => s + m.amount, 0);
     const latestCashSession =
-      [...cashSessions].sort(
+      [...visibleCashSessions].sort(
         (left, right) => right.openedAt.getTime() - left.openedAt.getTime(),
       )[0] ?? null;
     const saldoInicial = latestCashSession
@@ -3027,7 +3223,7 @@ function AdminContentReady({
               )}
               <button
                 className="button secondary"
-                onClick={() => onAction('Reporte de caja preparado')}
+                onClick={() => exportCashReport(visibleCashMovements, visibleCashSessions)}
               >
                 <FileText size={16} /> Reporte
               </button>
@@ -3036,14 +3232,14 @@ function AdminContentReady({
               </button>
             </div>
           </div>
-          {cashMovements.length === 0 ? (
+          {visibleCashMovements.length === 0 ? (
             <div className="hk-empty">
               <Wallet size={22} />
               <p>Sin movimientos de caja registrados</p>
             </div>
           ) : (
             <AdminTable headers={['Fecha', 'Concepto', 'Tipo', 'Monto', 'Responsable']}>
-              {cashMovements.map((m) => (
+              {visibleCashMovements.map((m) => (
                 <tr key={m.id}>
                   <td>{m.date}</td>
                   <td>
@@ -3114,10 +3310,7 @@ function AdminContentReady({
             <h3>Historial de auditoría</h3>
             <p>Registro de todas las acciones del sistema</p>
           </div>
-          <button
-            className="button secondary"
-            onClick={() => onAction('Reporte de auditoría preparado')}
-          >
+          <button className="button secondary" onClick={exportAuditReport}>
             <Download size={16} /> Exportar
           </button>
         </div>
