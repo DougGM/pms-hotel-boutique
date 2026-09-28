@@ -42,6 +42,7 @@ import { ErrorState } from '@/shared/components/ErrorState';
 import { LoadingState } from '@/shared/components/LoadingState';
 import { toDtoCalendarDate } from '@/shared/types/common';
 import { formatCurrency } from '@/shared/utils/currency';
+import { exportDateSuffix, exportToCSV } from '@/shared/utils/exportCsv';
 import type { AuditAction, AuditLog, AuditModule } from '@/shared/types/entities/audit-log';
 import type { Booking } from '@/shared/types/entities/booking';
 import type { CashSession } from '@/shared/types/entities/cash-session';
@@ -1230,6 +1231,149 @@ function AdminContentReady({
 
   const notifyError = (cause: unknown) => {
     onAction(getErrorMessage(cause));
+  };
+
+  const downloadCsv = (
+    fileName: string,
+    data: Record<string, unknown>[],
+    headers: { key: string; label: string }[],
+    emptyMessage: string,
+  ) => {
+    if (!exportToCSV(fileName, data, headers)) onAction(emptyMessage);
+    else onAction(`Archivo ${fileName}.csv descargado`);
+  };
+
+  const exportAdminReport = () => {
+    const period = reportFilter;
+    let data: Record<string, unknown>[] = [];
+    let headers: { key: string; label: string }[] = [];
+
+    if (reportTab === 'Ocupación') {
+      data = rooms.map((room) => ({
+        periodo: period,
+        habitacion: room.number,
+        estado: room.status,
+      }));
+      headers = [
+        { key: 'periodo', label: 'Periodo' },
+        { key: 'habitacion', label: 'Habitación' },
+        { key: 'estado', label: 'Estado' },
+      ];
+    } else if (reportTab === 'Ingresos') {
+      data = cashMovements
+        .filter((movement) => movement.type === 'Ingreso')
+        .map((movement) => ({
+          periodo: period,
+          fecha: movement.date,
+          concepto: movement.concept,
+          monto: movement.amount,
+          responsable: movement.responsible,
+        }));
+      headers = [
+        { key: 'periodo', label: 'Periodo' },
+        { key: 'fecha', label: 'Fecha' },
+        { key: 'concepto', label: 'Concepto' },
+        { key: 'monto', label: 'Monto' },
+        { key: 'responsable', label: 'Responsable' },
+      ];
+    } else if (reportTab === 'Reservas') {
+      data = bookings.map((booking) => ({
+        periodo: period,
+        codigo: booking.confirmationCode,
+        estado: booking.status,
+        entrada: toDtoCalendarDate(booking.checkIn),
+        salida: toDtoCalendarDate(booking.checkOut),
+        monto: centsToAmount(booking.totalAmountCents),
+      }));
+      headers = [
+        { key: 'periodo', label: 'Periodo' },
+        { key: 'codigo', label: 'Código' },
+        { key: 'estado', label: 'Estado' },
+        { key: 'entrada', label: 'Entrada' },
+        { key: 'salida', label: 'Salida' },
+        { key: 'monto', label: 'Monto' },
+      ];
+    } else if (reportTab === 'Cancelaciones') {
+      data = bookings
+        .filter((booking) => booking.status === 'cancelled')
+        .map((booking) => ({
+          periodo: period,
+          codigo: booking.confirmationCode,
+          fecha: toDtoCalendarDate(booking.updatedAt),
+          motivo: booking.notes ?? '',
+        }));
+      headers = [
+        { key: 'periodo', label: 'Periodo' },
+        { key: 'codigo', label: 'Código' },
+        { key: 'fecha', label: 'Fecha' },
+        { key: 'motivo', label: 'Motivo' },
+      ];
+    }
+
+    downloadCsv(
+      `reportes-${reportTab.toLowerCase()}-${exportDateSuffix()}`,
+      data,
+      headers,
+      `No hay datos de ${reportTab.toLowerCase()} para exportar`,
+    );
+  };
+
+  const exportCashReport = () => {
+    const rows: Record<string, unknown>[] = [
+      ...cashMovements.map((movement) => ({
+        registro: 'Movimiento',
+        fecha: movement.date,
+        concepto: movement.concept,
+        tipo: movement.type,
+        monto: movement.amount,
+        responsable: movement.responsible,
+      })),
+      ...cashSessions.map((session) => ({
+        registro: 'Corte',
+        fecha: toDtoCalendarDate(session.closedAt ?? session.openedAt),
+        concepto: session.status === 'closed' ? 'Cierre de caja' : 'Apertura de caja',
+        tipo: session.status,
+        monto: centsToAmount(session.countedBalanceCents ?? session.openingBalanceCents),
+        responsable: session.closedByUserId ?? session.openedByUserId ?? '',
+      })),
+    ];
+    downloadCsv(
+      `caja-${exportDateSuffix()}`,
+      rows,
+      [
+        { key: 'registro', label: 'Registro' },
+        { key: 'fecha', label: 'Fecha' },
+        { key: 'concepto', label: 'Concepto' },
+        { key: 'tipo', label: 'Tipo' },
+        { key: 'monto', label: 'Monto' },
+        { key: 'responsable', label: 'Responsable' },
+      ],
+      'No hay movimientos ni cierres de caja para exportar',
+    );
+  };
+
+  const exportAuditReport = () => {
+    const filtered = audit.filter((entry) => {
+      const matchesSearch = `${entry.user} ${entry.module} ${entry.action} ${entry.description}`
+        .toLowerCase()
+        .includes(search.toLowerCase());
+      const matchesFilter =
+        filter === 'Todos' || entry.module === filter || entry.action === filter;
+      return matchesSearch && matchesFilter;
+    });
+    downloadCsv(
+      `auditoria-${exportDateSuffix()}`,
+      filtered,
+      [
+        { key: 'user', label: 'Usuario' },
+        { key: 'date', label: 'Fecha' },
+        { key: 'time', label: 'Hora' },
+        { key: 'module', label: 'Módulo' },
+        { key: 'action', label: 'Acción' },
+        { key: 'description', label: 'Descripción' },
+      ],
+      'No hay registros de auditoría para exportar',
+    );
   };
 
   // ─── DASHBOARD ───
@@ -2519,10 +2663,7 @@ function AdminContentReady({
             <h3>Reportes del hotel</h3>
             <p>Analiza el rendimiento y la operación del hotel</p>
           </div>
-          <button
-            className="button secondary"
-            onClick={() => onAction('Reporte preparado para descargar')}
-          >
+          <button className="button secondary" onClick={exportAdminReport}>
             <Download size={16} /> Exportar
           </button>
         </div>
@@ -3025,10 +3166,7 @@ function AdminContentReady({
                   <Plus size={16} /> Abrir caja
                 </button>
               )}
-              <button
-                className="button secondary"
-                onClick={() => onAction('Reporte de caja preparado')}
-              >
+              <button className="button secondary" onClick={exportCashReport}>
                 <FileText size={16} /> Reporte
               </button>
               <button className="button primary" onClick={() => setShowCashModal(true)}>
@@ -3114,10 +3252,7 @@ function AdminContentReady({
             <h3>Historial de auditoría</h3>
             <p>Registro de todas las acciones del sistema</p>
           </div>
-          <button
-            className="button secondary"
-            onClick={() => onAction('Reporte de auditoría preparado')}
-          >
+          <button className="button secondary" onClick={exportAuditReport}>
             <Download size={16} /> Exportar
           </button>
         </div>

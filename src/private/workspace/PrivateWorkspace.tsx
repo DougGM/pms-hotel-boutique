@@ -51,6 +51,7 @@ import { AdminContent } from '@/modules/administration/components/AdminContent';
 import { AccountPreferencesModal, AccountProfileModal } from '@/private/workspace/AccountPanels';
 import { auditService } from '@/services/auditService';
 import { bookingService } from '@/services/bookingService';
+import { cashService } from '@/services/cashService';
 import { catalogService } from '@/services/catalogService';
 import { guestAccountService } from '@/services/guestAccountService';
 import { guestService } from '@/services/guestService';
@@ -62,6 +63,7 @@ import { ErrorState } from '@/shared/components/ErrorState';
 import { LoadingState } from '@/shared/components/LoadingState';
 import { toDomainCalendarDate, toDtoCalendarDate } from '@/shared/types/common';
 import { calculateNights } from '@/shared/utils/date';
+import { exportDateSuffix, exportToCSV } from '@/shared/utils/exportCsv';
 import type {
   OrderStatus as DomainOrderStatus,
   RoomHousekeepingStatus,
@@ -1383,6 +1385,152 @@ function PrivateWorkspaceReady({
     }
   };
 
+  const handleWorkspaceExport = async () => {
+    const date = exportDateSuffix();
+    const download = <T extends Record<string, unknown>>(
+      fileName: string,
+      data: readonly T[],
+      headers: { key: keyof T; label: string }[],
+      emptyMessage: string,
+    ) => {
+      if (!exportToCSV(fileName, data, headers)) notify(emptyMessage);
+      else notify(`Archivo ${fileName}.csv descargado`);
+    };
+
+    if (activeRole === 'reception') {
+      download(
+        `recepcion-${date}`,
+        recReservationList.map((reservation) => ({
+          codigo: reservation.code,
+          huesped: `${reservation.guest.name} ${reservation.guest.lastName}`,
+          entrada: reservation.checkIn,
+          salida: reservation.checkOut,
+          habitacion: reservation.roomNumber,
+          estado: reservation.status,
+        })),
+        [
+          { key: 'codigo', label: 'Código' },
+          { key: 'huesped', label: 'Huésped' },
+          { key: 'entrada', label: 'Entrada' },
+          { key: 'salida', label: 'Salida' },
+          { key: 'habitacion', label: 'Habitación' },
+          { key: 'estado', label: 'Estado' },
+        ],
+        'No hay reservas para exportar',
+      );
+      return;
+    }
+
+    if (activeRole === 'room-service') {
+      const activeOrders = rsOrders.filter(
+        (order) => !['Entregado', 'Rechazado', 'Cancelado'].includes(order.status),
+      );
+      const source = activeNav === 'Historial' ? rsOrders : activeOrders;
+      const visible = source.filter((order) => {
+        const matchesSearch = `${order.id} ${order.room} ${order.guest} ${order.items
+          .map((item) => item.name)
+          .join(' ')}`
+          .toLowerCase()
+          .includes(rsSearch.toLowerCase());
+        return matchesSearch && (rsFilter === 'Todos' || order.status === rsFilter);
+      });
+      download(
+        `room-service-${date}`,
+        visible.map((order) => ({
+          pedido: order.id,
+          habitacion: order.room,
+          huesped: order.guest,
+          total: order.items.reduce((sum, item) => sum + item.quantity * item.price, 0),
+          estado: order.status,
+          hora: order.time,
+        })),
+        [
+          { key: 'pedido', label: 'Pedido' },
+          { key: 'habitacion', label: 'Habitación' },
+          { key: 'huesped', label: 'Huésped' },
+          { key: 'total', label: 'Total' },
+          { key: 'estado', label: 'Estado' },
+          { key: 'hora', label: 'Hora' },
+        ],
+        'No hay pedidos de Room Service para exportar',
+      );
+      return;
+    }
+
+    if (activeRole === 'concierge') {
+      const activeRequests = cgRequests.filter(
+        (request) => !['Completada', 'Rechazada'].includes(request.status),
+      );
+      const source = activeNav === 'Historial' ? cgRequests : activeRequests;
+      const visible = source.filter((request) => {
+        const matchesSearch =
+          `${request.id} ${request.room} ${request.guest} ${request.category} ${request.description}`
+            .toLowerCase()
+            .includes(cgSearch.toLowerCase());
+        return matchesSearch && (cgFilter === 'Todos' || request.status === cgFilter);
+      });
+      download(
+        `conserjeria-${date}`,
+        visible.map((request) => ({
+          solicitud: request.id,
+          habitacion: request.room,
+          huesped: request.guest,
+          categoria: request.category,
+          prioridad: request.priority,
+          estado: request.status,
+          hora: request.time,
+        })),
+        [
+          { key: 'solicitud', label: 'Solicitud' },
+          { key: 'habitacion', label: 'Habitación' },
+          { key: 'huesped', label: 'Huésped' },
+          { key: 'categoria', label: 'Categoría' },
+          { key: 'prioridad', label: 'Prioridad' },
+          { key: 'estado', label: 'Estado' },
+          { key: 'hora', label: 'Hora' },
+        ],
+        'No hay solicitudes de conserjería para exportar',
+      );
+      return;
+    }
+
+    if (activeRole === 'admin' && activeNav === 'Dashboard') {
+      try {
+        const [rooms, bookings, cashMovements] = await Promise.all([
+          roomService.getRooms(),
+          bookingService.getBookings(),
+          cashService.getMovements(),
+        ]);
+        const dashboardRows =
+          rooms.length > 0 || bookings.length > 0 || cashMovements.length > 0
+            ? [
+                {
+                  indicador: 'Habitaciones',
+                  total: rooms.length,
+                  ocupadas: rooms.filter((room) => room.status === 'occupied').length,
+                  reservas: bookings.length,
+                  movimientosCaja: cashMovements.length,
+                },
+              ]
+            : [];
+        download(
+          `dashboard-${date}`,
+          dashboardRows,
+          [
+            { key: 'indicador', label: 'Indicador' },
+            { key: 'total', label: 'Total habitaciones' },
+            { key: 'ocupadas', label: 'Habitaciones ocupadas' },
+            { key: 'reservas', label: 'Reservas' },
+            { key: 'movimientosCaja', label: 'Movimientos de caja' },
+          ],
+          'No hay datos del dashboard para exportar',
+        );
+      } catch (cause) {
+        notifyError(cause);
+      }
+    }
+  };
+
   const toHousekeepingStatus = (status: RoomStatus): RoomHousekeepingStatus => {
     if (status === 'En proceso') return 'cleaning';
     if (status === 'Completada') return 'clean';
@@ -2295,7 +2443,7 @@ function PrivateWorkspaceReady({
                   <>
                     <button
                       className="button secondary"
-                      onClick={() => notify('Informe preparado para descargar')}
+                      onClick={() => void handleWorkspaceExport()}
                     >
                       <FileText size={16} /> Exportar informe
                     </button>
@@ -2318,7 +2466,7 @@ function PrivateWorkspaceReady({
                       <>
                         <button
                           className="button secondary"
-                          onClick={() => notify('Reporte preparado para descargar')}
+                          onClick={() => void handleWorkspaceExport()}
                         >
                           <FileText size={16} /> Exportar reporte
                         </button>
