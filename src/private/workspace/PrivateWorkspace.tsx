@@ -126,7 +126,7 @@ export type GuestRequest = {
   request: string;
   time: string;
   priority: string;
-  status: 'Pendiente' | 'En proceso' | 'Completada';
+  status: 'Pendiente' | 'En proceso' | 'Completada' | 'Rechazada';
 };
 
 export type HistoryEntry = {
@@ -417,11 +417,22 @@ const toDomainConciergeStatus = (status: ConciergeStatus): ServiceRequestStatus 
   return statuses[status];
 };
 
-const mapServiceStatus = (status: string): GuestRequest['status'] => {
-  if (status === 'completed') return 'Completada';
-  if (status === 'accepted' || status === 'inProgress') return 'En proceso';
-  return 'Pendiente';
+// Exhaustivo: `rejected` es terminal y no puede mostrarse como 'Pendiente', o la UI
+// ofrecería "Atender" y el servicio rechazaría rejected -> accepted.
+const mapServiceStatus = (status: ServiceRequestStatus): GuestRequest['status'] => {
+  const statuses: Record<ServiceRequestStatus, GuestRequest['status']> = {
+    pending: 'Pendiente',
+    accepted: 'En proceso',
+    inProgress: 'En proceso',
+    completed: 'Completada',
+    rejected: 'Rechazada',
+  };
+  return statuses[status];
 };
+
+/** Solicitud de limpieza que todavía requiere trabajo (mismo criterio que Conserjería). */
+const isOpenGuestRequest = (request: GuestRequest) =>
+  request.status === 'Pendiente' || request.status === 'En proceso';
 
 type WorkspaceState = {
   tasks: Task[];
@@ -1218,8 +1229,8 @@ function PrivateWorkspaceReady({
           },
           {
             label: 'Solicitudes',
-            value: String(hkRequests.filter((r) => r.status !== 'Completada').length),
-            change: `${hkRequests.filter((r) => r.priority === 'Alta' && r.status !== 'Completada').length} urgentes`,
+            value: String(hkRequests.filter(isOpenGuestRequest).length),
+            change: `${hkRequests.filter((r) => r.priority === 'Alta' && isOpenGuestRequest(r)).length} urgentes`,
             icon: ClipboardList as IconType,
             tone: 'terracotta',
           },
@@ -1264,7 +1275,7 @@ function PrivateWorkspaceReady({
               tone: 'warning',
             },
             {
-              title: `${hkRequests.filter((request) => request.status !== 'Completada').length} solicitudes activas`,
+              title: `${hkRequests.filter(isOpenGuestRequest).length} solicitudes activas`,
               detail: 'Amenidades y pedidos de huéspedes',
               tone: 'info',
             },
@@ -2242,9 +2253,11 @@ function PrivateWorkspaceReady({
             {activeRole !== 'guest' && (
               <div className="welcome-actions">
                 {activeRole === 'housekeeping' ? (
-                  <button className="button primary" onClick={() => setHkShowDefectModal(true)}>
-                    <Plus size={17} /> Reportar desperfecto
-                  </button>
+                  activeNav === summaryNavByRole.housekeeping && (
+                    <button className="button primary" onClick={() => setHkShowDefectModal(true)}>
+                      <Plus size={17} /> Reportar desperfecto
+                    </button>
+                  )
                 ) : activeRole === 'reception' ? (
                   <>
                     <button
@@ -3389,7 +3402,7 @@ function HousekeepingContent({
                 <span className="status-pill success">Prioridad baja</span>
               )}
               <span
-                className={`status-pill ${req.status === 'Pendiente' ? 'warning' : req.status === 'En proceso' ? 'info' : 'success'}`}
+                className={`status-pill ${req.status === 'Pendiente' ? 'warning' : req.status === 'En proceso' ? 'info' : req.status === 'Rechazada' ? 'terracotta' : 'success'}`}
               >
                 {req.status}
               </span>
@@ -3601,7 +3614,7 @@ function HousekeepingContent({
           </div>
           <div className="task-list">
             {rooms.filter((r) => r.status !== 'Completada').length === 0 &&
-              requests.filter((r) => r.status !== 'Completada').length === 0 && (
+              requests.filter(isOpenGuestRequest).length === 0 && (
                 <div className="hk-empty">
                   <Sparkles size={22} />
                   <p>Toda la jornada está al día</p>
@@ -3642,39 +3655,32 @@ function HousekeepingContent({
                   )}
                 </div>
               ))}
-            {requests
-              .filter((r) => r.status !== 'Completada')
-              .map((req) => (
-                <div className="task-row" key={req.id}>
-                  <div className="task-status-dot" />
-                  <div className="task-info">
-                    <strong>{req.request}</strong>
-                    <span>Habitación {req.room}</span>
-                  </div>
-                  <span className="task-time">{req.time}</span>
-                  <span
-                    className={`status-pill ${req.status === 'Pendiente' ? 'warning' : 'info'}`}
-                  >
-                    {req.status}
-                  </span>
-                  {req.status === 'Pendiente' && (
-                    <button
-                      className="button small primary"
-                      onClick={() => onAttendRequest(req.id)}
-                    >
-                      Atender
-                    </button>
-                  )}
-                  {req.status === 'En proceso' && (
-                    <button
-                      className="button small primary"
-                      onClick={() => onCompleteRequest(req.id)}
-                    >
-                      Completar
-                    </button>
-                  )}
+            {requests.filter(isOpenGuestRequest).map((req) => (
+              <div className="task-row" key={req.id}>
+                <div className="task-status-dot" />
+                <div className="task-info">
+                  <strong>{req.request}</strong>
+                  <span>Habitación {req.room}</span>
                 </div>
-              ))}
+                <span className="task-time">{req.time}</span>
+                <span className={`status-pill ${req.status === 'Pendiente' ? 'warning' : 'info'}`}>
+                  {req.status}
+                </span>
+                {req.status === 'Pendiente' && (
+                  <button className="button small primary" onClick={() => onAttendRequest(req.id)}>
+                    Atender
+                  </button>
+                )}
+                {req.status === 'En proceso' && (
+                  <button
+                    className="button small primary"
+                    onClick={() => onCompleteRequest(req.id)}
+                  >
+                    Completar
+                  </button>
+                )}
+              </div>
+            ))}
           </div>
         </div>
         <div className="panel side-panel">

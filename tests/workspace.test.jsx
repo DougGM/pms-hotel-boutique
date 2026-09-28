@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { test, afterEach } from 'node:test';
 import { create, act } from 'react-test-renderer';
 import { ReservationFormModal } from '@/modules/front-desk/components/workspace/ReceptionModals';
+import { PrivateWorkspace } from '@/private/workspace/PrivateWorkspace';
+import { serviceRequestService } from '@/services/serviceRequestService';
 import { calculateNights } from '@/shared/utils/date';
 import { toDomainCalendarDate } from '@/shared/types/common';
 
@@ -32,6 +34,10 @@ const hasClass = (node, name) =>
   typeof node.props?.className === 'string' && node.props.className.split(/\s+/).includes(name);
 const buttons = (label, root = view.root) =>
   root.findAll((node) => node.type === 'button' && text(node).includes(label));
+const settle = (ms = 700) =>
+  act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, ms));
+  });
 
 // --- Recepción: ReservationFormModal ------------------------------------
 
@@ -133,4 +139,102 @@ test('reserva manual: al corregir las fechas se recupera el flujo y guarda 2 noc
   assert.equal(saved[0].checkOut, '2024-09-02');
   assert.equal(saved[0].folio[0].concept, 'Alojamiento 2 noches');
   assert.equal(saved[0].folio[0].amount, 1000);
+});
+
+// --- Limpieza --------------------------------------------------------------
+
+async function mountHousekeeping() {
+  await act(async () => {
+    view = create(<PrivateWorkspace role="housekeeping" sessionName="Limpieza Test" />);
+  });
+  for (let i = 0; i < 20 && !view.root.findAll((node) => hasClass(node, 'side-nav')).length; i++) {
+    await settle(300);
+  }
+  assert.ok(view.root.findAll((node) => hasClass(node, 'side-nav')).length, 'workspace cargado');
+}
+const navItem = (label) =>
+  view.root.find(
+    (node) => node.type === 'button' && hasClass(node, 'nav-item') && text(node).startsWith(label),
+  );
+const goTo = async (label) => {
+  await act(async () => navItem(label).props.onClick());
+  await settle(100);
+};
+const headerHasDefectButton = () =>
+  buttons(
+    'Reportar desperfecto',
+    view.root.find((node) => hasClass(node, 'welcome-row')),
+  ).length > 0;
+const requestRows = () =>
+  view.root
+    .findAll((node) => node.type === 'div' && hasClass(node, 'hk-req-row'))
+    .map((row) => ({
+      row,
+      status: text(row.findAll((node) => hasClass(node, 'status-pill')).at(-1)),
+      actions: row.findAll((node) => node.type === 'button').map(text),
+    }));
+const toasts = () => view.root.findAll((node) => hasClass(node, 'toast')).map(text);
+const expectedOpenRequests = async () =>
+  (await serviceRequestService.getRequests()).filter(
+    (request) =>
+      (request.type === 'housekeeping' || request.type === 'maintenance') &&
+      ['pending', 'accepted', 'inProgress'].includes(request.status),
+  ).length;
+
+test('limpieza: "Reportar desperfecto" solo aparece en Inicio', async () => {
+  await mountHousekeeping();
+  assert.equal(headerHasDefectButton(), true, 'Inicio');
+  for (const nav of ['Habitaciones', 'Solicitudes', 'Historial']) {
+    await goTo(nav);
+    assert.equal(headerHasDefectButton(), false, nav);
+  }
+  await goTo('Inicio');
+  assert.equal(headerHasDefectButton(), true, 'vuelve a Inicio');
+});
+
+test('limpieza: cada solicitud ofrece solo la acción que su estado permite', async () => {
+  await mountHousekeeping();
+  await goTo('Solicitudes');
+  const rows = requestRows();
+  const rejectedInSource = (await serviceRequestService.getRequests()).filter(
+    (request) =>
+      (request.type === 'housekeeping' || request.type === 'maintenance') &&
+      request.status === 'rejected',
+  ).length;
+  assert.ok(rejectedInSource > 0, 'los datos mock incluyen una solicitud rechazada');
+  assert.equal(rows.filter((row) => row.status === 'Rechazada').length, rejectedInSource);
+  const allowed = {
+    Pendiente: ['Atender solicitud'],
+    'En proceso': ['Completar solicitud'],
+    Completada: [],
+    Rechazada: [],
+  };
+  for (const { status, actions } of rows) {
+    assert.ok(status in allowed, `estado conocido: ${status}`);
+    assert.deepEqual(actions, allowed[status], `acciones para ${status}`);
+  }
+});
+
+test('limpieza: atender y completar una solicitud avanza sin transición inválida', async () => {
+  await mountHousekeeping();
+  const openBefore = await expectedOpenRequests();
+
+  await goTo('Solicitudes');
+  const pending = requestRows().find((row) => row.status === 'Pendiente');
+  assert.ok(pending, 'hay una solicitud pendiente para atender');
+  const room = text(pending.row.find((node) => node.type === 'strong'));
+  const rowFor = () =>
+    requestRows().find((row) => text(row.row.find((node) => node.type === 'strong')) === room);
+
+  await act(async () => buttons('Atender solicitud', pending.row)[0].props.onClick());
+  await settle();
+  assert.equal(rowFor().status, 'En proceso');
+  assert.ok(!toasts().some((toast) => /Transici[oó]n inv[aá]lida/i.test(toast)), toasts().join());
+
+  await act(async () => buttons('Completar solicitud', rowFor().row)[0].props.onClick());
+  await settle();
+  assert.equal(rowFor().status, 'Completada');
+  assert.ok(!toasts().some((toast) => /Transici[oó]n inv[aá]lida/i.test(toast)), toasts().join());
+  const openAfter = await expectedOpenRequests();
+  assert.equal(openAfter, openBefore - 1);
 });
