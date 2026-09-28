@@ -57,6 +57,10 @@ modificar/cancelar reservas, vincular codigos del mismo huesped y marcar
 notificaciones como leidas pasan por servicios; el boton de reintento vuelve a
 consultar datos.
 
+**Actualizacion 2026-09-27:** el recibo del portal de huesped se descarga como
+PDF generado en navegador. El boton ya no usa `window.print()` ni abre el
+dialogo de impresion como sustituto de descarga.
+
 **Actualización WEB-29 (2026-09-13):** `GuestAccountScreen` dejó de ser stub.
 Carga la cuenta por `GACC-*` y sus cargos por `booking_id`, muestra el desglose
 con saldo y estado, y permite registrar consumos mediante

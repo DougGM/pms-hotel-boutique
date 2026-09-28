@@ -93,6 +93,170 @@ function formatDbTime(value?: Date) {
   return value.toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit', hour12: false });
 }
 
+function pdfText(value: string) {
+  const bytes = ['FE', 'FF'];
+  for (let i = 0; i < value.length; i += 1) {
+    const code = value.charCodeAt(i);
+    bytes.push(code.toString(16).padStart(4, '0').toUpperCase().slice(0, 2));
+    bytes.push(code.toString(16).padStart(4, '0').toUpperCase().slice(2));
+  }
+  return `<${bytes.join('')}>`;
+}
+
+function wrapPdfLine(value: string, maxLength: number) {
+  const words = value.split(' ');
+  const lines: string[] = [];
+  let current = '';
+
+  words.forEach((word) => {
+    const next = current ? `${current} ${word}` : word;
+    if (next.length <= maxLength) {
+      current = next;
+      return;
+    }
+    if (current) lines.push(current);
+    current = word;
+  });
+
+  if (current) lines.push(current);
+  return lines;
+}
+
+function buildReservationReceiptPdf(reservation: Reservation) {
+  const active = reservation.folio.filter((entry) => entry.status === 'Activo');
+  const charges = active
+    .filter((entry) => entry.type === 'Cargo')
+    .reduce((sum, entry) => sum + entry.amount, 0);
+  const payments = active
+    .filter((entry) => entry.type === 'Pago')
+    .reduce((sum, entry) => sum + entry.amount, 0);
+  const deposits = active
+    .filter((entry) => entry.type === 'Depósito')
+    .reduce((sum, entry) => sum + entry.amount, 0);
+  const balance = Math.max(0, charges - payments - deposits);
+  const nights = Math.max(
+    1,
+    calculateNights(
+      toDomainCalendarDate(reservation.checkIn),
+      toDomainCalendarDate(reservation.checkOut),
+    ),
+  );
+
+  const pageStreams: string[] = [];
+  let content = '';
+  let y = 790;
+
+  const addPage = () => {
+    if (content) pageStreams.push(content);
+    content = '';
+    y = 790;
+  };
+
+  const drawText = (text: string, x: number, size = 10, bold = false) => {
+    if (y < 64) addPage();
+    const font = bold ? 'F2' : 'F1';
+    content += `BT /${font} ${size} Tf ${x} ${y} Td ${pdfText(text)} Tj ET\n`;
+    y -= size + 7;
+  };
+
+  const drawRule = () => {
+    content += `0.78 0.72 0.64 RG 48 ${y} m 547 ${y} l S\n`;
+    y -= 18;
+  };
+
+  drawText('Hotel Aurora', 48, 18, true);
+  drawText('Sede Centro · RFC AUR850101', 48, 10);
+  y -= 8;
+  drawText(`Recibo de reserva #${reservation.code}`, 48, 15, true);
+  drawText(`Generado el ${new Date().toLocaleDateString('es-MX')}`, 48, 10);
+  drawRule();
+
+  drawText('Titular', 48, 11, true);
+  drawText(`${reservation.guest.name} ${reservation.guest.lastName}`, 48, 11);
+  drawText(reservation.guest.email, 48, 10);
+  y -= 8;
+
+  drawText('Estancia', 48, 11, true);
+  drawText(`Habitación: ${reservation.roomNumber} · ${reservation.roomType}`, 48, 10);
+  drawText(`Fechas: ${fmtDate(reservation.checkIn)} - ${fmtDate(reservation.checkOut)}`, 48, 10);
+  drawText(`Noches: ${nights}`, 48, 10);
+  drawRule();
+
+  drawText('Detalle de cargos', 48, 12, true);
+  if (active.length === 0) {
+    drawText('Sin movimientos registrados', 48, 10);
+  } else {
+    active.forEach((entry) => {
+      const sign = entry.type === 'Cargo' ? '+' : '-';
+      const amount = `${sign}${money(entry.amount)}`;
+      wrapPdfLine(`${entry.type} · ${entry.concept}`, 68).forEach((line, index) => {
+        drawText(index === 0 ? `${line}  ${amount}` : line, 48, 10, index === 0);
+      });
+      drawText(`${fmtDate(entry.date)}${entry.method ? ` · ${entry.method}` : ''}`, 64, 9);
+      y -= 2;
+    });
+  }
+  drawRule();
+
+  drawText(`Cargos: ${money(charges)}`, 48, 10);
+  drawText(`Pagos: -${money(payments)}`, 48, 10);
+  drawText(`Depósitos: -${money(deposits)}`, 48, 10);
+  drawText(`Saldo pendiente: ${money(balance)}`, 48, 12, true);
+
+  if (content) pageStreams.push(content);
+
+  const pageRefs: { pageId: number; contentId: number }[] = [];
+  let nextId = 5;
+  pageStreams.forEach(() => {
+    pageRefs.push({ pageId: nextId, contentId: nextId + 1 });
+    nextId += 2;
+  });
+
+  const objects: string[] = [];
+  objects[1] = '<< /Type /Catalog /Pages 2 0 R >>';
+  objects[2] =
+    `<< /Type /Pages /Kids [${pageRefs.map((page) => `${page.pageId} 0 R`).join(' ')}] ` +
+    `/Count ${pageRefs.length} >>`;
+  objects[3] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>';
+  objects[4] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>';
+  pageRefs.forEach((page, index) => {
+    const stream = pageStreams[index];
+    objects[page.pageId] =
+      '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] ' +
+      '/Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> ' +
+      `/Contents ${page.contentId} 0 R >>`;
+    objects[page.contentId] = `<< /Length ${stream.length} >>\nstream\n${stream}endstream`;
+  });
+
+  let pdf = '%PDF-1.4\n';
+  const offsets = [0];
+  for (let id = 1; id < objects.length; id += 1) {
+    offsets[id] = pdf.length;
+    pdf += `${id} 0 obj\n${objects[id]}\nendobj\n`;
+  }
+  const xrefOffset = pdf.length;
+  pdf += `xref\n0 ${objects.length}\n0000000000 65535 f \n`;
+  for (let id = 1; id < objects.length; id += 1) {
+    pdf += `${offsets[id].toString().padStart(10, '0')} 00000 n \n`;
+  }
+  pdf += `trailer\n<< /Size ${objects.length} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+  return pdf;
+}
+
+function downloadReservationReceiptPdf(reservation: Reservation) {
+  const pdf = buildReservationReceiptPdf(reservation);
+  const blob = new Blob([pdf], { type: 'application/pdf' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  const safeCode = reservation.code.replace(/[^a-z0-9-]/gi, '-').toLowerCase();
+  link.href = url;
+  link.download = `recibo-${safeCode}.pdf`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
 function getRoomTypeLabel(
   roomTypeId: string | undefined,
   roomTypes: RoomTypeModel[],
@@ -1097,9 +1261,9 @@ function GuestContentReady({
             reservation={receiptRes}
             onClose={() => setReceiptResId(null)}
             onDownload={() => {
-              window.print();
+              downloadReservationReceiptPdf(receiptRes);
               setReceiptResId(null);
-              onAction('Recibo enviado a impresión');
+              onAction('Recibo descargado en PDF');
             }}
           />
         )}
@@ -1306,9 +1470,9 @@ function GuestContentReady({
             reservation={receiptRes}
             onClose={() => setReceiptResId(null)}
             onDownload={() => {
-              window.print();
+              downloadReservationReceiptPdf(receiptRes);
               setReceiptResId(null);
-              onAction('Recibo enviado a impresión');
+              onAction('Recibo descargado en PDF');
             }}
           />
         )}
