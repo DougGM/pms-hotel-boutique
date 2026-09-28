@@ -128,6 +128,13 @@ test('calculateNights: 31 diciembre 2026 -> 2 enero 2027 = 2 (cruce de año)', (
   assert.equal(calculateNights(checkIn, checkOut), 2);
 });
 
+test('calculateNights: salida anterior a la entrada lanza, no devuelve noches negativas', () => {
+  // Contrato de dominio: la presentación valida antes de llamar (ReservationFormModal).
+  const checkIn = new Date(2024, 8, 8);
+  const checkOut = new Date(2024, 8, 2);
+  assert.throws(() => calculateNights(checkIn, checkOut), /inválido/);
+});
+
 test('calculateNights: rango invertido -> lanza error, nunca negativo', () => {
   const checkIn = new Date(2026, 8, 15);
   const checkOut = new Date(2026, 8, 10);
