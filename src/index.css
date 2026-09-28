@@ -2887,6 +2887,30 @@ button {
     padding: 0 var(--space-9);
   }
 }
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  .gs-receipt-modal,
+  .gs-receipt-modal * {
+    visibility: visible;
+  }
+
+  .gs-receipt-modal {
+    position: absolute;
+    inset: 0;
+    width: 100% !important;
+    max-width: none !important;
+    box-shadow: none !important;
+  }
+
+  .gs-receipt-modal .modal-head button,
+  .gs-receipt-modal .modal-foot {
+    display: none;
+  }
+}
+
 @media (max-width: 600px) {
   .room-cards {
     grid-template-columns: 1fr;

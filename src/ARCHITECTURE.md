@@ -223,6 +223,10 @@ operaciones soportadas escriben mediante servicios (`orderService`,
 `notificationService`). La pantalla resuelve sesion -> huesped -> reserva activa
 -> habitacion y no debe volver a introducir datos fijos de prototipo.
 
+Nota 2026-09-27: el boton de recibo del portal de huesped descarga un PDF
+generado en navegador con `Blob` y enlace `download`; no debe volver a depender
+de `window.print()` ni prometer descarga si solo abre el dialogo de impresion.
+
 Ningún componente ni pantalla importa `src/data/db.ts` directamente — todo
 pasa por un servicio en `services/`. Cada servicio es `async`, devuelve
 Models (nunca DTOs), simula una latencia de 300 a 600 ms

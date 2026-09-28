@@ -26,6 +26,24 @@ export function hydrateCollection<T>(storageKey: string, collection: T[]): T[] {
   return collection;
 }
 
+/** Relee una colección persistida para acciones explícitas de actualización. */
+export function refreshCollection<T>(storageKey: string, collection: T[]): T[] {
+  const storage = getStorage();
+  if (!storage) return collection;
+
+  const raw = storage.getItem(storageKey);
+  if (!raw) return collection;
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) collection.splice(0, collection.length, ...(parsed as T[]));
+  } catch (cause) {
+    console.warn(`[services] No fue posible refrescar ${storageKey} desde localStorage.`, cause);
+  }
+
+  return collection;
+}
+
 export function persistCollection<T>(storageKey: string, collection: T[]): void {
   const storage = getStorage();
   if (!storage) return;

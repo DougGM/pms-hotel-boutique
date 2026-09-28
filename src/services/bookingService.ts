@@ -12,9 +12,16 @@ import { validateBookingCapacity } from '@/shared/utils/bookingCapacity';
 import { bookingsDB, ratesDB, roomsDB, roomTypesDB } from '@/data/db';
 import { closeAccountForCheckout, openOrSyncAccountForBooking } from './guestAccountService';
 import { mockUtils, requireCollection, simulateLatency } from './mockUtils';
+import { hydrateCollection, persistCollection, refreshCollection } from './mockPersistence';
+
+const bookingsStorageKey = 'pms.bookings';
+
+function getBookingsCollection() {
+  return hydrateCollection(bookingsStorageKey, bookingsDB);
+}
 
 function assertBookingExists(id: ID): BookingDto {
-  const booking = bookingsDB.find((item) => item.id === id);
+  const booking = getBookingsCollection().find((item) => item.id === id);
   if (!booking) throw new Error(`No existe la reserva ${id}.`);
   return booking;
 }
@@ -60,6 +67,7 @@ function transitionBooking(booking: BookingDto, nextStatus: Booking['status']): 
 
   booking.status = toDtoStatus(nextStatus);
   booking.updated_at = new Date().toISOString();
+  persistCollection(bookingsStorageKey, getBookingsCollection());
   return toBooking(booking);
 }
 
@@ -67,12 +75,15 @@ export const bookingService = {
   async getBookings(): Promise<Booking[]> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar las reservas.');
-    return requireCollection(bookingsDB, 'bookingsDB').map(toBooking);
+    return requireCollection(
+      refreshCollection(bookingsStorageKey, getBookingsCollection()),
+      'bookingsDB',
+    ).map(toBooking);
   },
   async getBookingById(id: ID): Promise<Booking | undefined> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar la reserva.');
-    const booking = bookingsDB.find((item) => item.id === id);
+    const booking = getBookingsCollection().find((item) => item.id === id);
     return booking ? toBooking(booking) : undefined;
   },
   async createBooking(data: CreateBookingDto): Promise<Booking> {
@@ -97,7 +108,8 @@ export const bookingService = {
       created_at: now,
       updated_at: now,
     };
-    bookingsDB.push(booking);
+    getBookingsCollection().push(booking);
+    persistCollection(bookingsStorageKey, getBookingsCollection());
     return toBooking(booking);
   },
   async checkIn(bookingId: ID): Promise<Booking> {
@@ -162,6 +174,7 @@ export const bookingService = {
     }
 
     booking.updated_at = new Date().toISOString();
+    persistCollection(bookingsStorageKey, getBookingsCollection());
     return toBooking(booking);
   },
   async confirmBooking(bookingId: ID): Promise<Booking> {
@@ -180,6 +193,7 @@ export const bookingService = {
     booking.notes = booking.notes
       ? `${booking.notes}\nCancelada: ${reason.trim()}`
       : `Cancelada: ${reason.trim()}`;
+    persistCollection(bookingsStorageKey, getBookingsCollection());
     return toBooking(booking);
   },
   async assignRoom(bookingId: ID, roomId: ID): Promise<Booking> {
@@ -197,6 +211,7 @@ export const bookingService = {
 
     booking.room_id = roomId;
     booking.updated_at = new Date().toISOString();
+    persistCollection(bookingsStorageKey, getBookingsCollection());
     return toBooking(booking);
   },
 };
