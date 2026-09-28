@@ -10,6 +10,16 @@ type Totals = { charges: number; deposits: number; payments: number; balance: nu
 
 const fieldClass = (err?: string) => `rc-input${err ? ' error' : ''}`;
 
+// Fechas civiles "YYYY-MM-DD" del <input type="date">: en ese formato el orden de
+// texto coincide con el cronológico, así que se comparan sin pasar por new Date().
+const CALENDAR_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const INVALID_STAY_RANGE = 'Rango de fechas no válido. La fecha de salida debe ser posterior a la fecha de entrada.';
+const stayRangeError = (checkIn: string, checkOut: string) => {
+  if (!checkIn || !checkOut) return 'Fechas obligatorias';
+  if (!CALENDAR_DATE.test(checkIn) || !CALENDAR_DATE.test(checkOut) || checkOut <= checkIn) return INVALID_STAY_RANGE;
+  return '';
+};
+
 /* ---------- New Reservation / Walk-in ---------- */
 export function ReservationFormModal({
   nextCode, rooms, hasConflict, isRoomBlocked, onSave, onClose, walkin, nights, folioTotals,
@@ -40,8 +50,10 @@ export function ReservationFormModal({
 
   const availableRooms = rooms.filter((r) => r.status === 'Disponible');
   const selectedRoom = rooms.find((r) => r.number === roomNumber);
-  const n = nights(checkIn, checkOut);
-  const total = selectedRoom ? selectedRoom.rate * n : 0;
+  // Con un rango inválido no se calculan noches: calculateNights lanza ante él y tumbaría el render.
+  const dateError = stayRangeError(checkIn, checkOut);
+  const n = dateError ? null : nights(checkIn, checkOut);
+  const total = selectedRoom && n !== null ? selectedRoom.rate * n : 0;
 
   const conflict = roomNumber && hasConflict(roomNumber, checkIn, checkOut);
   const blocked = roomNumber && isRoomBlocked(roomNumber, checkIn, checkOut);
@@ -59,8 +71,7 @@ export function ReservationFormModal({
     if (!guest.name.trim()) e.name = 'Nombre obligatorio';
     if (!guest.lastName.trim()) e.lastName = 'Apellido obligatorio';
     if (!guest.phone.trim()) e.phone = 'Teléfono obligatorio';
-    if (!checkIn || !checkOut) e.dates = 'Fechas obligatorias';
-    if (new Date(checkOut) <= new Date(checkIn)) e.dates = 'La salida debe ser posterior a la entrada';
+    if (dateError) e.dates = dateError;
     if (!roomNumber) e.room = 'Selecciona una habitación';
     if (conflict) e.room = 'La habitación ya tiene una reserva en esas fechas';
     if (blocked) e.room = 'La habitación está bloqueada en esas fechas';
@@ -70,7 +81,7 @@ export function ReservationFormModal({
   };
 
   const handleSave = () => {
-    if (!validate()) return;
+    if (!validate() || n === null) return;
     const room = rooms.find((r) => r.number === roomNumber)!;
     const res: Reservation = {
       id: Date.now(),
@@ -121,12 +132,12 @@ export function ReservationFormModal({
 
           <h4 className="rc-form-section-title">Estadía</h4>
           <div className="rc-form-grid">
-            <label className="rc-field"><span>Entrada</span><input type="date" value={checkIn} onChange={(e) => setCheckIn(e.target.value)} /></label>
-            <label className="rc-field"><span>Salida</span><input type="date" value={checkOut} onChange={(e) => setCheckOut(e.target.value)} /></label>
+            <label className="rc-field"><span>Entrada</span><input type="date" className={fieldClass(dateError)} value={checkIn} onChange={(e) => setCheckIn(e.target.value)} /></label>
+            <label className="rc-field"><span>Salida</span><input type="date" className={fieldClass(dateError)} value={checkOut} onChange={(e) => setCheckOut(e.target.value)} /></label>
             <label className="rc-field"><span>Huéspedes</span><input type="number" min={1} value={guestCount} onChange={(e) => setGuestCount(Number(e.target.value) || 1)} /></label>
             <label className="rc-field"><span>Origen / canal</span><select value={origin} onChange={(e) => setOrigin(e.target.value)}>{!walkin && <option>Teléfono</option>}{!walkin && <option>Presencial</option>}{!walkin && <option>Online</option>}<option>Walk-in</option></select></label>
           </div>
-          {errors.dates && <small className="rc-field-error">{errors.dates}</small>}
+          {dateError && <small className="rc-field-error" role="alert">{dateError}</small>}
 
           <h4 className="rc-form-section-title">Habitación</h4>
           <div className="rc-room-select-list">
@@ -145,7 +156,7 @@ export function ReservationFormModal({
           </div>
           {errors.room && <small className="rc-field-error">{errors.room}</small>}
           {errors.capacity && <small className="rc-field-error">{errors.capacity}</small>}
-          {selectedRoom && <div className="rc-rate-preview">Tarifa: {money(selectedRoom.rate)} × {n} {n === 1 ? 'noche' : 'noches'} = <strong>{money(total)}</strong></div>}
+          {selectedRoom && n !== null && <div className="rc-rate-preview">Tarifa: {money(selectedRoom.rate)} × {n} {n === 1 ? 'noche' : 'noches'} = <strong>{money(total)}</strong></div>}
 
           <h4 className="rc-form-section-title">Acompañantes</h4>
           <div className="rc-comp-add">
@@ -160,7 +171,7 @@ export function ReservationFormModal({
         </div>
         <div className="modal-foot">
           <button className="button secondary" onClick={onClose}>Cancelar</button>
-          <button className="button primary" onClick={() => { if (validate()) setShowSummary(true); }}><Check size={16} /> Ver resumen</button>
+          <button className="button primary" disabled={Boolean(dateError)} onClick={() => { if (validate()) setShowSummary(true); }}><Check size={16} /> Ver resumen</button>
         </div>
       </div>
     </div>
