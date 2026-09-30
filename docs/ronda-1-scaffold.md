@@ -176,6 +176,27 @@ del `PrivateLayout` clasico para `/pms/reception`, `/pms/housekeeping`,
 restaura una URL privada segura si existe; si no existe, usa el rol de sesion
 para entrar directo al workspace operativo correspondiente.
 
+Nota 2026-09-30 (#95): el workspace de Administracion usa el sidebar como
+navegacion primaria para subsecciones. `PrivateWorkspace` define grupos
+desplegables para Usuarios y roles, Habitaciones, Tarifas, Servicios,
+Reportes e Inventario; `AdminContent` renderiza el contenido segun el subitem
+activo y ya no muestra tabs internas para esas secciones. Reportes mantiene
+los siete tipos originales agrupados en Resumen operativo, Reportes
+financieros y Analisis comercial. En Roles y permisos, las tarjetas muestran
+la matriz de accesos por dashboard/vista para todos los roles, agrupada por
+Administracion, Recepcion, Limpieza, Room Service, Conserjeria y Huesped.
+El sidebar consume esa organizacion: admin despliega todos los grupos y los
+roles operativos solo muestran su grupo habilitado; el editor de rol conserva
+visibles tanto permisos marcados como no marcados, y permite seleccionar o
+deseleccionar permisos por grupo sin perder la seleccion individual. Las
+tarjetas de roles, en cambio, ocultan los permisos no seleccionados para que
+reflejen solo lo habilitado. Para demostracion sin backend, los permisos
+editados se guardan en `localStorage` (`pms.demo.rolePermissions`) y alimentan
+el sidebar filtrado de cualquier rol en ese navegador. Si un rol operativo
+solo tiene permisos de su modulo, mantiene menu plano; si se le agregan
+permisos cruzados, el menu se agrupa por modulo para distinguir accesos con
+el mismo nombre.
+
 ## 3. Permisos nuevos en `session.ts`
 
 El guarda `RequirePermission` (WEB-06) valida contra la unión cerrada

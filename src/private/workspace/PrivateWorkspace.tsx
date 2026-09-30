@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unused-vars -- Migracion controlada del prototipo Bolt; se conserva la logica original para portarla incrementalmente. */
+﻿/* eslint-disable @typescript-eslint/no-unused-vars -- Migracion controlada del prototipo Bolt; se conserva la logica original para portarla incrementalmente. */
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -94,7 +94,15 @@ type Role = {
   color: string;
 };
 
-type NavItem = { label: string; icon: IconType; badge?: string };
+type NavChild = { label: string; nav: string; role: RoleId };
+type NavItem = {
+  label: string;
+  icon: IconType;
+  badge?: string;
+  nav?: string;
+  role?: RoleId;
+  children?: NavChild[];
+};
 type NotificationItem = { title: string; detail: string; tone: 'warning' | 'info' | 'success' };
 
 type Task = {
@@ -440,6 +448,17 @@ const mapServiceStatus = (status: ServiceRequestStatus): GuestRequest['status'] 
 /** Solicitud de limpieza que todavía requiere trabajo (mismo criterio que Conserjería). */
 const isOpenGuestRequest = (request: GuestRequest) =>
   request.status === 'Pendiente' || request.status === 'En proceso';
+
+const scopedNav = (role: RoleId, label: string) => `${role}:${label}`;
+
+const roleAccessKey = (groupName: string, item: string) =>
+  `${groupName.toLocaleUpperCase('es-GT')}::${item}`;
+
+const navChild = (role: RoleId, label: string): NavChild => ({
+  label,
+  nav: scopedNav(role, label),
+  role,
+});
 
 type WorkspaceState = {
   tasks: Task[];
@@ -823,16 +842,84 @@ const navByRole: Record<RoleId, NavItem[]> = {
     { label: 'Caja', icon: Wallet },
   ],
   admin: [
-    { label: 'Dashboard', icon: Gauge },
-    { label: 'Usuarios y roles', icon: Users },
-    { label: 'Habitaciones', icon: BedDouble },
-    { label: 'Tarifas', icon: Wallet },
-    { label: 'Promociones', icon: Percent },
-    { label: 'Servicios', icon: Utensils },
-    { label: 'Reportes', icon: FileText },
-    { label: 'Inventario', icon: Package },
-    { label: 'Caja', icon: Wallet },
-    { label: 'Auditoría', icon: ShieldCheck },
+    {
+      label: 'Administración',
+      icon: ShieldCheck,
+      children: [
+        navChild('admin', 'Dashboard'),
+        navChild('admin', 'Gestión de usuarios'),
+        navChild('admin', 'Roles y permisos'),
+        navChild('admin', 'Gestión de habitaciones'),
+        navChild('admin', 'Tipos de habitación'),
+        navChild('admin', 'Tarifas por temporada'),
+        navChild('admin', 'Tarifas dinámicas'),
+        navChild('admin', 'Promociones'),
+        navChild('admin', 'Amenidades'),
+        navChild('admin', 'Catálogo de Room Service'),
+        navChild('admin', 'Resumen operativo'),
+        navChild('admin', 'Reportes financieros'),
+        navChild('admin', 'Análisis comercial'),
+        navChild('admin', 'Gestión de inventario'),
+        navChild('admin', 'Movimientos de inventario'),
+        navChild('admin', 'Caja'),
+        navChild('admin', 'Auditoría'),
+      ],
+    },
+    {
+      label: 'Recepción',
+      icon: Headphones,
+      children: [
+        navChild('reception', 'Resumen'),
+        navChild('reception', 'Calendario'),
+        navChild('reception', 'Reservas'),
+        navChild('reception', 'Huéspedes'),
+        navChild('reception', 'Disponibilidad'),
+        navChild('reception', 'Habitaciones'),
+        navChild('reception', 'Caja'),
+      ],
+    },
+    {
+      label: 'Limpieza',
+      icon: Sparkles,
+      children: [
+        navChild('housekeeping', 'Inicio'),
+        navChild('housekeeping', 'Habitaciones'),
+        navChild('housekeeping', 'Solicitudes'),
+        navChild('housekeeping', 'Historial'),
+      ],
+    },
+    {
+      label: 'Room Service',
+      icon: Package,
+      children: [
+        navChild('room-service', 'Pedidos activos'),
+        navChild('room-service', 'Menú'),
+        navChild('room-service', 'Historial'),
+        navChild('room-service', 'Inventario'),
+      ],
+    },
+    {
+      label: 'Conserjería',
+      icon: MessageSquare,
+      children: [
+        navChild('concierge', 'Solicitudes'),
+        navChild('concierge', 'Por habitación'),
+        navChild('concierge', 'Historial'),
+      ],
+    },
+    {
+      label: 'Huésped',
+      icon: UserRound,
+      children: [
+        navChild('guest', 'Inicio'),
+        navChild('guest', 'Mis reservas'),
+        navChild('guest', 'Mi estancia'),
+        navChild('guest', 'Amenidades'),
+        navChild('guest', 'Servicios de habitación'),
+        navChild('guest', 'Room service'),
+        navChild('guest', 'Mis solicitudes y pedidos'),
+      ],
+    },
   ],
   housekeeping: [
     { label: 'Inicio', icon: Gauge },
@@ -863,6 +950,126 @@ const navByRole: Record<RoleId, NavItem[]> = {
 };
 
 // Pestaña única donde se muestran los KPI de cada rol; el resto no los repite (#85).
+const groupRoleBySidebarLabel: Record<string, string> = {
+  Administración: 'admin',
+  Recepción: 'reception',
+  Limpieza: 'housekeeping',
+  'Room Service': 'roomService',
+  Conserjería: 'concierge',
+  Huésped: 'guest',
+};
+
+const adminPermissionBySidebarLabel: Record<string, string> = {
+  Dashboard: 'Dashboard',
+  'Gestión de usuarios': 'Usuarios y roles',
+  'Roles y permisos': 'Usuarios y roles',
+  'Gestión de habitaciones': 'Habitaciones',
+  'Tipos de habitación': 'Habitaciones',
+  'Tarifas por temporada': 'Tarifas',
+  'Tarifas dinámicas': 'Tarifas',
+  Promociones: 'Promociones',
+  Amenidades: 'Servicios',
+  'Catálogo de Room Service': 'Servicios',
+  'Resumen operativo': 'Reportes',
+  'Reportes financieros': 'Reportes',
+  'Análisis comercial': 'Reportes',
+  'Gestión de inventario': 'Inventario',
+  'Movimientos de inventario': 'Inventario',
+  Caja: 'Caja',
+  Auditoría: 'Auditoría',
+};
+const navPermissionKeys = (groupLabel: string, childLabel: string) => {
+  const keys = [roleAccessKey(groupLabel, childLabel)];
+  if (groupRoleBySidebarLabel[groupLabel] === 'admin') {
+    const adminPermission = adminPermissionBySidebarLabel[childLabel];
+    if (adminPermission) keys.push(roleAccessKey(groupLabel, adminPermission));
+  }
+  return keys;
+};
+
+const defaultRolePermissions = Object.fromEntries(
+  Object.entries(groupRoleBySidebarLabel).map(([groupName, roleCode]) => [
+    roleCode,
+    Object.fromEntries(
+      navByRole.admin.flatMap((group) =>
+        (group.children ?? []).map((child) => [
+          roleAccessKey(group.label, child.label),
+          roleCode === 'admin' || groupRoleBySidebarLabel[group.label] === roleCode,
+        ]),
+      ),
+    ) as Record<string, boolean>,
+  ]),
+) as Record<string, Record<string, boolean>>;
+
+const rolePermissionsStorageKey = 'pms.demo.rolePermissions';
+
+const mergeRolePermissions = (
+  overrides: Record<string, Record<string, boolean>>,
+): Record<string, Record<string, boolean>> => ({
+  ...defaultRolePermissions,
+  ...Object.fromEntries(
+    Object.entries(overrides).map(([roleCode, permissions]) => [
+      roleCode,
+      {
+        ...(defaultRolePermissions[roleCode] ?? {}),
+        ...permissions,
+      },
+    ]),
+  ),
+});
+
+const loadDemoRolePermissions = () => {
+  try {
+    const raw = window.localStorage.getItem(rolePermissionsStorageKey);
+    if (!raw) return defaultRolePermissions;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return defaultRolePermissions;
+    }
+    return mergeRolePermissions(parsed as Record<string, Record<string, boolean>>);
+  } catch {
+    return defaultRolePermissions;
+  }
+};
+
+const saveDemoRolePermissions = (permissions: Record<string, Record<string, boolean>>) => {
+  try {
+    window.localStorage.setItem(rolePermissionsStorageKey, JSON.stringify(permissions));
+  } catch {
+    // Demo-only persistence: if the browser blocks storage, keep the in-memory update.
+  }
+};
+
+const filterNavByPermissions = (nav: NavItem[], permissions: Record<string, boolean>) => {
+  if (Object.keys(permissions).length === 0) return nav;
+  return nav
+    .map((item) => {
+      if (!item.children) return item;
+      const children = item.children.filter(
+        (child) => navPermissionKeys(item.label, child.label).some((key) => permissions[key]),
+      );
+      return children.length > 0 ? { ...item, children } : null;
+    })
+    .filter((item): item is NavItem => Boolean(item));
+};
+
+const flattenPermittedNav = (nav: NavItem[]): NavItem[] =>
+  nav.flatMap((item) =>
+    item.children
+      ? item.children.map((child) => ({
+          label: child.label,
+          nav: child.nav,
+          role: child.role,
+          icon: item.icon,
+        }))
+      : [item],
+  );
+
+const firstNavValue = (nav: NavItem[]) => {
+  const first = nav[0];
+  return first?.children?.[0]?.nav ?? first?.nav ?? first?.label ?? 'Dashboard';
+};
+
 const summaryNavByRole: Record<RoleId, string> = {
   reception: 'Resumen',
   admin: 'Dashboard',
@@ -991,13 +1198,69 @@ type PrivateWorkspaceProps = {
 };
 
 function getInitialNav(role: RoleId, initialNav?: string) {
-  if (initialNav && navByRole[role].some((item) => item.label === initialNav)) return initialNav;
-  if (role === 'admin') return 'Dashboard';
+  if (initialNav) {
+    const adminLegacyNav: Record<string, string> = {
+      'Usuarios y roles': scopedNav('admin', 'Gestión de usuarios'),
+      Habitaciones: scopedNav('admin', 'Gestión de habitaciones'),
+      Tarifas: scopedNav('admin', 'Tarifas por temporada'),
+      Servicios: scopedNav('admin', 'Amenidades'),
+      Reportes: scopedNav('admin', 'Resumen operativo'),
+      Inventario: scopedNav('admin', 'Gestión de inventario'),
+    };
+    if (role === 'admin' && adminLegacyNav[initialNav]) return adminLegacyNav[initialNav];
+    const directItem = navByRole[role].find((item) => item.label === initialNav);
+    if (directItem?.children?.length) return directItem.children[0].nav;
+    if (directItem) return directItem.nav ?? initialNav;
+    const childItem = navByRole[role]
+      .flatMap((item) => item.children ?? [])
+      .find((child) => child.nav === initialNav || child.label === initialNav);
+    if (childItem) return childItem.nav;
+  }
+  if (role === 'admin') return scopedNav('admin', 'Dashboard');
   if (role === 'guest') return 'Inicio';
   if (role === 'housekeeping') return 'Inicio';
   if (role === 'concierge') return 'Solicitudes';
   if (role === 'reception') return 'Resumen';
   return navByRole[role][0].label;
+}
+
+function getDefaultExpandedNav(role: RoleId, activeNav: string) {
+  const groupedItems = navByRole[role].filter((item) => item.children?.length);
+  if (role === 'admin') return groupedItems.map((item) => item.label);
+  return groupedItems
+    .filter(
+      (item) =>
+        (item.nav ?? item.label) === activeNav ||
+        item.children?.some((child) => child.nav === activeNav),
+    )
+    .map((item) => item.label);
+}
+
+function resolveWorkspaceNav(role: RoleId, activeNav: string, navItems = navByRole[role]) {
+  const directItem = navItems.find((item) => (item.nav ?? item.label) === activeNav);
+  if (directItem) {
+    return {
+      role: directItem.role ?? role,
+      nav: directItem.role ? directItem.label : (directItem.nav ?? directItem.label),
+      label: directItem.label,
+    };
+  }
+
+  for (const item of navItems) {
+    const child = item.children?.find((entry) => entry.nav === activeNav);
+    if (child) return { role: child.role, nav: child.label, label: child.label };
+  }
+
+  const scopedMatch = activeNav.match(/^(admin|reception|housekeeping|room-service|concierge|guest):(.+)$/);
+  if (scopedMatch) {
+    return {
+      role: scopedMatch[1] as RoleId,
+      nav: scopedMatch[2],
+      label: scopedMatch[2],
+    };
+  }
+
+  return { role, nav: activeNav, label: activeNav };
 }
 
 function getErrorMessage(cause: unknown): string {
@@ -1087,6 +1350,9 @@ function PrivateWorkspaceReady({
   const activeRole = workspaceRole;
   const navigate = useNavigate();
   const [activeNav, setActiveNav] = useState(() => getInitialNav(workspaceRole, initialNav));
+  const [expandedNav, setExpandedNav] = useState(() =>
+    getDefaultExpandedNav(workspaceRole, getInitialNav(workspaceRole, initialNav)),
+  );
   const [showRoleMenu, setShowRoleMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [accountPanel, setAccountPanel] = useState<'profile' | 'preferences' | null>(null);
@@ -1096,6 +1362,7 @@ function PrivateWorkspaceReady({
   const [search, setSearch] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [headerScrolled, setHeaderScrolled] = useState(false);
+  const [rolePermissions, setRolePermissions] = useState(loadDemoRolePermissions);
   const [hkRooms, setHkRooms] = useState(initialData.cleaningRooms);
   const [hkRequests, setHkRequests] = useState(initialData.guestRequests);
   const [hkHistory, setHkHistory] = useState(initialData.history);
@@ -1189,8 +1456,35 @@ function PrivateWorkspaceReady({
         r.checkIn < checkOut,
     );
 
+  const rolePermissionCode = activeRole === 'room-service' ? 'roomService' : activeRole;
+  const baseNav = activeRole ? navByRole.admin : [];
+  const permittedNav = filterNavByPermissions(baseNav, rolePermissions[rolePermissionCode] ?? {});
+  const shouldGroupNav = activeRole === 'admin' || permittedNav.length > 1;
+  const nav = shouldGroupNav ? permittedNav : flattenPermittedNav(permittedNav);
+  const groupedNavLabels = nav
+    .filter((item) => item.children?.length)
+    .map((item) => item.label)
+    .join('|');
+  useEffect(() => {
+    if (!groupedNavLabels) return;
+    const labels = groupedNavLabels.split('|');
+    setExpandedNav((current) => {
+      const missing = labels.filter((label) => !current.includes(label));
+      return missing.length > 0 ? [...current, ...missing] : current;
+    });
+  }, [groupedNavLabels]);
+  useEffect(() => {
+    const isVisible =
+      nav.some((item) => (item.nav ?? item.label) === activeNav) ||
+      nav.some((item) => item.children?.some((child) => child.nav === activeNav));
+    if (!isVisible) setActiveNav(firstNavValue(nav));
+  }, [activeNav, nav]);
+  const activeWorkspace = resolveWorkspaceNav(activeRole, activeNav, nav);
+  const contentRole = activeWorkspace.role;
+  const contentNav = activeWorkspace.nav;
+  const contentLabel = activeWorkspace.label;
   const role = roles.find((item) => item.id === activeRole) ?? roles[0];
-  const nav = activeRole ? navByRole[activeRole] : [];
+  const contentRoleInfo = roles.find((item) => item.id === contentRole) ?? role;
   const accountName = sessionName ?? role.person;
   const accountRoleLabel = sessionRoleLabel ?? role.name;
   const greetingName = accountName.trim().split(/\s+/)[0] || role.person;
@@ -1216,7 +1510,7 @@ function PrivateWorkspaceReady({
     'Mi estancia',
     'Inicio',
     'Pedidos activos',
-  ].includes(activeNav);
+  ].includes(contentNav);
   const filteredTasks = useMemo(
     () =>
       tasks.filter((task) =>
@@ -1267,7 +1561,7 @@ function PrivateWorkspaceReady({
             tone: 'blue',
           },
         ]
-      : metricsByRole[activeRole ?? 'reception'];
+      : metricsByRole[contentRole ?? 'reception'];
   const notificationItems: NotificationItem[] =
     activeRole === 'admin'
       ? [
@@ -1433,7 +1727,7 @@ function PrivateWorkspaceReady({
       else notify(`Archivo ${fileName}.csv descargado`);
     };
 
-    if (activeRole === 'reception') {
+    if (contentRole === 'reception') {
       download(
         `recepcion-${date}`,
         recReservationList.map((reservation) => ({
@@ -1457,11 +1751,11 @@ function PrivateWorkspaceReady({
       return;
     }
 
-    if (activeRole === 'room-service') {
+    if (contentRole === 'room-service') {
       const activeOrders = rsOrders.filter(
         (order) => !['Entregado', 'Rechazado', 'Cancelado'].includes(order.status),
       );
-      const source = activeNav === 'Historial' ? rsOrders : activeOrders;
+      const source = contentNav === 'Historial' ? rsOrders : activeOrders;
       const visible = source.filter((order) => {
         const matchesSearch = `${order.id} ${order.room} ${order.guest} ${order.items
           .map((item) => item.name)
@@ -1493,11 +1787,11 @@ function PrivateWorkspaceReady({
       return;
     }
 
-    if (activeRole === 'concierge') {
+    if (contentRole === 'concierge') {
       const activeRequests = cgRequests.filter(
         (request) => !['Completada', 'Rechazada'].includes(request.status),
       );
-      const source = activeNav === 'Historial' ? cgRequests : activeRequests;
+      const source = contentNav === 'Historial' ? cgRequests : activeRequests;
       const visible = source.filter((request) => {
         const matchesSearch =
           `${request.id} ${request.room} ${request.guest} ${request.category} ${request.description}`
@@ -1530,7 +1824,7 @@ function PrivateWorkspaceReady({
       return;
     }
 
-    if (activeRole === 'admin' && activeNav === 'Dashboard') {
+    if (contentRole === 'admin' && contentNav === 'Dashboard') {
       try {
         const [rooms, bookings, cashMovements] = await Promise.all([
           roomService.getRooms(),
@@ -2318,22 +2612,61 @@ function PrivateWorkspaceReady({
           <div className="workspace-label">OPERACIÓN</div>
           {sidebarNav.map((item) => {
             const Icon = item.icon;
+            const hasChildren = Boolean(item.children?.length);
+            const isExpanded = expandedNav.includes(item.label);
+            const isActiveGroup =
+              activeNav === (item.nav ?? item.label) ||
+              Boolean(item.children?.some((child) => child.nav === activeNav));
             return (
-              <button
-                key={item.label}
-                className={`nav-item ${activeNav === item.label ? 'active' : ''}`}
-                onClick={() => {
-                  if (activeRole === 'reception') closeAllReceptionModals();
-                  setActiveNav(item.label);
-                  setSidebarOpen(false);
-                  setShowNotifications(false);
-                  notify(`${item.label} seleccionado`);
-                }}
-              >
-                <Icon size={18} />
-                <span>{item.label}</span>
-                {item.badge && <b>{item.badge}</b>}
-              </button>
+              <div className="nav-group" key={item.nav ?? item.label}>
+                <button
+                  className={`nav-item ${isActiveGroup ? 'active' : ''} ${hasChildren ? 'has-children' : ''}`}
+                  aria-expanded={hasChildren ? isExpanded : undefined}
+                  onClick={() => {
+                    if (hasChildren) {
+                      setExpandedNav((current) =>
+                        current.includes(item.label)
+                          ? current.filter((label) => label !== item.label)
+                          : [...current, item.label],
+                      );
+                      return;
+                    }
+                    if (activeRole === 'reception') closeAllReceptionModals();
+                    setActiveNav(item.nav ?? item.label);
+                    setSidebarOpen(false);
+                    setShowNotifications(false);
+                    notify(`${item.label} seleccionado`);
+                  }}
+                >
+                  <Icon size={18} />
+                  <span>{item.label}</span>
+                  {item.badge && <b>{item.badge}</b>}
+                  {hasChildren && (
+                    <ChevronDown className="nav-chevron" size={15} aria-hidden="true" />
+                  )}
+                </button>
+                {hasChildren && isExpanded && (
+                  <div className="nav-submenu">
+                    {item.children?.map((child) => (
+                      <button
+                        key={child.nav}
+                        className={`nav-subitem ${activeNav === child.nav ? 'active' : ''}`}
+                        onClick={() => {
+                          setActiveNav(child.nav);
+                          setExpandedNav((current) =>
+                            current.includes(item.label) ? current : [...current, item.label],
+                          );
+                          setSidebarOpen(false);
+                          setShowNotifications(false);
+                          notify(`${child.label} seleccionado`);
+                        }}
+                      >
+                        <span>{child.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             );
           })}
         </nav>
@@ -2365,7 +2698,7 @@ function PrivateWorkspaceReady({
           <div className="crumbs">
             <span>Hotel Aurora</span>
             <span>/</span>
-            <strong>{activeNav}</strong>
+            <strong>{contentLabel}</strong>
           </div>
           <div className="topbar-actions">
             <div className="notification-wrap">
@@ -2464,18 +2797,18 @@ function PrivateWorkspaceReady({
                   month: 'long',
                 })}
               </p>
-              <h1>{showsGreeting ? `Buenos días, ${greetingName}` : activeNav}</h1>
-              <p className="muted">{getSubtitle(activeNav, role.name)}</p>
+              <h1>{showsGreeting ? `Buenos días, ${greetingName}` : contentLabel}</h1>
+              <p className="muted">{getSubtitle(contentNav, contentRoleInfo.name)}</p>
             </div>
-            {activeRole !== 'guest' && (
+            {contentRole !== 'guest' && (
               <div className="welcome-actions">
-                {activeRole === 'housekeeping' ? (
-                  activeNav === summaryNavByRole.housekeeping && (
+                {contentRole === 'housekeeping' ? (
+                  contentNav === summaryNavByRole.housekeeping && (
                     <button className="button primary" onClick={() => setHkShowDefectModal(true)}>
                       <Plus size={17} /> Reportar desperfecto
                     </button>
                   )
-                ) : activeRole === 'reception' ? (
+                ) : contentRole === 'reception' ? (
                   <>
                     <button
                       className="button secondary"
@@ -2483,14 +2816,14 @@ function PrivateWorkspaceReady({
                     >
                       <FileText size={16} /> Exportar informe
                     </button>
-                    {(activeNav === 'Resumen' ||
-                      activeNav === 'Reservas' ||
-                      activeNav === 'Calendario') && (
+                    {(contentNav === 'Resumen' ||
+                      contentNav === 'Reservas' ||
+                      contentNav === 'Calendario') && (
                       <button className="button primary" onClick={() => setRecShowNewRes(true)}>
                         <Plus size={17} /> Nueva reserva
                       </button>
                     )}
-                    {activeNav === 'Habitaciones' && (
+                    {contentNav === 'Habitaciones' && (
                       <button className="button primary" onClick={() => setRecShowBlock(true)}>
                         <Ban size={17} /> Bloquear habitación
                       </button>
@@ -2498,7 +2831,7 @@ function PrivateWorkspaceReady({
                   </>
                 ) : (
                   <>
-                    {(activeRole !== 'admin' || activeNav === 'Dashboard') && (
+                    {(contentRole !== 'admin' || contentNav === 'Dashboard') && (
                       <>
                         <button
                           className="button secondary"
@@ -2516,7 +2849,7 @@ function PrivateWorkspaceReady({
               </div>
             )}
           </section>
-          {activeRole && activeNav === summaryNavByRole[activeRole] && (
+          {contentNav === summaryNavByRole[contentRole] && (
             <section className="metric-grid">
               {currentMetrics.map((metric) => {
                 const Icon = metric.icon;
@@ -2538,9 +2871,9 @@ function PrivateWorkspaceReady({
               })}
             </section>
           )}
-          {activeRole === 'housekeeping' ? (
+          {contentRole === 'housekeeping' ? (
             <HousekeepingContent
-              nav={activeNav}
+              nav={contentNav}
               rooms={hkRooms}
               requests={hkRequests}
               history={hkHistory}
@@ -2558,7 +2891,9 @@ function PrivateWorkspaceReady({
               onOpenStatusModal={setHkShowStatusModal}
               onSubmitDefect={submitDefect}
               onAction={notify}
-              onNavigate={setActiveNav}
+              onNavigate={(nextNav) =>
+                setActiveNav(activeRole === 'admin' ? scopedNav('housekeeping', nextNav) : nextNav)
+              }
               detailRoom={hkDetailRoom}
               onCloseDetail={() => setHkDetailRoomId(null)}
               showStatusModal={hkShowStatusModal}
@@ -2568,9 +2903,9 @@ function PrivateWorkspaceReady({
               hkFilter={hkFilter}
               setHkFilter={setHkFilter}
             />
-          ) : activeRole === 'concierge' ? (
+          ) : contentRole === 'concierge' ? (
             <ConciergeContent
-              nav={activeNav}
+              nav={contentNav}
               requests={cgRequests}
               selectedRequest={cgSelectedRequest}
               onSelectRequest={setCgSelectedRequestId}
@@ -2585,9 +2920,9 @@ function PrivateWorkspaceReady({
               filter={cgFilter}
               setFilter={setCgFilter}
             />
-          ) : activeRole === 'reception' ? (
+          ) : contentRole === 'reception' ? (
             <ReceptionContent
-              nav={activeNav}
+              nav={contentNav}
               reservations={recReservationList}
               rooms={recRoomList}
               blocks={recBlockList}
@@ -2645,12 +2980,14 @@ function PrivateWorkspaceReady({
               search={recSearch}
               setSearch={setRecSearch}
               onAction={notify}
-              onNavigate={setActiveNav}
+              onNavigate={(nextNav) =>
+                setActiveNav(activeRole === 'admin' ? scopedNav('reception', nextNav) : nextNav)
+              }
               onRefresh={refreshReception}
             />
-          ) : activeRole === 'room-service' ? (
+          ) : contentRole === 'room-service' ? (
             <RoomServiceContent
-              nav={activeNav}
+              nav={contentNav}
               orders={rsOrders}
               selectedOrder={rsSelectedOrder}
               onSelectOrder={setRsSelectedOrderId}
@@ -2666,26 +3003,41 @@ function PrivateWorkspaceReady({
               filter={rsFilter}
               setFilter={setRsFilter}
             />
-          ) : activeRole === 'guest' ? (
+          ) : contentRole === 'guest' ? (
             <GuestContent
-              nav={activeNav}
+              nav={contentNav}
               onAction={notify}
-              onNavigate={setActiveNav}
+              onNavigate={(nextNav) =>
+                setActiveNav(activeRole === 'admin' ? scopedNav('guest', nextNav) : nextNav)
+              }
               onLogout={() => onLogout?.()}
               sessionUserId={sessionUserId}
               sessionName={sessionName}
               sessionEmail={sessionEmail}
             />
-          ) : activeRole === 'admin' ? (
-            <AdminContent nav={activeNav} onAction={notify} onNavigate={setActiveNav} />
+          ) : contentRole === 'admin' ? (
+            <AdminContent
+              nav={contentNav}
+              onAction={notify}
+              onNavigate={(nextNav) =>
+                setActiveNav(activeRole === 'admin' ? scopedNav('admin', nextNav) : nextNav)
+              }
+              onRolePermissionsChange={(roleCode, permissions) =>
+                setRolePermissions((current) => {
+                  const next = { ...current, [roleCode]: permissions };
+                  saveDemoRolePermissions(next);
+                  return next;
+                })
+              }
+            />
           ) : (
             <>
               <section className="dashboard-grid">
                 <div className="panel main-panel">
                   <div className="panel-heading">
                     <div>
-                      <h3>{getPanelTitle(activeRole, activeNav)}</h3>
-                      <p>{getPanelDescription(activeRole)}</p>
+                      <h3>{getPanelTitle(contentRole, contentNav)}</h3>
+                      <p>{getPanelDescription(contentRole)}</p>
                     </div>
                     <button
                       className="text-button"
@@ -2694,7 +3046,7 @@ function PrivateWorkspaceReady({
                       Ver todo <ArrowRight size={15} />
                     </button>
                   </div>
-                  {activeRole === 'admin' ? (
+                  {contentRole === 'admin' ? (
                     <AdminChart onAction={notify} />
                   ) : (
                     <TaskTable
@@ -2703,7 +3055,7 @@ function PrivateWorkspaceReady({
                       setSearch={setSearch}
                       onComplete={updateTask}
                       onAction={notify}
-                      role={activeRole}
+                      role={contentRole}
                     />
                   )}
                 </div>
@@ -2729,7 +3081,13 @@ function PrivateWorkspaceReady({
                     </div>
                     <button
                       className="button small secondary"
-                      onClick={() => setActiveNav('Habitaciones')}
+                      onClick={() =>
+                        setActiveNav(
+                          activeRole === 'admin'
+                            ? scopedNav('reception', 'Habitaciones')
+                            : 'Habitaciones',
+                        )
+                      }
                     >
                       Gestionar <ArrowRight size={14} />
                     </button>
@@ -2787,9 +3145,9 @@ function PrivateWorkspaceReady({
           )}
         </div>
       </main>
-      {showModal && activeRole !== 'reception' && (
+      {showModal && contentRole !== 'reception' && (
         <Modal
-          role={role}
+          role={contentRoleInfo}
           onClose={() => setShowModal(false)}
           onSubmit={(message) => {
             setShowModal(false);
@@ -5863,3 +6221,4 @@ function getPanelDescription(role: RoleId) {
 }
 
 export default PrivateWorkspace;
+

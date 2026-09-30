@@ -66,6 +66,7 @@ type AdminUser = {
 };
 type AdminRole = {
   id: number;
+  code: string;
   name: string;
   description: string;
   permissions: Record<string, boolean>;
@@ -190,16 +191,80 @@ type RoomsSection = 'Gestión de habitaciones' | 'Tipos de habitación';
 type InventorySection = 'Gestión de inventario' | 'Movimientos de inventario';
 type RatesSection = 'Tarifas por temporada' | 'Tarifas dinámicas';
 type ServicesSection = 'Amenidades' | 'Catálogo de Room Service';
+type ReportGroup = 'Resumen operativo' | 'Reportes financieros' | 'Análisis comercial';
 
-const ALL_PERMISSIONS = [
-  'Recepción',
-  'Reservaciones',
-  'Caja',
-  'Inventario',
-  'Reportes',
-  'Administración',
-  'Room Service',
-];
+const ROLE_ACCESS_GROUPS = [
+  {
+    name: 'ADMINISTRACIÓN',
+    roleCodes: ['admin'],
+    items: [
+      'Dashboard',
+      'Usuarios y roles',
+      'Habitaciones',
+      'Tarifas',
+      'Promociones',
+      'Servicios',
+      'Reportes',
+      'Inventario',
+      'Caja',
+      'Auditoría',
+    ],
+  },
+  {
+    name: 'RECEPCIÓN',
+    roleCodes: ['reception'],
+    items: ['Resumen', 'Calendario', 'Reservas', 'Huéspedes', 'Disponibilidad', 'Habitaciones', 'Caja'],
+  },
+  {
+    name: 'LIMPIEZA',
+    roleCodes: ['housekeeping'],
+    items: ['Inicio', 'Habitaciones', 'Solicitudes', 'Historial'],
+  },
+  {
+    name: 'ROOM SERVICE',
+    roleCodes: ['roomService'],
+    items: ['Pedidos activos', 'Menú', 'Historial', 'Inventario'],
+  },
+  {
+    name: 'CONSERJERÍA',
+    roleCodes: ['concierge'],
+    items: ['Solicitudes', 'Por habitación', 'Historial'],
+  },
+  {
+    name: 'HUÉSPED',
+    roleCodes: ['guest'],
+    items: [
+      'Inicio',
+      'Mis reservas',
+      'Mi estancia',
+      'Amenidades',
+      'Servicios de habitación',
+      'Room service',
+      'Mis solicitudes y pedidos',
+    ],
+  },
+] as const;
+
+const roleAccessKey = (groupName: string, item: string) => `${groupName}::${item}`;
+
+const ALL_PERMISSIONS = ROLE_ACCESS_GROUPS.flatMap((group) =>
+  group.items.map((item) => roleAccessKey(group.name, item)),
+);
+
+const demoRolePermissionsStorageKey = 'pms.demo.rolePermissions';
+
+const loadDemoRolePermissionOverrides = () => {
+  try {
+    const raw = window.localStorage.getItem(demoRolePermissionsStorageKey);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? (parsed as Record<string, Record<string, boolean>>)
+      : {};
+  } catch {
+    return {};
+  }
+};
 
 /**
  * Tarifas dinámicas (ajuste automático por ocupación/anticipación): no
@@ -210,6 +275,11 @@ const ALL_PERMISSIONS = [
  * todavía como entidad.
  */
 const defaultDynamicRates: DynamicRate[] = [];
+const reportTabsByGroup: Record<ReportGroup, AdminReportTab[]> = {
+  'Resumen operativo': ['Ocupación', 'Reservas', 'Cancelaciones'],
+  'Reportes financieros': ['Ingresos'],
+  'Análisis comercial': ['Canales', 'Servicios', 'Temporadas'],
+};
 /*
   {
     id: 1,
@@ -295,6 +365,18 @@ const roleDisplayName = (role?: Role) => {
   return labels[normalizeRoleCode(role.code)] ?? role.name;
 };
 
+const getRoleDashboardPermissions = (roleCode: string) => {
+  const normalized = normalizeRoleCode(roleCode);
+  return Object.fromEntries(
+    ROLE_ACCESS_GROUPS.flatMap((group) =>
+      group.items.map((item) => [
+        roleAccessKey(group.name, item),
+        normalized === 'admin' || (group.roleCodes as readonly string[]).includes(normalized),
+      ]),
+    ),
+  ) as Record<string, boolean>;
+};
+
 const roomStatusLabel = (
   status: Room['status'],
   housekeepingStatus: Room['housekeepingStatus'],
@@ -362,15 +444,6 @@ const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
 };
 
 const dashboardPeriodOptions: DashboardPeriod[] = ['Hoy', '7 días', '30 días', '90 días'];
-const reportTabs: AdminReportTab[] = [
-  'Ocupación',
-  'Ingresos',
-  'Reservas',
-  'Cancelaciones',
-  'Canales',
-  'Servicios',
-  'Temporadas',
-];
 const reportPeriodOptions: ReportPeriod[] = ['Día', 'Semana', 'Mes', 'Año', 'Temporada'];
 /*
 const dashboardSeries: Record<
@@ -699,34 +772,6 @@ function AdminToolbar({
   );
 }
 
-// Navegación interna de una pestaña con varias secciones grandes (#85); reusa el estilo de .chart-tabs.
-function AdminSectionTabs<T extends string>({
-  tabs,
-  active,
-  onChange,
-}: {
-  tabs: readonly T[];
-  active: T;
-  onChange: (tab: T) => void;
-}) {
-  return (
-    <div className="chart-tabs" role="tablist">
-      {tabs.map((tab) => (
-        <button
-          key={tab}
-          type="button"
-          role="tab"
-          aria-selected={active === tab}
-          className={active === tab ? 'active' : ''}
-          onClick={() => onChange(tab)}
-        >
-          {tab}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 function AdminTable({ headers, children }: { headers: string[]; children: React.ReactNode }) {
   return (
     <div className="adm-table-wrap">
@@ -899,10 +944,12 @@ export function AdminContent({
   nav,
   onAction,
   onNavigate,
+  onRolePermissionsChange,
 }: {
   nav: string;
   onAction: (message: string) => void;
   onNavigate?: (nav: string) => void;
+  onRolePermissionsChange?: (roleCode: string, permissions: Record<string, boolean>) => void;
 }) {
   const [screen, setScreen] = useState<ScreenState>({ status: 'loading' });
 
@@ -915,7 +962,6 @@ export function AdminContent({
         const [
           users,
           roles,
-          permissions,
           rooms,
           roomTypes,
           roomFeatures,
@@ -932,7 +978,6 @@ export function AdminContent({
         ] = await Promise.all([
           personnelService.getUsers(),
           personnelService.getRoles(),
-          personnelService.getPermissions(),
           roomService.getRooms(),
           roomService.getRoomTypes(),
           roomService.getRoomFeatures(),
@@ -960,18 +1005,21 @@ export function AdminContent({
           };
         });
 
-        const adminRoles: AdminRole[] = roles.map((role, index) => ({
-          id: parseDbId(role.id, index + 1),
-          name: roleDisplayName(role),
-          description: `Rol ${role.code}`,
-          userCount: users.filter((user) => user.role === normalizeRoleCode(role.code)).length,
-          permissions: Object.fromEntries(
-            ALL_PERMISSIONS.map((label, permissionIndex) => {
-              const permission = permissions[permissionIndex];
-              return [label, permission ? role.permissionIds.includes(permission.id) : false];
-            }),
-          ) as Record<string, boolean>,
-        }));
+        const demoRolePermissionOverrides = loadDemoRolePermissionOverrides();
+        const adminRoles: AdminRole[] = roles.map((role, index) => {
+          const roleCode = normalizeRoleCode(role.code);
+          return {
+            id: parseDbId(role.id, index + 1),
+            code: roleCode,
+            name: roleDisplayName(role),
+            description: `Rol ${role.code}`,
+            userCount: users.filter((user) => user.role === roleCode).length,
+            permissions: {
+              ...getRoleDashboardPermissions(role.code),
+              ...(demoRolePermissionOverrides[roleCode] ?? {}),
+            },
+          };
+        });
 
         const adminRooms: AdminRoom[] = rooms.map((room, index) => {
           const roomType = roomTypes.find((type) => type.id === room.roomTypeId);
@@ -1150,6 +1198,7 @@ export function AdminContent({
       nav={nav}
       onAction={onAction}
       onNavigate={onNavigate}
+      onRolePermissionsChange={onRolePermissionsChange}
       initialAdminUsers={screen.users}
       initialAdminRoles={screen.roles}
       initialAdminRooms={screen.rooms}
@@ -1173,6 +1222,7 @@ function AdminContentReady({
   nav,
   onAction,
   onNavigate,
+  onRolePermissionsChange,
   initialAdminUsers,
   initialAdminRoles,
   initialAdminRooms,
@@ -1192,6 +1242,7 @@ function AdminContentReady({
   nav: string;
   onAction: (message: string) => void;
   onNavigate?: (nav: string) => void;
+  onRolePermissionsChange?: (roleCode: string, permissions: Record<string, boolean>) => void;
   initialAdminUsers: AdminUser[];
   initialAdminRoles: AdminRole[];
   initialAdminRooms: AdminRoom[];
@@ -1209,7 +1260,7 @@ function AdminContentReady({
   recentActivity: AuditEntry[];
 }) {
   const [users] = useState(initialAdminUsers);
-  const [roles] = useState(initialAdminRoles);
+  const [roles, setRoles] = useState(initialAdminRoles);
   const [rooms, setRooms] = useState(initialAdminRooms);
   const [roomTypes, setRoomTypes] = useState(initialAdminRoomTypes);
   const [seasonRates, setSeasonRates] = useState(initialSeasonRates);
@@ -1256,12 +1307,24 @@ function AdminContentReady({
     'Ocupación',
   );
   const [dashboardPeriod, setDashboardPeriod] = useState<DashboardPeriod>('30 días');
-  const [usersSection, setUsersSection] = useState<UsersSection>('Gestión de usuarios');
-  const [roomsSection, setRoomsSection] = useState<RoomsSection>('Gestión de habitaciones');
-  const [inventorySection, setInventorySection] =
-    useState<InventorySection>('Gestión de inventario');
-  const [ratesSection, setRatesSection] = useState<RatesSection>('Tarifas por temporada');
-  const [servicesSection, setServicesSection] = useState<ServicesSection>('Amenidades');
+  const usersSection: UsersSection =
+    nav === 'Roles y permisos' ? 'Roles y permisos' : 'Gestión de usuarios';
+  const roomsSection: RoomsSection =
+    nav === 'Tipos de habitación' ? 'Tipos de habitación' : 'Gestión de habitaciones';
+  const inventorySection: InventorySection =
+    nav === 'Movimientos de inventario' ? 'Movimientos de inventario' : 'Gestión de inventario';
+  const ratesSection: RatesSection =
+    nav === 'Tarifas dinámicas' ? 'Tarifas dinámicas' : 'Tarifas por temporada';
+  const servicesSection: ServicesSection =
+    nav === 'Catálogo de Room Service' ? 'Catálogo de Room Service' : 'Amenidades';
+  const reportGroup: ReportGroup =
+    nav === 'Reportes financieros'
+      ? 'Reportes financieros'
+      : nav === 'Análisis comercial'
+        ? 'Análisis comercial'
+        : 'Resumen operativo';
+  const visibleReportTabs = reportTabsByGroup[reportGroup];
+  const activeReportTab = visibleReportTabs.includes(reportTab) ? reportTab : visibleReportTabs[0];
 
   const resetSearch = () => {
     setSearch('');
@@ -1297,7 +1360,7 @@ function AdminContentReady({
     let data: Record<string, unknown>[] = [];
     let headers: { key: string; label: string }[] = [];
 
-    if (reportTab === 'Ocupación') {
+    if (activeReportTab === 'Ocupación') {
       data = rooms.map((room) => ({
         periodo: period,
         habitacion: room.number,
@@ -1308,7 +1371,7 @@ function AdminContentReady({
         { key: 'habitacion', label: 'Habitación' },
         { key: 'estado', label: 'Estado' },
       ];
-    } else if (reportTab === 'Ingresos') {
+    } else if (activeReportTab === 'Ingresos') {
       data = periodCashMovements
         .filter((movement) => movement.type === 'Ingreso')
         .map((movement) => ({
@@ -1325,7 +1388,7 @@ function AdminContentReady({
         { key: 'monto', label: 'Monto' },
         { key: 'responsable', label: 'Responsable' },
       ];
-    } else if (reportTab === 'Reservas') {
+    } else if (activeReportTab === 'Reservas') {
       data = periodBookings.map((booking) => ({
         periodo: period,
         codigo: booking.confirmationCode,
@@ -1342,7 +1405,7 @@ function AdminContentReady({
         { key: 'salida', label: 'Salida' },
         { key: 'monto', label: 'Monto' },
       ];
-    } else if (reportTab === 'Cancelaciones') {
+    } else if (activeReportTab === 'Cancelaciones') {
       data = periodCancelledBookings.map((booking) => ({
         periodo: period,
         codigo: booking.confirmationCode,
@@ -1358,10 +1421,10 @@ function AdminContentReady({
     }
 
     downloadCsv(
-      `reportes-${reportTab.toLowerCase()}-${exportDateSuffix()}`,
+      `reportes-${activeReportTab.toLowerCase()}-${exportDateSuffix()}`,
       data,
       headers,
-      `No hay datos de ${reportTab.toLowerCase()} para exportar`,
+      `No hay datos de ${activeReportTab.toLowerCase()} para exportar`,
     );
   };
 
@@ -1707,7 +1770,7 @@ function AdminContentReady({
   }
 
   // ─── USUARIOS Y ROLES ───
-  if (nav === 'Usuarios y roles') {
+  if (nav === 'Usuarios y roles' || nav === 'Gestión de usuarios' || nav === 'Roles y permisos') {
     const roleFilterOptions = ['Todos', 'Activo', 'Inactivo', ...roles.map((role) => role.name)];
     const filtered = users.filter((u) => {
       const ms = `${u.name} ${u.email} ${u.role}`.toLowerCase().includes(search.toLowerCase());
@@ -1718,13 +1781,6 @@ function AdminContentReady({
         (filter === 'Inactivo' && u.status === 'Inactivo');
       return ms && mf;
     });
-    const sectionTabs = (
-      <AdminSectionTabs
-        tabs={['Gestión de usuarios', 'Roles y permisos'] as const}
-        active={usersSection}
-        onChange={setUsersSection}
-      />
-    );
     return (
       <>
         {usersSection === 'Gestión de usuarios' && (
@@ -1744,7 +1800,6 @@ function AdminContentReady({
                 <Plus size={17} /> Nuevo usuario
               </button>
             </div>
-            {sectionTabs}
             <AdminToolbar
               search={search}
               setSearch={setSearch}
@@ -1814,7 +1869,6 @@ function AdminContentReady({
                 <Plus size={17} /> Nuevo rol
               </button>
             </div>
-            {sectionTabs}
             <div className="adm-role-grid">
               {roles.map((r) => (
                 <div className="adm-role-card" key={r.id}>
@@ -1825,15 +1879,28 @@ function AdminContentReady({
                     </div>
                     <span className="status-pill info">{r.userCount} usuarios</span>
                   </div>
-                  <div className="adm-perm-list">
-                    {ALL_PERMISSIONS.map((p) => (
-                      <div className="adm-perm-item" key={p}>
-                        <span className={`adm-perm-check ${r.permissions[p] ? 'on' : ''}`}>
-                          {r.permissions[p] && <Check size={12} />}
-                        </span>
-                        <span>{p}</span>
-                      </div>
-                    ))}
+                  <div className="adm-role-permission-groups">
+                    {ROLE_ACCESS_GROUPS.map((group) => {
+                      const activeItems = group.items.filter(
+                        (p) => r.permissions[roleAccessKey(group.name, p)],
+                      );
+                      if (activeItems.length === 0) return null;
+                      return (
+                        <div className="adm-role-permission-group" key={group.name}>
+                          <h4>{group.name}</h4>
+                          <div className="adm-perm-list">
+                            {activeItems.map((p) => (
+                              <div className="adm-perm-item" key={roleAccessKey(group.name, p)}>
+                                <span className="adm-perm-check on">
+                                  <Check size={12} />
+                                </span>
+                                <span>{p}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                   <div className="adm-role-actions">
                     <EditIconButton
@@ -1866,9 +1933,21 @@ function AdminContentReady({
             role={editRole}
             onClose={() => setShowRoleModal(false)}
             onSave={(r) => {
-              void r;
-              onAction('Gestion de roles fuera de alcance: no se modifico la fuente.');
+              const savedRole: AdminRole = {
+                ...r,
+                id: editRole?.id ?? Date.now(),
+                code: editRole?.code ?? r.code,
+                userCount: editRole?.userCount ?? r.userCount,
+              };
+              setRoles((current) =>
+                editRole
+                  ? current.map((item) => (item.id === editRole.id ? savedRole : item))
+                  : [...current, savedRole],
+              );
+              onRolePermissionsChange?.(savedRole.code, savedRole.permissions);
+              onAction('Permisos del rol actualizados en esta sesion.');
               setShowRoleModal(false);
+              setEditRole(null);
             }}
           />
         )}
@@ -1877,7 +1956,11 @@ function AdminContentReady({
   }
 
   // ─── HABITACIONES ───
-  if (nav === 'Habitaciones') {
+  if (
+    nav === 'Habitaciones' ||
+    nav === 'Gestión de habitaciones' ||
+    nav === 'Tipos de habitación'
+  ) {
     const filtered = rooms.filter((r) => {
       const ms = `${r.number} ${r.floor} ${r.type} ${r.status}`
         .toLowerCase()
@@ -1885,13 +1968,6 @@ function AdminContentReady({
       const mf = filter === 'Todos' || r.status === filter || r.type === filter;
       return ms && mf;
     });
-    const sectionTabs = (
-      <AdminSectionTabs
-        tabs={['Gestión de habitaciones', 'Tipos de habitación'] as const}
-        active={roomsSection}
-        onChange={setRoomsSection}
-      />
-    );
     return (
       <>
         {roomsSection === 'Gestión de habitaciones' && (
@@ -1911,7 +1987,6 @@ function AdminContentReady({
                 <Plus size={17} /> Nueva habitación
               </button>
             </div>
-            {sectionTabs}
             <AdminToolbar
               search={search}
               setSearch={setSearch}
@@ -2011,7 +2086,6 @@ function AdminContentReady({
                 <Plus size={17} /> Nuevo tipo
               </button>
             </div>
-            {sectionTabs}
             {roomTypes.length === 0 ? (
               <div className="hk-empty">
                 <Building2 size={22} />
@@ -2183,14 +2257,7 @@ function AdminContentReady({
   }
 
   // ─── TARIFAS ───
-  if (nav === 'Tarifas') {
-    const sectionTabs = (
-      <AdminSectionTabs
-        tabs={['Tarifas por temporada', 'Tarifas dinámicas'] as const}
-        active={ratesSection}
-        onChange={setRatesSection}
-      />
-    );
+  if (nav === 'Tarifas' || nav === 'Tarifas por temporada' || nav === 'Tarifas dinámicas') {
     return (
       <>
         {ratesSection === 'Tarifas por temporada' && (
@@ -2204,7 +2271,6 @@ function AdminContentReady({
                 <Plus size={17} /> Nueva tarifa de temporada
               </button>
             </div>
-            {sectionTabs}
             {seasonRates.length === 0 ? (
               <div className="hk-empty">
                 <CalendarDays size={22} />
@@ -2281,7 +2347,6 @@ function AdminContentReady({
                 <Plus size={17} /> Nueva regla
               </button>
             </div>
-            {sectionTabs}
             <div className="adm-dynrate-grid">
               {dynamicRates.length === 0 && (
                 <div className="hk-empty">
@@ -2524,16 +2589,9 @@ function AdminContentReady({
   }
 
   // ─── SERVICIOS (AMENIDADES + ROOM SERVICE) ───
-  if (nav === 'Servicios') {
+  if (nav === 'Servicios' || nav === 'Amenidades' || nav === 'Catálogo de Room Service') {
     const filteredRs = rsItems.filter((i) =>
       `${i.name} ${i.category}`.toLowerCase().includes(search.toLowerCase()),
-    );
-    const sectionTabs = (
-      <AdminSectionTabs
-        tabs={['Amenidades', 'Catálogo de Room Service'] as const}
-        active={servicesSection}
-        onChange={setServicesSection}
-      />
     );
     return (
       <>
@@ -2554,7 +2612,6 @@ function AdminContentReady({
                 <Plus size={17} /> Nueva amenidad
               </button>
             </div>
-            {sectionTabs}
             {amenities.length === 0 ? (
               <div className="hk-empty">
                 <Star size={22} />
@@ -2623,7 +2680,6 @@ function AdminContentReady({
                 <Plus size={17} /> Nuevo producto
               </button>
             </div>
-            {sectionTabs}
             <AdminToolbar search={search} setSearch={setSearch} />
             {filteredRs.length === 0 ? (
               <div className="hk-empty">
@@ -2704,7 +2760,12 @@ function AdminContentReady({
   }
 
   // ─── REPORTES ───
-  if (nav === 'Reportes') {
+  if (
+    nav === 'Reportes' ||
+    nav === 'Resumen operativo' ||
+    nav === 'Reportes financieros' ||
+    nav === 'Análisis comercial'
+  ) {
     const periodCashMovements = cashMovements.filter((movement) =>
       isDateInReportPeriod(new Date(`${movement.date}T12:00:00`), reportFilter),
     );
@@ -2748,24 +2809,29 @@ function AdminContentReady({
       <div className="panel">
         <div className="panel-heading">
           <div>
-            <h3>Reportes del hotel</h3>
+            <h3>{reportGroup}</h3>
             <p>Analiza el rendimiento y la operación del hotel</p>
           </div>
           <button className="button secondary" onClick={exportAdminReport}>
             <Download size={16} /> Exportar
           </button>
         </div>
-        <div className="chart-tabs">
-          {reportTabs.map((t) => (
-            <button
-              key={t}
-              className={reportTab === t ? 'active' : ''}
-              onClick={() => setReportTab(t)}
-            >
-              {t}
-            </button>
-          ))}
-        </div>
+        {visibleReportTabs.length > 1 && (
+          <div className="adm-compact-selector">
+            <span>Tipo de reporte</span>
+            <div>
+              {visibleReportTabs.map((t) => (
+                <button
+                  key={t}
+                  className={activeReportTab === t ? 'active' : ''}
+                  onClick={() => setReportTab(t)}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="adm-report-filters">
           {reportPeriodOptions.map((f) => (
             <button
@@ -2778,7 +2844,7 @@ function AdminContentReady({
           ))}
         </div>
         <div className="adm-report-content">
-          {reportTab === 'Ocupación' && (
+          {activeReportTab === 'Ocupación' && (
             <>
               <div className="adm-report-stats">
                 <div className="metric-card">
@@ -2808,7 +2874,7 @@ function AdminContentReady({
               />
             </>
           )}
-          {reportTab === 'Ingresos' && (
+          {activeReportTab === 'Ingresos' && (
             <>
               <div className="adm-report-stats">
                 <div className="metric-card">
@@ -2840,7 +2906,7 @@ function AdminContentReady({
               />
             </>
           )}
-          {reportTab === 'Reservas' && (
+          {activeReportTab === 'Reservas' && (
             <AdminTable headers={['Periodo', 'Reservas', 'Check-ins', 'Check-outs', 'Ingresos']}>
               {reservationRows.map((row) => (
                 <tr key={row.label}>
@@ -2853,7 +2919,7 @@ function AdminContentReady({
               ))}
             </AdminTable>
           )}
-          {reportTab === 'Cancelaciones' && (
+          {activeReportTab === 'Cancelaciones' && (
             <>
               <div className="adm-report-stats">
                 <div className="metric-card">
@@ -2884,13 +2950,13 @@ function AdminContentReady({
               />
             </>
           )}
-          {reportTab === 'Canales' && (
+          {activeReportTab === 'Canales' && (
             <EmptyReport message="El contrato actual de reservas no define canal de venta; no se muestran cifras simuladas." />
           )}
-          {reportTab === 'Servicios' && (
+          {activeReportTab === 'Servicios' && (
             <EmptyReport message="Los ingresos por servicio se veran aqui cuando exista una fuente contractual agregada." />
           )}
-          {reportTab === 'Temporadas' && (
+          {activeReportTab === 'Temporadas' && (
             <EmptyReport message="La agrupacion por temporadas aun no tiene contrato de datos; se omiten metricas inventadas." />
           )}
         </div>
@@ -2899,18 +2965,15 @@ function AdminContentReady({
   }
 
   // ─── INVENTARIO ───
-  if (nav === 'Inventario') {
+  if (
+    nav === 'Inventario' ||
+    nav === 'Gestión de inventario' ||
+    nav === 'Movimientos de inventario'
+  ) {
     const filtered = inventory.filter((p) =>
       `${p.name} ${p.category}`.toLowerCase().includes(search.toLowerCase()),
     );
     const lowStock = inventory.filter((p) => p.stock <= p.minStock);
-    const sectionTabs = (
-      <AdminSectionTabs
-        tabs={['Gestión de inventario', 'Movimientos de inventario'] as const}
-        active={inventorySection}
-        onChange={setInventorySection}
-      />
-    );
     return (
       <>
         {inventorySection === 'Gestión de inventario' && (
@@ -2935,7 +2998,6 @@ function AdminContentReady({
                 </button>
               </div>
             </div>
-            {sectionTabs}
             {lowStock.length > 0 && (
               <div className="adm-inv-alerts">
                 <TriangleAlert size={18} />
@@ -3018,7 +3080,6 @@ function AdminContentReady({
                 <p>Historial de entradas y salidas</p>
               </div>
             </div>
-            {sectionTabs}
             {movements.length === 0 ? (
               <div className="hk-empty">
                 <ArrowRight size={22} />
@@ -3492,6 +3553,15 @@ function RoleModal({
   const [permissions, setPermissions] = useState<Record<string, boolean>>(
     role?.permissions ?? Object.fromEntries(ALL_PERMISSIONS.map((p) => [p, false])),
   );
+  const setGroupPermissions = (
+    group: (typeof ROLE_ACCESS_GROUPS)[number],
+    selected: boolean,
+  ) => {
+    setPermissions((current) => ({
+      ...current,
+      ...Object.fromEntries(group.items.map((p) => [roleAccessKey(group.name, p), selected])),
+    }));
+  };
   return (
     <AdminModal
       title={role ? 'Editar rol' : 'Nuevo rol'}
@@ -3500,6 +3570,7 @@ function RoleModal({
       onSubmit={() =>
         onSave({
           id: role?.id ?? 0,
+          code: role?.code ?? name.toLowerCase().replace(/\s+/g, '_'),
           name,
           description,
           permissions,
@@ -3530,16 +3601,44 @@ function RoleModal({
       <label className="hk-form-label">
         Permisos
         <div className="adm-perm-editor">
-          {ALL_PERMISSIONS.map((p) => (
-            <button
-              type="button"
-              key={p}
-              className={`adm-perm-toggle ${permissions[p] ? 'on' : ''}`}
-              onClick={() => setPermissions((cur) => ({ ...cur, [p]: !cur[p] }))}
-            >
-              <span className="adm-perm-check">{permissions[p] && <Check size={12} />}</span>
-              <span>{p}</span>
-            </button>
+          {ROLE_ACCESS_GROUPS.map((group) => (
+            <div className="adm-perm-editor-group" key={group.name}>
+              <div className="adm-perm-editor-heading">
+                <h4>{group.name}</h4>
+                <div className="adm-perm-bulk-actions">
+                  <button
+                    type="button"
+                    className="button secondary"
+                    onClick={() => setGroupPermissions(group, true)}
+                  >
+                    Seleccionar todo
+                  </button>
+                  <button
+                    type="button"
+                    className="button secondary"
+                    onClick={() => setGroupPermissions(group, false)}
+                  >
+                    Deseleccionar todo
+                  </button>
+                </div>
+              </div>
+              {group.items.map((p) => {
+                const key = roleAccessKey(group.name, p);
+                return (
+                  <button
+                    type="button"
+                    key={key}
+                    className={`adm-perm-toggle ${permissions[key] ? 'on' : ''}`}
+                    onClick={() => setPermissions((cur) => ({ ...cur, [key]: !cur[key] }))}
+                  >
+                    <span className="adm-perm-check">
+                      {permissions[key] && <Check size={12} />}
+                    </span>
+                    <span>{p}</span>
+                  </button>
+                );
+              })}
+            </div>
           ))}
         </div>
       </label>
