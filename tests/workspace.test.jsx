@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test, afterEach } from 'node:test';
 import { create, act } from 'react-test-renderer';
+import { MemoryRouter } from 'react-router-dom';
 import { ReservationFormModal } from '@/modules/front-desk/components/workspace/ReceptionModals';
 import { PrivateWorkspace } from '@/private/workspace/PrivateWorkspace';
 import { serviceRequestService } from '@/services/serviceRequestService';
@@ -145,7 +146,11 @@ test('reserva manual: al corregir las fechas se recupera el flujo y guarda 2 noc
 
 async function mountHousekeeping() {
   await act(async () => {
-    view = create(<PrivateWorkspace role="housekeeping" sessionName="Limpieza Test" />);
+    view = create(
+      <MemoryRouter>
+        <PrivateWorkspace role="housekeeping" sessionName="Limpieza Test" />
+      </MemoryRouter>,
+    );
   });
   for (let i = 0; i < 20 && !view.root.findAll((node) => hasClass(node, 'side-nav')).length; i++) {
     await settle(300);
