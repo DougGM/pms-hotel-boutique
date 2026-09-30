@@ -181,7 +181,7 @@ export function RoomServiceContent({
   const registerInventoryMovement = async () => {
     const quantity = Number(inventoryQuantity);
     if (!inventoryItemId || !Number.isInteger(quantity) || quantity <= 0) {
-      onAction('Selecciona un insumo y una cantidad vÃ¡lida');
+      onAction('Selecciona un insumo y una cantidad válida');
       return;
     }
 
