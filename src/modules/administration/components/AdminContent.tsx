@@ -1287,7 +1287,8 @@ function AdminContentReady({
       isDateInReportPeriod(booking.checkIn, period),
     );
     const periodCancelledBookings = bookings.filter(
-      (booking) => booking.status === 'cancelled' && isDateInReportPeriod(booking.updatedAt, period),
+      (booking) =>
+        booking.status === 'cancelled' && isDateInReportPeriod(booking.updatedAt, period),
     );
     let data: Record<string, unknown>[] = [];
     let headers: { key: string; label: string }[] = [];

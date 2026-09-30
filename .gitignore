@@ -45,3 +45,6 @@ vite.config.ts.timestamp-*
 
 # Temporary imported source archive
 .tmp-bolt-source/
+
+# Serena (configuración y caché local del asistente)
+.serena/
