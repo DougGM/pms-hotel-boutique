@@ -49,6 +49,7 @@ const PRODUCT_CATEGORY_LABELS: Record<string, string> = {
 };
 
 type InventoryItem = {
+  id: string;
   name: string;
   stock: number;
   unit: string;
@@ -95,6 +96,7 @@ export function RoomServiceContent({
   onUpdateNote,
   onReject,
   onCancel,
+  onRefreshOrders,
   onAction,
   search,
   setSearch,
@@ -110,6 +112,7 @@ export function RoomServiceContent({
   onUpdateNote: (id: number, note: string) => void;
   onReject: (id: number, reason: string) => void;
   onCancel: (id: number, reason: string) => void;
+  onRefreshOrders: () => Promise<void>;
   onAction: (msg: string) => void;
   search: string;
   setSearch: (v: string) => void;
@@ -121,51 +124,87 @@ export function RoomServiceContent({
   const [cancelOrderId, setCancelOrderId] = useState<number | null>(null);
   const [cancelReason, setCancelReason] = useState('');
   const [catalog, setCatalog] = useState<CatalogState>({ status: 'loading' });
+  const [inventoryModalOpen, setInventoryModalOpen] = useState(false);
+  const [inventoryItemId, setInventoryItemId] = useState('');
+  const [inventoryQuantity, setInventoryQuantity] = useState('1');
+  const [inventoryNotes, setInventoryNotes] = useState('');
+  const [inventorySaving, setInventorySaving] = useState(false);
+
+  const loadCatalog = async () => {
+    setCatalog({ status: 'loading' });
+    try {
+      const [products, inventoryItemsData] = await Promise.all([
+        catalogService.getProducts(),
+        inventoryService.getItems(),
+      ]);
+
+      const menu: MenuItem[] = products
+        .filter((product) => product.category === 'foodAndBeverage')
+        .map((product) => ({
+          name: product.name,
+          description: product.description ?? product.sku,
+          price: Math.round(product.priceCents / 100),
+          category: PRODUCT_CATEGORY_LABELS[product.category] ?? product.category,
+        }));
+
+      const inventory: InventoryItem[] = inventoryItemsData
+        .filter((item) => item.category === 'roomService')
+        .map((item) => ({
+          id: item.id,
+          name: item.name,
+          stock: item.currentQuantity,
+          unit: INVENTORY_UNIT_LABELS[item.unit] ?? item.unit,
+          status:
+            item.currentQuantity === 0 ? 'Agotado' : item.isBelowMinimum ? 'Bajo' : 'Disponible',
+        }));
+
+      setCatalog({ status: 'ready', menu, inventory });
+      if (inventory.length > 0) setInventoryItemId((current) => current || inventory[0].id);
+    } catch (cause) {
+      setCatalog({ status: 'error', message: getErrorMessage(cause) });
+    }
+  };
 
   useEffect(() => {
-    let active = true;
-
-    async function load() {
-      setCatalog({ status: 'loading' });
-      try {
-        const [products, inventoryItemsData] = await Promise.all([
-          catalogService.getProducts(),
-          inventoryService.getItems(),
-        ]);
-
-        const menu: MenuItem[] = products
-          .filter((product) => product.category === 'foodAndBeverage')
-          .map((product) => ({
-            name: product.name,
-            description: product.description ?? product.sku,
-            price: Math.round(product.priceCents / 100),
-            category: PRODUCT_CATEGORY_LABELS[product.category] ?? product.category,
-          }));
-
-        const inventory: InventoryItem[] = inventoryItemsData
-          .filter((item) => item.category === 'roomService')
-          .map((item) => ({
-            name: item.name,
-            stock: item.currentQuantity,
-            unit: INVENTORY_UNIT_LABELS[item.unit] ?? item.unit,
-            status:
-              item.currentQuantity === 0 ? 'Agotado' : item.isBelowMinimum ? 'Bajo' : 'Disponible',
-          }));
-
-        if (active) setCatalog({ status: 'ready', menu, inventory });
-      } catch (cause) {
-        if (active) setCatalog({ status: 'error', message: getErrorMessage(cause) });
-      }
-    }
-
-    void load();
-    return () => {
-      active = false;
-    };
+    void loadCatalog();
   }, []);
 
   const menuItems = catalog.status === 'ready' ? catalog.menu : [];
   const inventoryItems = catalog.status === 'ready' ? catalog.inventory : [];
+  const selectedInventoryItem = inventoryItems.find((item) => item.id === inventoryItemId);
+
+  const refreshCatalog = async (message: string) => {
+    await loadCatalog();
+    onAction(message);
+  };
+
+  const registerInventoryMovement = async () => {
+    const quantity = Number(inventoryQuantity);
+    if (!inventoryItemId || !Number.isInteger(quantity) || quantity <= 0) {
+      onAction('Selecciona un insumo y una cantidad válida');
+      return;
+    }
+
+    setInventorySaving(true);
+    try {
+      await inventoryService.createMovement({
+        inventoryItemId,
+        type: 'in',
+        reason: 'restock',
+        quantity,
+        notes: inventoryNotes,
+      });
+      await loadCatalog();
+      setInventoryModalOpen(false);
+      setInventoryQuantity('1');
+      setInventoryNotes('');
+      onAction('Insumo registrado en inventario');
+    } catch (cause) {
+      onAction(cause instanceof Error ? cause.message : 'No fue posible registrar el insumo');
+    } finally {
+      setInventorySaving(false);
+    }
+  };
 
   const activeOrders = orders.filter(
     (o) => !['Entregado', 'Rechazado', 'Cancelado'].includes(o.status),
@@ -556,7 +595,10 @@ export function RoomServiceContent({
             <h3>Menú de Room Service</h3>
             <p>Carta disponible para pedidos de habitación</p>
           </div>
-          <button className="button small secondary" onClick={() => onAction('Menú actualizado')}>
+          <button
+            className="button small secondary"
+            onClick={() => void refreshCatalog('Menú actualizado')}
+          >
             <FileText size={14} /> Actualizar
           </button>
         </div>
@@ -572,7 +614,7 @@ export function RoomServiceContent({
           <ErrorState
             title="No pudimos cargar el menú"
             description={catalog.message}
-            onRetry={() => setCatalog({ status: 'loading' })}
+            onRetry={() => void loadCatalog()}
           />
         )}
         {catalog.status === 'ready' && menuItems.length === 0 && (
@@ -611,10 +653,7 @@ export function RoomServiceContent({
             <h3>Historial de pedidos</h3>
             <p>Consulta los pedidos entregados, rechazados y cancelados</p>
           </div>
-          <button
-            className="button small secondary"
-            onClick={() => onAction('Historial actualizado')}
-          >
+          <button className="button small secondary" onClick={() => void onRefreshOrders()}>
             <FileText size={14} /> Actualizar
           </button>
         </div>
@@ -674,10 +713,7 @@ export function RoomServiceContent({
             <h3>Inventario de cocina</h3>
             <p>Insumos disponibles para preparar pedidos</p>
           </div>
-          <button
-            className="button small primary"
-            onClick={() => onAction('Inventario actualizado')}
-          >
+          <button className="button small primary" onClick={() => setInventoryModalOpen(true)}>
             <Plus size={14} /> Registrar insumo
           </button>
         </div>
@@ -686,7 +722,7 @@ export function RoomServiceContent({
           <ErrorState
             title="No pudimos cargar el inventario"
             description={catalog.message}
-            onRetry={() => setCatalog({ status: 'loading' })}
+            onRetry={() => void loadCatalog()}
           />
         )}
         {catalog.status === 'ready' && inventoryItems.length === 0 && (
@@ -698,7 +734,7 @@ export function RoomServiceContent({
         {catalog.status === 'ready' && inventoryItems.length > 0 && (
           <div className="rs-inventory-grid">
             {inventoryItems.map((item) => (
-              <div className="rs-inventory-item" key={item.name}>
+              <div className="rs-inventory-item" key={item.id}>
                 <div>
                   <strong>{item.name}</strong>
                   <span>
@@ -710,6 +746,69 @@ export function RoomServiceContent({
                 </span>
               </div>
             ))}
+          </div>
+        )}
+        {inventoryModalOpen && (
+          <div className="modal-backdrop" onMouseDown={() => setInventoryModalOpen(false)}>
+            <div className="modal" style={{ width: 460 }} onMouseDown={(e) => e.stopPropagation()}>
+              <div className="modal-head">
+                <div>
+                  <p className="eyebrow">INVENTARIO DE COCINA</p>
+                  <h2>Registrar insumo</h2>
+                </div>
+                <button className="icon-btn" onClick={() => setInventoryModalOpen(false)}>
+                  <X size={18} />
+                </button>
+              </div>
+              <label>
+                Insumo
+                <select
+                  value={inventoryItemId}
+                  onChange={(event) => setInventoryItemId(event.target.value)}
+                >
+                  {inventoryItems.map((item) => (
+                    <option value={item.id} key={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {selectedInventoryItem && (
+                <p className="login-helper">
+                  Stock actual: {selectedInventoryItem.stock} {selectedInventoryItem.unit}
+                </p>
+              )}
+              <label>
+                Cantidad recibida
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={inventoryQuantity}
+                  onChange={(event) => setInventoryQuantity(event.target.value)}
+                />
+              </label>
+              <label>
+                Observaciones
+                <textarea
+                  value={inventoryNotes}
+                  onChange={(event) => setInventoryNotes(event.target.value)}
+                  placeholder="Ej. Reposición de turno, compra de cocina..."
+                />
+              </label>
+              <div className="modal-foot">
+                <button className="button secondary" onClick={() => setInventoryModalOpen(false)}>
+                  Cancelar
+                </button>
+                <button
+                  className="button primary"
+                  disabled={inventorySaving || inventoryItems.length === 0}
+                  onClick={() => void registerInventoryMovement()}
+                >
+                  Registrar movimiento
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>

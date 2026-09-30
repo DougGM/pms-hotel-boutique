@@ -184,9 +184,12 @@ export type ConciergeStatus = 'Pendiente' | 'Aceptada' | 'En proceso' | 'Complet
 type ConciergeRequest = {
   id: number;
   requestId: string;
+  bookingId: string;
   room: string;
   guest: string;
   time: string;
+  requestedDate: string;
+  updatedDate: string;
   category: string;
   description: string;
   priority: 'Alta' | 'Media' | 'Baja';
@@ -736,9 +739,12 @@ async function loadWorkspaceData(): Promise<WorkspaceState> {
       return {
         id: parseDbId(request.id, index + 1),
         requestId: request.id,
+        bookingId: request.bookingId,
         room: room?.roomNumber ?? 'Sin habitación',
         guest: guest ? `${guest.firstName} ${guest.lastName}` : 'Huésped',
         time: formatDbTime(request.requestedAt),
+        requestedDate: toDtoCalendarDate(request.requestedAt),
+        updatedDate: toDtoCalendarDate(request.updatedAt),
         category: request.type === 'concierge' ? 'Conserjería' : 'Solicitud especial',
         description: request.description,
         priority: (request.status === 'pending' ? 'Alta' : 'Media') as ConciergeRequest['priority'],
@@ -1371,6 +1377,36 @@ function PrivateWorkspaceReady({
 
   const notifyError = (cause: unknown) => {
     notify(getErrorMessage(cause));
+  };
+
+  const refreshRoomServiceOrders = async () => {
+    try {
+      const data = await loadWorkspaceData();
+      setRsOrders(data.roomServiceOrders);
+      setRsSelectedOrderId((currentId) =>
+        currentId !== null && data.roomServiceOrders.some((order) => order.id === currentId)
+          ? currentId
+          : null,
+      );
+      notify('Historial de pedidos actualizado');
+    } catch (cause) {
+      notifyError(cause);
+    }
+  };
+
+  const refreshConciergeRequests = async () => {
+    try {
+      const data = await loadWorkspaceData();
+      setCgRequests(data.conciergeRequests);
+      setCgSelectedRequestId((currentId) =>
+        currentId !== null && data.conciergeRequests.some((request) => request.id === currentId)
+          ? currentId
+          : null,
+      );
+      notify('Historial de solicitudes actualizado');
+    } catch (cause) {
+      notifyError(cause);
+    }
   };
 
   const refreshReception = async () => {
@@ -2542,6 +2578,7 @@ function PrivateWorkspaceReady({
               onUpdateStatus={updateConciergeStatus}
               onUpdateObservation={updateConciergeObservation}
               onReject={rejectConciergeRequest}
+              onRefresh={refreshConciergeRequests}
               onAction={notify}
               search={cgSearch}
               setSearch={setCgSearch}
@@ -2622,6 +2659,7 @@ function PrivateWorkspaceReady({
               onUpdateNote={updateRoomServiceNote}
               onReject={rejectRoomServiceOrder}
               onCancel={cancelRoomServiceOrder}
+              onRefreshOrders={refreshRoomServiceOrders}
               onAction={notify}
               search={rsSearch}
               setSearch={setRsSearch}
@@ -2801,6 +2839,7 @@ function ConciergeContent({
   onUpdateStatus,
   onUpdateObservation,
   onReject,
+  onRefresh,
   onAction,
   search,
   setSearch,
@@ -2815,6 +2854,7 @@ function ConciergeContent({
   onUpdateStatus: (id: number, status: ConciergeStatus) => void;
   onUpdateObservation: (id: number, observation: string) => void;
   onReject: (id: number, reason: string) => void;
+  onRefresh: () => Promise<void>;
   onAction: (message: string) => void;
   search: string;
   setSearch: (value: string) => void;
@@ -2940,53 +2980,65 @@ function ConciergeContent({
 
   if (nav === 'Historial')
     return (
-      <div className="panel cg-view">
-        <div className="panel-heading">
-          <div>
-            <h3>Historial de solicitudes</h3>
-            <p>Consulta las solicitudes atendidas, completadas o rechazadas.</p>
-          </div>
-          <button
-            className="button small secondary"
-            onClick={() => onAction('Historial actualizado')}
-          >
-            <Activity size={14} /> Actualizar
-          </button>
-        </div>
-        <div className="cg-history-list">
-          {completedRequests.length === 0 ? (
-            <div className="hk-empty">
-              <FileText size={22} />
-              <p>Aún no hay solicitudes finalizados</p>
+      <>
+        <div className="panel cg-view">
+          <div className="panel-heading">
+            <div>
+              <h3>Historial de solicitudes</h3>
+              <p>Consulta las solicitudes atendidas, completadas o rechazadas.</p>
             </div>
-          ) : (
-            completedRequests.map((req) => (
-              <div className="cg-history-row" key={req.id}>
-                <div className="cg-history-info">
-                  <strong>
-                    #{req.id} · Habitación {req.room}
-                  </strong>
-                  <span>
-                    {req.guest} · {req.category}
-                  </span>
-                  <small>{req.description}</small>
-                </div>
-                <div className="cg-history-meta">
-                  {req.completedAt && (
-                    <span>
-                      <Clock size={13} /> Completada {req.completedAt}
-                    </span>
-                  )}
-                  <strong className={`status-pill ${statusClass(req.status)}`}>{req.status}</strong>
-                </div>
-                <button className="button small secondary" onClick={() => onSelectRequest(req.id)}>
-                  Ver detalle
-                </button>
+            <button className="button small secondary" onClick={() => void onRefresh()}>
+              <Activity size={14} /> Actualizar
+            </button>
+          </div>
+          <div className="cg-history-list">
+            {completedRequests.length === 0 ? (
+              <div className="hk-empty">
+                <FileText size={22} />
+                <p>Aún no hay solicitudes finalizados</p>
               </div>
-            ))
-          )}
+            ) : (
+              completedRequests.map((req) => (
+                <div className="cg-history-row" key={req.id}>
+                  <div className="cg-history-info">
+                    <strong>
+                      #{req.id} · Habitación {req.room}
+                    </strong>
+                    <span>
+                      {req.guest} · {req.category}
+                    </span>
+                    <small>{req.description}</small>
+                  </div>
+                  <div className="cg-history-meta">
+                    {req.completedAt && (
+                      <span>
+                        <Clock size={13} /> Completada {req.completedAt}
+                      </span>
+                    )}
+                    <strong className={`status-pill ${statusClass(req.status)}`}>
+                      {req.status}
+                    </strong>
+                  </div>
+                  <button
+                    className="button small secondary"
+                    onClick={() => onSelectRequest(req.id)}
+                  >
+                    Ver detalle
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
         </div>
-      </div>
+        {selectedRequest && (
+          <ConciergeRequestModal
+            request={selectedRequest}
+            onClose={onCloseRequest}
+            onUpdateStatus={onUpdateStatus}
+            onUpdateObservation={onUpdateObservation}
+          />
+        )}
+      </>
     );
 
   if (nav === 'Por habitación') {
@@ -3294,9 +3346,25 @@ function ConciergeRequestModal({
           </span>
         </div>
         <div className="cg-detail-meta">
+          {request.bookingId && (
+            <div>
+              <small>Reserva</small>
+              <span>{request.bookingId}</span>
+            </div>
+          )}
           <div>
             <small>Categoría</small>
             <span>{request.category}</span>
+          </div>
+          <div>
+            <small>Solicitada</small>
+            <span>
+              {request.requestedDate} {request.time}
+            </span>
+          </div>
+          <div>
+            <small>Actualizada</small>
+            <span>{request.updatedDate}</span>
           </div>
           <div>
             <small>Prioridad</small>
