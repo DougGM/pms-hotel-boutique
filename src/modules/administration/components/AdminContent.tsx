@@ -188,6 +188,8 @@ type DashboardPeriod = 'Hoy' | '7 días' | '30 días' | '90 días';
 type UsersSection = 'Gestión de usuarios' | 'Roles y permisos';
 type RoomsSection = 'Gestión de habitaciones' | 'Tipos de habitación';
 type InventorySection = 'Gestión de inventario' | 'Movimientos de inventario';
+type RatesSection = 'Tarifas por temporada' | 'Tarifas dinámicas';
+type ServicesSection = 'Amenidades' | 'Catálogo de Room Service';
 
 const ALL_PERMISSIONS = [
   'Recepción',
@@ -1258,6 +1260,8 @@ function AdminContentReady({
   const [roomsSection, setRoomsSection] = useState<RoomsSection>('Gestión de habitaciones');
   const [inventorySection, setInventorySection] =
     useState<InventorySection>('Gestión de inventario');
+  const [ratesSection, setRatesSection] = useState<RatesSection>('Tarifas por temporada');
+  const [servicesSection, setServicesSection] = useState<ServicesSection>('Amenidades');
 
   const resetSearch = () => {
     setSearch('');
@@ -2180,140 +2184,155 @@ function AdminContentReady({
 
   // ─── TARIFAS ───
   if (nav === 'Tarifas') {
+    const sectionTabs = (
+      <AdminSectionTabs
+        tabs={['Tarifas por temporada', 'Tarifas dinámicas'] as const}
+        active={ratesSection}
+        onChange={setRatesSection}
+      />
+    );
     return (
       <>
-        <div className="panel">
-          <div className="panel-heading">
-            <div>
-              <h3>Tarifas por temporada</h3>
-              <p>Configura tarifas especiales según la temporada</p>
+        {ratesSection === 'Tarifas por temporada' && (
+          <div className="panel">
+            <div className="panel-heading">
+              <div>
+                <h3>Tarifas por temporada</h3>
+                <p>Configura tarifas especiales según la temporada</p>
+              </div>
+              <button className="button primary" onClick={() => setShowSeasonRateModal(true)}>
+                <Plus size={17} /> Nueva tarifa de temporada
+              </button>
             </div>
-            <button className="button primary" onClick={() => setShowSeasonRateModal(true)}>
-              <Plus size={17} /> Nueva tarifa de temporada
-            </button>
+            {sectionTabs}
+            {seasonRates.length === 0 ? (
+              <div className="hk-empty">
+                <CalendarDays size={22} />
+                <p>No hay tarifas de temporada registradas</p>
+              </div>
+            ) : (
+              <AdminTable
+                headers={[
+                  'Tipo de habitación',
+                  'Temporada',
+                  'Fechas',
+                  'Tarifa base',
+                  'Tarifa especial',
+                  'Estado',
+                  'Acciones',
+                ]}
+              >
+                {seasonRates.map((sr) => (
+                  <tr key={sr.id}>
+                    <td>
+                      <strong>{sr.roomType}</strong>
+                    </td>
+                    <td>{sr.seasonName}</td>
+                    <td>
+                      {sr.startDate} → {sr.endDate}
+                    </td>
+                    <td>{money(sr.baseRate)}</td>
+                    <td>
+                      <strong className="success-text">{money(sr.seasonalRate)}</strong>
+                    </td>
+                    <td>
+                      <span className={`status-pill ${statusPillClass(sr.status)}`}>
+                        {sr.status}
+                      </span>
+                    </td>
+                    <td className="adm-actions">
+                      <StatusSwitch
+                        checked={sr.status === 'Activa'}
+                        label={sr.status === 'Activa' ? 'Desactivar tarifa' : 'Activar tarifa'}
+                        onChange={async () => {
+                          const updated = await roomService.updateRate(sr.dbId, {
+                            active: sr.status !== 'Activa',
+                          });
+                          setSeasonRates((cur) =>
+                            cur.map((x) =>
+                              x.id === sr.id
+                                ? { ...x, status: updated.active ? 'Activa' : 'Inactiva' }
+                                : x,
+                            ),
+                          );
+                          onAction(`Tarifa ${sr.status === 'Activa' ? 'desactivada' : 'activada'}`);
+                        }}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </AdminTable>
+            )}
           </div>
-          {seasonRates.length === 0 ? (
-            <div className="hk-empty">
-              <CalendarDays size={22} />
-              <p>No hay tarifas de temporada registradas</p>
+        )}
+        {ratesSection === 'Tarifas dinámicas' && (
+          <div className="panel">
+            <div className="panel-heading">
+              <div>
+                <h3>Tarifas dinámicas</h3>
+                <p>Reglas de ajuste automático según condiciones</p>
+              </div>
+              <button
+                className="button primary"
+                onClick={() =>
+                  onAction('Tarifas dinamicas fuera de alcance: no se modifico la fuente.')
+                }
+              >
+                <Plus size={17} /> Nueva regla
+              </button>
             </div>
-          ) : (
-            <AdminTable
-              headers={[
-                'Tipo de habitación',
-                'Temporada',
-                'Fechas',
-                'Tarifa base',
-                'Tarifa especial',
-                'Estado',
-                'Acciones',
-              ]}
-            >
-              {seasonRates.map((sr) => (
-                <tr key={sr.id}>
-                  <td>
-                    <strong>{sr.roomType}</strong>
-                  </td>
-                  <td>{sr.seasonName}</td>
-                  <td>
-                    {sr.startDate} → {sr.endDate}
-                  </td>
-                  <td>{money(sr.baseRate)}</td>
-                  <td>
-                    <strong className="success-text">{money(sr.seasonalRate)}</strong>
-                  </td>
-                  <td>
-                    <span className={`status-pill ${statusPillClass(sr.status)}`}>{sr.status}</span>
-                  </td>
-                  <td className="adm-actions">
+            {sectionTabs}
+            <div className="adm-dynrate-grid">
+              {dynamicRates.length === 0 && (
+                <div className="hk-empty">
+                  <TrendingUp size={22} />
+                  <p>Las tarifas dinamicas aun no tienen contrato de datos.</p>
+                </div>
+              )}
+              {dynamicRates.map((dr) => (
+                <div className="adm-dynrate-card" key={dr.id}>
+                  <div className="adm-dynrate-head">
+                    <div>
+                      <strong>{dr.condition}</strong>
+                      <span>
+                        {dr.operator} {dr.threshold}
+                        {dr.condition.includes('Ocupación')
+                          ? '%'
+                          : dr.condition.includes('noches')
+                            ? ' noches'
+                            : ' días'}
+                      </span>
+                    </div>
+                    <span className={`status-pill ${statusPillClass(dr.status)}`}>{dr.status}</span>
+                  </div>
+                  <div className="adm-dynrate-body">
+                    <span
+                      className={`status-pill ${dr.adjustment === 'Aumentar' ? 'warning' : 'info'}`}
+                    >
+                      {dr.adjustment} {dr.value}%
+                    </span>
+                  </div>
+                  <div className="adm-role-actions">
                     <StatusSwitch
-                      checked={sr.status === 'Activa'}
-                      label={sr.status === 'Activa' ? 'Desactivar tarifa' : 'Activar tarifa'}
-                      onChange={async () => {
-                        const updated = await roomService.updateRate(sr.dbId, {
-                          active: sr.status !== 'Activa',
-                        });
-                        setSeasonRates((cur) =>
+                      checked={dr.status === 'Activa'}
+                      label={dr.status === 'Activa' ? 'Desactivar regla' : 'Activar regla'}
+                      onChange={() => {
+                        setDynamicRates((cur) =>
                           cur.map((x) =>
-                            x.id === sr.id
-                              ? { ...x, status: updated.active ? 'Activa' : 'Inactiva' }
+                            x.id === dr.id
+                              ? { ...x, status: x.status === 'Activa' ? 'Inactiva' : 'Activa' }
                               : x,
                           ),
                         );
-                        onAction(`Tarifa ${sr.status === 'Activa' ? 'desactivada' : 'activada'}`);
+                        onAction(`Regla ${dr.status === 'Activa' ? 'desactivada' : 'activada'}`);
                       }}
                     />
-                  </td>
-                </tr>
-              ))}
-            </AdminTable>
-          )}
-        </div>
-        <div className="panel">
-          <div className="panel-heading">
-            <div>
-              <h3>Tarifas dinámicas</h3>
-              <p>Reglas de ajuste automático según condiciones</p>
-            </div>
-            <button
-              className="button primary"
-              onClick={() =>
-                onAction('Tarifas dinamicas fuera de alcance: no se modifico la fuente.')
-              }
-            >
-              <Plus size={17} /> Nueva regla
-            </button>
-          </div>
-          <div className="adm-dynrate-grid">
-            {dynamicRates.length === 0 && (
-              <div className="hk-empty">
-                <TrendingUp size={22} />
-                <p>Las tarifas dinamicas aun no tienen contrato de datos.</p>
-              </div>
-            )}
-            {dynamicRates.map((dr) => (
-              <div className="adm-dynrate-card" key={dr.id}>
-                <div className="adm-dynrate-head">
-                  <div>
-                    <strong>{dr.condition}</strong>
-                    <span>
-                      {dr.operator} {dr.threshold}
-                      {dr.condition.includes('Ocupación')
-                        ? '%'
-                        : dr.condition.includes('noches')
-                          ? ' noches'
-                          : ' días'}
-                    </span>
                   </div>
-                  <span className={`status-pill ${statusPillClass(dr.status)}`}>{dr.status}</span>
                 </div>
-                <div className="adm-dynrate-body">
-                  <span
-                    className={`status-pill ${dr.adjustment === 'Aumentar' ? 'warning' : 'info'}`}
-                  >
-                    {dr.adjustment} {dr.value}%
-                  </span>
-                </div>
-                <div className="adm-role-actions">
-                  <StatusSwitch
-                    checked={dr.status === 'Activa'}
-                    label={dr.status === 'Activa' ? 'Desactivar regla' : 'Activar regla'}
-                    onChange={() => {
-                      setDynamicRates((cur) =>
-                        cur.map((x) =>
-                          x.id === dr.id
-                            ? { ...x, status: x.status === 'Activa' ? 'Inactiva' : 'Activa' }
-                            : x,
-                        ),
-                      );
-                      onAction(`Regla ${dr.status === 'Activa' ? 'desactivada' : 'activada'}`);
-                    }}
-                  />
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
+        )}
         {showSeasonRateModal && (
           <SeasonRateModal
             roomTypes={roomTypes}
@@ -2509,140 +2528,155 @@ function AdminContentReady({
     const filteredRs = rsItems.filter((i) =>
       `${i.name} ${i.category}`.toLowerCase().includes(search.toLowerCase()),
     );
+    const sectionTabs = (
+      <AdminSectionTabs
+        tabs={['Amenidades', 'Catálogo de Room Service'] as const}
+        active={servicesSection}
+        onChange={setServicesSection}
+      />
+    );
     return (
       <>
-        <div className="panel">
-          <div className="panel-heading">
-            <div>
-              <h3>Amenidades</h3>
-              <p>Administra las amenidades del hotel y sus horarios</p>
+        {servicesSection === 'Amenidades' && (
+          <div className="panel">
+            <div className="panel-heading">
+              <div>
+                <h3>Amenidades</h3>
+                <p>Administra las amenidades del hotel y sus horarios</p>
+              </div>
+              <button
+                className="button primary"
+                onClick={() => {
+                  setEditAmenity(null);
+                  setShowAmenityModal(true);
+                }}
+              >
+                <Plus size={17} /> Nueva amenidad
+              </button>
             </div>
-            <button
-              className="button primary"
-              onClick={() => {
-                setEditAmenity(null);
-                setShowAmenityModal(true);
-              }}
-            >
-              <Plus size={17} /> Nueva amenidad
-            </button>
-          </div>
-          {amenities.length === 0 ? (
-            <div className="hk-empty">
-              <Star size={22} />
-              <p>No hay amenidades registradas</p>
-            </div>
-          ) : (
-            <div className="adm-amenity-grid">
-              {amenities.map((a) => {
-                const Icon = amenityIconMap[a.icon] ?? Sparkles;
-                return (
-                  <div className="adm-amenity-card" key={a.id}>
-                    <div className="adm-amenity-icon">
-                      <Icon size={22} />
-                    </div>
-                    <div className="adm-amenity-body">
-                      <div>
-                        <strong>{a.name}</strong>
-                        <span>{a.schedule}</span>
+            {sectionTabs}
+            {amenities.length === 0 ? (
+              <div className="hk-empty">
+                <Star size={22} />
+                <p>No hay amenidades registradas</p>
+              </div>
+            ) : (
+              <div className="adm-amenity-grid">
+                {amenities.map((a) => {
+                  const Icon = amenityIconMap[a.icon] ?? Sparkles;
+                  return (
+                    <div className="adm-amenity-card" key={a.id}>
+                      <div className="adm-amenity-icon">
+                        <Icon size={22} />
                       </div>
-                      <div className="adm-amenity-pills">
-                        <span className={`status-pill ${a.available ? 'success' : 'warning'}`}>
-                          {a.available ? 'Disponible' : 'No disponible'}
-                        </span>
-                        <span className={`status-pill ${statusPillClass(a.status)}`}>
-                          {a.status}
+                      <div className="adm-amenity-body">
+                        <div>
+                          <strong>{a.name}</strong>
+                          <span>{a.schedule}</span>
+                        </div>
+                        <div className="adm-amenity-pills">
+                          <span className={`status-pill ${a.available ? 'success' : 'warning'}`}>
+                            {a.available ? 'Disponible' : 'No disponible'}
+                          </span>
+                          <span className={`status-pill ${statusPillClass(a.status)}`}>
+                            {a.status}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="adm-amenity-actions">
+                        <EditIconButton
+                          label="Editar amenidad"
+                          onClick={() => {
+                            setEditAmenity(a);
+                            setShowAmenityModal(true);
+                          }}
+                        />
+                        <StatusSwitch
+                          checked={a.status === 'Activo'}
+                          label={a.status === 'Activo' ? 'Desactivar amenidad' : 'Activar amenidad'}
+                          onChange={() => {
+                            onAction('Amenidades fuera de alcance: no se modifico la fuente.');
+                          }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+        {servicesSection === 'Catálogo de Room Service' && (
+          <div className="panel">
+            <div className="panel-heading">
+              <div>
+                <h3>Catálogo de Room Service</h3>
+                <p>Administra los productos del menú de servicio a habitación</p>
+              </div>
+              <button
+                className="button primary"
+                onClick={() => {
+                  setEditRsItem(null);
+                  setShowRsItemModal(true);
+                }}
+              >
+                <Plus size={17} /> Nuevo producto
+              </button>
+            </div>
+            {sectionTabs}
+            <AdminToolbar search={search} setSearch={setSearch} />
+            {filteredRs.length === 0 ? (
+              <div className="hk-empty">
+                <Utensils size={22} />
+                <p>No hay productos de Room Service registrados</p>
+              </div>
+            ) : (
+              <div className="adm-rs-grid">
+                {filteredRs.map((item) => (
+                  <div className="adm-rs-card" key={item.id}>
+                    <div className="adm-rs-image" style={{ backgroundImage: `url(${item.image})` }}>
+                      <span className={`status-pill ${statusPillClass(item.status)}`}>
+                        {item.status}
+                      </span>
+                    </div>
+                    <div className="adm-rs-body">
+                      <div>
+                        <strong>{item.name}</strong>
+                        <span>{item.category}</span>
+                      </div>
+                      <div className="adm-rs-foot">
+                        <strong>{money(item.price)}</strong>
+                        <span className={`status-pill ${item.available ? 'success' : 'warning'}`}>
+                          {item.available ? 'Disponible' : 'No disponible'}
                         </span>
                       </div>
                     </div>
                     <div className="adm-amenity-actions">
                       <EditIconButton
-                        label="Editar amenidad"
+                        label="Editar producto de room service"
                         onClick={() => {
-                          setEditAmenity(a);
-                          setShowAmenityModal(true);
+                          setEditRsItem(item);
+                          setShowRsItemModal(true);
                         }}
                       />
                       <StatusSwitch
-                        checked={a.status === 'Activo'}
-                        label={a.status === 'Activo' ? 'Desactivar amenidad' : 'Activar amenidad'}
+                        checked={item.status === 'Activo'}
+                        label={
+                          item.status === 'Activo' ? 'Desactivar producto' : 'Activar producto'
+                        }
                         onChange={() => {
-                          onAction('Amenidades fuera de alcance: no se modifico la fuente.');
+                          onAction(
+                            'Catalogo de Room Service fuera de alcance: no se modifico la fuente.',
+                          );
                         }}
                       />
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-        <div className="panel">
-          <div className="panel-heading">
-            <div>
-              <h3>Catálogo de Room Service</h3>
-              <p>Administra los productos del menú de servicio a habitación</p>
-            </div>
-            <button
-              className="button primary"
-              onClick={() => {
-                setEditRsItem(null);
-                setShowRsItemModal(true);
-              }}
-            >
-              <Plus size={17} /> Nuevo producto
-            </button>
+                ))}
+              </div>
+            )}
           </div>
-          <AdminToolbar search={search} setSearch={setSearch} />
-          {filteredRs.length === 0 ? (
-            <div className="hk-empty">
-              <Utensils size={22} />
-              <p>No hay productos de Room Service registrados</p>
-            </div>
-          ) : (
-            <div className="adm-rs-grid">
-              {filteredRs.map((item) => (
-                <div className="adm-rs-card" key={item.id}>
-                  <div className="adm-rs-image" style={{ backgroundImage: `url(${item.image})` }}>
-                    <span className={`status-pill ${statusPillClass(item.status)}`}>
-                      {item.status}
-                    </span>
-                  </div>
-                  <div className="adm-rs-body">
-                    <div>
-                      <strong>{item.name}</strong>
-                      <span>{item.category}</span>
-                    </div>
-                    <div className="adm-rs-foot">
-                      <strong>{money(item.price)}</strong>
-                      <span className={`status-pill ${item.available ? 'success' : 'warning'}`}>
-                        {item.available ? 'Disponible' : 'No disponible'}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="adm-amenity-actions">
-                    <EditIconButton
-                      label="Editar producto de room service"
-                      onClick={() => {
-                        setEditRsItem(item);
-                        setShowRsItemModal(true);
-                      }}
-                    />
-                    <StatusSwitch
-                      checked={item.status === 'Activo'}
-                      label={item.status === 'Activo' ? 'Desactivar producto' : 'Activar producto'}
-                      onChange={() => {
-                        onAction(
-                          'Catalogo de Room Service fuera de alcance: no se modifico la fuente.',
-                        );
-                      }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        )}
         {showAmenityModal && (
           <AmenityModal
             amenity={editAmenity}
