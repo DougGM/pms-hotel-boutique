@@ -132,6 +132,15 @@ crean cargos. Conserjeria usa
 `serviceRequestService.updateRequestStatus()` y `updateRequestNotes()` sobre
 `PMS_SERVICE_REQUESTS_DB` para conservar estados, motivos y observaciones.
 
+Actualizacion 2026-09-29 (#87): los botones `Actualizar` de Menu/Historial de
+Room Service y de Historial de Conserjeria recargan datos desde los servicios
+mock vigentes en vez de solo emitir notificaciones. `Registrar insumo` en el
+inventario de cocina crea un movimiento real con `inventoryService.createMovement`
+(`type: in`, `reason: restock`) sobre `PMS_INVENTORY_MOVEMENTS_DB` y actualiza
+`PMS_INVENTORY_ITEMS_DB`. El detalle de Conserjeria usa la solicitud real
+seleccionada, muestra `bookingId`, habitacion, estado, fechas y notas disponibles,
+sin completar datos ausentes con valores inventados.
+
 Actualizacion 2026-09-24 (#75): Administracion ya no muestra metricas
 operativas hardcodeadas como si fueran actuales. `AdminContent` calcula
 dashboard/reportes desde habitaciones, reservas, caja, inventario y auditoria
