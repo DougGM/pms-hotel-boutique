@@ -88,6 +88,29 @@ operativa correspondiente. La campana de notificaciones debe mostrar alertas
 accionables del rol actual; en Administracion incluye alertas de stock bajo
 para que no dependan solo del dashboard.
 
+Nota 2026-09-30 (#95): en Administracion, las secciones grandes se navegan
+desde submenus desplegables del sidebar, no desde tabs internas. Usuarios y
+roles, Habitaciones, Tarifas, Servicios, Reportes e Inventario conservan sus
+servicios, formularios, modales y persistencia; el sidebar decide la pantalla
+activa. Reportes agrupa sus siete reportes en Resumen operativo, Reportes
+financieros y Analisis comercial, con selector compacto solo dentro de los
+grupos que contienen mas de un tipo de reporte.
+El panel Roles y permisos representa permisos como accesos agrupados a las
+vistas reales de Administracion, Recepcion, Limpieza, Room Service,
+Conserjeria y Huesped; no debe volver a mostrar solo permisos genericos si se
+esta configurando acceso a dashboards por rol. Esa misma matriz determina el
+sidebar del workspace: admin ve todos los grupos y submenus; los demas roles
+ven solo el grupo/vistas que tienen marcados. En las tarjetas del panel se
+renderizan solo permisos seleccionados; el modal de edicion muestra todos los
+permisos disponibles para poder habilitarlos, con acciones por grupo para
+seleccionar o deseleccionar sus permisos y toggles individuales para ajustes
+puntuales. Para la demo, los cambios hechos en el editor se persisten en
+`localStorage` bajo `pms.demo.rolePermissions`; esa capa no reemplaza al backend,
+solo sobreescribe los permisos de navegacion del navegador actual.
+Cuando un rol operativo tiene permisos de un solo modulo, el sidebar conserva
+la lista plana original; si recibe permisos cruzados de dos o mas modulos,
+agrupa automaticamente por modulo para evitar opciones duplicadas sin contexto.
+
 ## Reglas de capas
 
 Nota 2026-09-17: en la home publica, `PublicLayout` abre login y registro como

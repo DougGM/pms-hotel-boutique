@@ -124,7 +124,7 @@ test('each staff role only sees its menu and direct unauthorized URLs are blocke
     ['conserjeria', '/pms/concierge', 'Solicitudes', '/pms/cash', 3],
     ['roomservice', '/pms/room-service', 'Pedidos activos', '/pms/users', 4],
     ['huesped', '/pms/dashboard', 'Room service', '/pms/reception', 7],
-    ['admin', '/pms/dashboard', 'Usuarios y roles', null, 10],
+    ['admin', '/pms/dashboard', 'Administración', null, 48],
   ];
   for (const [account, expectedPath, section, forbidden, count] of roles) {
     await login(`${account}@hotelboutique.test`);
@@ -135,6 +135,14 @@ test('each staff role only sees its menu and direct unauthorized URLs are blocke
       .map((button) => button.findByType('span').children.join(''));
     assert.ok(labels.includes(section), account);
     assert.equal(labels.length, count, account);
+    if (account === 'admin') {
+      assert.ok(labels.includes('Gestión de usuarios'), account);
+      assert.ok(labels.includes('Análisis comercial'), account);
+      assert.ok(labels.includes('Movimientos de inventario'), account);
+      assert.ok(labels.includes('Recepción'), account);
+      assert.ok(labels.includes('Pedidos activos'), account);
+      assert.ok(labels.includes('Mis solicitudes y pedidos'), account);
+    }
     if (forbidden) {
       await act(async () => {
         await router.navigate(`${forbidden}/no-existe`);
