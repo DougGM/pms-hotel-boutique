@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { routePaths } from '@/app/routes';
 import { roomService } from '@/services/roomService';
 import { Badge } from '@/shared/components/Badge';
 import { Button } from '@/shared/components/Button';
@@ -87,6 +88,7 @@ export function RoomDetailScreen() {
   const [searchParams] = useSearchParams();
   const checkIn = parseDateKey(searchParams.get('checkIn'));
   const checkOut = parseDateKey(searchParams.get('checkOut'));
+  const fromConfirmation = searchParams.get('fromConfirmation') === 'true';
 
   const [status, setStatus] = useState<DetailStatus>('loading');
   const [error, setError] = useState<string | null>(null);
@@ -171,6 +173,7 @@ export function RoomDetailScreen() {
   const bookingUrl = hasValidDates
     ? `/booking/new?roomTypeId=${detail.roomType.id}&checkIn=${dateKey(checkIn)}&checkOut=${dateKey(checkOut!)}`
     : `/booking/new?roomTypeId=${detail.roomType.id}`;
+  const stayUrl = routePaths.pms.dashboard;
   const galleryImages = getRoomTypeGallery(detail.roomType);
 
   return (
@@ -255,12 +258,12 @@ export function RoomDetailScreen() {
           </div>
 
           <Button
-            disabled={!rate}
+            disabled={!rate && !fromConfirmation}
             onClick={() => {
-              navigate(bookingUrl);
+              navigate(fromConfirmation ? stayUrl : bookingUrl);
             }}
           >
-            Reservar
+            {fromConfirmation ? 'Ver mi estancia' : 'Reservar'}
           </Button>
         </aside>
       </div>

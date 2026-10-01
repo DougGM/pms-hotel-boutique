@@ -39,6 +39,14 @@ superior, los tabs distribuyen sus opciones a lo largo de la barra y
 `booking-search-panel` queda centrado con un ancho maximo proporcional. Los
 breakpoints de escritorio no se modifican.
 
+Actualizacion 2026-10-01: el enlace `Ver habitacion` de la confirmacion
+conserva `checkIn`, `checkOut`, `guests` y `fromConfirmation` al abrir el
+detalle. El detalle muestra esos datos en la tarifa y cambia su accion a
+`Ver mi estancia`, que apunta al panel registrado del huesped
+(`/pms/dashboard`); la navegacion normal sin ese indicador conserva el CTA
+`Reservar`. Las rutas `/my-account/*` permanecen en el catalogo futuro y no se
+usan como destinos mientras no tengan un registro activo en `router.tsx`.
+
 ## Boton `Registrarse`
 
 Actualizacion 2026-09-17: `Iniciar sesion` abre un modal flotante sobre la home

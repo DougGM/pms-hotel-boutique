@@ -122,6 +122,7 @@ export function BookingConfirmationScreen() {
   const nights = calculateNights(booking.checkIn, booking.checkOut);
   const computedAmount = confirmation.rate ? confirmation.rate.priceCents * nights : 0;
   const amountToShow = booking.totalAmountCents > 0 ? booking.totalAmountCents : computedAmount;
+  const roomDetailsUrl = `/rooms/${booking.roomTypeId}?checkIn=${dateKey(booking.checkIn)}&checkOut=${dateKey(booking.checkOut)}&guests=${booking.adults + booking.children}&fromConfirmation=true`;
 
   return (
     <section className="content booking-confirmation-page">
@@ -184,7 +185,7 @@ export function BookingConfirmationScreen() {
             Esta ronda confirma la reserva en pantalla. El envio por correo queda fuera de alcance.
           </p>
           <div className="booking-form-actions">
-            <Link className="ui-action" to={`/rooms/${booking.roomTypeId}`}>
+            <Link className="ui-action" to={roomDetailsUrl}>
               Ver habitación
             </Link>
           </div>
