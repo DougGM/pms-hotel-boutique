@@ -2859,6 +2859,25 @@ button {
   font-weight: var(--font-weight-bold);
   padding: 0;
 }
+@media (max-width: 640px) {
+  .visitor-header {
+    padding-top: var(--space-10);
+  }
+
+  .visitor-tabs {
+    justify-content: space-around;
+    gap: var(--space-2);
+  }
+
+  .visitor-tab {
+    flex: 1 1 0;
+    justify-content: center;
+    min-width: 0;
+    padding-left: var(--space-3);
+    padding-right: var(--space-3);
+  }
+}
+
 @media (max-width: 1180px) {
   body {
     min-width: 0;

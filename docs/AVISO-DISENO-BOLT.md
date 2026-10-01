@@ -33,6 +33,12 @@ Actualizacion 2026-09-16: los tabs publicos del header (`Habitaciones`,
 la home publica mediante hash (`/#amenidades`, etc.). No deben volver a quedar
 como secciones apiladas ni links decorativos.
 
+Actualizacion 2026-10-01: el header publico y la tarjeta de disponibilidad
+conservan el mismo lenguaje Bolt en movil. Hasta 640px, el header agrega aire
+superior, los tabs distribuyen sus opciones a lo largo de la barra y
+`booking-search-panel` queda centrado con un ancho maximo proporcional. Los
+breakpoints de escritorio no se modifican.
+
 ## Boton `Registrarse`
 
 Actualizacion 2026-09-17: `Iniciar sesion` abre un modal flotante sobre la home

@@ -76,7 +76,7 @@ const promotions = [
     value: '15%',
     detail: 'Ahorra en reservas de 4 noches o más.',
     image:
-      'https://images.pexels.com/photos/754628/pexels-photo-754628.jpeg?auto=compress&cs=tinysrgb&w=900',
+      'https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=900&q=80',
   },
   {
     name: 'Escapada romántica',

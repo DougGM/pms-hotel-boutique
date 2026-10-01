@@ -241,6 +241,12 @@
 }
 
 @media (max-width: 760px) {
+  .booking-search-panel {
+    width: min(90%, var(--size-legacy-420));
+    margin-left: auto;
+    margin-right: auto;
+  }
+
   .booking-amenity-grid,
   .booking-promo-grid,
   .booking-policy-section {
