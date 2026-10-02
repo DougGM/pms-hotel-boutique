@@ -10,6 +10,8 @@ export interface CashSession {
   openingBalanceCents: number;
   currency: Currency;
   status: CashSessionStatus;
+  totalIncomeCents?: number;
+  totalExpenseCents?: number;
   closedByUserId?: string;
   closedAt?: Date;
   expectedBalanceCents?: number;

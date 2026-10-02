@@ -86,7 +86,8 @@ export class HttpClient {
     body?: unknown,
     init?: HttpClientInit,
   ): Promise<Response> {
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE_URL;
+    const env = (import.meta as ImportMeta & { env?: { VITE_API_BASE_URL?: string } }).env;
+    const baseUrl = env?.VITE_API_BASE_URL || DEFAULT_API_BASE_URL;
     const url = new URL(path.replace(/^\/+/, ''), `${baseUrl.replace(/\/+$/, '')}/`);
     const headers = new Headers(init?.headers);
     headers.set('Accept', 'application/json');
