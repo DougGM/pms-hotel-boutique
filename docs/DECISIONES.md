@@ -794,8 +794,8 @@ clave legacy `hotel-aurora.auth.v1`.
 - Si el backend cambia claims del JWT o literales de roles, se deben actualizar
   mapper, guards, tests y docs juntos.
 - CORS debe validarse manualmente: el backend revisado permite
-  `http://localhost:3000`, mientras Vite suele correr en
-  `http://localhost:5173`.
+  `http://localhost:3000`, por lo que Vite queda fijado en ese origen durante
+  desarrollo local con `strictPort`.
 - El resto de servicios mock permanece fuera del alcance de INT-01.
 
 ## Cómo agregar una nueva decisión

@@ -107,10 +107,9 @@ PostgreSQL/backend. El frontend deriva email, rol y authorities del JWT
 (`sub`, `ROLE_*`, permisos backend) y conserva los guards actuales mediante la
 matriz de permisos de `src/modules/auth/models/session.ts`.
 
-Nota CORS: el backend local revisado permite `http://localhost:3000`, mientras
-Vite suele correr en `http://localhost:5173`. Si el navegador bloquea login,
-ajustar CORS del backend para desarrollo o usar proxy de Vite antes de abrir el
-PR.
+Nota CORS: el backend local revisado permite `http://localhost:3000`. La
+configuracion de Vite fija el servidor dev en ese mismo origen para que el
+login real contra backend no falle por CORS.
 
 ## Catálogo de interfaz — WEB-13
 

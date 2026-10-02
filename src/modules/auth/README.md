@@ -61,9 +61,9 @@ limpia la sesion local aunque el backend falle. La clave legacy
 ## CORS
 
 El backend local revisado permite `http://localhost:3000` en `CorsConfig`.
-Vite normalmente usa `http://localhost:5173`. Antes de cerrar el PR manual,
-probar login en navegador y, si hay bloqueo CORS, decidir entre ampliar CORS de
-desarrollo en backend o configurar proxy de Vite.
+Este frontend fija Vite en `http://localhost:3000` con `strictPort` para que el
+origen de desarrollo coincida con ese contrato. Si el puerto 3000 esta ocupado,
+liberarlo o ampliar CORS del backend antes de probar login real.
 
 ## Pruebas
 
