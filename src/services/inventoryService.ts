@@ -11,93 +11,205 @@ import {
   type InventoryMovementTypeDto,
 } from '@/shared/types/entities/inventory-movement';
 import type { ID } from '@/shared/types/common';
-import { inventoryItemsDB, inventoryMovementsDB, usersDB } from '@/data/db';
+import { inventoryItemsDB, inventoryMovementsDB } from '@/data/db';
 import { mockUtils, requireCollection, simulateLatency } from './mockUtils';
-import { hydrateCollection, persistCollection } from './mockPersistence';
+import { httpClient } from './http-client';
 
-const inventoryItemsStorageKey = 'PMS_INVENTORY_ITEMS_DB';
-const inventoryMovementsStorageKey = 'PMS_INVENTORY_MOVEMENTS_DB';
+type ApiInventoryItem = {
+  id: string;
+  sku: string;
+  name: string;
+  description?: string;
+  category: string;
+  unit: string;
+  currentQuantity: number;
+  minimumQuantity: number;
+  lowStock: boolean;
+  productId?: string;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
 
-function getInventoryItemsDB(): InventoryItemDto[] {
-  return hydrateCollection(inventoryItemsStorageKey, inventoryItemsDB);
+type ApiInventoryMovement = {
+  id: string;
+  inventoryItemId: string;
+  type: InventoryMovementTypeDto;
+  reason: InventoryMovementReasonDto | 'physical_count' | 'room_service_return';
+  quantity: number;
+  responsibleUserId?: string;
+  occurredAt: string;
+  notes?: string;
+  createdAt: string;
+};
+
+type UpdateInventoryItemData = Partial<
+  Pick<InventoryItemDto, 'name' | 'category' | 'current_quantity' | 'minimum_quantity' | 'active'>
+>;
+
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const isOfflineError = (error: unknown): boolean =>
+  !(typeof error === 'object' && error !== null && 'status' in error) ||
+  (typeof error === 'object' && error !== null && 'status' in error && error.status === 404);
+
+function ensureBackendUserId(responsibleUserId?: ID): void {
+  if (responsibleUserId && !uuidPattern.test(responsibleUserId)) {
+    throw new Error(`No existe el usuario responsable ${responsibleUserId}.`);
+  }
 }
 
-function persistInventoryItemsDB(): void {
-  persistCollection(inventoryItemsStorageKey, inventoryItemsDB);
+function normalizeCategory(category: string): InventoryItemDto['category'] {
+  return category === 'roomService' ? 'room_service' : (category as InventoryItemDto['category']);
 }
 
-function getInventoryMovementsDB(): InventoryMovementDto[] {
-  return hydrateCollection(inventoryMovementsStorageKey, inventoryMovementsDB);
+function normalizeUnit(unit: string): InventoryItemDto['unit'] {
+  return unit as InventoryItemDto['unit'];
 }
 
-function persistInventoryMovementsDB(): void {
-  persistCollection(inventoryMovementsStorageKey, inventoryMovementsDB);
+function normalizeReason(reason: ApiInventoryMovement['reason']): InventoryMovementReasonDto {
+  if (reason === 'physical_count') return 'restock';
+  if (reason === 'room_service_return') return 'restock';
+  return reason;
 }
 
-function createMovementId(): ID {
-  const max = getInventoryMovementsDB().reduce((currentMax, movement) => {
-    const match = /^IMOV-(\d+)$/.exec(movement.id);
-    return match ? Math.max(currentMax, Number(match[1])) : currentMax;
-  }, 0);
-  return `IMOV-${String(max + 1).padStart(3, '0')}`;
+function toInventoryItemDto(api: ApiInventoryItem): InventoryItemDto {
+  return {
+    id: api.id,
+    sku: api.sku,
+    name: api.name,
+    description: api.description,
+    category: normalizeCategory(api.category),
+    unit: normalizeUnit(api.unit),
+    current_quantity: api.currentQuantity,
+    minimum_quantity: api.minimumQuantity,
+    product_id: api.productId,
+    active: api.active,
+    created_at: api.createdAt,
+    updated_at: api.updatedAt,
+  };
 }
 
-function resolveResponsibleUserId(responsibleUserId?: ID): ID | undefined {
-  if (!responsibleUserId) return undefined;
-  if (usersDB.some((user) => user.id === responsibleUserId)) return responsibleUserId;
-  throw new Error(`No existe el usuario responsable ${responsibleUserId}.`);
+function toInventoryMovementDto(api: ApiInventoryMovement): InventoryMovementDto {
+  return {
+    id: api.id,
+    inventory_item_id: api.inventoryItemId,
+    type: api.type,
+    reason: normalizeReason(api.reason),
+    quantity: api.quantity,
+    responsible_user_id: api.responsibleUserId,
+    occurred_at: api.occurredAt,
+    notes: api.notes,
+    created_at: api.createdAt,
+  };
+}
+
+function toUpdateRequest(item: InventoryItem, data: UpdateInventoryItemData) {
+  return {
+    sku: item.sku,
+    name: data.name ?? item.name,
+    description: item.description,
+    category: data.category ?? (item.category === 'roomService' ? 'room_service' : item.category),
+    unit: item.unit,
+    minimumQuantity: data.minimum_quantity ?? item.minimumQuantity,
+    productId: item.productId,
+    active: data.active ?? item.active,
+  };
 }
 
 export const inventoryService = {
   async getItems(): Promise<InventoryItem[]> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar el inventario.');
-    return requireCollection(getInventoryItemsDB(), 'inventoryItemsDB').map(toInventoryItem);
+    try {
+      const items = await httpClient.get<ApiInventoryItem[]>('/inventory/items');
+      return items.map(toInventoryItemDto).map(toInventoryItem);
+    } catch (error) {
+      if (!isOfflineError(error)) throw error;
+      return requireCollection(inventoryItemsDB, 'inventoryItemsDB').map(toInventoryItem);
+    }
   },
   async getItemById(id: ID): Promise<InventoryItem | undefined> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar el articulo.');
-    const item = getInventoryItemsDB().find((entry) => entry.id === id);
-    return item ? toInventoryItem(item) : undefined;
+    try {
+      const item = await httpClient.get<ApiInventoryItem>(`/inventory/items/${id}`);
+      return toInventoryItem(toInventoryItemDto(item));
+    } catch (error) {
+      if (!isOfflineError(error)) throw error;
+      const item = inventoryItemsDB.find((entry) => entry.id === id);
+      return item ? toInventoryItem(item) : undefined;
+    }
   },
   async getItemsBelowMinimum(): Promise<InventoryItem[]> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar la alerta de stock bajo.');
-    return requireCollection(getInventoryItemsDB(), 'inventoryItemsDB')
-      .map(toInventoryItem)
-      .filter((item) => item.isBelowMinimum);
+    try {
+      const items = await httpClient.get<ApiInventoryItem[]>('/inventory/items?lowStock=true');
+      return items.map(toInventoryItemDto).map(toInventoryItem);
+    } catch (error) {
+      if (!isOfflineError(error)) throw error;
+      return requireCollection(inventoryItemsDB, 'inventoryItemsDB')
+        .map(toInventoryItem)
+        .filter((item) => item.isBelowMinimum);
+    }
   },
   async getMovementsByItemId(itemId: ID): Promise<InventoryMovement[]> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar los movimientos.');
-    return requireCollection(getInventoryMovementsDB(), 'inventoryMovementsDB')
-      .filter((item) => item.inventory_item_id === itemId)
-      .map(toInventoryMovement);
+    try {
+      const movements = await httpClient.get<ApiInventoryMovement[]>(
+        `/inventory/items/${itemId}/movements`,
+      );
+      return movements.map(toInventoryMovementDto).map(toInventoryMovement);
+    } catch (error) {
+      if (!isOfflineError(error)) throw error;
+      return requireCollection(inventoryMovementsDB, 'inventoryMovementsDB')
+        .filter((item) => item.inventory_item_id === itemId)
+        .map(toInventoryMovement);
+    }
   },
   async getMovements(): Promise<InventoryMovement[]> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar los movimientos.');
-    return requireCollection(getInventoryMovementsDB(), 'inventoryMovementsDB').map(
-      toInventoryMovement,
-    );
+    try {
+      const items = await httpClient.get<ApiInventoryItem[]>('/inventory/items');
+      const movements = await Promise.all(
+        items.map((item) =>
+          httpClient.get<ApiInventoryMovement[]>(`/inventory/items/${item.id}/movements`),
+        ),
+      );
+      return movements.flat().map(toInventoryMovementDto).map(toInventoryMovement);
+    } catch (error) {
+      if (!isOfflineError(error)) throw error;
+      return requireCollection(inventoryMovementsDB, 'inventoryMovementsDB').map(
+        toInventoryMovement,
+      );
+    }
   },
-  async updateItem(
-    id: ID,
-    data: Partial<
-      Pick<
-        InventoryItemDto,
-        'name' | 'category' | 'current_quantity' | 'minimum_quantity' | 'active'
-      >
-    >,
-  ): Promise<InventoryItem> {
+  async updateItem(id: ID, data: UpdateInventoryItemData): Promise<InventoryItem> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible actualizar el inventario.');
 
-    const item = getInventoryItemsDB().find((entry) => entry.id === id);
-    if (!item) throw new Error(`No existe el articulo de inventario ${id}.`);
-    Object.assign(item, data, { updated_at: new Date().toISOString() });
-    persistInventoryItemsDB();
-    return toInventoryItem(item);
+    const current = await this.getItemById(id);
+    if (!current) throw new Error(`No existe el articulo de inventario ${id}.`);
+    const updated = await httpClient.put<ApiInventoryItem>(
+      `/admin/inventory/items/${id}`,
+      toUpdateRequest(current, data),
+    );
+    if (data.current_quantity !== undefined && data.current_quantity !== updated.currentQuantity) {
+      const delta = data.current_quantity - updated.currentQuantity;
+      if (delta !== 0) {
+        await this.createMovement({
+          inventoryItemId: id,
+          type: delta > 0 ? 'in' : 'out',
+          reason: delta > 0 ? 'restock' : 'shrinkage',
+          quantity: Math.abs(delta),
+          notes: 'Ajuste manual de existencias desde administracion.',
+        });
+        return (await this.getItemById(id)) as InventoryItem;
+      }
+    }
+    return toInventoryItem(toInventoryItemDto(updated));
   },
   async createMovement(data: {
     inventoryItemId: ID;
@@ -112,33 +224,18 @@ export const inventoryService = {
     if (!Number.isInteger(data.quantity) || data.quantity <= 0) {
       throw new Error('La cantidad debe ser un entero mayor a 0.');
     }
+    ensureBackendUserId(data.responsibleUserId);
 
-    const item = getInventoryItemsDB().find((entry) => entry.id === data.inventoryItemId);
-    if (!item) throw new Error(`No existe el articulo de inventario ${data.inventoryItemId}.`);
-    const nextQuantity =
-      data.type === 'in'
-        ? item.current_quantity + data.quantity
-        : item.current_quantity - data.quantity;
-    if (nextQuantity < 0) throw new Error('El movimiento dejaria stock negativo.');
-
-    const now = new Date().toISOString();
-    const movement: InventoryMovementDto = {
-      id: createMovementId(),
-      inventory_item_id: item.id,
-      type: data.type,
-      reason: data.reason,
-      quantity: data.quantity,
-      responsible_user_id: resolveResponsibleUserId(data.responsibleUserId),
-      occurred_at: now,
-      notes: data.notes?.trim() || undefined,
-      created_at: now,
-    };
-    item.current_quantity = nextQuantity;
-    item.updated_at = now;
-    getInventoryMovementsDB().unshift(movement);
-    persistInventoryItemsDB();
-    persistInventoryMovementsDB();
-    return toInventoryMovement(movement);
+    const movement = await httpClient.post<ApiInventoryMovement>(
+      `/inventory/items/${data.inventoryItemId}/movements`,
+      {
+        type: data.type,
+        reason: data.reason,
+        quantity: data.quantity,
+        notes: data.notes?.trim() || undefined,
+      },
+    );
+    return toInventoryMovement(toInventoryMovementDto(movement));
   },
 };
 export default inventoryService;

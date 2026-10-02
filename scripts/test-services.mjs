@@ -121,6 +121,195 @@ const {
   mockUtils,
 } = require(require.resolve('../.cache/services-harness.cjs'));
 
+const apiNow = '2026-10-02T12:00:00.000Z';
+const apiProducts = [
+  {
+    id: '11111111-1111-4111-8111-111111111111',
+    sku: 'RS-COFFEE',
+    name: 'Cafe americano',
+    description: 'Cafe de la casa',
+    category: 'food_and_beverage',
+    priceCents: 1500,
+    currency: 'GTQ',
+    active: true,
+  },
+];
+const apiAmenities = [
+  {
+    id: '22222222-2222-4222-8222-222222222222',
+    name: 'Piscina',
+    description: 'Piscina principal',
+    category: 'hotel',
+    location: 'Terraza',
+    opensAt: '08:00',
+    closesAt: '20:00',
+    active: true,
+    createdAt: apiNow,
+    updatedAt: apiNow,
+  },
+];
+const apiUsers = [
+  {
+    id: '33333333-3333-4333-8333-333333333333',
+    firstName: 'Jose',
+    lastName: 'Perez',
+    email: 'jose@example.com',
+    roleCode: 'ADMIN',
+    status: 'active',
+    createdAt: apiNow,
+    updatedAt: apiNow,
+  },
+];
+const apiRoles = [
+  {
+    id: '44444444-4444-4444-8444-444444444444',
+    code: 'ADMIN',
+    name: 'Administrador',
+    active: true,
+    permissions: ['admin.dashboard.view'],
+  },
+];
+const apiPromotions = [
+  {
+    id: '55555555-5555-4555-8555-555555555555',
+    code: 'EARLY',
+    name: 'Reserva anticipada',
+    description: 'Descuento base',
+    discountPercent: 10,
+    validFrom: '2026-12-01',
+    validTo: '2026-12-31',
+    active: true,
+    createdAt: apiNow,
+    updatedAt: apiNow,
+  },
+];
+const apiInventoryItems = [
+  {
+    id: '66666666-6666-4666-8666-666666666666',
+    sku: 'HK-TOWEL',
+    name: 'Toalla blanca',
+    description: 'Toalla de habitacion',
+    category: 'housekeeping',
+    unit: 'unit',
+    currentQuantity: 10,
+    minimumQuantity: 4,
+    lowStock: false,
+    active: true,
+    createdAt: apiNow,
+    updatedAt: apiNow,
+  },
+];
+const apiInventoryMovements = [];
+
+function jsonResponse(data, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { 'content-type': 'application/json' },
+  });
+}
+
+globalThis.fetch = async (input, init = {}) => {
+  const url = new URL(String(input));
+  const method = init.method ?? 'GET';
+  const path = url.pathname.replace('/api/v1', '');
+  const body = init.body ? JSON.parse(String(init.body)) : undefined;
+
+  if (method === 'GET' && path === '/room-service/products') return jsonResponse(apiProducts);
+  if (method === 'GET' && path === '/admin/amenities') return jsonResponse(apiAmenities);
+  if (method === 'GET' && path === '/admin/users') return jsonResponse(apiUsers);
+  if (method === 'GET' && path.startsWith('/admin/users/')) {
+    const user = apiUsers.find((item) => path.endsWith(item.id));
+    return user ? jsonResponse(user) : jsonResponse({ message: 'Not found' }, 404);
+  }
+  if (method === 'GET' && path === '/admin/roles') return jsonResponse(apiRoles);
+  if (method === 'GET' && path === '/admin/promotions') return jsonResponse(apiPromotions);
+  if (method === 'POST' && path === '/admin/promotions') {
+    const promotion = {
+      id: '77777777-7777-4777-8777-777777777777',
+      code: body.code,
+      name: body.name,
+      description: body.description,
+      discountPercent: body.discountPercent,
+      validFrom: body.validFrom,
+      validTo: body.validTo,
+      active: body.active,
+      createdAt: apiNow,
+      updatedAt: apiNow,
+    };
+    apiPromotions.push(promotion);
+    return jsonResponse(promotion, 201);
+  }
+  if (method === 'PUT' && path.startsWith('/admin/promotions/')) {
+    const id = path.split('/').at(-1);
+    const promotion = apiPromotions.find((item) => item.id === id);
+    if (!promotion) return jsonResponse({ message: 'Not found' }, 404);
+    Object.assign(promotion, {
+      code: body.code,
+      name: body.name,
+      description: body.description,
+      discountPercent: body.discountPercent,
+      validFrom: body.validFrom,
+      validTo: body.validTo,
+      active: body.active,
+      updatedAt: apiNow,
+    });
+    return jsonResponse(promotion);
+  }
+  if (method === 'GET' && path === '/inventory/items') return jsonResponse(apiInventoryItems);
+  if (method === 'GET' && path.startsWith('/inventory/items/') && path.endsWith('/movements')) {
+    const itemId = path.split('/').at(-2);
+    return jsonResponse(apiInventoryMovements.filter((item) => item.inventoryItemId === itemId));
+  }
+  if (method === 'GET' && path.startsWith('/inventory/items/')) {
+    const id = path.split('/').at(-1);
+    const item = apiInventoryItems.find((entry) => entry.id === id);
+    return item ? jsonResponse(item) : jsonResponse({ message: 'Not found' }, 404);
+  }
+  if (method === 'PUT' && path.startsWith('/admin/inventory/items/')) {
+    const id = path.split('/').at(-1);
+    const item = apiInventoryItems.find((entry) => entry.id === id);
+    if (!item) return jsonResponse({ message: 'Not found' }, 404);
+    Object.assign(item, {
+      sku: body.sku,
+      name: body.name,
+      description: body.description,
+      category: body.category,
+      unit: body.unit,
+      minimumQuantity: body.minimumQuantity,
+      productId: body.productId,
+      active: body.active,
+      updatedAt: apiNow,
+    });
+    return jsonResponse(item);
+  }
+  if (method === 'POST' && path.startsWith('/inventory/items/') && path.endsWith('/movements')) {
+    const itemId = path.split('/').at(-2);
+    const item = apiInventoryItems.find((entry) => entry.id === itemId);
+    if (!item) return jsonResponse({ message: 'Not found' }, 404);
+    const nextQuantity =
+      body.type === 'in'
+        ? item.currentQuantity + body.quantity
+        : item.currentQuantity - body.quantity;
+    if (nextQuantity < 0) return jsonResponse({ message: 'Stock cannot go negative' }, 400);
+    item.currentQuantity = nextQuantity;
+    item.updatedAt = apiNow;
+    const movement = {
+      id: `${88888888 + apiInventoryMovements.length}-8888-4888-8888-888888888888`,
+      inventoryItemId: itemId,
+      type: body.type,
+      reason: body.reason,
+      quantity: body.quantity,
+      occurredAt: apiNow,
+      notes: body.notes,
+      createdAt: apiNow,
+    };
+    apiInventoryMovements.unshift(movement);
+    return jsonResponse(movement, 201);
+  }
+
+  return jsonResponse({ message: `Unhandled ${method} ${path}` }, 404);
+};
+
 const MIN_LATENCY_MS = 250; // 300ms nominal, con margen por scheduling
 const MAX_LATENCY_MS = 900; // 600ms nominal, con margen para CI lento
 
