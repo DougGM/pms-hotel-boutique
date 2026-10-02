@@ -197,3 +197,22 @@ refresh falla, limpia la sesion local para obligar un nuevo login.
 persistencia local, incluso si la confirmacion remota falla. `clearSession()`
 expone la limpieza local sincrona. La clave legacy `hotel-aurora.auth.v1` se
 elimina al restaurar o limpiar sesion.
+
+## INT-13: validacion E2E y mocks restantes
+
+La integracion frontend-backend usa un unico punto de salida HTTP:
+`src/services/http-client.ts`. No agregar `fetch`, `axios`, `XMLHttpRequest` ni
+clientes paralelos en modulos o componentes; los servicios deben consumir
+`httpClient` y traducir DTOs backend a modelos de dominio.
+
+`src/data/db.ts` sigue existiendo para funcionalidades demo o flujos cuyo
+contrato backend aun no esta disponible en `develop`. Los componentes y
+modulos no deben importarlo directamente: todo acceso mock permitido debe pasar
+por `src/services/`, para que cada mock pueda retirarse cuando exista su API
+real. La suite `npm run test:e2e-integration` falla si aparece un import directo
+desde fuera de servicios o un cliente HTTP alternativo.
+
+El cliente central propaga `403`, `404` y `409` como `HttpError` con el payload
+del backend para que la UI pueda mostrar errores controlados. Ante un `401`
+protegido, intenta un refresh una sola vez y reintenta la solicitud original con
+el nuevo JWT; si falla, el handler de sesion limpia el estado local.
