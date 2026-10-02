@@ -761,6 +761,43 @@ decidir explícitamente cuál de las dos prevalece (o si D-009 debe
 actualizarse para reemplazar formalmente a D-008) antes de que alguien
 intente "arreglar" el router o la prueba por su cuenta.
 
+## D-011 · INT-01: autenticacion frontend contra backend Spring
+
+**Fecha:** 2026-10-01 · **Estado:** aceptada e implementada en auth.
+
+### Contexto
+
+La issue #99 pide que el frontend deje de autenticar contra
+`sessionAccountsDB` y use el contrato real del backend Spring. El backend
+expone `/api/v1/auth/login`, `/api/v1/auth/refresh` y `/api/v1/auth/logout`.
+Su `AuthResponse` devuelve `accessToken`, `refreshToken`, `tokenType` y
+`expiresIn`, no el DTO historico del frontend con `user/token/expiresAt`.
+
+### Decision
+
+Se conserva `src/services/http-client.ts` como unico cliente HTTP. No se crea un
+segundo `apiClient`. El cliente agrega Bearer automaticamente y, ante `401`,
+intenta refresh una sola vez y reintenta la peticion original una sola vez.
+
+`services/authService.ts` adapta el `AuthResponse` real al contrato de sesion
+del frontend decodificando el JWT: `sub` define el email, `ROLE_*` define el
+`UserRole` y `authorities` alimenta la matriz de permisos de navegacion. El
+frontend no completa identidad ni permisos desde `sessionAccountsDB`.
+
+`logout` revoca el refresh token cuando el backend responde, pero siempre limpia
+la sesion local. La persistencia sigue usando `PMS_AUTH_SESSION` y elimina la
+clave legacy `hotel-aurora.auth.v1`.
+
+### Consecuencias
+
+- Las credenciales validas deben existir en PostgreSQL/backend.
+- Si el backend cambia claims del JWT o literales de roles, se deben actualizar
+  mapper, guards, tests y docs juntos.
+- CORS debe validarse manualmente: el backend revisado permite
+  `http://localhost:3000`, mientras Vite suele correr en
+  `http://localhost:5173`.
+- El resto de servicios mock permanece fuera del alcance de INT-01.
+
 ## Cómo agregar una nueva decisión
 
 Copiar la estructura de D-001: **Contexto** (qué problema había y qué

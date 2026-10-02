@@ -54,6 +54,11 @@ fuente visible principal de gestion de usuarios.
 
 ## Cuentas mock para pruebas
 
+Nota 2026-10-01 (#99 / INT-01): estas cuentas quedan como referencia historica
+del frontend beta y para datos administrativos mock. El login real ya valida
+contra el backend Spring/PostgreSQL; las credenciales disponibles dependen del
+seed o base local del backend.
+
 Todas usan la contrasena publica de demo `AuroraDemo2026!`.
 
 | Correo                         | Rol            |

@@ -49,7 +49,7 @@ Crear `.env` a partir de `.env.example`. Nunca incluir credenciales reales en
 el repositorio.
 
 ```env
-VITE_API_BASE_URL=http://localhost:3000/api
+VITE_API_BASE_URL=http://localhost:8080/api/v1
 ```
 
 ## Estructura
@@ -96,32 +96,21 @@ producción y `npm run test` (once suites, 238 pruebas — ver
 correr por separado: `npm run test:auth`, `test:currency`, `test:date`,
 `test:money-contract`, `test:contract`, `test:services`, `test:presentation`.
 
-## Acceso de demostración (WEB-06)
+## Autenticacion con backend (INT-01)
 
-Abrir `/auth/login`. Todas las cuentas de prueba usan la contraseña pública
-`AuroraDemo2026!`. No utilizar credenciales reales.
+Abrir `/auth/login`. Desde 2026-10-01, `services/authService.ts` usa el backend
+Spring real: `POST /auth/login`, JWT Bearer automatico, `POST /auth/refresh`
+ante `401` con retry unico y `POST /auth/logout` con `refreshToken`.
 
-| Correo                                                                        | Rol                         |
-| ----------------------------------------------------------------------------- | --------------------------- |
-| admin@hotelboutique.test                                                      | Administracion (ADMIN)      |
-| huesped@hotelboutique.test                                                    | Huesped (GUEST)             |
-| recepcion@hotelboutique.test                                                  | Recepcion (RECEPTION)       |
-| limpieza@hotelboutique.test                                                   | Limpieza (HOUSEKEEPING)     |
-| conserjeria@hotelboutique.test                                                | Conserjeria (CONCIERGE)     |
-| roomservice@hotelboutique.test                                                | Room Service (ROOM_SERVICE) |
-| La sesión dura ocho horas y se conserva al recargar. El menú depende del rol; |
-| abrir directamente una sección ajena muestra acceso restringido. «Cerrar      |
-| sesión» elimina la persistencia y sincroniza el cierre con otras pestañas.    |
+Las credenciales ya no se validan contra `sessionAccountsDB`; deben existir en
+PostgreSQL/backend. El frontend deriva email, rol y authorities del JWT
+(`sub`, `ROLE_*`, permisos backend) y conserva los guards actuales mediante la
+matriz de permisos de `src/modules/auth/models/session.ts`.
 
-La autenticación es simulada y no protege datos de producción. Consume el
-servicio compartido `services/authService.ts` y los tipos `SessionUser`/
-`AuthSession`/`UserRole` de `shared/types/entities/session/` — un contrato
-separado del `User` de `shared/types/entities/user/` (ese modela el puesto de
-un empleado, no el rol de acceso al PMS; ver
-[src/ARCHITECTURE.md](src/ARCHITECTURE.md)). Las cuentas antiguas
-`@hotel.test` y su sesión local dejaron de utilizarse; iniciar sesión con una
-cuenta de la tabla. Ver [el módulo auth](src/modules/auth/README.md) para
-permisos, contrato y pruebas.
+Nota CORS: el backend local revisado permite `http://localhost:3000`, mientras
+Vite suele correr en `http://localhost:5173`. Si el navegador bloquea login,
+ajustar CORS del backend para desarrollo o usar proxy de Vite antes de abrir el
+PR.
 
 ## Catálogo de interfaz — WEB-13
 

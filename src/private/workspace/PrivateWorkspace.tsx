@@ -1045,8 +1045,8 @@ const filterNavByPermissions = (nav: NavItem[], permissions: Record<string, bool
   return nav
     .map((item) => {
       if (!item.children) return item;
-      const children = item.children.filter(
-        (child) => navPermissionKeys(item.label, child.label).some((key) => permissions[key]),
+      const children = item.children.filter((child) =>
+        navPermissionKeys(item.label, child.label).some((key) => permissions[key]),
       );
       return children.length > 0 ? { ...item, children } : null;
     })
@@ -1251,7 +1251,9 @@ function resolveWorkspaceNav(role: RoleId, activeNav: string, navItems = navByRo
     if (child) return { role: child.role, nav: child.label, label: child.label };
   }
 
-  const scopedMatch = activeNav.match(/^(admin|reception|housekeeping|room-service|concierge|guest):(.+)$/);
+  const scopedMatch = activeNav.match(
+    /^(admin|reception|housekeeping|room-service|concierge|guest):(.+)$/,
+  );
   if (scopedMatch) {
     return {
       role: scopedMatch[1] as RoleId,
@@ -6221,4 +6223,3 @@ function getPanelDescription(role: RoleId) {
 }
 
 export default PrivateWorkspace;
-

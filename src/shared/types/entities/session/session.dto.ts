@@ -20,9 +20,19 @@ export interface LoginDTO {
   password: string;
 }
 
+export interface BackendAuthResponseDTO {
+  accessToken: string;
+  refreshToken: string;
+  tokenType: string;
+  expiresIn: number;
+}
+
 export interface AuthResponseDTO {
   user: SessionUserDTO;
   token: string;
   refreshToken: string;
   expiresAt: ISODateString;
+  accessExpiresAt?: ISODateString;
+  tokenType?: string;
+  authorities?: string[];
 }
