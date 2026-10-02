@@ -291,8 +291,12 @@ test('public and private 404 pages remain scoped to their layouts', async () => 
   }
 });
 
-function storedSession(email = 'admin@hotelboutique.test', expiresAt = Date.now() + 10000) {
-  const response = authResponse(email);
+function storedSession(
+  email = 'admin@hotelboutique.test',
+  expiresAt = Date.now() + 10000,
+  accessExpiresIn = 60,
+) {
+  const response = authResponse(email, accessExpiresIn);
   return JSON.stringify({
     user: {
       id: email,
@@ -373,6 +377,32 @@ test('shared service sets Bearer, refreshes once, retries, and clears on refresh
   failNextRefresh = true;
   requests = [];
   await assert.rejects(httpClient.get('/protected-once'), /HTTP 401/);
+  assert.equal(values.size, 0);
+});
+
+test('restore refreshes an expired access token before granting the stored session', async () => {
+  storage.setItem(
+    sessionStorageKey,
+    storedSession('admin@hotelboutique.test', Date.now() + 60_000, -5),
+  );
+
+  const session = await sharedAuthService.getCurrentSession();
+  assert.equal(session.user.email, 'admin@hotelboutique.test');
+  assert.equal(requests.filter((request) => request.path === '/api/v1/auth/refresh').length, 1);
+
+  await httpClient.get('/probe');
+  assert.equal(requests.at(-1).authorization, `Bearer ${session.token}`);
+});
+
+test('restore clears the stored session when preventive refresh fails', async () => {
+  storage.setItem(
+    sessionStorageKey,
+    storedSession('admin@hotelboutique.test', Date.now() + 60_000, -5),
+  );
+  failNextRefresh = true;
+
+  assert.equal(await sharedAuthService.getCurrentSession(), null);
+  assert.equal(requests.filter((request) => request.path === '/api/v1/auth/refresh').length, 1);
   assert.equal(values.size, 0);
 });
 

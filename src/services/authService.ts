@@ -11,6 +11,7 @@ import { httpClient, HttpError } from './http-client';
 export const sessionStorageKey = 'PMS_AUTH_SESSION';
 const legacyStorageKey = 'hotel-aurora.auth.v1';
 const sessionDuration = 8 * 60 * 60 * 1000;
+const accessTokenRefreshWindow = 30 * 1000;
 let revision = 0;
 
 type JwtPayload = {
@@ -146,6 +147,11 @@ function persistSession(dto: AuthResponseDTO): void {
   }
 }
 
+function isAccessTokenExpiring(dto: AuthResponseDTO): boolean {
+  const expiresAt = Date.parse(dto.accessExpiresAt ?? '');
+  return Number.isFinite(expiresAt) && expiresAt <= Date.now() + accessTokenRefreshWindow;
+}
+
 async function refreshStoredSession(): Promise<string | null> {
   const stored = readStoredSession();
   if (!stored) return null;
@@ -218,6 +224,15 @@ export const authService = {
         },
         stored.expiresAt,
       );
+      if (isAccessTokenExpiring(normalized)) {
+        const refreshedToken = await refreshStoredSession();
+        if (!refreshedToken) return null;
+        checkRequest(current, signal);
+        const refreshed = readStoredSession();
+        if (!refreshed) return null;
+        httpClient.setToken(refreshed.token);
+        return toAuthSession(refreshed);
+      }
       checkRequest(current, signal);
       persistSession(normalized);
       httpClient.setToken(normalized.token);

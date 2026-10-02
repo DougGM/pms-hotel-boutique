@@ -182,6 +182,11 @@ El backend devuelve `accessToken`, `refreshToken`, `tokenType` y `expiresIn`.
 `authService` normaliza esa respuesta al contrato de sesion del frontend,
 decodifica el JWT para obtener `sub`, `ROLE_*` y `authorities`, y persiste solo
 tokens/metadatos en `PMS_AUTH_SESSION`.
+La sesion persistida conserva dos vencimientos: `expiresAt` para la ventana de
+8 horas del frontend y `accessExpiresAt` para el JWT. Al restaurar, si el `exp`
+del access token ya vencio o esta dentro de la ventana preventiva,
+`authService` llama `POST /auth/refresh` antes de devolver la sesion como
+valida.
 
 `http-client.ts` agrega `Authorization: Bearer <accessToken>` automaticamente.
 Ante un `401` protegido, llama `POST /auth/refresh` con `{ refreshToken }`,

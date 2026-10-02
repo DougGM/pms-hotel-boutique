@@ -45,6 +45,10 @@ La persistencia local usa `PMS_AUTH_SESSION`. Guarda tokens y metadatos de
 sesion, nunca password ni permisos frontend materializados.
 
 `http-client.ts` agrega `Authorization: Bearer <accessToken>` automaticamente.
+Al restaurar una sesion persistida, `authService` valida el `exp` del JWT y
+refresca antes de entregar la sesion si el access token ya vencio o vence en la
+ventana preventiva. Esto mantiene separadas las 8 horas de sesion frontend
+(`expiresAt`) de la expiracion real del JWT (`accessExpiresAt`).
 Si una peticion protegida responde `401`, intenta `POST /auth/refresh` una sola
 vez, actualiza access/refresh token y reintenta la peticion original una sola
 vez. Si refresh falla, limpia la sesion local y el usuario debe iniciar sesion
@@ -67,6 +71,7 @@ desarrollo en backend o configurar proxy de Vite.
 
 - login exitoso y credenciales invalidas;
 - Bearer automatico;
+- refresh preventivo al restaurar JWT vencido;
 - refresh + retry unico;
 - refresh fallido con limpieza local;
 - logout con envio de refresh token;
