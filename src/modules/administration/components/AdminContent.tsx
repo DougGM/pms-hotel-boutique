@@ -213,7 +213,15 @@ const ROLE_ACCESS_GROUPS = [
   {
     name: 'RECEPCIÓN',
     roleCodes: ['reception'],
-    items: ['Resumen', 'Calendario', 'Reservas', 'Huéspedes', 'Disponibilidad', 'Habitaciones', 'Caja'],
+    items: [
+      'Resumen',
+      'Calendario',
+      'Reservas',
+      'Huéspedes',
+      'Disponibilidad',
+      'Habitaciones',
+      'Caja',
+    ],
   },
   {
     name: 'LIMPIEZA',
@@ -3553,10 +3561,7 @@ function RoleModal({
   const [permissions, setPermissions] = useState<Record<string, boolean>>(
     role?.permissions ?? Object.fromEntries(ALL_PERMISSIONS.map((p) => [p, false])),
   );
-  const setGroupPermissions = (
-    group: (typeof ROLE_ACCESS_GROUPS)[number],
-    selected: boolean,
-  ) => {
+  const setGroupPermissions = (group: (typeof ROLE_ACCESS_GROUPS)[number], selected: boolean) => {
     setPermissions((current) => ({
       ...current,
       ...Object.fromEntries(group.items.map((p) => [roleAccessKey(group.name, p), selected])),

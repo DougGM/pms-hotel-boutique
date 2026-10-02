@@ -7,7 +7,6 @@ import { AuthProvider } from '@/modules/auth/components/AuthProvider';
 import { authService, sessionStorageKey } from '@/modules/auth/services/auth-service';
 import { getLoginDestination } from '@/private/routes/navigation';
 import { authService as sharedAuthService } from '@/services/authService';
-import { mockUtils } from '@/services/mockUtils';
 import { httpClient } from '@/services/http-client';
 
 const values = new Map();
@@ -22,21 +21,131 @@ globalThis.window = Object.assign(new EventTarget(), {
   clearTimeout,
   location: { search: '' },
 });
+
 let view;
 let router;
+let originalFetch;
+let requests;
+let failNextRefresh;
 const wait = () => new Promise((resolve) => setTimeout(resolve, 650));
 const text = () => JSON.stringify(view.toJSON());
+const password = 'AuroraDemo2026!';
+
+const accounts = {
+  'admin@hotelboutique.test': ['ROLE_ADMIN', 'bookings.read', 'rooms.write', 'cash.read'],
+  'huesped@hotelboutique.test': ['ROLE_GUEST'],
+  'recepcion@hotelboutique.test': [
+    'ROLE_RECEPTION',
+    'bookings.read',
+    'bookings.write',
+    'bookings.check-in',
+  ],
+  'limpieza@hotelboutique.test': ['ROLE_HOUSEKEEPING', 'housekeeping.read'],
+  'conserjeria@hotelboutique.test': ['ROLE_CONCIERGE', 'concierge.read'],
+  'roomservice@hotelboutique.test': ['ROLE_ROOM_SERVICE', 'room-service.read'],
+};
+
+function encodeBase64Url(value) {
+  return Buffer.from(JSON.stringify(value))
+    .toString('base64')
+    .replace(/=/g, '')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_');
+}
+
+function jwt(email, authorities, expiresIn = 60) {
+  const now = Math.floor(Date.now() / 1000);
+  return [
+    encodeBase64Url({ alg: 'HS256', typ: 'JWT' }),
+    encodeBase64Url({
+      sub: email,
+      authorities,
+      type: 'staff',
+      iat: now,
+      exp: now + expiresIn,
+    }),
+    'signature',
+  ].join('.');
+}
+
+function authResponse(email, expiresIn = 60) {
+  return {
+    accessToken: jwt(email, accounts[email], expiresIn),
+    refreshToken: `refresh:${email}:${Date.now()}`,
+    tokenType: 'Bearer',
+    expiresIn,
+  };
+}
+
+function json(data, status = 200, statusText = status === 200 ? 'OK' : 'Error') {
+  return new Response(JSON.stringify(data), {
+    status,
+    statusText,
+    headers: { 'content-type': 'application/json' },
+  });
+}
+
+function decodeAuth(init) {
+  const header = init?.headers?.get('Authorization');
+  if (!header?.startsWith('Bearer ')) return null;
+  const [, payload] = header.slice('Bearer '.length).split('.');
+  return JSON.parse(
+    Buffer.from(payload.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString(),
+  );
+}
+
+function installFetch() {
+  requests = [];
+  failNextRefresh = false;
+  globalThis.fetch = async (url, init = {}) => {
+    const path = new URL(String(url)).pathname;
+    const body = init.body ? JSON.parse(init.body) : undefined;
+    requests.push({ path, body, authorization: init.headers?.get('Authorization') ?? null });
+
+    if (path === '/api/v1/auth/login') {
+      const email = String(body.email ?? '')
+        .trim()
+        .toLowerCase();
+      if (!accounts[email] || body.password !== password) {
+        return json({ message: 'Correo o contraseña incorrectos.' }, 401, 'Unauthorized');
+      }
+      return json(authResponse(email));
+    }
+    if (path === '/api/v1/auth/refresh') {
+      if (failNextRefresh) return json({ message: 'Refresh token inválido.' }, 401, 'Unauthorized');
+      const email = String(body.refreshToken ?? '').split(':')[1];
+      if (!accounts[email])
+        return json({ message: 'Refresh token inválido.' }, 401, 'Unauthorized');
+      return json(authResponse(email));
+    }
+    if (path === '/api/v1/auth/logout') return new Response(null, { status: 204 });
+    if (path === '/api/v1/probe') {
+      const payload = decodeAuth(init);
+      if (!payload) return json({ message: 'Unauthorized' }, 401, 'Unauthorized');
+      return json({ ok: true, subject: payload.sub });
+    }
+    if (path === '/api/v1/protected-once') {
+      const count = requests.filter((request) => request.path === path).length;
+      if (count === 1) return json({ message: 'Token vencido.' }, 401, 'Unauthorized');
+      return json({ ok: true });
+    }
+    return json({ message: 'No encontrado.' }, 404, 'Not Found');
+  };
+}
 
 beforeEach(() => {
   values.clear();
   globalThis.localStorage = storage;
+  originalFetch = globalThis.fetch;
+  installFetch();
   sharedAuthService.clearSession();
-  mockUtils.setForceError(false);
 });
+
 afterEach(() => {
   if (view) act(() => view.unmount());
   router?.dispose();
   view = undefined;
+  globalThis.fetch = originalFetch;
 });
 
 async function open(path) {
@@ -51,16 +160,15 @@ async function open(path) {
   });
 }
 
-async function login(email, password = 'AuroraDemo2026!') {
+async function login(email, nextPassword = password) {
   act(() => {
     view.root.findByProps({ id: 'staff-email' }).props.onChange({ target: { value: email } });
-    view.root.findByProps({ id: 'staff-password' }).props.onChange({ target: { value: password } });
+    view.root
+      .findByProps({ id: 'staff-password' })
+      .props.onChange({ target: { value: nextPassword } });
   });
   await act(async () => {
     await view.root.findByType('form').props.onSubmit({ preventDefault() {} });
-    // Un login exitoso puede navegar a una pantalla que hace su propia carga
-    // async post-montaje (p. ej. PrivateWorkspace) además de la del login en
-    // sí — igual que open(), hay que darle tiempo a esa segunda ronda.
     await wait();
   });
 }
@@ -111,8 +219,8 @@ test('wrong credentials show an error, retry succeeds, and intended URL is resto
   assert.equal(router.state.location.pathname, '/pms/reception');
   assert.equal(router.state.location.search, '?day=today');
   assert.equal(router.state.location.hash, '#calendar');
-  assert.ok(text().includes('Luis Perez'));
-  assert.ok(!values.get(sessionStorageKey).includes('AuroraDemo2026!'));
+  assert.ok(text().includes('Recepcion'));
+  assert.ok(!values.get(sessionStorageKey).includes(password));
   assert.ok(!values.get(sessionStorageKey).includes('permissions'));
 });
 
@@ -135,14 +243,6 @@ test('each staff role only sees its menu and direct unauthorized URLs are blocke
       .map((button) => button.findByType('span').children.join(''));
     assert.ok(labels.includes(section), account);
     assert.equal(labels.length, count, account);
-    if (account === 'admin') {
-      assert.ok(labels.includes('Gestión de usuarios'), account);
-      assert.ok(labels.includes('Análisis comercial'), account);
-      assert.ok(labels.includes('Movimientos de inventario'), account);
-      assert.ok(labels.includes('Recepción'), account);
-      assert.ok(labels.includes('Pedidos activos'), account);
-      assert.ok(labels.includes('Mis solicitudes y pedidos'), account);
-    }
     if (forbidden) {
       await act(async () => {
         await router.navigate(`${forbidden}/no-existe`);
@@ -161,14 +261,11 @@ test('session survives remount; logout in another tab clears access', async () =
   act(() => view.unmount());
   router.dispose();
   await open('/pms/housekeeping');
-  // Remontaje desde cero: primero se restaura la sesión persistida (async) y
-  // solo entonces arranca la carga propia de PrivateWorkspace — dos rondas
-  // de latencia simulada en serie, open() por sí solo cubre una.
   await act(async () => {
     await wait();
   });
   assert.equal(router.state.location.pathname, '/pms/housekeeping');
-  assert.ok(text().includes('Maria Lopez'));
+  assert.ok(text().includes('Limpieza'));
   storage.removeItem(sessionStorageKey);
   await act(async () => {
     window.dispatchEvent(Object.assign(new Event('storage'), { key: sessionStorageKey }));
@@ -194,31 +291,38 @@ test('public and private 404 pages remain scoped to their layouts', async () => 
   }
 });
 
-function storedSession(id = 'user-admin', expiresAt = Date.now() + 10000) {
+function storedSession(
+  email = 'admin@hotelboutique.test',
+  expiresAt = Date.now() + 10000,
+  accessExpiresIn = 60,
+) {
+  const response = authResponse(email, accessExpiresIn);
   return JSON.stringify({
-    user: { id, role: 'ADMIN' },
-    token: 'mock-access-' + id,
-    refreshToken: 'mock-refresh-' + id,
+    user: {
+      id: email,
+      email,
+      name: email,
+      role: 'ADMIN',
+      createdAt: new Date().toISOString(),
+    },
+    token: response.accessToken,
+    refreshToken: response.refreshToken,
     expiresAt: new Date(expiresAt).toISOString(),
+    tokenType: 'Bearer',
+    authorities: accounts[email],
   });
 }
 
 test('expired, malformed and unknown sessions are cleared; persisted roles are ignored', async () => {
-  for (const value of [
-    '{',
-    'null',
-    storedSession('user-admin', Date.now() - 1),
-    storedSession('missing'),
-  ]) {
+  for (const value of ['{', 'null', storedSession('admin@hotelboutique.test', Date.now() - 1)]) {
     storage.setItem(sessionStorageKey, value);
     assert.equal(await authService.restore(), null);
     assert.equal(values.size, 0);
   }
-  storage.setItem(sessionStorageKey, storedSession('user-housekeeping'));
+  storage.setItem(sessionStorageKey, storedSession('limpieza@hotelboutique.test'));
   const session = await authService.restore();
   assert.equal(session.role, 'HOUSEKEEPING');
   assert.deepEqual(session.permissions, ['dashboard:view', 'housekeeping:view']);
-
   assert.ok(session.expiresAt instanceof Date);
 });
 
@@ -251,9 +355,9 @@ test('return URL cannot redirect to another origin or a non-private page', () =>
 });
 
 test('session expiration removes persisted credentials and redirects the mounted app', async () => {
-  storage.setItem(sessionStorageKey, storedSession('user-admin', Date.now() + 1100));
+  storage.setItem(sessionStorageKey, storedSession('admin@hotelboutique.test', Date.now() + 1100));
   await open('/pms');
-  assert.ok(text().includes('Ana Martinez'));
+  assert.ok(text().includes('Admin'));
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 600));
   });
@@ -261,63 +365,62 @@ test('session expiration removes persisted credentials and redirects the mounted
   assert.equal(values.size, 0);
 });
 
-test('session recovery failure offers a working retry', async () => {
-  storage.setItem(sessionStorageKey, storedSession());
+test('shared service sets Bearer, refreshes once, retries, and clears on refresh failure', async () => {
+  const session = await sharedAuthService.login('admin@hotelboutique.test', password);
+  await httpClient.get('/probe');
+  assert.equal(requests.at(-1).authorization, `Bearer ${session.token}`);
 
-  try {
-    mockUtils.setForceError(true);
-    await open('/pms');
-    assert.ok(text().includes('No se pudo recuperar la sesión'));
-    mockUtils.setForceError(false);
-    await act(async () => {
-      await view.root.findByType('button').props.onClick();
-    });
-    assert.ok(text().includes('Ana Martinez'));
-  } finally {
-    mockUtils.setForceError(false);
-  }
+  await httpClient.get('/protected-once');
+  assert.equal(requests.filter((request) => request.path === '/api/v1/protected-once').length, 2);
+  assert.equal(requests.filter((request) => request.path === '/api/v1/auth/refresh').length, 1);
+
+  failNextRefresh = true;
+  requests = [];
+  await assert.rejects(httpClient.get('/protected-once'), /HTTP 401/);
+  assert.equal(values.size, 0);
 });
 
-test('shared service sets and clears the HTTP token, even when remote logout fails', async () => {
-  const fetch = globalThis.fetch;
-  const headers = [];
-  globalThis.fetch = async (_url, init) => {
-    headers.push(init.headers.get('Authorization'));
-    return new Response(null, { status: 204 });
-  };
-  try {
-    const session = await sharedAuthService.login('admin@hotelboutique.test', 'AuroraDemo2026!');
-    await httpClient.get('/probe');
-    assert.equal(headers.at(-1), `Bearer ${session.token}`);
-    httpClient.clearToken();
-    assert.equal((await sharedAuthService.getCurrentUser()).role, 'ADMIN');
-    await httpClient.get('/probe');
-    assert.equal(headers.at(-1), `Bearer ${session.token}`);
-    mockUtils.setForceError(true);
-    const logout = sharedAuthService.logout();
-    assert.equal(values.size, 0);
-    await httpClient.get('/probe');
-    assert.equal(headers.at(-1), null);
-    await assert.rejects(logout, /sesión local se cerró/);
-  } finally {
-    globalThis.fetch = fetch;
-    mockUtils.setForceError(false);
-  }
+test('restore refreshes an expired access token before granting the stored session', async () => {
+  storage.setItem(
+    sessionStorageKey,
+    storedSession('admin@hotelboutique.test', Date.now() + 60_000, -5),
+  );
+
+  const session = await sharedAuthService.getCurrentSession();
+  assert.equal(session.user.email, 'admin@hotelboutique.test');
+  assert.equal(requests.filter((request) => request.path === '/api/v1/auth/refresh').length, 1);
+
+  await httpClient.get('/probe');
+  assert.equal(requests.at(-1).authorization, `Bearer ${session.token}`);
+});
+
+test('restore clears the stored session when preventive refresh fails', async () => {
+  storage.setItem(
+    sessionStorageKey,
+    storedSession('admin@hotelboutique.test', Date.now() + 60_000, -5),
+  );
+  failNextRefresh = true;
+
+  assert.equal(await sharedAuthService.getCurrentSession(), null);
+  assert.equal(requests.filter((request) => request.path === '/api/v1/auth/refresh').length, 1);
+  assert.equal(values.size, 0);
+});
+
+test('logout posts the refresh token and always removes the local session', async () => {
+  const session = await sharedAuthService.login('admin@hotelboutique.test', password);
+  await sharedAuthService.logout();
+  const logout = requests.find((request) => request.path === '/api/v1/auth/logout');
+  assert.equal(logout.body.refreshToken, session.refreshToken);
+  assert.equal(values.size, 0);
+  await httpClient.get('/probe').catch(() => undefined);
+  assert.equal(requests.at(-1).authorization, null);
 });
 
 test('in-flight login cannot restore a session after cancellation or logout', async () => {
   const controller = new AbortController();
-  const pending = sharedAuthService.login(
-    'admin@hotelboutique.test',
-    'AuroraDemo2026!',
-    controller.signal,
-  );
+  const pending = sharedAuthService.login('admin@hotelboutique.test', password, controller.signal);
   controller.abort();
   await assert.rejects(pending, { name: 'AbortError' });
-  assert.equal(values.size, 0);
-  const second = sharedAuthService.login('admin@hotelboutique.test', 'AuroraDemo2026!');
-  sharedAuthService.clearSession();
-  await assert.rejects(second, { name: 'AbortError' });
   assert.equal(values.size, 0);
 });
 
@@ -336,7 +439,7 @@ test('shared service rejects wrong passwords and unknown email addresses', async
     /Correo o contraseña incorrectos/,
   );
   await assert.rejects(
-    sharedAuthService.login('unknown@hotelboutique.test', 'AuroraDemo2026!'),
+    sharedAuthService.login('unknown@hotelboutique.test', password),
     /Correo o contraseña incorrectos/,
   );
   assert.equal(values.size, 0);

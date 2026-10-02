@@ -44,8 +44,9 @@ Servicios disponibles: `authService`, `roomService`, `bookingService`,
 `auditService`, `orderService`, `serviceRequestService` y `notificationService`. Las
 operaciones de creación reciben los DTOs de entrada definidos en
 `src/shared/types/entities`; sus respuestas siempre son modelos de dominio.
-Todos leen de `src/data/db.ts`, la única "base de datos" simulada del
-proyecto — ver `src/ARCHITECTURE.md`.
+Todos excepto `authService` leen de `src/data/db.ts`, la única "base de datos"
+simulada del proyecto — ver `src/ARCHITECTURE.md`. Desde INT-01,
+`authService` usa el backend Spring configurado con `VITE_API_BASE_URL`.
 
 Nota frontend beta: `personnelService.getUsers()` usa `sessionAccountsDB` como
 fuente visible de usuarios/roles para que Administracion muestre las mismas
@@ -171,20 +172,28 @@ por defecto.
 Todas las operaciones esperan entre 300 y 600 ms por defecto. Para pruebas
 unitarias se puede usar `simulateLatency(0, 0)` directamente.
 
-## Integración con WEB-06
+## Integracion con INT-01
 
 `authService.login(email, password, signal?)` conserva su API y admite cancelar
-una solicitud pendiente. Valida ambas credenciales contra `sessionAccountsDB`
-(`src/data/db.ts`), una por cada rol del contrato compartido. Las cuentas y
-permisos se documentan en `src/modules/auth/README.md`.
+una solicitud pendiente. Ya no valida contra `sessionAccountsDB`: envia
+`{ email, password }` a `POST /auth/login` del backend Spring.
 
-`getCurrentSession(signal?)` devuelve la sesión completa con fechas de dominio;
-`getCurrentUser()` delega en ella. La persistencia única usa `PMS_AUTH_SESSION`.
-La restauración rechaza datos corruptos/vencidos y reconstruye el usuario desde
-los fixtures. La sesión dura ocho horas desde el inicio.
+El backend devuelve `accessToken`, `refreshToken`, `tokenType` y `expiresIn`.
+`authService` normaliza esa respuesta al contrato de sesion del frontend,
+decodifica el JWT para obtener `sub`, `ROLE_*` y `authorities`, y persiste solo
+tokens/metadatos en `PMS_AUTH_SESSION`.
+La sesion persistida conserva dos vencimientos: `expiresAt` para la ventana de
+8 horas del frontend y `accessExpiresAt` para el JWT. Al restaurar, si el `exp`
+del access token ya vencio o esta dentro de la ventana preventiva,
+`authService` llama `POST /auth/refresh` antes de devolver la sesion como
+valida.
 
-`logout()` limpia inmediatamente la persistencia y el token HTTP incluso cuando
-falla la solicitud simulada posterior. `clearSession()` expone la limpieza local.
-Las respuestas de login canceladas u obsoletas no reabren la sesión. Se retiró
-la clave aislada `hotel-aurora.auth.v1`; las cuentas anteriores deben iniciar
-sesión otra vez. Todo es simulado y no constituye autenticación de producción.
+`http-client.ts` agrega `Authorization: Bearer <accessToken>` automaticamente.
+Ante un `401` protegido, llama `POST /auth/refresh` con `{ refreshToken }`,
+actualiza ambos tokens y reintenta la solicitud original una sola vez. Si el
+refresh falla, limpia la sesion local para obligar un nuevo login.
+
+`logout()` envia `POST /auth/logout` con el refresh token y siempre limpia la
+persistencia local, incluso si la confirmacion remota falla. `clearSession()`
+expone la limpieza local sincrona. La clave legacy `hotel-aurora.auth.v1` se
+elimina al restaurar o limpiar sesion.

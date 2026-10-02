@@ -176,6 +176,12 @@ del `PrivateLayout` clasico para `/pms/reception`, `/pms/housekeeping`,
 restaura una URL privada segura si existe; si no existe, usa el rol de sesion
 para entrar directo al workspace operativo correspondiente.
 
+Nota 2026-10-01 (#99 / INT-01): el login y las guardas conservan la UI y rutas
+existentes, pero la sesion ya no nace de `sessionAccountsDB`. `authService`
+usa `/auth/login`, `/auth/refresh` y `/auth/logout` del backend Spring, y los
+roles/permisos de navegacion se derivan del JWT (`ROLE_*` y `authorities`).
+No cambia el alcance de pantallas ni el contrato visual Bolt.
+
 Nota 2026-09-30 (#95): el workspace de Administracion usa el sidebar como
 navegacion primaria para subsecciones. `PrivateWorkspace` define grupos
 desplegables para Usuarios y roles, Habitaciones, Tarifas, Servicios,

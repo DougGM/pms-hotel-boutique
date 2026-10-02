@@ -210,7 +210,8 @@ import { toDomain as toBooking } from '@/shared/types/entities/booking';
 
 **`shared/types/entities/session/` es un caso aparte, y no se reexporta desde
 el barrel.** Modela la respuesta de login/sesión (`SessionUserDTO`,
-`AuthResponseDTO`, `AuthSession`, `LoginDTO`) con el rol de acceso al PMS
+`BackendAuthResponseDTO`, `AuthResponseDTO`, `AuthSession`, `LoginDTO`) con el
+rol de acceso al PMS
 (`UserRole` de `common.ts`: ADMIN/GUEST/RECEPTION/HOUSEKEEPING/CONCIERGE/ROOM_SERVICE). Es un concepto
 distinto de `shared/types/entities/user/`, que modela el puesto de un
 empleado en el directorio de personal
@@ -270,8 +271,9 @@ ya leía el dataset real de pagos del Lote C). `bookingService`,
 ahí (Lote B/C/D); igual `guestAccountService`/`cashService` (Lote C) y
 `personnelService`/`inventoryService`/`auditService` (Lote D).
 `authService.ts` es el único servicio con persistencia (sesión en
-`localStorage`) y cliente HTTP (`services/http-client.ts`, listo para una
-API real pero sin uso todavía). Única excepción documentada a "un solo
+`localStorage`) y cliente HTTP (`services/http-client.ts`) conectado al backend
+Spring desde INT-01: login, Bearer JWT, refresh con retry unico y logout contra
+`/auth/*`. Única excepción documentada a "un solo
 archivo con datos inventados": el fixture de demo de
 `src/modules/ui-catalog/services/catalog-service.ts`, que no representa
 ninguna entidad del contrato y existe solo para renderizar `/components`.
