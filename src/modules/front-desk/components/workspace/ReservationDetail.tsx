@@ -211,6 +211,16 @@ export function ReservationDetail({
                     <small>Huéspedes</small>
                     <span>{reservation.guestCount}</span>
                   </div>
+                  {/* El backend solo acepta el código mientras la reserva está en check-in. */}
+                  {reservation.status === 'Check-in' && reservation.guestLinkCode && (
+                    <div>
+                      <small>Código de acceso del huésped</small>
+                      <span>
+                        <strong>{reservation.guestLinkCode}</strong>
+                      </span>
+                      <small>Entrégalo al huésped para su portal (Acceso de huésped).</small>
+                    </div>
+                  )}
                 </div>
               </div>
 

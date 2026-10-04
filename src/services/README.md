@@ -139,7 +139,8 @@ mismo para solicitudes de habitacion; la cancelacion de solicitudes se
 representa con el estado contractual `rejected` en `service_request`.
 `notificationService.markNotificationRead()` y `markAllRead()` conservan las
 marcas de lectura en `notificationReadsDB`, dentro de `src/data/db.ts`, sin
-crear una entidad `notification` propia.
+crear una entidad `notification` propia. **Reemplazado por INT-12:** el portal
+ya no usa esos mocks — ver "Integracion con INT-12".
 
 Actualizacion 2026-09-22 (#73): las operaciones de Limpieza que antes vivian
 solo en estado React pasaron a servicios persistibles. Desde INT-02,
@@ -450,9 +451,9 @@ ready -> on_the_way -> delivered`; se cancela hasta `ready`; `pending`
   con precios congelados, porque el rol `room_service` no tiene `rooms.read`.
 - El workspace solo consulta catalogo y pedidos para admin, recepcion y room
   service (`room-service.read`).
-- `createOrder`, `cancelOrder` y `getOrdersByGuestId` son del portal del
-  huesped, que usa `/guest/room-service/...` con otro token: siguen sobre el
-  mock hasta INT-12.
+- El portal del huesped usa `getGuestOrders`, `createGuestOrder` y
+  `cancelGuestOrder` (`/guest/room-service/...`, INT-12); los metodos mock
+  `createOrder`, `cancelOrder` y `getOrdersByGuestId` se eliminaron.
 
 ## Integracion con INT-11 (#109)
 
@@ -470,10 +471,10 @@ ready -> on_the_way -> delivered`; se cancela hasta `ready`; `pending`
 - `updateConciergeRequestStatus(id, status, { notes?, responsibleUserId? })` →
   `POST /concierge/requests/{id}/status`.
 
-Siguen en mock: `createRequest`, `cancelRequest` y `getRequestsByGuestId` (portal
-del huesped, INT-12; tambien los usa `notificationService`), `getRequests` (tareas
-y desperfectos del workspace) y `createMaintenanceReport` (sin endpoint de
-mantenimiento). Se eliminaron `updateRequestStatus`, `updateRequestNotes` y
+Siguen en mock: `getRequests` (tareas y desperfectos del workspace) y
+`createMaintenanceReport` (via `createRequest`; sin endpoint de mantenimiento).
+Desde INT-12 el portal del huesped usa los metodos `*Guest*` y se eliminaron
+`cancelRequest` y `getRequestsByGuestId`. Se eliminaron `updateRequestStatus`, `updateRequestNotes` y
 `updateRequestType`, que solo usaba Conserjeria.
 
 Reglas:
@@ -494,3 +495,39 @@ cancelled`). Ante `400`/`403`/`404` la pantalla muestra el error y recarga las
   (`concierge.read`).
 
 Requiere la rama de backend `feature/concierge-responsible-notes`.
+
+## Integracion con INT-12 (#110)
+
+El portal del huesped usa **Guest Access**, no el login del personal:
+
+1. Recepcion ve el `guestLinkCode` en el detalle de la reserva (solo en
+   check-in) y se lo entrega al huesped.
+2. El huesped lo ingresa en "Acceso de huesped" (`/auth/register`, la ruta
+   publica existente; las rutas `/my-account/...` siguen reservadas en
+   `routes.ts`, congelado).
+3. `authService.linkGuest(code)` llama `POST /guest/auth/link` y guarda una
+   sesion de rol `GUEST` con el JWT `type: guest`. No hay refresh token: la
+   sesion dura lo mismo que el token y, al vencer, se pide de nuevo el codigo.
+4. `authService.login()` rechaza cuentas `ROLE_GUEST`.
+
+Todas las llamadas del portal van a `/guest/...` con ese JWT. **Ninguna envia
+`bookingId`**: el backend toma la reserva del token (ownership); un recurso ajeno
+responde `403`. Los errores se traducen en `guestHttp.ts`.
+
+| Servicio                | Metodo                                                                                                          | Endpoint                           |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| `guestPortalService`    | `getStay()`                                                                                                     | `GET /guest/stay`                  |
+| `catalogService`        | `getGuestAmenities()`                                                                                           | `GET /guest/amenities`             |
+| `catalogService`        | `getGuestProducts()`                                                                                            | `GET /guest/room-service/products` |
+| `orderService`          | `getGuestOrders` / `createGuestOrder` / `cancelGuestOrder`                                                      | `/guest/room-service/orders`       |
+| `housekeepingService`   | `getGuestStayoverRequests` / `createGuestStayoverRequest` / `cancelGuestStayoverRequest`                        | `/guest/housekeeping/requests`     |
+| `serviceRequestService` | `getGuestConciergeRequests` / `createGuestConciergeRequest` / `cancelGuestConciergeRequest`                     | `/guest/concierge/requests`        |
+| `notificationService`   | `getGuestNotifications` / `getGuestUnreadCount` / `markGuestNotificationRead` / `markAllGuestNotificationsRead` | `/guest/notifications`             |
+
+`GET /guest/room-service/products` y `POST /guest/notifications/read-all`
+requieren la rama de backend `feature/int-12-guest-portal-support`.
+
+Sin endpoint de huesped (se muestra "Consulta en recepcion" en lugar de
+consumir servicios del personal): editar perfil, otras reservas, modificar o
+cancelar la reserva, detalle del folio, tarifa y recibo. Las notificaciones mock
+(`notificationReadsDB`) ya no son fuente: solo se muestran las del backend.

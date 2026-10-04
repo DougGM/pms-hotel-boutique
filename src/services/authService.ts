@@ -3,6 +3,7 @@ import {
   type AuthResponseDTO,
   type AuthSession,
   type BackendAuthResponseDTO,
+  type BackendGuestLinkResponseDTO,
   type SessionUser,
 } from '@/shared/types/entities/session';
 import type { UserRole } from '@/shared/types/common';
@@ -112,6 +113,64 @@ function normalizeAuthResponse(
   };
 }
 
+// --- Acceso de huésped (INT-12) ----------------------------------------------
+// El huésped no usa el login del personal: canjea el código de su reserva en
+// `POST /guest/auth/link` y recibe un JWT `type: guest` sin refresh token. La
+// sesión dura lo mismo que ese token; al vencer, se pide de nuevo el código.
+
+const guestAccessExpiredKey = 'PMS_GUEST_ACCESS_EXPIRED';
+// En memoria para la pestaña actual; sessionStorage solo lo conserva si se recarga.
+let guestAccessExpired = false;
+
+function isGuestToken(token: string): boolean {
+  try {
+    return decodeJwt(token).type === 'guest';
+  } catch {
+    return false;
+  }
+}
+
+function normalizeGuestSession(
+  token: string,
+  tokenType: string,
+  expiresInSeconds: number,
+  name?: string,
+): AuthResponseDTO {
+  const payload = decodeJwt(token);
+  if (payload.type !== 'guest') throw new Error('El acceso recibido no corresponde a un huésped.');
+  const subject = payload.sub?.trim();
+  if (!subject) throw new Error('El token de huésped no incluye la reserva.');
+  const authorities = payload.authorities ?? [];
+  const role = roleFromAuthorities(authorities);
+  if (role !== 'GUEST') throw new Error('El acceso recibido no corresponde a un huésped.');
+  const issuedAt = payload.iat ? new Date(payload.iat * 1000) : new Date();
+  const accessExpiresAt = payload.exp
+    ? new Date(payload.exp * 1000)
+    : new Date(Date.now() + expiresInSeconds * 1000);
+  return {
+    user: {
+      id: subject,
+      email: '',
+      name: name?.trim() || 'Huésped',
+      role,
+      createdAt: issuedAt.toISOString(),
+    },
+    token,
+    refreshToken: '',
+    expiresAt: accessExpiresAt.toISOString(),
+    accessExpiresAt: accessExpiresAt.toISOString(),
+    tokenType,
+    authorities,
+  };
+}
+
+function guestLinkErrorMessage(error: unknown): string {
+  if (error instanceof HttpError && (error.status === 400 || error.status === 404)) {
+    return 'El código no es válido o tu estancia no está activa. El acceso funciona desde el check-in hasta el check-out.';
+  }
+  return messageFromHttpError(error, 'No fue posible validar tu código de reserva.');
+}
+
 function readStoredSession(): AuthResponseDTO | null {
   localStorage.removeItem(legacyStorageKey);
   const raw = localStorage.getItem(sessionStorageKey);
@@ -155,6 +214,11 @@ function isAccessTokenExpiring(dto: AuthResponseDTO): boolean {
 async function refreshStoredSession(): Promise<string | null> {
   const stored = readStoredSession();
   if (!stored) return null;
+  if (isGuestToken(stored.token)) {
+    // El huésped no tiene refresh token: vuelve a ingresar su código.
+    authService.clearSession();
+    return null;
+  }
   try {
     const response = await httpClient.post<BackendAuthResponseDTO>(
       '/auth/refresh',
@@ -191,12 +255,78 @@ export const authService = {
       );
       checkRequest(current, signal);
       const dto = normalizeAuthResponse(response);
+      if (dto.user.role === 'GUEST') {
+        throw new Error(
+          'Los huéspedes ingresan con el código de su reserva en "Acceso de huésped".',
+        );
+      }
       persistSession(dto);
       httpClient.setToken(dto.token);
       return toAuthSession(dto);
     } catch (error) {
       checkRequest(current, signal);
       throw new Error(messageFromHttpError(error, 'Correo o contraseña incorrectos.'));
+    }
+  },
+  /** Canjea el código de la reserva por una sesión de huésped (no usa el login del personal). */
+  async linkGuest(code: string, signal?: AbortSignal): Promise<AuthSession> {
+    const current = ++revision;
+    checkRequest(current, signal);
+    const trimmed = code.trim();
+    if (!trimmed) throw new Error('Ingresa el código de tu reserva.');
+    let dto: AuthResponseDTO;
+    try {
+      const response = await httpClient.post<BackendGuestLinkResponseDTO>(
+        '/guest/auth/link',
+        { code: trimmed },
+        { signal, auth: { skipAuthorization: true, skipRefresh: true } },
+      );
+      checkRequest(current, signal);
+      dto = normalizeGuestSession(response.accessToken, response.tokenType, response.expiresIn);
+    } catch (error) {
+      checkRequest(current, signal);
+      throw new Error(guestLinkErrorMessage(error));
+    }
+    httpClient.setToken(dto.token);
+    try {
+      // El nombre visible sale de la estancia; si falla, la sesión sigue siendo válida.
+      const stay = await httpClient.get<{ guestFirstName?: string; guestLastName?: string }>(
+        '/guest/stay',
+        { signal, auth: { skipRefresh: true } },
+      );
+      const name = [stay.guestFirstName, stay.guestLastName].filter(Boolean).join(' ');
+      if (name) dto = { ...dto, user: { ...dto.user, name } };
+    } catch {
+      /* El portal vuelve a pedir la estancia al cargar. */
+    }
+    checkRequest(current, signal);
+    this.clearGuestAccessExpired();
+    persistSession(dto);
+    return toAuthSession(dto);
+  },
+  /** Recuerda que la sesión de huésped venció para pedir el código con un aviso. */
+  markGuestAccessExpired(): void {
+    guestAccessExpired = true;
+    try {
+      sessionStorage.setItem(guestAccessExpiredKey, 'true');
+    } catch {
+      /* Sin sessionStorage, el aviso dura mientras la pestaña siga abierta. */
+    }
+  },
+  isGuestAccessExpired(): boolean {
+    if (guestAccessExpired) return true;
+    try {
+      return sessionStorage.getItem(guestAccessExpiredKey) === 'true';
+    } catch {
+      return false;
+    }
+  },
+  clearGuestAccessExpired(): void {
+    guestAccessExpired = false;
+    try {
+      sessionStorage.removeItem(guestAccessExpiredKey);
+    } catch {
+      /* Nada que limpiar sin almacenamiento. */
     }
   },
   async getCurrentSession(signal?: AbortSignal): Promise<AuthSession | null> {
@@ -211,8 +341,25 @@ export const authService = {
     checkRequest(current, signal);
     const expiresAt = Date.parse(stored.expiresAt);
     if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+      if (isGuestToken(stored.token)) this.markGuestAccessExpired();
       this.clearSession();
       return null;
+    }
+    if (isGuestToken(stored.token)) {
+      try {
+        const guest = normalizeGuestSession(
+          stored.token,
+          stored.tokenType ?? 'Bearer',
+          0,
+          stored.user.name,
+        );
+        persistSession(guest);
+        httpClient.setToken(guest.token);
+        return toAuthSession(guest);
+      } catch {
+        this.clearSession();
+        return null;
+      }
     }
     try {
       const normalized = normalizeAuthResponse(

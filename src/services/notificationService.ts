@@ -1,112 +1,86 @@
+import { toDomainDate } from '@/shared/types/common';
 import type { ID } from '@/shared/types/common';
-import { notificationReadsDB } from '@/data/db';
-import { orderService } from './orderService';
-import { serviceRequestService } from './serviceRequestService';
+import { httpClient } from './http-client';
+import { guestRequest } from './guestHttp';
 
 /**
- * No tiene colección propia en `data/db.ts` ni contrato de entidad — se
- * compone a partir de `serviceRequestService`+`orderService`. Ver
- * docs/DECISIONES.md: móvil (MOV-21) sí asume una entidad `notification`
- * propia, es una divergencia de contrato pendiente de resolver en sesión
- * de revisión, no algo que este servicio deba imitar.
+ * Notificaciones del huésped (INT-12): las persiste el backend por reserva y las
+ * genera ante cambios de Room Service, Conserjería y cancelaciones de limpieza.
+ * Sin colección mock: la fuente oficial es `/guest/notifications` con el JWT de
+ * huésped. No hay entidad en el contrato compartido (ver docs/DECISIONES.md,
+ * divergencia con MOV-21), así que el tipo vive aquí.
  */
 export interface Notification {
-  id: string;
+  id: ID;
+  /** Tipo técnico del backend, p. ej. `room_service_delivered`. */
+  type: string;
   title: string;
   message: string;
-  category: 'service' | 'order';
+  resourceType?: string;
+  resourceId?: ID;
   read: boolean;
-  occurredAt: Date;
+  readAt?: Date;
+  createdAt: Date;
 }
 
-function isNotificationRead(guestId: ID, notification: Notification): boolean {
-  return (
-    notification.read ||
-    notificationReadsDB.some(
-      (item) => item.guest_id === guestId && item.notification_id === notification.id,
-    )
-  );
-}
-
-function markReadInDb(guestId: ID, notificationId: ID) {
-  const existing = notificationReadsDB.find(
-    (item) => item.guest_id === guestId && item.notification_id === notificationId,
-  );
-  if (existing) {
-    existing.read_at = new Date().toISOString();
-    return;
-  }
-  notificationReadsDB.push({
-    guest_id: guestId,
-    notification_id: notificationId,
-    read_at: new Date().toISOString(),
-  });
-}
-
-function requestTitle(status: string): string {
-  return status === 'completed' ? 'Solicitud completada' : 'Solicitud registrada';
-}
-
-const ORDER_STATUS_LABELS: Record<string, string> = {
-  pending: 'pendiente',
-  accepted: 'aceptado',
-  preparing: 'en preparación',
-  ready: 'listo',
-  onTheWay: 'en camino',
-  delivered: 'entregado',
-  rejected: 'rechazado',
-  cancelled: 'cancelado',
+type GuestNotificationResponse = {
+  id: string;
+  type: string;
+  title: string;
+  message: string;
+  resourceType?: string | null;
+  resourceId?: string | null;
+  read: boolean;
+  readAt?: string | null;
+  createdAt: string;
 };
 
-function orderTitle(status: string): string {
-  return `Pedido de Room Service ${ORDER_STATUS_LABELS[status] ?? status}`;
+function toNotification(response: GuestNotificationResponse): Notification {
+  return {
+    id: response.id,
+    type: response.type,
+    title: response.title,
+    message: response.message,
+    resourceType: response.resourceType ?? undefined,
+    resourceId: response.resourceId ?? undefined,
+    read: response.read,
+    readAt: response.readAt ? toDomainDate(response.readAt) : undefined,
+    createdAt: toDomainDate(response.createdAt),
+  };
 }
 
 export const notificationService = {
-  async getNotificationsByGuestId(guestId: ID): Promise<Notification[]> {
-    const [requests, orders] = await Promise.all([
-      serviceRequestService.getRequestsByGuestId(guestId),
-      orderService.getOrdersByGuestId(guestId),
-    ]);
-
-    const fromRequests: Notification[] = requests.map((request) => ({
-      id: `sr-${request.id}`,
-      title: requestTitle(request.status),
-      message: request.description,
-      category: 'service',
-      read: request.status === 'completed',
-      occurredAt: request.requestedAt,
-    }));
-
-    const fromOrders: Notification[] = orders.map((order) => ({
-      id: `ord-${order.id}`,
-      title: orderTitle(order.status),
-      message: `Pedido #${order.id}`,
-      category: 'order',
-      read:
-        order.status === 'delivered' || order.status === 'cancelled' || order.status === 'rejected',
-      occurredAt: order.requestedAt,
-    }));
-
-    return [...fromRequests, ...fromOrders]
-      .map((notification) => ({
-        ...notification,
-        read: isNotificationRead(guestId, notification),
-      }))
-      .sort((left, right) => right.occurredAt.getTime() - left.occurredAt.getTime());
+  async getGuestNotifications(): Promise<Notification[]> {
+    const response = await guestRequest(
+      () => httpClient.get<GuestNotificationResponse[]>('/guest/notifications'),
+      'No fue posible cargar tus notificaciones.',
+    );
+    return response.map(toNotification);
   },
-  async markNotificationRead(guestId: ID, notificationId: ID): Promise<Notification> {
-    const notifications = await this.getNotificationsByGuestId(guestId);
-    const notification = notifications.find((item) => item.id === notificationId);
-    if (!notification) throw new Error(`No existe la notificacion ${notificationId}.`);
-
-    markReadInDb(guestId, notificationId);
-    return { ...notification, read: true };
+  /** Contador oficial del backend (`GET /guest/notifications/unread-count`). */
+  async getGuestUnreadCount(): Promise<number> {
+    const response = await guestRequest(
+      () => httpClient.get<{ unreadCount: number }>('/guest/notifications/unread-count'),
+      'No fue posible cargar tus notificaciones.',
+    );
+    return response.unreadCount;
   },
-  async markAllRead(guestId: ID): Promise<Notification[]> {
-    const notifications = await this.getNotificationsByGuestId(guestId);
-    notifications.forEach((notification) => markReadInDb(guestId, notification.id));
-    return notifications.map((notification) => ({ ...notification, read: true }));
+  async markGuestNotificationRead(notificationId: ID): Promise<Notification> {
+    const response = await guestRequest(
+      () =>
+        httpClient.post<GuestNotificationResponse>(`/guest/notifications/${notificationId}/read`),
+      'No fue posible marcar la notificación como leída.',
+    );
+    return toNotification(response);
+  },
+  /** Marca todas en una sola transacción del backend y devuelve el listado actualizado. */
+  async markAllGuestNotificationsRead(): Promise<Notification[]> {
+    const response = await guestRequest(
+      () => httpClient.post<GuestNotificationResponse[]>('/guest/notifications/read-all'),
+      'No fue posible marcar las notificaciones como leídas.',
+    );
+    return response.map(toNotification);
   },
 };
+
 export default notificationService;

@@ -27,6 +27,16 @@ export interface BackendAuthResponseDTO {
   expiresIn: number;
 }
 
+/**
+ * Respuesta de `POST /guest/auth/link` (INT-12): el huésped se identifica con
+ * el código de su reserva y recibe un JWT de tipo `guest`, sin refresh token.
+ */
+export interface BackendGuestLinkResponseDTO {
+  accessToken: string;
+  tokenType: string;
+  expiresIn: number;
+}
+
 export interface AuthResponseDTO {
   user: SessionUserDTO;
   token: string;

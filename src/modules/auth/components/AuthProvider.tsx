@@ -59,7 +59,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!session) return;
-    const timer = window.setTimeout(logout, Math.max(0, session.expiresAt.getTime() - Date.now()));
+    const expire = () => {
+      // La sesión de huésped vence con su token: se le pedirá de nuevo el código.
+      if (session.role === 'GUEST') authService.markGuestAccessExpired();
+      logout();
+    };
+    const timer = window.setTimeout(expire, Math.max(0, session.expiresAt.getTime() - Date.now()));
     return () => window.clearTimeout(timer);
   }, [session, logout]);
 
@@ -74,8 +79,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setError(null);
   }
 
+  async function linkGuest(code: string) {
+    const current = ++requestId.current;
+    request.current?.abort();
+    const controller = new AbortController();
+    request.current = controller;
+    const next = await authService.linkGuest(code, controller.signal);
+    if (current !== requestId.current) return;
+    setSession(next);
+    setError(null);
+  }
+
   return (
-    <AuthContext.Provider value={{ session, isLoading, error, login, logout, retry }}>
+    <AuthContext.Provider value={{ session, isLoading, error, login, linkGuest, logout, retry }}>
       {children}
     </AuthContext.Provider>
   );

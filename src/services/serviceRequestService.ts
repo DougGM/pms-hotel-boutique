@@ -11,6 +11,7 @@ import type {
 import { bookingsDB, roomsDB, serviceRequestsDB } from '@/data/db';
 import { mockUtils, requireCollection, simulateLatency } from './mockUtils';
 import { HttpError, httpClient } from './http-client';
+import { guestRequest } from './guestHttp';
 import { hydrateCollection, persistCollection } from './mockPersistence';
 
 // --- Conserjería (INT-11) ----------------------------------------------------
@@ -94,10 +95,10 @@ async function request<T>(call: () => Promise<T>, fallback: string): Promise<T> 
 
 const conciergePath = '/concierge/requests';
 
-// --- Portal del huésped y desperfectos (mock) ---------------------------------
-// `createRequest`, `cancelRequest` y `getRequestsByGuestId` son del portal del
-// huésped (pendiente INT-12); `createMaintenanceReport` no tiene endpoint en el
-// backend. Siguen sobre `src/data/db.ts`.
+// --- Desperfectos y tareas del workspace (mock) --------------------------------
+// `createMaintenanceReport` (vía `createRequest`) no tiene endpoint en el backend y
+// `getRequests` alimenta tareas y desperfectos del workspace. Siguen sobre
+// `src/data/db.ts`. El portal del huésped usa los métodos `*Guest*` (INT-12).
 
 const serviceRequestsStorageKey = 'PMS_SERVICE_REQUESTS_DB';
 
@@ -115,12 +116,6 @@ function nextRequestId(): string {
     return match ? Math.max(currentMax, Number(match[1])) : currentMax;
   }, 0);
   return `SR-${String(max + 1).padStart(3, '0')}`;
-}
-
-function assertRequestExists(id: ID): ServiceRequestDto {
-  const request = getServiceRequestsDB().find((item) => item.id === id);
-  if (!request) throw new Error(`No existe la solicitud ${id}.`);
-  return request;
 }
 
 function findActiveBookingForRoom(roomId: ID) {
@@ -206,6 +201,39 @@ export const serviceRequestService = {
     );
     return toServiceRequest(toConciergeDto(response));
   },
+  // --- Portal del huésped (INT-12) -------------------------------------------
+  // Conserjería de la reserva del JWT de huésped (`/guest/concierge`).
+  async getGuestConciergeRequests(): Promise<ServiceRequest[]> {
+    const response = await guestRequest(
+      () => httpClient.get<ConciergeRequestResponse[]>('/guest/concierge/requests'),
+      'No fue posible cargar tus solicitudes.',
+    );
+    return response.map((item) => toServiceRequest(toConciergeDto(item)));
+  },
+  async createGuestConciergeRequest(data: {
+    description: string;
+    notes?: string;
+  }): Promise<ServiceRequest> {
+    if (!data.description.trim()) throw new Error('Describe la solicitud.');
+    const response = await guestRequest(
+      () =>
+        httpClient.post<ConciergeRequestResponse>('/guest/concierge/requests', {
+          description: data.description.trim(),
+          notes: data.notes?.trim() || undefined,
+        }),
+      'No fue posible enviar tu solicitud.',
+    );
+    return toServiceRequest(toConciergeDto(response));
+  },
+  /** El backend decide si la solicitud todavía se puede cancelar. */
+  async cancelGuestConciergeRequest(requestId: ID): Promise<ServiceRequest> {
+    const response = await guestRequest(
+      () =>
+        httpClient.post<ConciergeRequestResponse>(`/guest/concierge/requests/${requestId}/cancel`),
+      'No fue posible cancelar tu solicitud.',
+    );
+    return toServiceRequest(toConciergeDto(response));
+  },
   async getRequests(): Promise<ServiceRequest[]> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar las solicitudes.');
@@ -216,13 +244,6 @@ export const serviceRequestService = {
     mockUtils.throwIfSimulatingError('No fue posible cargar la solicitud.');
     const request = getServiceRequestsDB().find((item) => item.id === id);
     return request ? toServiceRequest(request) : undefined;
-  },
-  async getRequestsByGuestId(guestId: ID): Promise<ServiceRequest[]> {
-    await simulateLatency();
-    mockUtils.throwIfSimulatingError('No fue posible cargar las solicitudes.');
-    return requireCollection(getServiceRequestsDB(), 'serviceRequestsDB')
-      .filter((item) => item.guest_id === guestId)
-      .map(toServiceRequest);
   },
   async createRequest(data: {
     bookingId: ID;
@@ -285,23 +306,6 @@ export const serviceRequestService = {
       description: data.description,
       notes: data.notes,
     });
-  },
-  async cancelRequest(requestId: ID, guestId?: ID): Promise<ServiceRequest> {
-    await simulateLatency();
-    mockUtils.throwIfSimulatingError('No fue posible cancelar la solicitud.');
-
-    const request = assertRequestExists(requestId);
-    if (guestId && request.guest_id !== guestId) {
-      throw new Error('La solicitud no pertenece al huesped autenticado.');
-    }
-    if (request.status !== 'pending') {
-      throw new Error('Esta solicitud ya no se puede cancelar.');
-    }
-
-    request.status = 'rejected';
-    request.updated_at = new Date().toISOString();
-    persistServiceRequestsDB();
-    return toServiceRequest(request);
   },
 };
 export default serviceRequestService;
