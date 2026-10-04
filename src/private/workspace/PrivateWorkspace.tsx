@@ -679,8 +679,10 @@ const toRoomServiceOrder = (
  * otro rol (Limpieza, Conserjería) responde 403 y tumbaría la carga del panel.
  */
 const ROOM_SERVICE_READ_ROLES: readonly RoleId[] = ['admin', 'reception', 'room-service'];
+const ROOM_CATALOG_READ_ROLES: readonly RoleId[] = ['admin', 'reception'];
 
 async function loadWorkspaceData(role: RoleId): Promise<WorkspaceState> {
+  const canReadRoomCatalog = ROOM_CATALOG_READ_ROLES.includes(role);
   const [
     rooms,
     roomTypes,
@@ -697,8 +699,8 @@ async function loadWorkspaceData(role: RoleId): Promise<WorkspaceState> {
     housekeepingData,
   ] = await Promise.all([
     roomService.getRooms(),
-    roomService.getRoomTypes(),
-    roomService.getRoomFeatures(),
+    canReadRoomCatalog ? roomService.getRoomTypes() : [],
+    canReadRoomCatalog ? roomService.getRoomFeatures() : [],
     bookingService.getBookings(),
     guestService.getGuests(),
     ROOM_SERVICE_READ_ROLES.includes(role) ? catalogService.getProducts() : [],
