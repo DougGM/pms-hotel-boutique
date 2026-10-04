@@ -50,6 +50,7 @@ import type { InventoryItemCategory } from '@/shared/types/entities/inventory-it
 import type { InventoryItemCategoryDto } from '@/shared/types/entities/inventory-item';
 import type { InventoryMovementReasonDto } from '@/shared/types/entities/inventory-movement';
 import type { InventoryMovementReason } from '@/shared/types/entities/inventory-movement';
+import type { Amenity as DomainAmenity } from '@/shared/types/entities/amenity';
 import type { Product } from '@/shared/types/entities/product';
 import type { Role } from '@/shared/types/entities/role';
 import type { Room, RoomStatusDto } from '@/shared/types/entities/room';
@@ -58,14 +59,17 @@ import type { User } from '@/shared/types/entities/user';
 
 type AdminUser = {
   id: number;
+  dbId: string;
   name: string;
   email: string;
+  password?: string;
   role: string;
   status: 'Activo' | 'Inactivo';
   lastAccess: string;
 };
 type AdminRole = {
   id: number;
+  dbId: string;
   code: string;
   name: string;
   description: string;
@@ -128,6 +132,7 @@ type Promo = {
 };
 type Amenity = {
   id: number;
+  dbId: string;
   name: string;
   schedule: string;
   available: boolean;
@@ -136,6 +141,7 @@ type Amenity = {
 };
 type RoomServiceItem = {
   id: number;
+  dbId: string;
   name: string;
   category: string;
   price: number;
@@ -426,6 +432,96 @@ const INVENTORY_REASON_BY_LABEL = Object.fromEntries(
 
 const toInventoryCategoryDto = (category: InventoryItemCategory): InventoryItemCategoryDto =>
   category === 'roomService' ? 'room_service' : category;
+
+const splitFullName = (name: string) => {
+  const [firstName = '', ...lastNameParts] = name.trim().split(/\s+/).filter(Boolean);
+  return {
+    firstName,
+    lastName: lastNameParts.join(' ') || firstName,
+  };
+};
+
+const adminUserFromDomain = (user: User, roles: Role[], index: number): AdminUser => {
+  const role = roles.find((item: Role) => normalizeRoleCode(item.code) === user.role);
+  return {
+    id: parseDbId(user.id, index + 1),
+    dbId: user.id,
+    name: `${user.firstName} ${user.lastName}`,
+    email: user.email,
+    role: roleDisplayName(role) || user.role,
+    status: user.status === 'active' ? 'Activo' : 'Inactivo',
+    lastAccess: toDtoCalendarDate(user.updatedAt),
+  };
+};
+
+const adminUserFromAdminRoles = (user: User, roles: AdminRole[], index: number): AdminUser => {
+  const role = roles.find((item) => item.code === user.role);
+  return {
+    id: parseDbId(user.id, index + 1),
+    dbId: user.id,
+    name: `${user.firstName} ${user.lastName}`,
+    email: user.email,
+    role: role?.name ?? user.role,
+    status: user.status === 'active' ? 'Activo' : 'Inactivo',
+    lastAccess: toDtoCalendarDate(user.updatedAt),
+  };
+};
+
+const roleIdFromDisplay = (roles: AdminRole[], roleName: string) => {
+  const role = roles.find((item) => item.name === roleName);
+  if (!role) throw new Error('Selecciona un rol valido.');
+  return role.dbId;
+};
+
+const formatAmenitySchedule = (amenity: DomainAmenity) => {
+  if (amenity.opensAt && amenity.closesAt) return `${amenity.opensAt} - ${amenity.closesAt}`;
+  return 'Disponible';
+};
+
+const parseAmenitySchedule = (schedule: string) => {
+  const [opensAt, closesAt] = schedule
+    .split(/\s*(?:-|—|a)\s*/i)
+    .map((value) => value.trim())
+    .filter(Boolean);
+  return {
+    opensAt: /^\d{2}:\d{2}$/.test(opensAt ?? '') ? opensAt : undefined,
+    closesAt: /^\d{2}:\d{2}$/.test(closesAt ?? '') ? closesAt : undefined,
+  };
+};
+
+const adminAmenityFromDomain = (amenity: DomainAmenity, index: number): Amenity => ({
+  id: parseDbId(amenity.id, index + 1),
+  dbId: amenity.id,
+  name: amenity.name,
+  schedule: formatAmenitySchedule(amenity),
+  available: amenity.active,
+  status: amenity.active ? 'Activo' : 'Inactivo',
+  icon: ['Waves', 'Utensils', 'Dumbbell', 'Sparkles', 'Star', 'Wifi'][index % 6],
+});
+
+const adminProductFromDomain = (product: Product, index: number): RoomServiceItem => ({
+  id: parseDbId(product.id, index + 1),
+  dbId: product.id,
+  name: product.name,
+  category: 'Room Service',
+  price: centsToAmount(product.priceCents),
+  available: product.active,
+  status: product.active ? 'Activo' : 'Inactivo',
+  image: '',
+});
+
+const productSkuFromName = (name: string) => {
+  const slug = name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/gi, '-')
+    .replace(/^-+|-+$/g, '')
+    .toUpperCase();
+  return `RS-${slug || Date.now()}`;
+};
+
+const serviceErrorMessage = (error: unknown) =>
+  error instanceof Error ? error.message : 'No fue posible completar la operacion.';
 
 /**
  * Los módulos/acciones de auditoría reales (AuditModule/AuditAction) no
@@ -990,8 +1086,8 @@ export function AdminContent({
           roomService.getRoomTypes(),
           roomService.getRoomFeatures(),
           roomService.getRates(),
-          catalogService.getAmenities(),
-          catalogService.getProducts(),
+          catalogService.getAdminAmenities(),
+          catalogService.getAdminProducts(),
           inventoryService.getItems(),
           inventoryService.getMovements(),
           bookingService.getBookings(),
@@ -1001,23 +1097,16 @@ export function AdminContent({
           promotionService.getPromotions(),
         ]);
 
-        const adminUsers: AdminUser[] = users.map((user, index) => {
-          const role = roles.find((item: Role) => normalizeRoleCode(item.code) === user.role);
-          return {
-            id: parseDbId(user.id, index + 1),
-            name: `${user.firstName} ${user.lastName}`,
-            email: user.email,
-            role: roleDisplayName(role) || user.role,
-            status: user.status === 'active' ? 'Activo' : 'Inactivo',
-            lastAccess: toDtoCalendarDate(user.updatedAt),
-          };
-        });
+        const adminUsers: AdminUser[] = users.map((user, index) =>
+          adminUserFromDomain(user, roles, index),
+        );
 
         const demoRolePermissionOverrides = loadDemoRolePermissionOverrides();
         const adminRoles: AdminRole[] = roles.map((role, index) => {
           const roleCode = normalizeRoleCode(role.code);
           return {
             id: parseDbId(role.id, index + 1),
+            dbId: role.id,
             code: roleCode,
             name: roleDisplayName(role),
             description: `Rol ${role.code}`,
@@ -1089,26 +1178,11 @@ export function AdminContent({
           status: promo.active ? 'Activa' : 'Inactiva',
         }));
 
-        const amenities: Amenity[] = amenitiesData.map((amenity, index) => ({
-          id: parseDbId(amenity.id, index + 1),
-          name: amenity.name,
-          schedule: 'Disponible',
-          available: amenity.active,
-          status: amenity.active ? 'Activo' : 'Inactivo',
-          icon: ['Waves', 'Utensils', 'Dumbbell', 'Sparkles', 'Star', 'Wifi'][index % 6],
-        }));
+        const amenities: Amenity[] = amenitiesData.map(adminAmenityFromDomain);
 
         const roomServiceItems: RoomServiceItem[] = products
           .filter((product: Product) => product.category === 'foodAndBeverage')
-          .map((product, index) => ({
-            id: parseDbId(product.id, index + 1),
-            name: product.name,
-            category: 'Room Service',
-            price: centsToAmount(product.priceCents),
-            available: product.active,
-            status: product.active ? 'Activo' : 'Inactivo',
-            image: '',
-          }));
+          .map(adminProductFromDomain);
 
         const inventory: InventoryProduct[] = inventoryItems.map((item, index) => {
           const product = products.find((productItem) => productItem.id === item.productId);
@@ -1267,15 +1341,15 @@ function AdminContentReady({
   initialAudit: AuditEntry[];
   recentActivity: AuditEntry[];
 }) {
-  const [users] = useState(initialAdminUsers);
+  const [users, setUsers] = useState(initialAdminUsers);
   const [roles, setRoles] = useState(initialAdminRoles);
   const [rooms, setRooms] = useState(initialAdminRooms);
   const [roomTypes, setRoomTypes] = useState(initialAdminRoomTypes);
   const [seasonRates, setSeasonRates] = useState(initialSeasonRates);
   const [dynamicRates, setDynamicRates] = useState(defaultDynamicRates);
   const [promos, setPromos] = useState(initialPromos);
-  const [amenities] = useState(initialAmenities);
-  const [rsItems] = useState(initialRoomServiceItems);
+  const [amenities, setAmenities] = useState(initialAmenities);
+  const [rsItems, setRsItems] = useState(initialRoomServiceItems);
   const [inventory, setInventory] = useState(initialInventory);
   const [movements, setMovements] = useState(initialMovements);
   const [cashMovements, setCashMovements] = useState(initialCashMovements);
@@ -1858,10 +1932,23 @@ function AdminContentReady({
                       <StatusSwitch
                         checked={u.status === 'Activo'}
                         label={u.status === 'Activo' ? 'Desactivar usuario' : 'Activar usuario'}
-                        onChange={() => {
-                          onAction(
-                            'Gestion de usuarios fuera de alcance: no se modifico la fuente.',
-                          );
+                        onChange={async () => {
+                          try {
+                            const updated = await personnelService.updateUser(u.dbId, {
+                              roleId: roleIdFromDisplay(roles, u.role),
+                              status: u.status === 'Activo' ? 'inactive' : 'active',
+                            });
+                            setUsers((current) =>
+                              current.map((item, index) =>
+                                item.dbId === u.dbId
+                                  ? adminUserFromAdminRoles(updated, roles, index)
+                                  : item,
+                              ),
+                            );
+                            onAction('Usuario actualizado correctamente');
+                          } catch (error) {
+                            onAction(serviceErrorMessage(error));
+                          }
                         }}
                       />
                     </td>
@@ -1940,10 +2027,45 @@ function AdminContentReady({
             user={editUser}
             roles={roles}
             onClose={() => setShowUserModal(false)}
-            onSave={(u) => {
-              void u;
-              onAction('Gestion de usuarios fuera de alcance: no se modifico la fuente.');
-              setShowUserModal(false);
+            onSave={async (u) => {
+              try {
+                const { firstName, lastName } = splitFullName(u.name);
+                const payload = {
+                  firstName,
+                  lastName,
+                  email: u.email,
+                  roleId: roleIdFromDisplay(roles, u.role),
+                  status: u.status === 'Activo' ? 'active' : 'inactive',
+                } as const;
+                let saved = editUser
+                  ? await personnelService.updateUser(editUser.dbId, payload)
+                  : await personnelService.createUser({
+                      firstName,
+                      lastName,
+                      email: u.email,
+                      password: u.password ?? '',
+                      roleId: payload.roleId,
+                    });
+                if (!editUser && payload.status === 'inactive') {
+                  saved = await personnelService.updateUser(saved.id, payload);
+                }
+                setUsers((current) =>
+                  editUser
+                    ? current.map((item, index) =>
+                        item.dbId === editUser.dbId
+                          ? adminUserFromAdminRoles(saved, roles, index)
+                          : item,
+                      )
+                    : [...current, adminUserFromAdminRoles(saved, roles, current.length)],
+                );
+                onAction(
+                  editUser ? 'Usuario actualizado correctamente' : 'Usuario creado correctamente',
+                );
+                setShowUserModal(false);
+                setEditUser(null);
+              } catch (error) {
+                onAction(serviceErrorMessage(error));
+              }
             }}
           />
         )}
@@ -2670,8 +2792,22 @@ function AdminContentReady({
                         <StatusSwitch
                           checked={a.status === 'Activo'}
                           label={a.status === 'Activo' ? 'Desactivar amenidad' : 'Activar amenidad'}
-                          onChange={() => {
-                            onAction('Amenidades fuera de alcance: no se modifico la fuente.');
+                          onChange={async () => {
+                            try {
+                              const updated = await catalogService.updateAmenity(a.dbId, {
+                                active: a.status !== 'Activo',
+                              });
+                              setAmenities((current) =>
+                                current.map((item, index) =>
+                                  item.dbId === a.dbId
+                                    ? adminAmenityFromDomain(updated, index)
+                                    : item,
+                                ),
+                              );
+                              onAction('Amenidad actualizada correctamente');
+                            } catch (error) {
+                              onAction(serviceErrorMessage(error));
+                            }
                           }}
                         />
                       </div>
@@ -2740,9 +2876,23 @@ function AdminContentReady({
                           item.status === 'Activo' ? 'Desactivar producto' : 'Activar producto'
                         }
                         onChange={() => {
-                          onAction(
-                            'Catalogo de Room Service fuera de alcance: no se modifico la fuente.',
-                          );
+                          void (async () => {
+                            try {
+                              const updated = await catalogService.updateAdminProduct(item.dbId, {
+                                active: item.status !== 'Activo',
+                              });
+                              setRsItems((current) =>
+                                current.map((entry, index) =>
+                                  entry.dbId === item.dbId
+                                    ? adminProductFromDomain(updated, index)
+                                    : entry,
+                                ),
+                              );
+                              onAction('Producto actualizado correctamente');
+                            } catch (error) {
+                              onAction(serviceErrorMessage(error));
+                            }
+                          })();
                         }}
                       />
                     </div>
@@ -2756,10 +2906,43 @@ function AdminContentReady({
           <AmenityModal
             amenity={editAmenity}
             onClose={() => setShowAmenityModal(false)}
-            onSave={(a) => {
-              void a;
-              onAction('Amenidades fuera de alcance: no se modifico la fuente.');
-              setShowAmenityModal(false);
+            onSave={async (a) => {
+              try {
+                const schedule = parseAmenitySchedule(a.schedule);
+                const payload = {
+                  name: a.name,
+                  description: a.schedule,
+                  category: 'hotel' as const,
+                  location: undefined,
+                  opensAt: schedule.opensAt,
+                  closesAt: schedule.closesAt,
+                  active: a.status === 'Activo',
+                };
+                const saved = editAmenity
+                  ? await catalogService.updateAmenity(editAmenity.dbId, payload)
+                  : await catalogService.createAmenity(payload);
+                setAmenities((current) =>
+                  editAmenity
+                    ? current.map((item, index) =>
+                        item.dbId === editAmenity.dbId
+                          ? { ...adminAmenityFromDomain(saved, index), icon: a.icon }
+                          : item,
+                      )
+                    : [
+                        ...current,
+                        { ...adminAmenityFromDomain(saved, current.length), icon: a.icon },
+                      ],
+                );
+                onAction(
+                  editAmenity
+                    ? 'Amenidad actualizada correctamente'
+                    : 'Amenidad creada correctamente',
+                );
+                setShowAmenityModal(false);
+                setEditAmenity(null);
+              } catch (error) {
+                onAction(serviceErrorMessage(error));
+              }
             }}
           />
         )}
@@ -2767,10 +2950,45 @@ function AdminContentReady({
           <RsItemModal
             item={editRsItem}
             onClose={() => setShowRsItemModal(false)}
-            onSave={(item) => {
-              void item;
-              onAction('Catalogo de Room Service fuera de alcance: no se modifico la fuente.');
-              setShowRsItemModal(false);
+            onSave={async (item) => {
+              try {
+                const payload = {
+                  sku: editRsItem?.dbId ? undefined : productSkuFromName(item.name),
+                  name: item.name,
+                  description: item.category,
+                  category: 'food_and_beverage' as const,
+                  priceCents: amountToCents(item.price),
+                  currency: 'GTQ' as const,
+                  active: item.status === 'Activo',
+                };
+                const saved = editRsItem
+                  ? await catalogService.updateAdminProduct(editRsItem.dbId, payload)
+                  : await catalogService.createAdminProduct({
+                      ...payload,
+                      sku: payload.sku ?? productSkuFromName(item.name),
+                    });
+                setRsItems((current) =>
+                  editRsItem
+                    ? current.map((entry, index) =>
+                        entry.dbId === editRsItem.dbId
+                          ? { ...adminProductFromDomain(saved, index), image: item.image }
+                          : entry,
+                      )
+                    : [
+                        ...current,
+                        { ...adminProductFromDomain(saved, current.length), image: item.image },
+                      ],
+                );
+                onAction(
+                  editRsItem
+                    ? 'Producto actualizado correctamente'
+                    : 'Producto creado correctamente',
+                );
+                setShowRsItemModal(false);
+                setEditRsItem(null);
+              } catch (error) {
+                onAction(serviceErrorMessage(error));
+              }
             }}
           />
         )}
@@ -3516,6 +3734,7 @@ function UserModal({
 }) {
   const [name, setName] = useState(user?.name ?? '');
   const [email, setEmail] = useState(user?.email ?? '');
+  const [password, setPassword] = useState('');
   const [role, setRole] = useState(user?.role ?? roles[0]?.name ?? '');
   const [status, setStatus] = useState<'Activo' | 'Inactivo'>(user?.status ?? 'Activo');
   return (
@@ -3526,8 +3745,10 @@ function UserModal({
       onSubmit={() =>
         onSave({
           id: user?.id ?? 0,
+          dbId: user?.dbId ?? '',
           name,
           email,
+          password: user ? undefined : password,
           role,
           status,
           lastAccess: user?.lastAccess ?? 'Sin acceso',
@@ -3563,6 +3784,18 @@ function UserModal({
           ))}
         </select>
       </label>
+      {!user && (
+        <label className="hk-form-label">
+          Contrasena temporal
+          <input
+            className="hk-form-select"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Contrasena inicial"
+          />
+        </label>
+      )}
       <label className="hk-form-label">
         Estado
         <select
@@ -3606,6 +3839,7 @@ function RoleModal({
       onSubmit={() =>
         onSave({
           id: role?.id ?? 0,
+          dbId: role?.dbId ?? '',
           code: role?.code ?? name.toLowerCase().replace(/\s+/g, '_'),
           name,
           description,
@@ -4183,7 +4417,17 @@ function AmenityModal({
       title={amenity ? 'Editar amenidad' : 'Nueva amenidad'}
       eyebrow="GESTIÓN DE AMENIDADES"
       onClose={onClose}
-      onSubmit={() => onSave({ id: amenity?.id ?? 0, name, schedule, available, status, icon })}
+      onSubmit={() =>
+        onSave({
+          id: amenity?.id ?? 0,
+          dbId: amenity?.dbId ?? '',
+          name,
+          schedule,
+          available,
+          status,
+          icon,
+        })
+      }
       submitLabel={amenity ? 'Guardar cambios' : 'Crear amenidad'}
     >
       <div className="rc-form-grid">
@@ -4266,6 +4510,7 @@ function RsItemModal({
       onSubmit={() =>
         onSave({
           id: item?.id ?? 0,
+          dbId: item?.dbId ?? '',
           name,
           category,
           price,
