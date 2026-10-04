@@ -196,6 +196,7 @@ function installHousekeepingBackend() {
       hkStayover('stay-3', 'room-101', 'completed', 'Tendido de cama'),
       hkStayover('stay-4', 'room-102', 'cancelled', 'Cancelada por el huésped'),
     ],
+    requests: [],
   };
   const turnover = {
     start: ['dirty', 'cleaning', 'cleaningStartedAt'],
@@ -216,6 +217,9 @@ function installHousekeepingBackend() {
   globalThis.fetch = async (input, init = {}) => {
     const path = new URL(String(input)).pathname.replace(/^\/api\/v1/, '');
     const method = init.method ?? 'GET';
+    state.requests.push(`${method} ${path}`);
+    // El rol housekeeping no tiene `room-service.read`: el backend real responde 403.
+    if (path.startsWith('/room-service/')) return json({ status: 403 }, 403);
     if (method === 'GET' && path === '/housekeeping/rooms') return json(state.rooms);
     if (method === 'GET' && path === '/housekeeping/rooms/stayover-cleanings') {
       return json(state.stayovers);
@@ -301,6 +305,17 @@ const toasts = () => view.root.findAll((node) => hasClass(node, 'toast')).map(te
 const expectedOpenRequests = () =>
   hkBackend.stayovers.filter((request) => ['pending', 'in_progress'].includes(request.status))
     .length;
+
+test('limpieza: el panel carga sin pedir datos para los que el rol no tiene permiso', async () => {
+  await mountHousekeeping();
+  assert.ok(hkBackend.requests.includes('GET /housekeeping/rooms'));
+  assert.ok(hkBackend.requests.includes('GET /housekeeping/rooms/stayover-cleanings'));
+  assert.deepEqual(
+    hkBackend.requests.filter((request) => request.includes('/room-service/')),
+    [],
+    'el catálogo de Room Service exige room-service.read',
+  );
+});
 
 test('limpieza: "Reportar desperfecto" solo aparece en Inicio', async () => {
   await mountHousekeeping();

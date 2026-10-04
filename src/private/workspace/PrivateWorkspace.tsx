@@ -638,7 +638,13 @@ type WorkspaceState = {
   recentActivity: { time: string; text: string; tone: string }[];
 };
 
-async function loadWorkspaceData(role?: RoleId): Promise<WorkspaceState> {
+/**
+ * Roles con `room-service.read` en el backend. Pedir el catálogo con otro rol
+ * (Limpieza, Conserjería) responde 403 y tumbaría la carga de todo el panel.
+ */
+const ROOM_SERVICE_READ_ROLES: readonly RoleId[] = ['admin', 'reception', 'room-service'];
+
+async function loadWorkspaceData(role: RoleId): Promise<WorkspaceState> {
   const [
     rooms,
     roomTypes,
@@ -659,7 +665,7 @@ async function loadWorkspaceData(role?: RoleId): Promise<WorkspaceState> {
     roomService.getRoomFeatures(),
     bookingService.getBookings(),
     guestService.getGuests(),
-    catalogService.getProducts(),
+    ROOM_SERVICE_READ_ROLES.includes(role) ? catalogService.getProducts() : [],
     orderService.getOrders(),
     serviceRequestService.getRequests(),
     auditService.getLogs(),
@@ -1763,7 +1769,7 @@ function PrivateWorkspaceReady({
 
   const refreshRoomServiceOrders = async () => {
     try {
-      const data = await loadWorkspaceData();
+      const data = await loadWorkspaceData(activeRole);
       setRsOrders(data.roomServiceOrders);
       setRsSelectedOrderId((currentId) =>
         currentId !== null && data.roomServiceOrders.some((order) => order.id === currentId)
@@ -1778,7 +1784,7 @@ function PrivateWorkspaceReady({
 
   const refreshConciergeRequests = async () => {
     try {
-      const data = await loadWorkspaceData();
+      const data = await loadWorkspaceData(activeRole);
       setCgRequests(data.conciergeRequests);
       setCgSelectedRequestId((currentId) =>
         currentId !== null && data.conciergeRequests.some((request) => request.id === currentId)
@@ -1793,7 +1799,7 @@ function PrivateWorkspaceReady({
 
   const refreshReception = async () => {
     try {
-      const data = await loadWorkspaceData();
+      const data = await loadWorkspaceData(activeRole);
       setRecReservationList(data.recReservations);
       setRecRoomList(data.recRooms);
       setRecBlockList(data.recRoomBlocks);
