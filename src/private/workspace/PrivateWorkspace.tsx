@@ -4802,8 +4802,9 @@ function DefectModal({
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState('');
   const [observation, setObservation] = useState('');
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const e: Record<string, string> = {};
     if (!room) e.room = 'Selecciona una habitación';
     if (!category) e.category = 'Selecciona una categoría';
@@ -4813,7 +4814,8 @@ function DefectModal({
       setErrors(e);
       return;
     }
-    onSubmit({ room, category, description: description.trim(), priority, observation, photo: '' });
+    const photo = photoFile ? await readFileAsDataUrl(photoFile) : '';
+    onSubmit({ room, category, description: description.trim(), priority, observation, photo });
   };
   return (
     <div className="modal-backdrop" onMouseDown={onClose}>
@@ -4896,13 +4898,18 @@ function DefectModal({
             placeholder="Notas adicionales (opcional)..."
           />
         </label>
-        <label className="hk-form-label">
+        <div className="hk-form-label">
           Fotografía (opcional)
-          <div className="hk-photo-upload">
+          <label className="hk-photo-upload">
             <Plus size={20} />
-            <span>Adjuntar foto</span>
-          </div>
-        </label>
+            <span>{photoFile?.name ?? 'Adjuntar foto'}</span>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(event) => setPhotoFile(event.currentTarget.files?.[0] ?? null)}
+            />
+          </label>
+        </div>
         <div className="modal-foot">
           <button className="button secondary" onClick={onClose}>
             Cancelar
@@ -4914,6 +4921,15 @@ function DefectModal({
       </div>
     </div>
   );
+}
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+    reader.onerror = () => reject(reader.error ?? new Error('No fue posible leer la fotografía.'));
+    reader.readAsDataURL(file);
+  });
 }
 
 type ReservationStep = 'guest' | 'payment' | 'confirmation';

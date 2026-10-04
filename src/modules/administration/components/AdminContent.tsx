@@ -1384,6 +1384,24 @@ function AdminContentReady({
   const [cashSessions, setCashSessions] = useState(initialCashSessions);
   const [audit] = useState(initialAudit);
 
+  const toggleStatus = async (promo: Promo) => {
+    try {
+      const updated = await promotionService.updatePromotion(promo.dbId, {
+        active: promo.status !== 'Activa',
+      });
+      setPromos((current) =>
+        current.map((item) =>
+          item.dbId === promo.dbId
+            ? { ...item, status: updated.active ? 'Activa' : 'Inactiva' }
+            : item,
+        ),
+      );
+      onAction('Promocion actualizada correctamente');
+    } catch (cause) {
+      notifyError(cause);
+    }
+  };
+
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('Todos');
 
@@ -2704,23 +2722,7 @@ function AdminContentReady({
                     <StatusSwitch
                       checked={p.status === 'Activa'}
                       label={p.status === 'Activa' ? 'Desactivar promoción' : 'Activar promoción'}
-                      onChange={async () => {
-                        try {
-                          const updated = await promotionService.updatePromotion(p.dbId, {
-                            active: p.status !== 'Activa',
-                          });
-                          setPromos((cur) =>
-                            cur.map((x) =>
-                              x.id === p.id
-                                ? { ...x, status: updated.active ? 'Activa' : 'Inactiva' }
-                                : x,
-                            ),
-                          );
-                          onAction('Promocion actualizada correctamente');
-                        } catch (cause) {
-                          notifyError(cause);
-                        }
-                      }}
+                      onChange={() => void toggleStatus(p)}
                     />
                   </div>
                 </div>

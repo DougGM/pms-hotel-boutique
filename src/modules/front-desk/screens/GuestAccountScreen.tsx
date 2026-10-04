@@ -309,7 +309,7 @@ export function GuestAccountScreen() {
             onClick={openChargeModal}
             disabled={account.status !== 'open'}
           >
-            Registrar consumo
+            + Agregar cargo
           </button>
           <button
             className="button secondary"
@@ -387,10 +387,10 @@ export function GuestAccountScreen() {
         />
       </div>
 
-      <Modal open={isModalOpen} onClose={closeChargeModal} title="Registrar consumo">
+      <Modal open={isModalOpen} onClose={closeChargeModal} title="Agregar cargo">
         <form onSubmit={handleSubmit} noValidate>
           <Input
-            label="Concepto del consumo"
+            label="Concepto del cargo"
             placeholder="Ej. Minibar, restaurante o spa"
             value={description}
             onChange={(event) => setDescription(event.target.value)}
@@ -427,7 +427,7 @@ export function GuestAccountScreen() {
               Cancelar
             </button>
             <button className="button primary" type="submit" disabled={isSaving}>
-              {isSaving ? 'Guardando…' : 'Agregar a la cuenta'}
+              {isSaving ? 'Guardando…' : 'Agregar cargo'}
             </button>
           </div>
         </form>
