@@ -3321,10 +3321,9 @@ function AdminContentReady({
                   className="button secondary"
                   onClick={async () => {
                     try {
-                      const closed = await cashService.closeSession();
-                      setCashSessions((cur) =>
-                        cur.map((session) => (session.id === closed.id ? closed : session)),
-                      );
+                      await cashService.closeSession();
+                      const sessions = await cashService.getSessions();
+                      setCashSessions(sessions);
                       setCashMovements([]);
                       setCashOpen(false);
                       onAction('Caja cerrada correctamente');
@@ -3341,7 +3340,7 @@ function AdminContentReady({
                   onClick={async () => {
                     try {
                       const opened = await cashService.openSession({
-                        openingBalanceCents: amountToCents(saldoActual),
+                        openingBalanceCents: amountToCents(saldoInicial),
                       });
                       setCashSessions((cur) => [...cur, opened]);
                       setCashMovements([]);

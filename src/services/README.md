@@ -211,6 +211,13 @@ oficial. Las operaciones de caja se envian al backend Spring mediante
 - `POST /cash-sessions/{id}/movements` con `type`, `concept` y `amountCents`.
 - `POST /cash-sessions/{id}/close` con `countedBalanceCents` y `notes`.
 
+`getSessions()` mantiene el nombre de la API de dominio por compatibilidad con
+las pantallas existentes, pero hoy representa como maximo `[currentSession]`; no
+es un historial. Al cerrar caja, la UI debe volver a consultar `/current` y
+esperar `[]` si ya no hay jornada abierta. La apertura de una jornada envia el
+saldo inicial indicado por la pantalla de apertura y no hereda automaticamente
+el saldo esperado de una jornada anterior.
+
 Los montos siguen en centavos y la moneda se mantiene como `GTQ`. Los totales
 `totalIncomeCents`, `totalExpenseCents` y `expectedBalanceCents` son autoridad
 del backend; Administracion los usa cuando vienen en la respuesta y solo
