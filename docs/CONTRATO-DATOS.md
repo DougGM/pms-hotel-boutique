@@ -78,9 +78,12 @@ Servicios habilitados por WEB-14:
   `guestAccountService.voidCharge`.
 
 `checkIn`/`checkOut` aplican `BOOKING_STATUS_TRANSITIONS`; `assignRoom` usa
-`isRoomAssignable()`. El folio calcula `balance_cents` como cargos activos
-menos pagos completados menos depositos no reembolsados. `createCharge`,
-`createPayment` y `voidCharge` recalculan ese saldo guardado.
+`isRoomAssignable()`. En folios mock (`BKG-*`), el saldo se recalcula como
+cargos activos menos pagos completados menos depositos no reembolsados. En
+folios integrados con backend (UUID), `balance_cents` es autoridad del backend
+y se consulta desde `GET /bookings/{bookingId}/folio`; ningun cliente debe usar
+el calculo local como fuente oficial. `createCharge`, `createPayment` y
+`voidCharge` actualizan ese saldo guardado solo en el camino mock.
 `checkIn` marca la habitacion asignada como `occupied`. Los acompañantes se
 persisten por reserva y se validan contra capacidad y composición de adultos/
 niños antes de completar check-in.
@@ -88,6 +91,11 @@ niños antes de completar check-in.
 `checkOut` se bloquea si `balance_cents !== 0`; solo con saldo exactamente en cero cierra el folio,
 marca la reserva como `checked_out` y deja la habitacion `available` con
 `housekeeping_status: 'dirty'`.
+
+Actualizacion 2026-10-03 (#103): las funciones legacy de folio mock rechazan
+reservas UUID. `voidCharge(chargeId, reason)` queda reservada para cargos mock;
+si el cargo es UUID debe llamarse como `voidCharge(chargeId, reason, bookingId)`
+para operar contra el backend.
 
 ## 3. Entidad por entidad
 

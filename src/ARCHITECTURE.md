@@ -303,6 +303,14 @@ capacidad y composición (`principal + acompañantes` contra
 documento del titular y `bookingService.checkIn` marca la habitación asignada
 como `occupied`.
 
+Nota 2026-10-03 (#103): en folios financieros integrados, un `bookingId` UUID
+nunca debe caer al recalculo local mock. `guestAccountService` consulta el
+saldo oficial desde `GET /bookings/{bookingId}/folio`; las utilidades legacy
+de apertura/cierre/calculo local rechazan UUID y `voidCharge` exige `bookingId`
+cuando el `chargeId` pertenece al backend. Las pantallas de folio deben
+refrescar ese endpoint despues de una mutacion financiera y no modificar
+`balanceCents` manualmente.
+
 ## Pruebas
 
 `npm run test` corre doce suites (`scripts/*.mjs`), todas con el mismo

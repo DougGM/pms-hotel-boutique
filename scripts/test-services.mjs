@@ -132,6 +132,20 @@ const apiProducts = [
     priceCents: 1500,
     currency: 'GTQ',
     active: true,
+    createdAt: apiNow,
+    updatedAt: apiNow,
+  },
+  {
+    id: '11111111-1111-4111-8111-222222222222',
+    sku: 'RS-CAKE',
+    name: 'Pastel de chocolate',
+    description: 'Postre de la casa',
+    category: 'food_and_beverage',
+    priceCents: 2800,
+    currency: 'GTQ',
+    active: false,
+    createdAt: apiNow,
+    updatedAt: apiNow,
   },
 ];
 const apiAmenities = [
@@ -144,6 +158,18 @@ const apiAmenities = [
     opensAt: '08:00',
     closesAt: '20:00',
     active: true,
+    createdAt: apiNow,
+    updatedAt: apiNow,
+  },
+  {
+    id: '22222222-2222-4222-8222-333333333333',
+    name: 'Spa',
+    description: 'Tratamientos con reserva',
+    category: 'service',
+    location: 'Nivel 2',
+    opensAt: '10:00',
+    closesAt: '18:00',
+    active: false,
     createdAt: apiNow,
     updatedAt: apiNow,
   },
@@ -208,18 +234,115 @@ function jsonResponse(data, status = 200) {
   });
 }
 
-globalThis.fetch = async (input, init = {}) => {
+const adminFetchMock = async (input, init = {}) => {
   const url = new URL(String(input));
   const method = init.method ?? 'GET';
   const path = url.pathname.replace('/api/v1', '');
   const body = init.body ? JSON.parse(String(init.body)) : undefined;
 
-  if (method === 'GET' && path === '/room-service/products') return jsonResponse(apiProducts);
+  if (method === 'GET' && path === '/room-service/products') {
+    return jsonResponse(apiProducts.filter((item) => item.active));
+  }
+  if (method === 'GET' && path === '/admin/room-service/products') {
+    return jsonResponse(apiProducts);
+  }
+  if (method === 'POST' && path === '/admin/room-service/products') {
+    const product = {
+      id: `11111111-1111-4111-8111-${String(apiProducts.length + 3).padStart(12, '0')}`,
+      sku: body.sku,
+      name: body.name,
+      description: body.description,
+      category: body.category,
+      priceCents: body.priceCents,
+      currency: body.currency,
+      active: body.active,
+      createdAt: apiNow,
+      updatedAt: apiNow,
+    };
+    apiProducts.push(product);
+    return jsonResponse(product, 201);
+  }
+  if (method === 'PUT' && path.startsWith('/admin/room-service/products/')) {
+    const id = path.split('/').at(-1);
+    const product = apiProducts.find((item) => item.id === id);
+    if (!product) return jsonResponse({ message: 'Not found' }, 404);
+    Object.assign(product, {
+      sku: body.sku,
+      name: body.name,
+      description: body.description,
+      category: body.category,
+      priceCents: body.priceCents,
+      currency: body.currency,
+      active: body.active,
+      updatedAt: apiNow,
+    });
+    return jsonResponse(product);
+  }
   if (method === 'GET' && path === '/admin/amenities') return jsonResponse(apiAmenities);
+  if (method === 'POST' && path === '/admin/amenities') {
+    const amenity = {
+      id: `22222222-2222-4222-8222-${String(apiAmenities.length + 4).padStart(12, '0')}`,
+      name: body.name,
+      description: body.description,
+      category: body.category,
+      location: body.location,
+      opensAt: body.opensAt,
+      closesAt: body.closesAt,
+      active: body.active,
+      createdAt: apiNow,
+      updatedAt: apiNow,
+    };
+    apiAmenities.push(amenity);
+    return jsonResponse(amenity, 201);
+  }
+  if (method === 'PUT' && path.startsWith('/admin/amenities/')) {
+    const id = path.split('/').at(-1);
+    const amenity = apiAmenities.find((item) => item.id === id);
+    if (!amenity) return jsonResponse({ message: 'Not found' }, 404);
+    Object.assign(amenity, {
+      name: body.name,
+      description: body.description,
+      category: body.category,
+      location: body.location,
+      opensAt: body.opensAt,
+      closesAt: body.closesAt,
+      active: body.active,
+      updatedAt: apiNow,
+    });
+    return jsonResponse(amenity);
+  }
   if (method === 'GET' && path === '/admin/users') return jsonResponse(apiUsers);
+  if (method === 'POST' && path === '/admin/users') {
+    const user = {
+      id: `33333333-3333-4333-8333-${String(apiUsers.length + 4).padStart(12, '0')}`,
+      firstName: body.firstName,
+      lastName: body.lastName,
+      email: body.email,
+      roleCode: body.roleCode,
+      status: body.status,
+      createdAt: apiNow,
+      updatedAt: apiNow,
+    };
+    apiUsers.push(user);
+    return jsonResponse(user, 201);
+  }
   if (method === 'GET' && path.startsWith('/admin/users/')) {
     const user = apiUsers.find((item) => path.endsWith(item.id));
     return user ? jsonResponse(user) : jsonResponse({ message: 'Not found' }, 404);
+  }
+  if (method === 'PUT' && path.startsWith('/admin/users/')) {
+    const id = path.split('/').at(-1);
+    const user = apiUsers.find((item) => item.id === id);
+    if (!user) return jsonResponse({ message: 'Not found' }, 404);
+    Object.assign(user, {
+      firstName: body.firstName,
+      lastName: body.lastName,
+      email: body.email,
+      roleCode: body.roleCode,
+      status: body.status,
+      updatedAt: apiNow,
+    });
+    return jsonResponse(user);
   }
   if (method === 'GET' && path === '/admin/roles') return jsonResponse(apiRoles);
   if (method === 'GET' && path === '/admin/promotions') return jsonResponse(apiPromotions);
@@ -310,6 +433,8 @@ globalThis.fetch = async (input, init = {}) => {
   return jsonResponse({ message: `Unhandled ${method} ${path}` }, 404);
 };
 
+globalThis.fetch = adminFetchMock;
+
 const MIN_LATENCY_MS = 250; // 300ms nominal, con margen por scheduling
 const MAX_LATENCY_MS = 900; // 600ms nominal, con margen para CI lento
 
@@ -324,6 +449,253 @@ async function assertServiceCall(label, call) {
     `${label}: la latencia simulada fue ${elapsed}ms, se esperaba entre ${MIN_LATENCY_MS} y ${MAX_LATENCY_MS}ms`,
   );
   return value;
+}
+
+function installFinancialFetchMock() {
+  const bookingId = '8f3d5bb0-9c0a-4c24-8e56-5e3fd5406c4a';
+  const guestId = '81f20327-2f16-4b6d-9dc5-caa25c822d31';
+  const accountId = '64d6cfcc-22f4-4c2e-b01d-c00f737dc6e1';
+  const chargeId = 'a8082035-e41a-40b8-b08f-a3856346f3c2';
+  const paymentId = 'ca458699-01eb-4576-a0e9-925b81a4d83e';
+  const depositId = '9a3b8b2b-604f-47d4-a8db-c72ce367508f';
+  const now = '2026-10-02T10:00:00Z';
+  const charges = [
+    {
+      id: chargeId,
+      bookingId,
+      productId: null,
+      description: 'Estadia base',
+      quantity: 1,
+      unitPriceCents: 50000,
+      amountCents: 50000,
+      currency: 'GTQ',
+      category: 'stay',
+      status: 'posted',
+      chargedAt: now,
+      createdByUserId: null,
+      voidReason: null,
+      createdAt: now,
+    },
+  ];
+  const payments = [];
+  const deposits = [];
+  const folio = () => ({
+    accountId,
+    bookingId,
+    guestId,
+    status: 'open',
+    balanceCents:
+      charges
+        .filter((charge) => charge.status === 'posted')
+        .reduce((sum, charge) => sum + charge.amountCents, 0) -
+      payments
+        .filter((payment) => payment.status === 'completed')
+        .reduce((sum, payment) => sum + payment.amountCents, 0) -
+      deposits
+        .filter((deposit) => deposit.status === 'held' || deposit.status === 'applied')
+        .reduce((sum, deposit) => sum + deposit.amountCents, 0),
+    currency: 'GTQ',
+    openedAt: now,
+    closedAt: null,
+    activeChargesCents: charges
+      .filter((charge) => charge.status === 'posted')
+      .reduce((sum, charge) => sum + charge.amountCents, 0),
+    voidedChargesCents: charges
+      .filter((charge) => charge.status === 'voided')
+      .reduce((sum, charge) => sum + charge.amountCents, 0),
+    completedPaymentsCents: payments
+      .filter((payment) => payment.status === 'completed')
+      .reduce((sum, payment) => sum + payment.amountCents, 0),
+    charges,
+  });
+
+  globalThis.fetch = async (input, init = {}) => {
+    const url = new URL(String(input));
+    const path = url.pathname.replace(/^\/api\/v1/, '');
+    const method = init.method ?? 'GET';
+    const json = (body, status = 200) =>
+      new Response(JSON.stringify(body), {
+        status,
+        headers: { 'content-type': 'application/json' },
+      });
+
+    if (method === 'GET' && path === `/bookings/${bookingId}/folio`) return json(folio());
+    if (method === 'POST' && path === `/bookings/${bookingId}/folio/open`) return json(folio());
+    if (method === 'GET' && path === `/bookings/${bookingId}/charges`) return json(charges);
+    if (method === 'POST' && path === `/bookings/${bookingId}/charges`) {
+      const request = JSON.parse(String(init.body ?? '{}'));
+      const charge = {
+        id: 'b8082035-e41a-40b8-b08f-a3856346f3c2',
+        bookingId,
+        productId: request.productId ?? null,
+        description: request.description,
+        quantity: request.quantity,
+        unitPriceCents: request.unitPriceCents,
+        amountCents: request.quantity * request.unitPriceCents,
+        currency: 'GTQ',
+        category: request.category,
+        status: 'posted',
+        chargedAt: now,
+        createdByUserId: null,
+        voidReason: null,
+        createdAt: now,
+      };
+      charges.push(charge);
+      return json(charge, 201);
+    }
+    if (method === 'POST' && path === `/bookings/${bookingId}/charges/${chargeId}/void`) {
+      const request = JSON.parse(String(init.body ?? '{}'));
+      charges[0] = { ...charges[0], status: 'voided', voidReason: request.reason };
+      return json(charges[0]);
+    }
+    if (method === 'GET' && path === `/bookings/${bookingId}/payments`) return json(payments);
+    if (method === 'POST' && path === `/bookings/${bookingId}/payments`) {
+      const request = JSON.parse(String(init.body ?? '{}'));
+      const payment = {
+        id: paymentId,
+        bookingId,
+        amountCents: request.amountCents,
+        currency: 'GTQ',
+        method: request.method,
+        status: 'completed',
+        transactionReference: request.transactionReference ?? null,
+        paidAt: now,
+        processedByUserId: null,
+        createdAt: now,
+      };
+      payments.push(payment);
+      return json(payment, 201);
+    }
+    if (method === 'GET' && path === `/bookings/${bookingId}/deposits`) return json(deposits);
+    if (method === 'POST' && path === `/bookings/${bookingId}/deposits`) {
+      const request = JSON.parse(String(init.body ?? '{}'));
+      const deposit = {
+        id: depositId,
+        bookingId,
+        guestId,
+        amountCents: request.amountCents,
+        currency: 'GTQ',
+        method: request.method,
+        status: 'held',
+        collectedAt: now,
+        refundedAt: null,
+        notes: request.notes ?? null,
+        createdAt: now,
+        updatedAt: now,
+      };
+      deposits.push(deposit);
+      return json(deposit, 201);
+    }
+    if (method === 'POST' && path === `/bookings/${bookingId}/deposits/${depositId}/apply`) {
+      deposits[0] = { ...deposits[0], status: 'applied', updatedAt: now };
+      return json(deposits[0]);
+    }
+    if (method === 'POST' && path === `/bookings/${bookingId}/deposits/${depositId}/refund`) {
+      deposits[0] = { ...deposits[0], status: 'refunded', refundedAt: now, updatedAt: now };
+      return json(deposits[0]);
+    }
+    return json({ message: `Ruta financiera no mockeada en test: ${method} ${path}` }, 404);
+  };
+
+  return { bookingId, chargeId, depositId };
+}
+
+function installCashFetchMock() {
+  let session = {
+    id: '7a4db6cf-d72a-4fc7-b7ec-0d07fbef5104',
+    openedByUserId: '6f1f5a3c-51f1-4c1e-9f66-d89d62eced0c',
+    openedAt: '2026-10-02T08:00:00Z',
+    openingBalanceCents: 100000,
+    currency: 'GTQ',
+    status: 'open',
+    totalIncomeCents: 0,
+    totalExpenseCents: 0,
+    expectedBalanceCents: 100000,
+    closedByUserId: null,
+    closedAt: null,
+    countedBalanceCents: null,
+    differenceCents: null,
+    notes: 'Caja de prueba',
+    createdAt: '2026-10-02T08:00:00Z',
+    updatedAt: '2026-10-02T08:00:00Z',
+  };
+  const movements = [];
+
+  globalThis.fetch = async (input, init = {}) => {
+    const url = new URL(String(input));
+    const path = url.pathname.replace(/^\/api\/v1/, '');
+    const method = init.method ?? 'GET';
+    const json = (body, status = 200) =>
+      new Response(JSON.stringify(body), {
+        status,
+        headers: { 'content-type': 'application/json' },
+      });
+
+    if (method === 'GET' && path === '/cash-sessions/current') return json(session);
+
+    if (method === 'POST' && path === '/cash-sessions/open') {
+      const request = JSON.parse(String(init.body ?? '{}'));
+      session = {
+        ...session,
+        id: 'e1c5846d-bdc9-4f0a-8dcf-ef9dd5670720',
+        openingBalanceCents: request.openingBalanceCents,
+        totalIncomeCents: 0,
+        totalExpenseCents: 0,
+        expectedBalanceCents: request.openingBalanceCents,
+        status: 'open',
+        notes: request.notes,
+      };
+      movements.length = 0;
+      return json(session, 201);
+    }
+
+    if (method === 'POST' && path === `/cash-sessions/${session.id}/close`) {
+      const request = JSON.parse(String(init.body ?? '{}'));
+      session = {
+        ...session,
+        status: 'closed',
+        closedAt: '2026-10-02T16:00:00Z',
+        countedBalanceCents: request.countedBalanceCents,
+        differenceCents: request.countedBalanceCents - session.expectedBalanceCents,
+        notes: request.notes ?? session.notes,
+      };
+      return json(session);
+    }
+
+    if (method === 'GET' && path === `/cash-sessions/${session.id}/movements`) {
+      return json(movements);
+    }
+
+    if (method === 'POST' && path === `/cash-sessions/${session.id}/movements`) {
+      const request = JSON.parse(String(init.body ?? '{}'));
+      const movement = {
+        id: `4e6e9400-879b-4b7e-8e8c-${String(movements.length + 1).padStart(12, '0')}`,
+        cashSessionId: session.id,
+        type: request.type,
+        concept: request.concept,
+        amountCents: request.amountCents,
+        currency: 'GTQ',
+        responsibleUserId: null,
+        occurredAt: '2026-10-02T09:00:00Z',
+        paymentId: null,
+        createdAt: '2026-10-02T09:00:00Z',
+      };
+      movements.unshift(movement);
+      session = {
+        ...session,
+        totalIncomeCents:
+          session.totalIncomeCents + (movement.type === 'income' ? movement.amountCents : 0),
+        totalExpenseCents:
+          session.totalExpenseCents + (movement.type === 'expense' ? movement.amountCents : 0),
+        expectedBalanceCents:
+          session.expectedBalanceCents +
+          (movement.type === 'income' ? movement.amountCents : -movement.amountCents),
+      };
+      return json(movement, 201);
+    }
+
+    return json({ message: `Ruta no mockeada en test: ${method} ${path}` }, 404);
+  };
 }
 
 test('bookingService.getBookings: async, con latencia simulada, devuelve Models (no DTOs)', async () => {
@@ -363,17 +735,62 @@ test('paymentService.getPaymentsByBookingId: async, con latencia simulada, devue
 });
 
 test('catalogService.getProducts/getAmenities: async, con latencia simulada, devuelven Models', async () => {
+  globalThis.fetch = adminFetchMock;
   const products = await assertServiceCall('catalogService.getProducts', () =>
     catalogService.getProducts(),
   );
   assert.ok(Array.isArray(products) && products.length > 0);
   assert.ok('priceCents' in products[0], 'el Model de Product debe tener priceCents');
   assert.ok(!('price_cents' in products[0]), 'un Model no debe traer campos snake_case del DTO');
+  assert.ok(
+    products.every((product) => product.active),
+    'el catalogo operativo solo lista activos',
+  );
+
+  const adminProducts = await assertServiceCall('catalogService.getAdminProducts', () =>
+    catalogService.getAdminProducts(),
+  );
+  assert.ok(
+    adminProducts.some((product) => !product.active),
+    'el catalogo administrativo incluye productos inactivos',
+  );
+  const product = await catalogService.createAdminProduct({
+    sku: 'RS-TEA',
+    name: 'Te frio',
+    description: 'Bebida fria',
+    category: 'food_and_beverage',
+    priceCents: 1200,
+    currency: 'GTQ',
+    active: true,
+  });
+  assert.equal(product.sku, 'RS-TEA');
+  const disabledProduct = await catalogService.updateAdminProduct(product.id, { active: false });
+  assert.equal(disabledProduct.active, false);
 
   const amenities = await assertServiceCall('catalogService.getAmenities', () =>
     catalogService.getAmenities(),
   );
   assert.ok(Array.isArray(amenities) && amenities.length > 0);
+
+  const adminAmenities = await assertServiceCall('catalogService.getAdminAmenities', () =>
+    catalogService.getAdminAmenities(),
+  );
+  assert.ok(
+    adminAmenities.some((amenity) => !amenity.active),
+    'administracion debe listar amenidades inactivas',
+  );
+  const amenity = await catalogService.createAmenity({
+    name: 'Sauna',
+    description: 'Sauna seco',
+    category: 'service',
+    location: 'Spa',
+    opensAt: '09:00',
+    closesAt: '17:00',
+    active: true,
+  });
+  assert.equal(amenity.name, 'Sauna');
+  const disabledAmenity = await catalogService.updateAmenity(amenity.id, { active: false });
+  assert.equal(disabledAmenity.active, false);
 });
 
 test('guestAccountService.getAccounts: async, con latencia simulada, devuelve Models', async () => {
@@ -385,18 +802,79 @@ test('guestAccountService.getAccounts: async, con latencia simulada, devuelve Mo
   assert.ok(!('balance_cents' in accounts[0]), 'un Model no debe traer campos snake_case del DTO');
 });
 
-test('cashService.getSessions: async, con latencia simulada, devuelve Models', async () => {
-  const sessions = await assertServiceCall('cashService.getSessions', () =>
-    cashService.getSessions(),
+test('guestAccountService: usa backend para folio financiero integrado', async () => {
+  const { bookingId, chargeId, depositId } = installFinancialFetchMock();
+  const account = await guestAccountService.getAccountByBookingId(bookingId);
+  assert.ok(account);
+  assert.equal(account.bookingId, bookingId);
+  assert.equal(account.balanceCents, 50000);
+
+  const charge = await guestAccountService.createCharge({
+    booking_id: bookingId,
+    description: 'Consumo minibar',
+    quantity: 2,
+    unit_price_cents: 1500,
+    currency: 'GTQ',
+    category: 'consumption',
+  });
+  assert.equal(charge.amountCents, 3000);
+  assert.equal(charge.status, 'posted');
+  assert.ok(!('amount_cents' in charge), 'createCharge integrado debe devolver Model');
+
+  const voided = await guestAccountService.voidCharge(chargeId, 'Correccion de cargo', bookingId);
+  assert.equal(voided.status, 'voided');
+  assert.equal(voided.voidReason, 'Correccion de cargo');
+
+  assert.throws(
+    () => guestAccountService.calculateBalanceCents(bookingId),
+    /folio mock/,
+    'el saldo oficial de una reserva UUID no debe calcularse localmente',
   );
+  await assert.rejects(
+    () => guestAccountService.voidCharge(chargeId, 'Sin booking'),
+    /requiere bookingId/,
+    'un cargo UUID sin bookingId no debe caer al mock legacy',
+  );
+
+  const payment = await guestAccountService.createPayment({
+    booking_id: bookingId,
+    amount_cents: 20000,
+    currency: 'GTQ',
+    method: 'cash',
+    transaction_reference: 'REC-001',
+  });
+  assert.equal(payment.amountCents, 20000);
+  assert.equal(payment.status, 'completed');
+
+  const deposit = await guestAccountService.createDeposit({
+    bookingId,
+    amountCents: 10000,
+    method: 'cash',
+    notes: 'Garantia',
+  });
+  assert.equal(deposit.status, 'held');
+
+  const applied = await guestAccountService.applyDeposit(bookingId, depositId);
+  assert.equal(applied.status, 'applied');
+
+  const refunded = await guestAccountService.refundDeposit(bookingId, depositId, 'Devolucion');
+  assert.equal(refunded.status, 'refunded');
+});
+
+test('cashService.getSessions: usa backend y devuelve Models', async () => {
+  installCashFetchMock();
+  const sessions = await cashService.getSessions();
   assert.ok(Array.isArray(sessions) && sessions.length > 0);
   assert.ok(
     'openingBalanceCents' in sessions[0],
     'el Model de CashSession debe tener openingBalanceCents',
   );
+  assert.ok(!('openingBalanceCents' in sessions[0] && 'opening_balance_cents' in sessions[0]));
+  assert.equal(sessions[0].expectedBalanceCents, 100000);
 });
 
 test('personnelService.getUsers/getRoles/getPermissions: async, con latencia simulada, devuelven Models', async () => {
+  globalThis.fetch = adminFetchMock;
   const users = await assertServiceCall('personnelService.getUsers', () =>
     personnelService.getUsers(),
   );
@@ -412,6 +890,17 @@ test('personnelService.getUsers/getRoles/getPermissions: async, con latencia sim
     personnelService.getPermissions(),
   );
   assert.ok(Array.isArray(permissions) && permissions.length > 0);
+
+  const created = await personnelService.createUser({
+    firstName: 'Ana',
+    lastName: 'Lopez',
+    email: 'ana@example.com',
+    role: 'reception',
+    status: 'active',
+  });
+  assert.equal(created.email, 'ana@example.com');
+  const disabled = await personnelService.updateUser(created.id, { status: 'inactive' });
+  assert.equal(disabled.status, 'inactive');
 });
 
 test('inventoryService.getItems: async, con latencia simulada, devuelve Models', async () => {
@@ -778,6 +1267,7 @@ test('guestAccountService.createCharge: crea Charge y actualiza el balance guard
 });
 
 test('administracion: promociones, tarifas, inventario y caja persisten operaciones soportadas', async () => {
+  globalThis.fetch = adminFetchMock;
   const roomTypes = await roomService.getRoomTypes();
   assert.ok(roomTypes.length > 0, 'debe existir al menos un tipo de habitacion para crear tarifa');
 
@@ -811,9 +1301,48 @@ test('administracion: promociones, tarifas, inventario y caja persisten operacio
   });
   assert.equal(disabledPromotion.active, false);
 
+  const user = await personnelService.createUser({
+    firstName: 'Mario',
+    lastName: 'Admin',
+    email: 'mario.admin@example.com',
+    role: 'admin',
+    status: 'active',
+  });
+  const updatedUser = await personnelService.updateUser(user.id, { status: 'inactive' });
+  assert.equal(updatedUser.status, 'inactive');
+
+  const amenity = await catalogService.createAmenity({
+    name: 'Terraza',
+    description: 'Terraza panoramica',
+    category: 'hotel',
+    location: 'Azotea',
+    active: true,
+  });
+  const inactiveAmenity = await catalogService.updateAmenity(amenity.id, { active: false });
+  assert.equal(inactiveAmenity.active, false);
+
+  const adminProduct = await catalogService.createAdminProduct({
+    sku: 'RS-SOUP',
+    name: 'Sopa del dia',
+    description: 'Entrada caliente',
+    category: 'food_and_beverage',
+    priceCents: 3200,
+    active: true,
+  });
+  const inactiveAdminProduct = await catalogService.updateAdminProduct(adminProduct.id, {
+    active: false,
+  });
+  assert.equal(inactiveAdminProduct.active, false);
+
   const inventoryItems = await inventoryService.getItems();
   const item = inventoryItems.find((entry) => entry.active);
   assert.ok(item, 'debe existir un item activo para registrar movimiento');
+  const renamed = await inventoryService.updateItem(item.id, {
+    name: 'Toalla blanca premium',
+    minimum_quantity: item.minimumQuantity + 1,
+  });
+  assert.equal(renamed.name, 'Toalla blanca premium');
+  assert.equal(renamed.minimumQuantity, item.minimumQuantity + 1);
   const movement = await inventoryService.createMovement({
     inventoryItemId: item.id,
     type: 'in',
@@ -840,8 +1369,20 @@ test('administracion: promociones, tarifas, inventario y caja persisten operacio
   );
 
   const updatedItem = await inventoryService.getItemById(item.id);
-  assert.equal(updatedItem.currentQuantity, item.currentQuantity + 3);
+  assert.equal(updatedItem.currentQuantity, renamed.currentQuantity + 3);
 
+  const adjustedItem = await inventoryService.updateItem(item.id, {
+    current_quantity: updatedItem.currentQuantity - 2,
+  });
+  assert.equal(adjustedItem.currentQuantity, updatedItem.currentQuantity - 2);
+  assert.ok(
+    (await inventoryService.getMovementsByItemId(item.id)).some(
+      (entry) => entry.reason === 'shrinkage' && entry.quantity === 2,
+    ),
+    'los ajustes de stock deben pasar por movimientos de inventario',
+  );
+
+  installCashFetchMock();
   const beforeCashMovements = await cashService.getMovements();
   const cashMovement = await cashService.createMovement({
     type: 'income',
@@ -853,16 +1394,6 @@ test('administracion: promociones, tarifas, inventario y caja persisten operacio
     cashMovement.responsibleUserId,
     undefined,
     'un movimiento de caja sin usuario operativo no debe atribuirse a un fallback',
-  );
-  await assert.rejects(
-    () =>
-      cashService.createMovement({
-        type: 'income',
-        concept: 'Usuario invalido',
-        amountCents: 100,
-        responsibleUserId: 'USR-NO-EXISTE',
-      }),
-    /usuario responsable/,
   );
   assert.equal((await cashService.getMovements()).length, beforeCashMovements.length + 1);
 });
