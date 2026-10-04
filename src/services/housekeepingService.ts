@@ -7,6 +7,7 @@ import {
 import type { ID } from '@/shared/types/common';
 import type { RoomHousekeepingStatus, ServiceRequestStatus } from '@/shared/constants/statuses';
 import { HttpError, httpClient } from './http-client';
+import { guestRequest } from './guestHttp';
 import { hydrateCollection, persistCollection } from './mockPersistence';
 
 // INT-09: el turnover (`dirty -> cleaning -> clean -> inspected`) y las tareas
@@ -231,6 +232,41 @@ export const housekeepingService = {
       'complete',
       'No fue posible completar la limpieza de estancia.',
     );
+  },
+  // --- Portal del huésped (INT-12) -------------------------------------------
+  // Limpiezas de estancia de la reserva del JWT de huésped (`/guest/housekeeping`).
+  async getGuestStayoverRequests(): Promise<ServiceRequest[]> {
+    const response = await guestRequest(
+      () => httpClient.get<StayoverCleaningResponse[]>('/guest/housekeeping/requests'),
+      'No fue posible cargar tus solicitudes de limpieza.',
+    );
+    return response.map((item) => toServiceRequest(toServiceRequestDto(item)));
+  },
+  async createGuestStayoverRequest(data: {
+    description: string;
+    notes?: string;
+  }): Promise<ServiceRequest> {
+    if (!data.description.trim()) throw new Error('Describe la solicitud.');
+    const response = await guestRequest(
+      () =>
+        httpClient.post<StayoverCleaningResponse>('/guest/housekeeping/requests', {
+          description: data.description.trim(),
+          notes: data.notes?.trim() || undefined,
+        }),
+      'No fue posible enviar tu solicitud de limpieza.',
+    );
+    return toServiceRequest(toServiceRequestDto(response));
+  },
+  /** El backend decide si la limpieza todavía se puede cancelar. */
+  async cancelGuestStayoverRequest(requestId: ID): Promise<ServiceRequest> {
+    const response = await guestRequest(
+      () =>
+        httpClient.post<StayoverCleaningResponse>(
+          `/guest/housekeeping/requests/${requestId}/cancel`,
+        ),
+      'No fue posible cancelar tu solicitud de limpieza.',
+    );
+    return toServiceRequest(toServiceRequestDto(response));
   },
   async getChecklists(): Promise<HousekeepingChecklist[]> {
     return checklists.map((item) => ({

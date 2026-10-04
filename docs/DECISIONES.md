@@ -881,6 +881,41 @@ backend; es solo referencia, los servicios no lo usan para validar.
 - Housekeeping (INT-09) todavía muestra un `cancelled` de stayover como
   `rejected`; se puede unificar cuando se revise esa pantalla.
 
+## D-014 · INT-12: Acceso de huésped con código, separado del login del personal
+
+### Contexto
+
+La issue #110 exige que el portal use Guest Access (código de reserva → JWT de
+huésped) y nunca el login del personal. El backend expone `POST
+/guest/auth/link`, que solo acepta el código con la reserva en check-in y emite un
+JWT `type: guest` sin refresh token. Hasta ahora el portal entraba por el login
+del personal con rol `GUEST`. Las rutas `/my-account/...` existen reservadas en
+`routes.ts`, pero `routes.ts` y `router.tsx` están congelados (Ronda 1).
+
+### Decisión
+
+- La pantalla "Acceso de huésped" ocupa la ruta pública existente
+  `/auth/register`, que antes mostraba un registro de cuenta de demo sin backend.
+  El huésped ingresa solo su código; no hay correo ni contraseña.
+- La sesión de huésped vive en el mismo `AuthProvider` (rol `GUEST`), pero se
+  obtiene únicamente con `authService.linkGuest`. `authService.login` rechaza
+  cuentas `ROLE_GUEST`.
+- Sin refresh token: la sesión dura lo que el token. Al vencer, el guard manda al
+  huésped a su pantalla de código con el aviso "Tu acceso venció".
+- Recepción muestra el `guestLinkCode` en el detalle de la reserva solo en
+  check-in.
+
+### Qué NO hacer
+
+- No enviar `bookingId` desde el portal: el backend toma la reserva del JWT.
+- No consumir endpoints del personal desde el portal (`/bookings`, `/guests`,
+  `/rooms`, `/admin/...`): responden 403 con el token de huésped.
+
+### Pendiente
+
+- Pedir a JEPG321 la ruta dedicada `/my-account/link-reservation` (y las demás
+  `/my-account/...`) para que el acceso de huésped no dependa de `/auth/register`.
+
 ## Cómo agregar una nueva decisión
 
 Copiar la estructura de D-001: **Contexto** (qué problema había y qué

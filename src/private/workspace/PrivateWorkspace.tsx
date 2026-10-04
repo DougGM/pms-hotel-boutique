@@ -259,6 +259,8 @@ export type Reservation = {
   id: number;
   bookingId?: string;
   code: string;
+  /** Código que recepción entrega al huésped para entrar a su portal (INT-12). */
+  guestLinkCode?: string;
   guest: GuestInfo;
   companions: Companion[];
   checkIn: string;
@@ -854,6 +856,7 @@ async function loadWorkspaceData(role: RoleId): Promise<WorkspaceState> {
       id: index + 1,
       bookingId: booking.id,
       code: booking.confirmationCode,
+      guestLinkCode: booking.guestLinkCode,
       checkIn: toDtoCalendarDate(booking.checkIn),
       checkOut: toDtoCalendarDate(booking.checkOut),
       roomNumber: room?.roomNumber ?? 'Sin asignar',
@@ -1064,6 +1067,7 @@ const navByRole: Record<RoleId, NavItem[]> = {
         navChild('guest', 'Servicios de habitación'),
         navChild('guest', 'Room service'),
         navChild('guest', 'Mis solicitudes y pedidos'),
+        navChild('guest', 'Notificaciones'),
       ],
     },
   ],
@@ -1092,6 +1096,8 @@ const navByRole: Record<RoleId, NavItem[]> = {
     { label: 'Servicios de habitación', icon: ClipboardList },
     { label: 'Room service', icon: Package },
     { label: 'Mis solicitudes y pedidos', icon: FileText },
+    // INT-12: lista, contador y "marcar como leída" con las notificaciones del backend.
+    { label: 'Notificaciones', icon: Bell },
   ],
 };
 

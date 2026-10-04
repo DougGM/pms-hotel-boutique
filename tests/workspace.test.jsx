@@ -729,3 +729,156 @@ test('conserjería: si el backend rechaza la transición se recargan las solicit
   );
   assert.equal(requestCards().length, 0, 'la solicitud cancelada sale de las activas');
 });
+
+// --- Portal del huésped: backend falso de GuestAccessController (INT-12) ----
+
+function installGuestPortalBackend() {
+  const state = {
+    calls: [],
+    notifications: [
+      {
+        id: 'n-1',
+        type: 'room_service_accepted',
+        title: 'Room Service',
+        message: 'Pedido aceptado',
+        read: false,
+        createdAt: '2026-10-04T09:00:00Z',
+      },
+      {
+        id: 'n-2',
+        type: 'concierge_accepted',
+        title: 'Concierge',
+        message: 'Solicitud aceptada',
+        read: false,
+        createdAt: '2026-10-04T09:30:00Z',
+      },
+    ],
+    orders: [],
+  };
+  const json = (body, status = 200) =>
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { 'content-type': 'application/json' },
+    });
+
+  originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input, init = {}) => {
+    const path = new URL(String(input)).pathname.replace(/^\/api\/v1/, '');
+    const method = init.method ?? 'GET';
+    const body = init.body ? JSON.parse(String(init.body)) : undefined;
+    state.calls.push({ call: `${method} ${path}`, body });
+    if (path === '/guest/stay') {
+      return json({
+        bookingId: 'booking-guest',
+        guestId: 'guest-1',
+        guestFirstName: 'Ana',
+        guestLastName: 'López',
+        roomId: 'room-305',
+        roomNumber: '305',
+        roomTypeName: 'Suite Jardín',
+        checkIn: '2026-10-03',
+        checkOut: '2026-10-06',
+        status: 'checked_in',
+        balanceCents: 45000,
+        currency: 'GTQ',
+      });
+    }
+    if (path === '/guest/room-service/products') {
+      return json([
+        {
+          id: 'product-1',
+          sku: 'FB-001',
+          name: 'Club sándwich',
+          category: 'food_and_beverage',
+          priceCents: 4500,
+          currency: 'GTQ',
+          active: true,
+        },
+      ]);
+    }
+    if (path === '/guest/room-service/orders' && method === 'POST') {
+      const order = {
+        id: 'order-1',
+        bookingId: 'booking-guest',
+        roomId: 'room-305',
+        roomNumber: '305',
+        status: 'pending',
+        notes: body.notes ?? null,
+        currency: 'GTQ',
+        items: body.items.map((item) => ({
+          id: 'i-1',
+          productId: item.productId,
+          productName: 'Club sándwich',
+          quantity: item.quantity,
+          unitPriceCents: 4500,
+        })),
+        requestedAt: '2026-10-04T10:00:00Z',
+        createdAt: '2026-10-04T10:00:00Z',
+        updatedAt: '2026-10-04T10:00:00Z',
+      };
+      state.orders.push(order);
+      return json(order, 201);
+    }
+    if (path === '/guest/notifications') return json(state.notifications);
+    if (path === '/guest/notifications/unread-count') {
+      return json({ unreadCount: state.notifications.filter((item) => !item.read).length });
+    }
+    if (path === '/guest/notifications/read-all' && method === 'POST') {
+      state.notifications.forEach((item) => (item.read = true));
+      return json(state.notifications);
+    }
+    if (path.startsWith('/guest/')) return json([]);
+    return json({ message: `Ruta no mockeada: ${method} ${path}` }, 404);
+  };
+  return state;
+}
+
+let guestBackend;
+async function mountGuestPortal() {
+  guestBackend = installGuestPortalBackend();
+  await act(async () => {
+    view = create(
+      <MemoryRouter>
+        <PrivateWorkspace role="guest" sessionName="Ana López" />
+      </MemoryRouter>,
+    );
+  });
+  for (let i = 0; i < 20 && !text(view.root).includes('Habitacion 305'); i++) {
+    await settle(300);
+  }
+  assert.ok(text(view.root).includes('Habitacion 305'), 'la estancia sale de /guest/stay');
+}
+
+test('portal del huésped: carga solo desde /guest, sin endpoints del personal', async () => {
+  await mountGuestPortal();
+  const paths = guestBackend.calls.map(({ call }) => call.split(' ')[1]);
+  assert.ok(paths.includes('/guest/stay'));
+  assert.ok(paths.includes('/guest/notifications/unread-count'));
+  assert.ok(
+    paths.every((path) => path.startsWith('/guest/')),
+    `solo rutas de huésped: ${paths.join(', ')}`,
+  );
+});
+
+test('portal del huésped: marcar todas usa read-all y el contador del backend', async () => {
+  await mountGuestPortal();
+  await goTo('Notificaciones');
+  assert.ok(text(view.root).includes('2 notificaciones sin leer'));
+
+  await act(async () => buttons('Marcar todas como leídas')[0].props.onClick());
+  await settle();
+  assert.ok(guestBackend.calls.some(({ call }) => call === 'POST /guest/notifications/read-all'));
+  assert.ok(!text(view.root).includes('notificaciones sin leer'), 'el contador quedó en cero');
+});
+
+test('portal del huésped: el pedido de Room Service no elige la reserva', async () => {
+  await mountGuestPortal();
+  await goTo('Room service');
+  await act(async () => buttons('Agregar')[0].props.onClick());
+  await act(async () => buttons('Enviar pedido')[0].props.onClick());
+  await settle();
+  const post = guestBackend.calls.find(({ call }) => call === 'POST /guest/room-service/orders');
+  assert.ok(post, 'el pedido va a /guest/room-service/orders');
+  assert.ok(!('bookingId' in post.body), 'la reserva la toma el backend del JWT');
+  assert.deepEqual(post.body.items, [{ productId: 'product-1', quantity: 1 }]);
+});

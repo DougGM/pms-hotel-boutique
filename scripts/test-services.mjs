@@ -69,7 +69,8 @@ await build({
       export { orderService } from './src/services/orderService';
       export { serviceRequestService } from './src/services/serviceRequestService';
       export { notificationService } from './src/services/notificationService';
-      export { notificationReadsDB, roomsDB } from './src/data/db';
+      export { guestPortalService } from './src/services/guestPortalService';
+      export { roomsDB } from './src/data/db';
       export { mockUtils } from './src/services/mockUtils';
     `,
     resolveDir: '.',
@@ -119,7 +120,7 @@ const {
   orderService,
   serviceRequestService,
   notificationService,
-  notificationReadsDB,
+  guestPortalService,
   roomsDB,
   mockUtils,
 } = require(require.resolve('../.cache/services-harness.cjs'));
@@ -2208,102 +2209,279 @@ test('check-out exige saldo exactamente cero, cierra folio y envia habitacion a 
   );
 });
 
-test('portal de huesped persiste pedidos, solicitudes, perfil y notificaciones', async () => {
-  const order = await assertServiceCall('orderService.createOrder', () =>
-    orderService.createOrder({
-      bookingId: 'BKG-002',
-      roomId: 'RM-201',
-      guestId: 'GST-002',
-      items: [{ productId: 'PRD-001', quantity: 2 }],
-      notes: 'Sin hielo.',
-    }),
-  );
-  assert.equal(order.bookingId, 'BKG-002');
-  assert.equal(order.guestId, 'GST-002');
+const GUEST_STAY_BOOKING_ID = '7c6b5a49-0000-4000-8000-000000000001';
+const GUEST_ROOM_ID = '6b5a4938-0000-4000-8000-000000000001';
+const FOREIGN_ORDER_ID = 'ffffffff-0000-4000-8000-000000000999';
+
+// Backend falso de GuestAccessController: la reserva sale del token, nunca del
+// request. Un recurso de otra reserva responde 403, como el backend real.
+function installGuestFetchMock() {
+  const previousFetch = globalThis.fetch;
+  const calls = [];
+  const orders = [];
+  const stayovers = [];
+  const concierge = [];
+  const notifications = [
+    {
+      id: 'aa000000-0000-4000-8000-000000000001',
+      type: 'room_service_accepted',
+      title: 'Room Service',
+      message: 'Your room service order is now accepted',
+      resourceType: 'room_service_order',
+      resourceId: 'bb000000-0000-4000-8000-000000000001',
+      read: false,
+      readAt: null,
+      createdAt: '2026-10-04T09:00:00Z',
+    },
+    {
+      id: 'aa000000-0000-4000-8000-000000000002',
+      type: 'concierge_accepted',
+      title: 'Concierge',
+      message: 'Your concierge request is now accepted',
+      resourceType: 'concierge_request',
+      resourceId: 'cc000000-0000-4000-8000-000000000001',
+      read: false,
+      readAt: null,
+      createdAt: '2026-10-04T09:30:00Z',
+    },
+  ];
+  const json = (body, status = 200) =>
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { 'content-type': 'application/json' },
+    });
+  const nextId = (prefix, list) =>
+    `${prefix}-0000-4000-8000-${String(list.length + 1).padStart(12, '0')}`;
+  const request = (id, status, description) => ({
+    id,
+    bookingId: GUEST_STAY_BOOKING_ID,
+    roomId: GUEST_ROOM_ID,
+    roomNumber: '305',
+    status,
+    description,
+    notes: null,
+    requestedAt: '2026-10-04T10:00:00Z',
+    createdAt: '2026-10-04T10:00:00Z',
+    updatedAt: '2026-10-04T10:00:00Z',
+  });
+
+  globalThis.fetch = async (input, init = {}) => {
+    const url = new URL(String(input));
+    const path = url.pathname.replace(/^\/api\/v1/, '');
+    const method = init.method ?? 'GET';
+    const body = init.body ? JSON.parse(String(init.body)) : undefined;
+    calls.push({ call: `${method} ${path}${url.search}`, body });
+
+    if (method === 'GET' && path === '/guest/stay') {
+      return json({
+        bookingId: GUEST_STAY_BOOKING_ID,
+        guestId: '5a493827-0000-4000-8000-000000000001',
+        guestFirstName: 'Ana',
+        guestLastName: 'López',
+        roomId: GUEST_ROOM_ID,
+        roomNumber: '305',
+        roomTypeId: '49382716-0000-4000-8000-000000000001',
+        roomTypeName: 'Suite Jardín',
+        checkIn: '2026-10-03',
+        checkOut: '2026-10-06',
+        status: 'checked_in',
+        balanceCents: 45000,
+        currency: 'GTQ',
+      });
+    }
+    if (method === 'GET' && path === '/guest/amenities') {
+      return json([
+        {
+          id: 'dd000000-0000-4000-8000-000000000001',
+          name: 'Spa',
+          category: 'spa',
+          active: true,
+          opensAt: '08:00',
+          closesAt: '20:00',
+        },
+      ]);
+    }
+    if (method === 'GET' && path === '/guest/room-service/products') {
+      return json([
+        {
+          id: 'ee000000-0000-4000-8000-000000000001',
+          sku: 'FB-001',
+          name: 'Club sándwich',
+          category: 'food_and_beverage',
+          priceCents: 4500,
+          currency: 'GTQ',
+          active: true,
+        },
+      ]);
+    }
+    if (path === '/guest/room-service/orders') {
+      if (method === 'GET') return json(orders);
+      const order = {
+        id: nextId('bb000000', orders),
+        bookingId: GUEST_STAY_BOOKING_ID,
+        roomId: GUEST_ROOM_ID,
+        roomNumber: '305',
+        guestId: '5a493827-0000-4000-8000-000000000001',
+        guestName: 'Ana López',
+        status: 'pending',
+        notes: body.notes ?? null,
+        currency: 'GTQ',
+        totalCents: 4500 * body.items[0].quantity,
+        items: body.items.map((item, index) => ({
+          id: `item-${index}`,
+          productId: item.productId,
+          productName: 'Club sándwich',
+          quantity: item.quantity,
+          unitPriceCents: 4500,
+          lineTotalCents: 4500 * item.quantity,
+        })),
+        chargeId: null,
+        requestedAt: '2026-10-04T10:00:00Z',
+        createdAt: '2026-10-04T10:00:00Z',
+        updatedAt: '2026-10-04T10:00:00Z',
+      };
+      orders.unshift(order);
+      return json(order, 201);
+    }
+    const orderCancel = path.match(/^\/guest\/room-service\/orders\/([^/]+)\/cancel$/);
+    if (method === 'POST' && orderCancel) {
+      const order = orders.find((item) => item.id === orderCancel[1]);
+      if (!order) return json({ status: 403, message: 'Guest cannot access this resource' }, 403);
+      order.status = 'cancelled';
+      return json(order);
+    }
+    if (path === '/guest/housekeeping/requests') {
+      if (method === 'GET') return json(stayovers);
+      const created = request(nextId('cc100000', stayovers), 'pending', body.description);
+      stayovers.unshift(created);
+      return json(created, 201);
+    }
+    const stayoverCancel = path.match(/^\/guest\/housekeeping\/requests\/([^/]+)\/cancel$/);
+    if (method === 'POST' && stayoverCancel) {
+      const item = stayovers.find((stayover) => stayover.id === stayoverCancel[1]);
+      item.status = 'cancelled';
+      return json(item);
+    }
+    if (path === '/guest/concierge/requests') {
+      if (method === 'GET') return json(concierge);
+      const created = {
+        ...request(nextId('cc200000', concierge), 'pending', body.description),
+        type: 'concierge',
+        guestName: 'Ana López',
+      };
+      concierge.unshift(created);
+      return json(created, 201);
+    }
+    const conciergeCancel = path.match(/^\/guest\/concierge\/requests\/([^/]+)\/cancel$/);
+    if (method === 'POST' && conciergeCancel) {
+      const item = concierge.find((entry) => entry.id === conciergeCancel[1]);
+      item.status = 'cancelled';
+      return json(item);
+    }
+    if (method === 'GET' && path === '/guest/notifications') return json(notifications);
+    if (method === 'GET' && path === '/guest/notifications/unread-count') {
+      return json({ unreadCount: notifications.filter((item) => !item.read).length });
+    }
+    if (method === 'POST' && path === '/guest/notifications/read-all') {
+      notifications.forEach((item) => {
+        item.read = true;
+        item.readAt = '2026-10-04T11:00:00Z';
+      });
+      return json(notifications);
+    }
+    const markRead = path.match(/^\/guest\/notifications\/([^/]+)\/read$/);
+    if (method === 'POST' && markRead) {
+      const item = notifications.find((entry) => entry.id === markRead[1]);
+      item.read = true;
+      item.readAt = '2026-10-04T11:00:00Z';
+      return json(item);
+    }
+    return json({ message: `Ruta no mockeada en test: ${method} ${path}` }, 404);
+  };
+  return { calls, restore: () => (globalThis.fetch = previousFetch) };
+}
+
+test('portal del huésped: estancia, menú, pedidos y solicitudes van a /guest sin bookingId', async (t) => {
+  const { calls, restore } = installGuestFetchMock();
+  t.after(restore);
+
+  const stay = await guestPortalService.getStay();
+  assert.equal(stay.roomNumber, '305');
+  assert.equal(stay.balanceCents, 45000);
+  assert.equal(stay.checkIn.getDate(), 3, 'la fecha civil no se desplaza por zona horaria');
+
+  const [product] = await catalogService.getGuestProducts();
+  assert.equal(product.name, 'Club sándwich');
+  assert.equal((await catalogService.getGuestAmenities())[0].name, 'Spa');
+
+  const order = await orderService.createGuestOrder({
+    items: [{ productId: product.id, quantity: 2 }],
+    notes: ' Sin hielo ',
+  });
   assert.equal(order.status, 'pending');
-  assert.equal(order.items[0].unitPriceCents, 1500);
-
-  const guestOrders = await orderService.getOrdersByGuestId('GST-002');
-  assert.ok(
-    guestOrders.some((item) => item.id === order.id),
-    'el pedido creado debe sobrevivir una recarga desde el servicio',
-  );
-
-  const cancelledOrder = await assertServiceCall('orderService.cancelOrder', () =>
-    orderService.cancelOrder(order.id, 'GST-002'),
-  );
-  assert.equal(cancelledOrder.status, 'cancelled');
+  assert.equal(order.items[0].productName, 'Club sándwich');
+  assert.deepEqual(calls.at(-1).body, {
+    notes: 'Sin hielo',
+    items: [{ productId: product.id, quantity: 2 }],
+  });
+  assert.equal((await orderService.getGuestOrders()).length, 1);
+  assert.equal((await orderService.cancelGuestOrder(order.id)).status, 'cancelled');
   await assert.rejects(
-    () => orderService.cancelOrder('ORD-001', 'GST-002'),
-    /no pertenece/,
-    'un huesped no debe cancelar pedidos de otra reserva',
+    () => orderService.cancelGuestOrder(FOREIGN_ORDER_ID),
+    /no pertenece a tu estancia/,
+    'un pedido de otra reserva responde 403',
   );
 
-  const request = await assertServiceCall('serviceRequestService.createRequest', () =>
-    serviceRequestService.createRequest({
-      bookingId: 'BKG-002',
-      roomId: 'RM-201',
-      guestId: 'GST-002',
-      type: 'housekeeping',
-      description: 'Toallas extra',
-    }),
-  );
-  assert.equal(request.status, 'pending');
-  assert.equal(request.guestId, 'GST-002');
-
-  const guestRequests = await serviceRequestService.getRequestsByGuestId('GST-002');
-  assert.ok(
-    guestRequests.some((item) => item.id === request.id),
-    'la solicitud creada debe sobrevivir una recarga desde el servicio',
-  );
-
-  const cancelledRequest = await assertServiceCall('serviceRequestService.cancelRequest', () =>
-    serviceRequestService.cancelRequest(request.id, 'GST-002'),
-  );
-  assert.equal(cancelledRequest.status, 'rejected');
-  await assert.rejects(
-    () => serviceRequestService.cancelRequest('SR-001', 'GST-002'),
-    /no pertenece/,
-    'un huesped no debe cancelar solicitudes de otra reserva',
-  );
-
-  const updatedGuest = await assertServiceCall('guestService.updateGuest portal', () =>
-    guestService.updateGuest('GST-002', {
-      phone: '+502 5555-7272',
-      nationality: 'Guatemalteca',
-    }),
-  );
-  assert.equal(updatedGuest.phone, '+502 5555-7272');
-  assert.equal((await guestService.getGuestById('GST-002')).phone, '+502 5555-7272');
-
-  const notifications = await notificationService.getNotificationsByGuestId('GST-002');
-  assert.ok(notifications.length > 0);
-  const unread = notifications.find((item) => !item.read) ?? notifications[0];
-  const marked = await notificationService.markNotificationRead('GST-002', unread.id);
-  assert.equal(marked.read, true);
-  assert.ok(
-    notificationReadsDB.some(
-      (item) => item.guest_id === 'GST-002' && item.notification_id === unread.id,
-    ),
-    'la marca de lectura debe persistir en notificationReadsDB',
-  );
-  const reloaded = await notificationService.getNotificationsByGuestId('GST-002');
+  const cleaning = await housekeepingService.createGuestStayoverRequest({
+    description: 'Cambio de toallas',
+  });
+  assert.equal(cleaning.type, 'housekeeping');
+  assert.equal((await housekeepingService.getGuestStayoverRequests()).length, 1);
+  const cancelledCleaning = await housekeepingService.cancelGuestStayoverRequest(cleaning.id);
   assert.equal(
-    reloaded.find((item) => item.id === unread.id)?.read,
-    true,
-    'la marca de lectura debe sobrevivir una recarga desde notificationService',
+    cancelledCleaning.status,
+    'rejected',
+    'stayover cancelado se muestra como rechazado',
   );
 
-  const beforeMarkAllCount = notificationReadsDB.filter(
-    (item) => item.guest_id === 'GST-002',
-  ).length;
-  await notificationService.markAllRead('GST-002');
-  const afterMarkAll = await notificationService.getNotificationsByGuestId('GST-002');
-  assert.ok(afterMarkAll.every((item) => item.read));
-  assert.ok(
-    notificationReadsDB.filter((item) => item.guest_id === 'GST-002').length >= beforeMarkAllCount,
-    'markAllRead debe conservar las marcas en notificationReadsDB',
+  const conciergeRequest = await serviceRequestService.createGuestConciergeRequest({
+    description: 'Reservar cena',
+    notes: 'Horario preferido: 20:00',
+  });
+  assert.equal(conciergeRequest.type, 'concierge');
+  assert.equal((await serviceRequestService.getGuestConciergeRequests()).length, 1);
+  assert.equal(
+    (await serviceRequestService.cancelGuestConciergeRequest(conciergeRequest.id)).status,
+    'cancelled',
   );
+
+  assert.ok(
+    calls.every(({ call }) => call.split(' ')[1].startsWith('/guest/')),
+    'el portal solo usa rutas /guest',
+  );
+  assert.ok(
+    calls.every(({ call, body }) => !call.includes('bookingId') && !(body && 'bookingId' in body)),
+    'ninguna llamada del huésped elige la reserva',
+  );
+});
+
+test('portal del huésped: notificaciones y contador salen del backend', async (t) => {
+  const { calls, restore } = installGuestFetchMock();
+  t.after(restore);
+
+  const notifications = await notificationService.getGuestNotifications();
+  assert.equal(notifications.length, 2);
+  assert.ok(notifications[0].createdAt instanceof Date);
+  assert.equal(await notificationService.getGuestUnreadCount(), 2);
+
+  const marked = await notificationService.markGuestNotificationRead(notifications[0].id);
+  assert.equal(marked.read, true);
+  assert.equal(await notificationService.getGuestUnreadCount(), 1);
+
+  const all = await notificationService.markAllGuestNotificationsRead();
+  assert.ok(all.every((item) => item.read));
+  assert.equal(calls.at(-1).call, 'POST /guest/notifications/read-all');
+  assert.equal(await notificationService.getGuestUnreadCount(), 0);
 });
 
 const RS_BOOKING_ID = '8a1f2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d';
