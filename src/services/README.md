@@ -108,12 +108,27 @@ trata como `bookingId` y carga el folio por `getAccountByBookingId`; despues
 de crear cargos o pagos vuelve a consultar el folio en vez de ajustar
 `balanceCents` manualmente en React.
 
-Actualizacion 2026-09-17: `guestService.createGuest(data)` crea huespedes demo
-en `guestsDB`, genera el siguiente ID `GST-*`, agrega timestamps y devuelve
-`Guest` de dominio. El motor publico de reservas lo usa para no pedir al
-usuario un ID interno antes de crear la reserva.
-`guestService.updateGuest(id, data)` permite conservar cambios válidos del
-titular capturados durante recepción/check-in.
+Actualizacion 2026-10-04 (#101 / INT-03): `guestService` y `bookingService`
+integran huespedes y reservas con el backend Spring mediante `http-client.ts`.
+Las lecturas intentan primero `GET /guests` y `GET /bookings`, normalizan las
+respuestas camelCase del backend a los DTO internos y devuelven Models. Si el
+backend no esta disponible o el harness responde 404 a rutas no mockeadas,
+conservan el fallback local `GST-*`/`BKG-*` para el prototipo.
+
+`guestService.createGuest(data)` y `guestService.updateGuest(id, data)` envian
+`POST /guests` y `PUT /guests/{id}` con camelCase (`firstName`,
+`documentNumber`, etc.). En fallback local, `createGuest` genera el siguiente
+ID `GST-*`, agrega timestamps y devuelve `Guest` de dominio.
+
+`bookingService.createBooking(data)` y `bookingService.updateBooking(id, data)`
+envian `POST /bookings` y `PUT /bookings/{id}` con camelCase (`guestId`,
+`roomTypeId`, `checkIn`, etc.). INT-03 no integra acciones operativas de
+reservas: confirmacion, cancelacion, asignacion, check-in y check-out siguen en
+el camino mock/legacy hasta INT-04 o la issue especifica que corresponda.
+
+La validacion local de capacidad se mantiene para `room_type_id` mock (`RT-*`).
+Cuando el `roomTypeId` es UUID se delega al backend, porque el dataset local no
+es autoridad sobre tipos integrados.
 
 Actualizacion 2026-09-22 (#72): el portal de huesped ya no confirma acciones
 solo en estado local. `orderService.createOrder()` persiste pedidos de Room
@@ -250,6 +265,23 @@ HousekeepingController. Room Service usa el `roomNumber`, `guestName` y
 `productName` que entrega su propio backend de pedidos, sin depender de
 `rooms.read`. Asi se evitan llamadas que el backend rechazaria con 403 por falta
 de permisos de catalogo.
+
+## Integracion con INT-03 (#101)
+
+Huespedes y reservas ya no dependen exclusivamente de `src/data/db.ts`:
+
+- `guestService`: `GET /guests`, `GET /guests/{id}`, `POST /guests`,
+  `PUT /guests/{id}`.
+- `bookingService`: `GET /bookings`, `GET /bookings/{id}`, `POST /bookings`,
+  `PUT /bookings/{id}`.
+  El backend habla camelCase; la web conserva su contrato interno DTO
+  snake_case -> Mapper -> Model. Las pantallas no reciben DTOs ni importan
+  `src/data/db.ts`.
+
+`PrivateWorkspace` carga `bookings` y `guests` solo para roles con permisos de
+ese dominio (`admin` y `reception`). Roles como Limpieza, Room Service y
+Conserjeria no disparan `GET /bookings` ni `GET /guests`, evitando que un 403
+tumbe todo el workspace.
 
 ## Integracion con INT-08
 

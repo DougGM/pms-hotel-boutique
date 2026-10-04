@@ -287,10 +287,15 @@ login. `getRoles()` y `getPermissions()` siguen leyendo `rolesDB` y
 `permissionsDB`; `usersDB` permanece como directorio operativo historico del
 Lote D.
 
-Nota 2026-09-17: `guestService.createGuest(data)` es la operacion mock para
-crear huespedes desde el flujo publico de reserva. Escribe en `guestsDB` desde
-la capa de servicios, genera IDs `GST-*` y mantiene el contrato DTO -> Mapper
--> Model.
+Nota 2026-10-04 (#101 / INT-03): `guestService` y `bookingService` usan el
+backend para CRUD de huespedes y reservas (`/guests`, `/bookings`) y conservan
+fallback local solo cuando el backend no esta disponible o una ruta no esta
+mockeada en el harness. El backend devuelve camelCase; los servicios lo
+normalizan al DTO snake_case interno y despues devuelven Models. INT-03 no
+integra acciones operativas: confirmacion, cancelacion, asignacion, check-in y
+check-out quedan en el flujo mock/legacy hasta INT-04 o su issue especifica.
+`PrivateWorkspace` solo carga reservas y huespedes para `admin`/`reception`,
+que son los roles con permisos `bookings.read`/`guests.read` en este dominio.
 
 Nota 2026-09-21 (#69): `bookingService.createBooking` y
 `bookingService.updateBooking` validan capacidad antes de escribir en
@@ -298,6 +303,8 @@ Nota 2026-09-21 (#69): `bookingService.createBooking` y
 exige `adults + children <= roomType.capacity`; los formularios publicos y de
 ocupacion la reutilizan para mostrar el limite al cambiar habitacion, adultos o
 menores.
+Cuando `roomTypeId` es UUID, INT-03 delega esa validacion al backend porque el
+dataset local `RT-*` no es autoridad sobre catalogos integrados.
 
 Nota 2026-09-21 (#70): `booking-companion` registra acompañantes por
 `booking_id` durante check-in. `bookingCompanionService` valida campos,

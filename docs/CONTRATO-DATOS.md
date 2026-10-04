@@ -1,6 +1,6 @@
 # Contrato de datos — PMS Hotel Boutique
 
-**Última actualización:** 2026-09-11 · rama `web-14-servicios-faltantes`.
+**Última actualización:** 2026-10-04 · issue `#101` / INT-03.
 
 ## 1. Propósito y regla de gobierno
 
@@ -96,6 +96,15 @@ Actualizacion 2026-10-03 (#103): las funciones legacy de folio mock rechazan
 reservas UUID. `voidCharge(chargeId, reason)` queda reservada para cargos mock;
 si el cargo es UUID debe llamarse como `voidCharge(chargeId, reason, bookingId)`
 para operar contra el backend.
+
+Actualizacion 2026-10-04 (#101 / INT-03): `guestService` y `bookingService`
+consumen el backend para huespedes y reservas. El transporte backend usa
+camelCase (`firstName`, `guestId`, `roomTypeId`, `totalAmountCents`), pero la
+web conserva este contrato interno snake_case -> Mapper -> Model. Los servicios
+son el unico punto de adaptacion. INT-03 no integra acciones operativas de
+reservas (`confirm`, `check-in`, `check-out`, `cancel`, `assign-room`); esas
+transiciones siguen en el camino mock/legacy hasta INT-04 o la issue especifica
+que corresponda.
 
 ## 3. Entidad por entidad
 
