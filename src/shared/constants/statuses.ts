@@ -127,25 +127,29 @@ export const ORDER_STATUS_TRANSITIONS: Record<OrderStatus, readonly OrderStatus[
 
 // --- service_request ---------------------------------------------------
 //
-// Entidad nueva (FASE 2.4), mismo caso que `order`.
+// Entidad nueva (FASE 2.4), mismo caso que `order`. `cancelled` se agregó en
+// INT-11 para coincidir con el backend (docs/DECISIONES.md, D-013).
 export const SERVICE_REQUEST_STATUSES = [
   'pending',
   'accepted',
   'inProgress',
   'completed',
   'rejected',
+  'cancelled',
 ] as const;
 export type ServiceRequestStatus = (typeof SERVICE_REQUEST_STATUSES)[number];
 
+// Flujo de Conserjería del backend. Solo referencia: el backend valida.
 export const SERVICE_REQUEST_STATUS_TRANSITIONS: Record<
   ServiceRequestStatus,
   readonly ServiceRequestStatus[]
 > = {
-  pending: ['accepted', 'rejected'],
-  accepted: ['inProgress'],
-  inProgress: ['completed'],
+  pending: ['accepted', 'rejected', 'cancelled'],
+  accepted: ['inProgress', 'cancelled'],
+  inProgress: ['completed', 'cancelled'],
   completed: [],
   rejected: [],
+  cancelled: [],
 };
 
 // --- guest_account (Lote C, WEB-11) -------------------------------------

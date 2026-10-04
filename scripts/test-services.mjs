@@ -1962,16 +1962,7 @@ test('housekeeping: sincroniza estado de habitacion, solicitudes y desperfectos'
       description: 'Toallas adicionales',
     }),
   );
-  const accepted = await assertServiceCall(
-    'serviceRequestService.updateRequestStatus accepted',
-    () => serviceRequestService.updateRequestStatus(pending.id, 'accepted'),
-  );
-  assert.equal(accepted.status, 'accepted');
-  const completed = await assertServiceCall(
-    'serviceRequestService.updateRequestStatus completed',
-    () => serviceRequestService.updateRequestStatus(pending.id, 'completed'),
-  );
-  assert.equal(completed.status, 'completed');
+  assert.equal(pending.status, 'pending');
 
   const defect = await assertServiceCall('serviceRequestService.createMaintenanceReport', () =>
     serviceRequestService.createMaintenanceReport({
@@ -2513,41 +2504,194 @@ test('orderService: motivos y observaciones se guardan en el backend', async (t)
   assert.equal(await orderService.getOrderById('9c8b7a6d-0000-4000-8000-999999999999'), undefined);
 });
 
-test('conserjeria persiste estados, motivos y observaciones (mock hasta INT-11)', async () => {
-  const concierge = await serviceRequestService.createRequest({
-    bookingId: 'BKG-002',
-    roomId: 'RM-201',
-    guestId: 'GST-002',
-    type: 'concierge',
-    description: 'Reservar cena',
+const CG_BOOKING_ID = '6d5c4b3a-0000-4000-8000-000000000001';
+
+// Mismas reglas que ConciergeRequestServiceImpl: transiciones exactas, notas del
+// cambio de estado agregadas a las existentes, responsable automático al tomar la
+// solicitud y edición de notas solo en estados no terminales.
+function installConciergeFetchMock() {
+  const previousFetch = globalThis.fetch;
+  const calls = [];
+  const requests = [];
+  const allowed = {
+    pending: ['accepted', 'rejected', 'cancelled'],
+    accepted: ['in_progress', 'cancelled'],
+    in_progress: ['completed', 'cancelled'],
+  };
+  const json = (body, status = 200) =>
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { 'content-type': 'application/json' },
+    });
+
+  globalThis.fetch = async (input, init = {}) => {
+    const url = new URL(String(input));
+    const path = url.pathname.replace(/^\/api\/v1/, '');
+    const method = init.method ?? 'GET';
+    const body = init.body ? JSON.parse(String(init.body)) : undefined;
+    calls.push({ call: `${method} ${path}${url.search}`, body });
+
+    if (method === 'GET' && path === '/concierge/requests') {
+      const status = url.searchParams.get('status');
+      return json(requests.filter((item) => !status || item.status === status));
+    }
+    if (method === 'POST' && path === '/concierge/requests') {
+      const created = {
+        id: `5a4b3c2d-0000-4000-8000-${String(requests.length + 1).padStart(12, '0')}`,
+        bookingId: body.bookingId,
+        roomId: '4c3b2a1d-0000-4000-8000-000000000001',
+        roomNumber: '402',
+        guestId: '3b2a1c0d-0000-4000-8000-000000000001',
+        guestName: 'Luis Pérez',
+        responsibleUserId: null,
+        responsibleUserName: null,
+        responsibleUserEmail: null,
+        type: 'concierge',
+        description: body.description,
+        status: 'pending',
+        notes: body.notes ?? null,
+        chargeId: null,
+        requestedAt: '2026-10-04T10:00:00Z',
+        createdAt: '2026-10-04T10:00:00Z',
+        updatedAt: '2026-10-04T10:00:00Z',
+      };
+      requests.push(created);
+      return json(created, 201);
+    }
+    const match = path.match(/^\/concierge\/requests\/([^/]+)(\/status)?$/);
+    const item = match && requests.find((request) => request.id === match[1]);
+    if (match && !item) return json({ status: 404, message: 'Concierge request not found' }, 404);
+    if (method === 'GET' && match && !match[2]) return json(item);
+    if (method === 'POST' && match?.[2]) {
+      if (!(allowed[item.status] ?? []).includes(body.status)) {
+        return json({ status: 400, message: 'Invalid status transition' }, 400);
+      }
+      item.status = body.status;
+      if (body.notes) item.notes = item.notes ? `${item.notes}\n${body.notes}` : body.notes;
+      if (
+        !item.responsibleUserId &&
+        ['accepted', 'in_progress', 'completed'].includes(body.status)
+      ) {
+        item.responsibleUserId = '2a1b0c9d-0000-4000-8000-000000000001';
+        item.responsibleUserName = 'Douglas Gómez';
+        item.responsibleUserEmail = 'conserjeria@hotelboutique.test';
+      }
+      return json(item);
+    }
+    if (method === 'PUT' && match && !match[2]) {
+      if (['completed', 'rejected', 'cancelled'].includes(item.status)) {
+        return json({ status: 400, message: `Concierge request is already ${item.status}` }, 400);
+      }
+      if (body.description !== undefined && item.status !== 'pending') {
+        return json({ status: 400, message: 'Only pending concierge requests can be edited' }, 400);
+      }
+      if (body.description !== undefined) item.description = body.description;
+      if (body.notes !== undefined) item.notes = body.notes.trim() || null;
+      return json(item);
+    }
+    return json({ message: `Ruta no mockeada en test: ${method} ${path}` }, 404);
+  };
+  return { calls, requests, restore: () => (globalThis.fetch = previousFetch) };
+}
+
+test('serviceRequestService: Conserjería crea, lista y avanza contra el backend', async (t) => {
+  const { calls, restore } = installConciergeFetchMock();
+  t.after(restore);
+
+  const created = await serviceRequestService.createConciergeRequest({
+    bookingId: CG_BOOKING_ID,
+    description: '  Reservar cena  ',
+    notes: ' Mesa junto a ventana ',
   });
-  const conciergeAccepted = await serviceRequestService.updateRequestStatus(
-    concierge.id,
-    'accepted',
+  assert.equal(created.status, 'pending');
+  assert.equal(created.type, 'concierge');
+  assert.equal(created.roomNumber, '402');
+  assert.equal(created.guestName, 'Luis Pérez');
+  assert.equal(created.responsibleUserName, undefined);
+  assert.ok(!('room_number' in created), 'un Model no debe traer campos snake_case del DTO');
+  assert.deepEqual(calls.at(-1).body, {
+    bookingId: CG_BOOKING_ID,
+    description: 'Reservar cena',
+    notes: 'Mesa junto a ventana',
+  });
+
+  const accepted = await serviceRequestService.updateConciergeRequestStatus(created.id, 'accepted');
+  assert.equal(accepted.status, 'accepted');
+  assert.equal(
+    accepted.responsibleUserName,
+    'Douglas Gómez',
+    'el responsable lo asigna el backend',
   );
-  assert.equal(conciergeAccepted.status, 'accepted');
-  const observed = await serviceRequestService.updateRequestNotes(
-    concierge.id,
-    'Mesa junto a ventana.',
+  assert.deepEqual(calls.at(-1).body, { status: 'accepted' });
+
+  const inProgress = await serviceRequestService.updateConciergeRequestStatus(
+    created.id,
+    'inProgress',
   );
-  assert.equal(observed.notes, 'Mesa junto a ventana.');
-  const inProgress = await serviceRequestService.updateRequestStatus(concierge.id, 'inProgress');
+  assert.equal(calls.at(-1).body.status, 'in_progress', 'inProgress viaja como in_progress');
   assert.equal(inProgress.status, 'inProgress');
-  const completed = await serviceRequestService.updateRequestStatus(concierge.id, 'completed');
+
+  const observed = await serviceRequestService.updateConciergeRequest(created.id, {
+    notes: 'Proveedor confirmado',
+  });
+  assert.equal(observed.notes, 'Proveedor confirmado', 'las notas se editan en in_progress');
+  assert.equal(calls.at(-1).call, `PUT /concierge/requests/${created.id}`);
+
+  const completed = await serviceRequestService.updateConciergeRequestStatus(
+    created.id,
+    'completed',
+  );
   assert.equal(completed.status, 'completed');
 
-  const rejectedConcierge = await serviceRequestService.createRequest({
-    bookingId: 'BKG-002',
-    roomId: 'RM-201',
-    guestId: 'GST-002',
-    type: 'concierge',
-    description: 'Traslado privado',
-  });
-  const conciergeRejected = await serviceRequestService.updateRequestStatus(
-    rejectedConcierge.id,
-    'rejected',
-    'Proveedor no disponible.',
+  await assert.rejects(
+    () => serviceRequestService.updateConciergeRequestStatus(created.id, 'cancelled'),
+    /rechazó la operación/,
+    'una solicitud completada es terminal: el backend decide',
   );
-  assert.equal(conciergeRejected.status, 'rejected');
-  assert.equal(conciergeRejected.notes, 'Proveedor no disponible.');
+  const detail = await serviceRequestService.getConciergeRequestById(created.id);
+  assert.equal(detail?.status, 'completed');
+  assert.equal(
+    await serviceRequestService.getConciergeRequestById('5a4b3c2d-0000-4000-8000-999999999999'),
+    undefined,
+  );
+});
+
+test('serviceRequestService: rechazo y cancelación de Conserjería guardan el motivo', async (t) => {
+  const { calls, restore } = installConciergeFetchMock();
+  t.after(restore);
+  const create = (description) =>
+    serviceRequestService.createConciergeRequest({ bookingId: CG_BOOKING_ID, description });
+
+  const toReject = await create('Traslado privado');
+  const rejected = await serviceRequestService.updateConciergeRequestStatus(
+    toReject.id,
+    'rejected',
+    { notes: 'Proveedor no disponible.' },
+  );
+  assert.equal(rejected.status, 'rejected');
+  assert.equal(rejected.notes, 'Proveedor no disponible.');
+  assert.equal(rejected.responsibleUserName, undefined, 'rechazar no asigna responsable');
+
+  const toCancel = await create('Tour en lancha');
+  await serviceRequestService.updateConciergeRequestStatus(toCancel.id, 'accepted');
+  const cancelled = await serviceRequestService.updateConciergeRequestStatus(
+    toCancel.id,
+    'cancelled',
+    { notes: 'El huésped ya no lo necesita.' },
+  );
+  assert.equal(cancelled.status, 'cancelled', 'cancelled ya no se confunde con rejected');
+  assert.deepEqual(calls.at(-1).body, {
+    status: 'cancelled',
+    notes: 'El huésped ya no lo necesita.',
+  });
+
+  await assert.rejects(
+    () => serviceRequestService.updateConciergeRequest(toCancel.id, { notes: 'Otra' }),
+    /rechazó la operación/,
+    'una solicitud cancelada no se edita',
+  );
+
+  const pending = await serviceRequestService.getConciergeRequests({ status: 'pending' });
+  assert.deepEqual(pending, []);
+  assert.equal(calls.at(-1).call, 'GET /concierge/requests?status=pending');
 });
