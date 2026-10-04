@@ -256,6 +256,84 @@ const apiInventoryItems = [
   },
 ];
 const apiInventoryMovements = [];
+const apiRoomFeatures = [
+  {
+    id: 'aaaa1111-1111-4111-8111-111111111111',
+    name: 'Aire acondicionado',
+    description: 'Climatizacion individual',
+    createdAt: apiNow,
+    updatedAt: apiNow,
+  },
+  {
+    id: 'aaaa1111-1111-4111-8111-222222222222',
+    name: 'Balcon privado',
+    description: 'Salida a balcon',
+    createdAt: apiNow,
+    updatedAt: apiNow,
+  },
+];
+const apiRoomTypes = [
+  {
+    id: 'bbbb2222-2222-4222-8222-111111111111',
+    code: 'EST',
+    name: 'Estandar',
+    description: 'Habitacion base',
+    capacity: 2,
+    bedConfiguration: '1 cama matrimonial',
+    roomFeatureIds: apiRoomFeatures.map((item) => item.id),
+    active: true,
+    createdAt: apiNow,
+    updatedAt: apiNow,
+  },
+];
+const apiRooms = [
+  {
+    id: 'cccc3333-3333-4333-8333-111111111111',
+    roomNumber: '101',
+    roomTypeId: apiRoomTypes[0].id,
+    floor: 1,
+    status: 'available',
+    housekeepingStatus: 'clean',
+    createdAt: apiNow,
+    updatedAt: apiNow,
+  },
+  {
+    id: 'RM-101',
+    roomNumber: '102',
+    roomTypeId: apiRoomTypes[0].id,
+    floor: 1,
+    status: 'available',
+    housekeepingStatus: 'dirty',
+    createdAt: apiNow,
+    updatedAt: apiNow,
+  },
+  {
+    id: 'RM-301',
+    roomNumber: '301',
+    roomTypeId: apiRoomTypes[0].id,
+    floor: 3,
+    status: 'occupied',
+    housekeepingStatus: 'clean',
+    createdAt: apiNow,
+    updatedAt: apiNow,
+  },
+];
+const apiRates = [
+  {
+    id: 'dddd4444-4444-4444-8444-111111111111',
+    roomTypeId: apiRoomTypes[0].id,
+    name: 'Tarifa base Estandar',
+    validFrom: '2026-01-01',
+    validTo: '2026-12-31',
+    priceCents: 65000,
+    currency: 'GTQ',
+    minimumNights: 1,
+    refundable: true,
+    active: true,
+    createdAt: apiNow,
+    updatedAt: apiNow,
+  },
+];
 
 function roleCodeById(roleId) {
   const role = apiRoles.find((item) => item.id === roleId);
@@ -342,6 +420,128 @@ const adminFetchMock = async (input, init = {}) => {
       finalBalanceCents: 0,
       currency: 'GTQ',
     });
+  }
+
+  if (method === 'GET' && path === '/rooms') return jsonResponse(apiRooms);
+  if (method === 'GET' && path.startsWith('/rooms/')) {
+    const id = path.split('/').at(-1);
+    const room = apiRooms.find((item) => item.id === id);
+    return room ? jsonResponse(room) : jsonResponse({ message: 'Not found' }, 404);
+  }
+  if (method === 'POST' && path === '/rooms') {
+    if (!body.roomNumber || !body.roomTypeId || !Number.isInteger(body.floor)) {
+      return jsonResponse({ message: 'roomNumber, roomTypeId and floor are required' }, 400);
+    }
+    if (!apiRoomTypes.some((item) => item.id === body.roomTypeId)) {
+      return jsonResponse({ message: 'Room type not found' }, 400);
+    }
+    const room = {
+      id: `cccc3333-3333-4333-8333-${String(apiRooms.length + 2).padStart(12, '0')}`,
+      roomNumber: body.roomNumber,
+      roomTypeId: body.roomTypeId,
+      floor: body.floor,
+      status: body.status ?? 'available',
+      housekeepingStatus: body.housekeepingStatus ?? 'dirty',
+      notes: body.notes,
+      createdAt: apiNow,
+      updatedAt: apiNow,
+    };
+    apiRooms.push(room);
+    return jsonResponse(room, 201);
+  }
+  if (method === 'PUT' && path.startsWith('/rooms/')) {
+    const id = path.split('/').at(-1);
+    const room = apiRooms.find((item) => item.id === id);
+    if (!room) return jsonResponse({ message: 'Not found' }, 404);
+    Object.assign(room, {
+      roomNumber: body.roomNumber ?? room.roomNumber,
+      roomTypeId: body.roomTypeId ?? room.roomTypeId,
+      floor: body.floor ?? room.floor,
+      status: body.status ?? room.status,
+      housekeepingStatus: body.housekeepingStatus ?? room.housekeepingStatus,
+      notes: body.notes ?? room.notes,
+      updatedAt: apiNow,
+    });
+    return jsonResponse(room);
+  }
+  if (method === 'GET' && path === '/room-types') return jsonResponse(apiRoomTypes);
+  if (method === 'GET' && path.startsWith('/room-types/')) {
+    const id = path.split('/').at(-1);
+    const roomType = apiRoomTypes.find((item) => item.id === id);
+    return roomType ? jsonResponse(roomType) : jsonResponse({ message: 'Not found' }, 404);
+  }
+  if (method === 'POST' && path === '/room-types') {
+    const roomType = {
+      id: `bbbb2222-2222-4222-8222-${String(apiRoomTypes.length + 2).padStart(12, '0')}`,
+      code: body.code,
+      name: body.name,
+      description: body.description,
+      capacity: body.capacity,
+      bedConfiguration: body.bedConfiguration,
+      roomFeatureIds: body.roomFeatureIds ?? [],
+      active: body.active ?? true,
+      createdAt: apiNow,
+      updatedAt: apiNow,
+    };
+    apiRoomTypes.push(roomType);
+    return jsonResponse(roomType, 201);
+  }
+  if (method === 'PUT' && path.startsWith('/room-types/')) {
+    const id = path.split('/').at(-1);
+    const roomType = apiRoomTypes.find((item) => item.id === id);
+    if (!roomType) return jsonResponse({ message: 'Not found' }, 404);
+    Object.assign(roomType, {
+      code: body.code ?? roomType.code,
+      name: body.name ?? roomType.name,
+      description: body.description ?? roomType.description,
+      capacity: body.capacity ?? roomType.capacity,
+      bedConfiguration: body.bedConfiguration ?? roomType.bedConfiguration,
+      roomFeatureIds: body.roomFeatureIds ?? roomType.roomFeatureIds,
+      active: body.active ?? roomType.active,
+      updatedAt: apiNow,
+    });
+    return jsonResponse(roomType);
+  }
+  if (method === 'GET' && path === '/room-features') return jsonResponse(apiRoomFeatures);
+  if (method === 'GET' && path === '/rates') return jsonResponse(apiRates);
+  if (method === 'POST' && path === '/rates') {
+    if (!Number.isInteger(body.priceCents) || body.priceCents < 1) {
+      return jsonResponse({ message: 'priceCents must be greater than or equal to 1' }, 400);
+    }
+    const rate = {
+      id: `dddd4444-4444-4444-8444-${String(apiRates.length + 2).padStart(12, '0')}`,
+      roomTypeId: body.roomTypeId,
+      name: body.name,
+      validFrom: body.validFrom,
+      validTo: body.validTo,
+      priceCents: body.priceCents,
+      currency: body.currency ?? 'GTQ',
+      minimumNights: body.minimumNights ?? 1,
+      refundable: body.refundable ?? true,
+      active: body.active ?? true,
+      createdAt: apiNow,
+      updatedAt: apiNow,
+    };
+    apiRates.push(rate);
+    return jsonResponse(rate, 201);
+  }
+  if (method === 'PUT' && path.startsWith('/rates/')) {
+    const id = path.split('/').at(-1);
+    const rate = apiRates.find((item) => item.id === id);
+    if (!rate) return jsonResponse({ message: 'Not found' }, 404);
+    Object.assign(rate, {
+      roomTypeId: body.roomTypeId ?? rate.roomTypeId,
+      name: body.name ?? rate.name,
+      validFrom: body.validFrom ?? rate.validFrom,
+      validTo: body.validTo ?? rate.validTo,
+      priceCents: body.priceCents ?? rate.priceCents,
+      currency: body.currency ?? rate.currency,
+      minimumNights: body.minimumNights ?? rate.minimumNights,
+      refundable: body.refundable ?? rate.refundable,
+      active: body.active ?? rate.active,
+      updatedAt: apiNow,
+    });
+    return jsonResponse(rate);
   }
 
   if (method === 'GET' && path === '/room-service/products') {
@@ -1083,11 +1283,18 @@ test('mockUtils.setForceError: hace que los servicios rechacen, y se puede desac
 
 // --- D. WEB-14: servicios faltantes para la vertical Ronda 1 ---------------
 
-test('roomService.createRoom/updateRoom/getRoomTypes: escriben roomsDB y devuelven Models', async () => {
+test('roomService.createRoom/updateRoom/getRoomTypes: usan API real y devuelven Models', async () => {
+  const roomTypes = await assertServiceCall('roomService.getRoomTypes', () =>
+    roomService.getRoomTypes(),
+  );
+  assert.ok(Array.isArray(roomTypes) && roomTypes.length > 0);
+  assert.ok('bedConfiguration' in roomTypes[0], 'RoomType debe ser Model camelCase');
+  assert.ok(!('bed_configuration' in roomTypes[0]), 'RoomType no debe traer campos DTO');
+
   const room = await assertServiceCall('roomService.createRoom', () =>
     roomService.createRoom({
       room_number: '909',
-      room_type_id: 'RT-01',
+      room_type_id: roomTypes[0].id,
       floor: 9,
       notes: 'Habitación creada por prueba WEB-14.',
     }),
@@ -1106,12 +1313,10 @@ test('roomService.createRoom/updateRoom/getRoomTypes: escriben roomsDB y devuelv
   assert.equal(updated.status, 'maintenance');
   assert.equal(updated.notes, 'Mantenimiento preventivo.');
 
-  const roomTypes = await assertServiceCall('roomService.getRoomTypes', () =>
-    roomService.getRoomTypes(),
+  const reloaded = await assertServiceCall('roomService.getRoomById', () =>
+    roomService.getRoomById(room.id),
   );
-  assert.ok(Array.isArray(roomTypes) && roomTypes.length > 0);
-  assert.ok('bedConfiguration' in roomTypes[0], 'RoomType debe ser Model camelCase');
-  assert.ok(!('bed_configuration' in roomTypes[0]), 'RoomType no debe traer campos DTO');
+  assert.equal(reloaded.roomNumber, '909');
 });
 
 test('bookingService.checkIn/checkOut: validan transiciones con BOOKING_STATUS_TRANSITIONS', async () => {
@@ -1527,15 +1732,15 @@ test('housekeepingService: stayover como flujo separado del turnover', async (t)
   assert.equal(room.status, 'occupied', 'stayover no libera la habitacion');
 });
 
-test('housekeeping: persiste estado de habitacion mock, solicitudes y desperfectos', async () => {
+test('housekeeping: sincroniza estado de habitacion, solicitudes y desperfectos', async () => {
   const room = await assertServiceCall('roomService.updateRoom housekeeping cleaning', () =>
     roomService.updateRoom('RM-101', { housekeeping_status: 'cleaning' }),
   );
   assert.equal(room.housekeepingStatus, 'cleaning');
-  assert.match(
-    storageValues.get('PMS_ROOMS_DB'),
-    /"housekeeping_status":"cleaning"/,
-    'el estado de limpieza debe quedar persistido en localStorage',
+  assert.equal(
+    (await roomService.getRoomById('RM-101')).housekeepingStatus,
+    'cleaning',
+    'el estado de limpieza debe volver desde la API de habitaciones',
   );
 
   const pending = await assertServiceCall('serviceRequestService.createRequest', () =>

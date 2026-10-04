@@ -196,8 +196,9 @@ esto pasa por una entrada nueva en ese documento.
 
 Actualizacion 2026-09-22 (#73): dentro de la web, el workspace de Limpieza
 tambien puede escribir `housekeepingStatus` a traves de `roomService` para
-persistir iniciar/finalizar/cambiar estado. Recepcion, Ocupacion y
-Administracion siguen leyendo ese campo como estado operativo compartido.
+persistir iniciar/finalizar/cambiar estado. Desde INT-02 esa escritura viaja al
+backend de habitaciones; Recepcion, Ocupacion y Administracion siguen leyendo
+ese campo como estado operativo compartido.
 
 `shared/types/entities/index.ts` es un barrel de **tipos únicamente**:
 `toDomain`/`toDTO` no se reexportan ahí porque las veinticuatro entidades
@@ -266,14 +267,16 @@ esta consolidación). Reemplaza a `services/mockData.ts`,
 `services/authMockData.ts` y `shared/mocks/{lot-b,lot-c,lot-d}.ts`, que
 antes coexistían con IDs de mundos distintos que no se cruzaban entre sí
 (p. ej. `paymentService` leía `mockData.ts` mientras `guestAccountService`
-ya leía el dataset real de pagos del Lote C). `bookingService`,
-`roomService`, `guestService`, `paymentService` y `catalogService` leen de
-ahí (Lote B/C/D); igual `guestAccountService`/`cashService` (Lote C) y
-`personnelService`/`inventoryService`/`auditService` (Lote D).
-`authService.ts` es el único servicio con persistencia (sesión en
-`localStorage`) y cliente HTTP (`services/http-client.ts`) conectado al backend
-Spring desde INT-01: login, Bearer JWT, refresh con retry unico y logout contra
-`/auth/*`. Única excepción documentada a "un solo
+ya leía el dataset real de pagos del Lote C). Los servicios no integrados aun
+leen de ahi (Lote B/C/D) mediante la capa `src/services/`; los servicios
+integrados usan `http-client.ts` y documentan cualquier fallback local de
+lectura en `src/services/README.md`.
+`authService.ts` conecta al backend Spring desde INT-01: login, Bearer JWT,
+refresh con retry unico y logout contra `/auth/*`. Desde INT-02, `roomService`
+tambien usa backend para habitaciones, tipos, caracteristicas y tarifas
+(`/rooms`, `/room-types`, `/room-features`, `/rates`) y deja `src/data/db.ts`
+solo como fallback de lectura cuando no hay backend/harness.
+Única excepción documentada a "un solo
 archivo con datos inventados": el fixture de demo de
 `src/modules/ui-catalog/services/catalog-service.ts`, que no representa
 ninguna entidad del contrato y existe solo para renderizar `/components`.

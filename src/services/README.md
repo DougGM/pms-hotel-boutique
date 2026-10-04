@@ -57,9 +57,9 @@ historico del Lote D.
 ## WEB-14: servicios faltantes de la vertical Ronda 1
 
 `roomService` expone `createRoom(data)`, `updateRoom(id, data)` y
-`getRoomTypes()`. Los dos primeros escriben en `roomsDB`, generan/actualizan
-timestamps y devuelven `Room` de dominio; `getRoomTypes()` devuelve
-`RoomType[]` desde `roomTypesDB`.
+`getRoomTypes()`. Desde INT-02, habitaciones, tipos, caracteristicas y tarifas
+usan el backend real; ver la seccion "Integracion con INT-02" para endpoints y
+fallbacks.
 
 `bookingService` expone `checkIn(bookingId)`, `checkOut(bookingId)` y
 `assignRoom(bookingId, roomId)`. `checkIn`/`checkOut` validan contra
@@ -127,10 +127,10 @@ marcas de lectura en `notificationReadsDB`, dentro de `src/data/db.ts`, sin
 crear una entidad `notification` propia.
 
 Actualizacion 2026-09-22 (#73): las operaciones de Limpieza que antes vivian
-solo en estado React ahora persisten en `localStorage` mediante la capa de
-servicios mock. `roomService.updateRoom()` guarda cambios de
-`housekeeping_status` en `PMS_ROOMS_DB`; `serviceRequestService` crea reportes
-de desperfectos (`maintenance`) y cambia estados de solicitudes en
+solo en estado React pasaron a servicios persistibles. Desde INT-02,
+`roomService.updateRoom()` envia cambios de `housekeeping_status` al backend de
+habitaciones; `serviceRequestService` crea reportes de desperfectos
+(`maintenance`) y cambia estados de solicitudes en
 `PMS_SERVICE_REQUESTS_DB`. Los handlers del workspace esperan estos metodos
 antes de mostrar mensajes de exito, por lo que un error conserva el estado
 anterior visible. Desde INT-09 el turnover, las tareas stayover y el historial
@@ -165,7 +165,7 @@ operativas hardcodeadas como si fueran actuales. `AdminContent` calcula
 dashboard/reportes desde habitaciones, reservas, caja, inventario y auditoria
 cargadas por servicios, con moneda GTQ. Las operaciones soportadas esperan a
 servicios persistibles antes de mostrar exito: habitaciones/tipos/tarifas usan
-`roomService` (`PMS_ROOMS_DB`, `PMS_ROOM_TYPES_DB`, `PMS_RATES_DB`),
+`roomService` contra backend desde INT-02,
 promociones usan `promotionService` (`PMS_PROMOTIONS_DB`), inventario usa
 `inventoryService` (`PMS_INVENTORY_ITEMS_DB`,
 `PMS_INVENTORY_MOVEMENTS_DB`) y caja usa `cashService` contra el backend real.
@@ -215,6 +215,31 @@ refresh falla, limpia la sesion local para obligar un nuevo login.
 persistencia local, incluso si la confirmacion remota falla. `clearSession()`
 expone la limpieza local sincrona. La clave legacy `hotel-aurora.auth.v1` se
 elimina al restaurar o limpiar sesion.
+
+## Integracion con INT-02
+
+`roomService` conserva su API de dominio para pantallas publicas, privadas y
+Administracion, pero las operaciones oficiales de habitaciones, tipos,
+caracteristicas y tarifas ya pasan por `http-client.ts`:
+
+- `GET /rooms`, `GET /rooms/{id}`, `POST /rooms`, `PUT /rooms/{id}`.
+- `GET /room-types`, `GET /room-types/{id}`, `POST /room-types`,
+  `PUT /room-types/{id}`.
+- `GET /room-features`.
+- `GET /rates`, `POST /rates`, `PUT /rates/{id}`. No se asume
+  `GET /rates/{id}`.
+
+El backend usa camelCase (`roomNumber`, `roomTypeId`, `housekeepingStatus`,
+`roomFeatureIds`, `priceCents`). El servicio adapta esas respuestas a los DTOs
+internos snake_case y despues aplica los mappers existentes para devolver
+Models. `status` y `housekeepingStatus` permanecen separados; `priceCents` se
+mantiene en centavos y no se duplica ninguna regla de negocio del backend.
+
+Las lecturas conservan fallback local solo cuando el backend no esta disponible
+o el harness responde 404 a una ruta no mockeada. Las escrituras de
+habitaciones, tipos y tarifas usan el contrato HTTP real; los errores 400, 401,
+403, 404 y 409 se propagan como mensajes de operacion para que la UI existente
+muestre el fallo sin mutar estado local.
 
 ## Integracion con INT-08
 
