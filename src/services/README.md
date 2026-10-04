@@ -349,3 +349,40 @@ Reglas:
   turnover nuevo.
 - El workspace solo consulta Limpieza para el rol `housekeeping`; los demas
   roles no tienen `housekeeping.read` y recibirian `403`.
+
+## Integracion con INT-10 (#108)
+
+El lado del personal de `orderService` ya no usa `ordersDB` ni `localStorage`.
+Todas sus operaciones van a `RoomServiceController` mediante `http-client.ts`:
+
+- `getOrders({ bookingId?, status? })` → `GET /room-service/orders`.
+- `getOrderById(id)` → `GET /room-service/orders/{id}` (`undefined` si no existe).
+- `createStaffOrder({ bookingId, items, notes? })` → `POST /room-service/orders`.
+  El backend toma habitacion, huesped y precios de la reserva.
+- `updateOrderStatus(id, status, notes?)` → `POST /room-service/orders/{id}/status`.
+  `notes` viaja junto con el cambio (motivo de rechazo o cancelacion); si se
+  omite, el backend conserva las notas actuales.
+- `updateOrderNotes(id, notes)` → `PATCH /room-service/orders/{id}/notes`.
+
+Ambos endpoints de notas requieren la rama de backend
+`feature/room-service-order-notes`. El catalogo sigue en `catalogService`
+(`GET /room-service/products`, desde INT-07).
+
+Reglas:
+
+- El backend decide las transiciones (`pending -> accepted -> preparing ->
+ready -> on_the_way -> delivered`; se cancela hasta `ready`; `pending`
+  tambien puede rechazarse). `ORDER_STATUS_TRANSITIONS` quedo alineado con
+  esas reglas solo como referencia; el servicio no lo usa para validar.
+- El frontend no toca inventario ni crea cargos: aceptar descuenta stock,
+  cancelar lo devuelve y entregar genera el cargo al folio, todo en backend. La
+  UI solo refleja el `chargeId` que devuelve la respuesta.
+- Ante `400`/`403`/`404` la pantalla muestra el error y recarga los pedidos
+  reales.
+- La respuesta incluye `roomNumber`, `guestName`, `productName` y los totales
+  con precios congelados, porque el rol `room_service` no tiene `rooms.read`.
+- El workspace solo consulta catalogo y pedidos para admin, recepcion y room
+  service (`room-service.read`).
+- `createOrder`, `cancelOrder` y `getOrdersByGuestId` son del portal del
+  huesped, que usa `/guest/room-service/...` con otro token: siguen sobre el
+  mock hasta INT-12.

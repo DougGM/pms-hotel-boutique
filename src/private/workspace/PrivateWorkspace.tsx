@@ -638,9 +638,45 @@ type WorkspaceState = {
   recentActivity: { time: string; text: string; tone: string }[];
 };
 
+// --- Room Service (INT-10) ---------------------------------------------------
+// Pedidos de `orderService` (backend). Habitación, huésped y producto vienen en
+// la respuesta; los catálogos locales solo cubren datos que el backend no envíe.
+
+const toRoomServiceOrder = (
+  order: Order,
+  id: number,
+  lookup: { rooms?: Room[]; guests?: Guest[]; products?: Product[] } = {},
+): RoomServiceOrder => {
+  const room = lookup.rooms?.find((item) => item.id === order.roomId);
+  const guest = lookup.guests?.find((item) => item.id === order.guestId);
+  const isClosedWithReason = order.status === 'rejected' || order.status === 'cancelled';
+  return {
+    id,
+    orderId: order.id,
+    bookingId: order.bookingId,
+    room: order.roomNumber ?? room?.roomNumber ?? 'Sin habitación',
+    guest: order.guestName ?? (guest ? `${guest.firstName} ${guest.lastName}` : 'Huésped'),
+    time: formatDbTime(order.requestedAt),
+    items: order.items.map((item) => ({
+      name:
+        item.productName ??
+        lookup.products?.find((product) => product.id === item.productId)?.name ??
+        item.productId,
+      quantity: item.quantity,
+      price: centsToAmount(item.unitPriceCents),
+    })),
+    status: mapOrderStatus(order.status),
+    // En un pedido rechazado o cancelado las notas son el motivo: se muestran una sola vez.
+    note: isClosedWithReason ? '' : (order.notes ?? ''),
+    rejectionReason: isClosedWithReason ? (order.notes ?? '') : '',
+    charged: Boolean(order.chargeId),
+    chargeId: order.chargeId,
+  };
+};
+
 /**
- * Roles con `room-service.read` en el backend. Pedir el catálogo con otro rol
- * (Limpieza, Conserjería) responde 403 y tumbaría la carga de todo el panel.
+ * Roles con `room-service.read` en el backend. Pedir catálogo o pedidos con
+ * otro rol (Limpieza, Conserjería) responde 403 y tumbaría la carga del panel.
  */
 const ROOM_SERVICE_READ_ROLES: readonly RoleId[] = ['admin', 'reception', 'room-service'];
 
@@ -666,7 +702,7 @@ async function loadWorkspaceData(role: RoleId): Promise<WorkspaceState> {
     bookingService.getBookings(),
     guestService.getGuests(),
     ROOM_SERVICE_READ_ROLES.includes(role) ? catalogService.getProducts() : [],
-    orderService.getOrders(),
+    ROOM_SERVICE_READ_ROLES.includes(role) ? orderService.getOrders() : [],
     serviceRequestService.getRequests(),
     auditService.getLogs(),
     guestAccountService.getCharges(),
@@ -791,32 +827,9 @@ async function loadWorkspaceData(role: RoleId): Promise<WorkspaceState> {
       active: true,
     }));
 
-  const roomServiceOrders: RoomServiceOrder[] = orders.map((order, index) => {
-    const room = rooms.find((item) => item.id === order.roomId);
-    const guest = guests.find((item) => item.id === order.guestId);
-
-    return {
-      id: parseDbId(order.id, index + 1),
-      orderId: order.id,
-      bookingId: order.bookingId,
-      room: room?.roomNumber ?? 'Sin habitación',
-      guest: guest ? `${guest.firstName} ${guest.lastName}` : 'Huésped',
-      time: formatDbTime(order.requestedAt),
-      items: order.items.map((item) => {
-        const product = products.find((productItem) => productItem.id === item.productId);
-        return {
-          name: product?.name ?? item.productId,
-          quantity: item.quantity,
-          price: centsToAmount(item.unitPriceCents),
-        };
-      }),
-      status: mapOrderStatus(order.status),
-      note: order.notes ?? '',
-      rejectionReason: order.status === 'rejected' ? (order.notes ?? '') : '',
-      charged: Boolean(order.chargeId),
-      chargeId: order.chargeId,
-    };
-  });
+  const roomServiceOrders = orders.map((order, index) =>
+    toRoomServiceOrder(order, index + 1, { rooms, guests, products }),
+  );
 
   const { cleaningRooms, guestRequests, history } = housekeepingData
     ? buildHousekeepingState(housekeepingData, (room) =>
@@ -1504,7 +1517,6 @@ function PrivateWorkspaceReady({
     status: 'Todos',
   });
   const [recSearch, setRecSearch] = useState('');
-  const operationalUserId = sessionUserId?.startsWith('USR-') ? sessionUserId : undefined;
   const hkDetailRoom =
     hkDetailRoomId !== null ? (hkRooms.find((r) => r.id === hkDetailRoomId) ?? null) : null;
   const rsSelectedOrder =
@@ -2173,6 +2185,50 @@ function PrivateWorkspaceReady({
     );
   };
 
+  // Room Service: cada acción espera la respuesta del backend. Si la rechaza
+  // (transición inválida, sin stock, folio cerrado), se recargan los pedidos reales.
+  const replaceRoomServiceOrder = (orderId: number, updated: Order) => {
+    setRsOrders((current) =>
+      current.map((item) => {
+        if (item.id !== orderId) return item;
+        const next = toRoomServiceOrder(updated, item.id);
+        // La respuesta del backend no repite los nombres si no los conoce.
+        return {
+          ...next,
+          room: updated.roomNumber ? next.room : item.room,
+          guest: updated.guestName ? next.guest : item.guest,
+        };
+      }),
+    );
+  };
+
+  const reloadRoomServiceOrders = async () => {
+    const orders = await orderService.getOrders();
+    setRsOrders(orders.map((order, index) => toRoomServiceOrder(order, index + 1)));
+  };
+
+  const failRoomService = async (cause: unknown) => {
+    notifyError(cause);
+    try {
+      await reloadRoomServiceOrders();
+    } catch {
+      // El aviso anterior ya informa del fallo; se conserva el último estado conocido.
+    }
+  };
+
+  // El cargo lo crea el backend al entregar; recepción solo refleja ese cargo en
+  // el folio que tiene en pantalla. Room Service no tiene `charges.read`.
+  const syncDeliveredChargeToFolio = async (order: RoomServiceOrder, chargeId: string) => {
+    if (activeRole !== 'reception' && activeRole !== 'admin') return;
+    try {
+      const charges = await guestAccountService.getChargesByBookingId(order.bookingId);
+      const charge = charges.find((item) => item.id === chargeId);
+      if (charge) addRoomServiceChargeToFolio(order, charge);
+    } catch (cause) {
+      notifyError(cause);
+    }
+  };
+
   const updateRoomServiceOrder = async (orderId: number, status: OrderStatus) => {
     const order = rsOrders.find((item) => item.id === orderId);
     if (!order) return;
@@ -2181,36 +2237,18 @@ function PrivateWorkspaceReady({
       const updated = await orderService.updateOrderStatus(
         order.orderId,
         toDomainOrderStatus(status),
-        order.note,
-        { createdByUserId: operationalUserId },
       );
-
-      if (status === 'Entregado' && updated.chargeId) {
-        const charges = await guestAccountService.getChargesByBookingId(order.bookingId);
-        const charge = charges.find((item) => item.id === updated.chargeId);
-        if (charge) addRoomServiceChargeToFolio(order, charge);
-      }
-
-      setRsOrders((current) =>
-        current.map((item) =>
-          item.id === orderId
-            ? {
-                ...item,
-                status,
-                charged: Boolean(updated.chargeId),
-                chargeId: updated.chargeId,
-                note: updated.notes ?? item.note,
-              }
-            : item,
-        ),
-      );
+      replaceRoomServiceOrder(orderId, updated);
       notify(
         status === 'Entregado'
           ? `Pedido #${orderId} entregado y cargado al folio`
           : `Pedido #${orderId} actualizado: ${status}`,
       );
+      if (updated.status === 'delivered' && updated.chargeId) {
+        await syncDeliveredChargeToFolio(order, updated.chargeId);
+      }
     } catch (cause) {
-      notifyError(cause);
+      await failRoomService(cause);
     }
   };
 
@@ -2220,14 +2258,10 @@ function PrivateWorkspaceReady({
 
     try {
       const updated = await orderService.updateOrderNotes(order.orderId, note);
-      setRsOrders((current) =>
-        current.map((item) =>
-          item.id === orderId ? { ...item, note: updated.notes ?? '' } : item,
-        ),
-      );
+      replaceRoomServiceOrder(orderId, updated);
       notify('Observación guardada');
     } catch (cause) {
-      notifyError(cause);
+      await failRoomService(cause);
     }
   };
 
@@ -2237,23 +2271,10 @@ function PrivateWorkspaceReady({
 
     try {
       const updated = await orderService.updateOrderStatus(order.orderId, 'rejected', reason);
-      setRsOrders((current) =>
-        current.map((item) =>
-          item.id === orderId
-            ? {
-                ...item,
-                status: 'Rechazado',
-                rejectionReason: reason,
-                note: updated.notes ?? item.note,
-                charged: Boolean(updated.chargeId),
-                chargeId: updated.chargeId,
-              }
-            : item,
-        ),
-      );
+      replaceRoomServiceOrder(orderId, updated);
       notify(`Pedido #${orderId} rechazado`);
     } catch (cause) {
-      notifyError(cause);
+      await failRoomService(cause);
     }
   };
 
@@ -2262,25 +2283,12 @@ function PrivateWorkspaceReady({
     if (!order) return;
 
     try {
-      const noted = await orderService.updateOrderNotes(order.orderId, reason);
-      const updated = await orderService.cancelOrder(order.orderId);
-      setRsOrders((current) =>
-        current.map((item) =>
-          item.id === orderId
-            ? {
-                ...item,
-                status: 'Cancelado',
-                rejectionReason: reason,
-                note: noted.notes ?? item.note,
-                charged: Boolean(updated.chargeId),
-                chargeId: updated.chargeId,
-              }
-            : item,
-        ),
-      );
+      // El backend devuelve el inventario si el pedido ya lo había descontado.
+      const updated = await orderService.updateOrderStatus(order.orderId, 'cancelled', reason);
+      replaceRoomServiceOrder(orderId, updated);
       notify(`Pedido #${orderId} cancelado`);
     } catch (cause) {
-      notifyError(cause);
+      await failRoomService(cause);
     }
   };
 

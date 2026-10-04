@@ -54,6 +54,10 @@ export class HttpClient {
     return this.request<T>('PUT', path, body, init);
   }
 
+  patch<T>(path: string, body?: unknown, init?: HttpClientInit): Promise<T> {
+    return this.request<T>('PATCH', path, body, init);
+  }
+
   delete<T>(path: string, init?: HttpClientInit): Promise<T> {
     return this.request<T>('DELETE', path, undefined, init);
   }

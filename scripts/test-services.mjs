@@ -1900,100 +1900,165 @@ test('portal de huesped persiste pedidos, solicitudes, perfil y notificaciones',
   );
 });
 
-test('room service y conserjeria persisten estados, motivos, observaciones y cargos reales', async () => {
-  const beforeCharges = await guestAccountService.getChargesByBookingId('BKG-002');
-  const deliveredOrder = await assertServiceCall('orderService.createOrder room-service', () =>
-    orderService.createOrder({
-      bookingId: 'BKG-002',
-      roomId: 'RM-201',
-      guestId: 'GST-002',
-      items: [{ productId: 'PRD-001', quantity: 1 }],
-      notes: 'Subir con cubiertos.',
-    }),
-  );
+const RS_BOOKING_ID = '8a1f2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d';
+const RS_PRODUCT_ID = '1b2c3d4e-5f6a-4b7c-8d9e-0f1a2b3c4d5e';
 
-  await orderService.updateOrderStatus(deliveredOrder.id, 'accepted');
-  await orderService.updateOrderStatus(deliveredOrder.id, 'preparing');
-  await orderService.updateOrderStatus(deliveredOrder.id, 'ready');
-  await orderService.updateOrderStatus(deliveredOrder.id, 'onTheWay');
-  const delivered = await orderService.updateOrderStatus(deliveredOrder.id, 'delivered');
+// Mismas reglas que RoomServiceOrderServiceImpl: transiciones exactas, notas
+// opcionales en el cambio de estado, PATCH de notas solo en pedidos no terminales
+// y un único cargo creado por el backend al entregar.
+function installRoomServiceFetchMock() {
+  const previousFetch = globalThis.fetch;
+  const calls = [];
+  const orders = [];
+  const allowed = {
+    pending: ['accepted', 'rejected', 'cancelled'],
+    accepted: ['preparing', 'cancelled'],
+    preparing: ['ready', 'cancelled'],
+    ready: ['on_the_way', 'cancelled'],
+    on_the_way: ['delivered'],
+    delivered: [],
+    rejected: [],
+    cancelled: [],
+  };
+  const terminal = ['delivered', 'rejected', 'cancelled'];
+  const json = (body, status = 200) =>
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { 'content-type': 'application/json' },
+    });
+
+  globalThis.fetch = async (input, init = {}) => {
+    const url = new URL(String(input));
+    const path = url.pathname.replace(/^\/api\/v1/, '');
+    const method = init.method ?? 'GET';
+    const body = init.body ? JSON.parse(String(init.body)) : undefined;
+    calls.push({ call: `${method} ${path}${url.search}`, body });
+
+    if (method === 'GET' && path === '/room-service/orders') {
+      const status = url.searchParams.get('status');
+      return json(orders.filter((order) => !status || order.status === status));
+    }
+    if (method === 'POST' && path === '/room-service/orders') {
+      const quantity = body.items[0].quantity;
+      const order = {
+        id: `9c8b7a6d-0000-4000-8000-${String(orders.length + 1).padStart(12, '0')}`,
+        bookingId: body.bookingId,
+        roomId: '2d3e4f5a-0000-4000-8000-000000000001',
+        roomNumber: '305',
+        guestId: '3e4f5a6b-0000-4000-8000-000000000001',
+        guestName: 'Ana López',
+        status: 'pending',
+        notes: body.notes ?? null,
+        currency: 'GTQ',
+        totalCents: 4500 * quantity,
+        items: [
+          {
+            id: 'item-1',
+            productId: body.items[0].productId,
+            productName: 'Club sándwich',
+            quantity,
+            unitPriceCents: 4500,
+            lineTotalCents: 4500 * quantity,
+          },
+        ],
+        chargeId: null,
+        requestedAt: '2026-10-03T12:00:00Z',
+        createdAt: '2026-10-03T12:00:00Z',
+        updatedAt: '2026-10-03T12:00:00Z',
+      };
+      orders.push(order);
+      return json(order, 201);
+    }
+    const match = path.match(/^\/room-service\/orders\/([^/]+)(?:\/(status|notes))?$/);
+    const order = match && orders.find((item) => item.id === match[1]);
+    if (match && !order) return json({ status: 404, message: 'Room service order not found' }, 404);
+    if (method === 'GET' && match && !match[2]) return json(order);
+    if (method === 'POST' && match?.[2] === 'status') {
+      if (!allowed[order.status].includes(body.status)) {
+        return json({ status: 400, message: 'Invalid room service order status transition' }, 400);
+      }
+      order.status = body.status;
+      if (body.notes !== undefined) order.notes = body.notes.trim() || null;
+      if (body.status === 'delivered') order.chargeId = '7f6e5d4c-0000-4000-8000-000000000001';
+      return json(order);
+    }
+    if (method === 'PATCH' && match?.[2] === 'notes') {
+      if (terminal.includes(order.status)) {
+        return json({ status: 400, message: 'Room service order status is terminal' }, 400);
+      }
+      order.notes = body.notes.trim() || null;
+      return json(order);
+    }
+    return json({ message: `Ruta no mockeada en test: ${method} ${path}` }, 404);
+  };
+  return { calls, orders, restore: () => (globalThis.fetch = previousFetch) };
+}
+
+test('orderService: el ciclo de Room Service va al backend y no crea cargos locales', async (t) => {
+  const { calls, restore } = installRoomServiceFetchMock();
+  t.after(restore);
+  const chargesBefore = (await guestAccountService.getCharges()).length;
+
+  const created = await orderService.createStaffOrder({
+    bookingId: RS_BOOKING_ID,
+    items: [{ productId: RS_PRODUCT_ID, quantity: 2 }],
+    notes: '  Sin cebolla  ',
+  });
+  assert.equal(created.status, 'pending');
+  assert.equal(created.roomNumber, '305');
+  assert.equal(created.guestName, 'Ana López');
+  assert.equal(created.totalCents, 9000);
+  assert.equal(created.items[0].productName, 'Club sándwich');
+  assert.ok(!('room_number' in created), 'un Model no debe traer campos snake_case del DTO');
+  assert.deepEqual(calls.at(-1).body, {
+    bookingId: RS_BOOKING_ID,
+    notes: 'Sin cebolla',
+    items: [{ productId: RS_PRODUCT_ID, quantity: 2 }],
+  });
+
+  for (const status of ['accepted', 'preparing', 'ready', 'onTheWay']) {
+    await orderService.updateOrderStatus(created.id, status);
+  }
+  assert.equal(calls.at(-1).body.status, 'on_the_way', 'onTheWay viaja como on_the_way');
+  assert.equal(calls.at(-1).body.notes, undefined, 'sin notas el backend conserva las actuales');
+
+  const delivered = await orderService.updateOrderStatus(created.id, 'delivered');
   assert.equal(delivered.status, 'delivered');
-  assert.ok(delivered.chargeId, 'un pedido entregado debe guardar el chargeId real');
+  assert.ok(delivered.chargeId, 'el chargeId lo devuelve el backend');
+  assert.equal(delivered.notes, 'Sin cebolla');
 
-  const afterDeliveryCharges = await guestAccountService.getChargesByBookingId('BKG-002');
+  await assert.rejects(
+    () => orderService.updateOrderStatus(created.id, 'delivered'),
+    /rechazó la operación/,
+    'un pedido entregado es terminal: el backend decide',
+  );
   assert.equal(
-    afterDeliveryCharges.length,
-    beforeCharges.length + 1,
-    'entregar un pedido debe crear exactamente un cargo',
+    (await guestAccountService.getCharges()).length,
+    chargesBefore,
+    'el frontend no crea cargos de folio por su cuenta',
+  );
+  assert.deepEqual(
+    calls.filter(({ call }) => !call.startsWith('GET')).map(({ call }) => call.split(' ')[0]),
+    ['POST', 'POST', 'POST', 'POST', 'POST', 'POST', 'POST'],
   );
   assert.ok(
-    afterDeliveryCharges.some((charge) => charge.id === delivered.chargeId),
-    'el cargo creado debe existir en el folio real de la reserva',
+    calls.every(({ call }) => call.includes('/room-service/orders')),
+    'solo se usan los endpoints de RoomServiceController',
   );
-  assert.equal(
-    afterDeliveryCharges.find((charge) => charge.id === delivered.chargeId)?.createdByUserId,
-    undefined,
-    'un cargo automatico sin usuario operativo no debe inventar createdByUserId',
-  );
+});
 
-  const deliveredAgain = await orderService.updateOrderStatus(deliveredOrder.id, 'delivered');
-  assert.equal(deliveredAgain.chargeId, delivered.chargeId);
-  assert.equal(
-    (await guestAccountService.getChargesByBookingId('BKG-002')).length,
-    afterDeliveryCharges.length,
-    'reintentar el mismo estado entregado no debe duplicar cargos',
-  );
+test('orderService: motivos y observaciones se guardan en el backend', async (t) => {
+  const { calls, restore } = installRoomServiceFetchMock();
+  t.after(restore);
+  const order = () =>
+    orderService.createStaffOrder({
+      bookingId: RS_BOOKING_ID,
+      items: [{ productId: RS_PRODUCT_ID, quantity: 1 }],
+    });
 
-  const staffOrder = await orderService.createOrder({
-    bookingId: 'BKG-002',
-    roomId: 'RM-201',
-    guestId: 'GST-002',
-    items: [{ productId: 'PRD-004', quantity: 1 }],
-  });
-  await orderService.updateOrderStatus(staffOrder.id, 'accepted');
-  await orderService.updateOrderStatus(staffOrder.id, 'preparing');
-  await orderService.updateOrderStatus(staffOrder.id, 'ready');
-  await orderService.updateOrderStatus(staffOrder.id, 'onTheWay');
-  const staffDelivered = await orderService.updateOrderStatus(
-    staffOrder.id,
-    'delivered',
-    undefined,
-    { createdByUserId: 'USR-008' },
-  );
-  const afterStaffDeliveryCharges = await guestAccountService.getChargesByBookingId('BKG-002');
-  assert.equal(
-    afterStaffDeliveryCharges.find((charge) => charge.id === staffDelivered.chargeId)
-      ?.createdByUserId,
-    'USR-008',
-    'si el caller envia un usuario operativo real, el cargo debe conservarlo',
-  );
-  const invalidCreatorOrder = await orderService.createOrder({
-    bookingId: 'BKG-002',
-    roomId: 'RM-201',
-    guestId: 'GST-002',
-    items: [{ productId: 'PRD-004', quantity: 1 }],
-  });
-  await orderService.updateOrderStatus(invalidCreatorOrder.id, 'accepted');
-  await orderService.updateOrderStatus(invalidCreatorOrder.id, 'preparing');
-  await orderService.updateOrderStatus(invalidCreatorOrder.id, 'ready');
-  await orderService.updateOrderStatus(invalidCreatorOrder.id, 'onTheWay');
-  await assert.rejects(
-    () =>
-      orderService.updateOrderStatus(invalidCreatorOrder.id, 'delivered', undefined, {
-        createdByUserId: 'user-room-service',
-      }),
-    /usuario operativo/,
-    'no debe guardar IDs de sesion como creador de cargos',
-  );
-
-  const rejectedOrder = await orderService.createOrder({
-    bookingId: 'BKG-002',
-    roomId: 'RM-201',
-    guestId: 'GST-002',
-    items: [{ productId: 'PRD-007', quantity: 1 }],
-  });
+  const toReject = await order();
   const rejected = await orderService.updateOrderStatus(
-    rejectedOrder.id,
+    toReject.id,
     'rejected',
     'Producto agotado.',
   );
@@ -2001,23 +2066,39 @@ test('room service y conserjeria persisten estados, motivos, observaciones y car
   assert.equal(rejected.notes, 'Producto agotado.');
   assert.equal(rejected.chargeId, undefined);
 
-  const cancelledOrder = await orderService.createOrder({
-    bookingId: 'BKG-002',
-    roomId: 'RM-201',
-    guestId: 'GST-002',
-    items: [{ productId: 'PRD-009', quantity: 1 }],
-  });
-  const noted = await orderService.updateOrderNotes(cancelledOrder.id, 'Cancelar por llamada.');
-  const cancelled = await orderService.cancelOrder(cancelledOrder.id);
-  assert.equal(noted.notes, 'Cancelar por llamada.');
-  assert.equal(cancelled.status, 'cancelled');
-  assert.equal(cancelled.chargeId, undefined);
-  assert.equal(
-    (await guestAccountService.getChargesByBookingId('BKG-002')).length,
-    afterStaffDeliveryCharges.length,
-    'pedidos rechazados o cancelados no deben crear cargos',
+  const toCancel = await order();
+  await orderService.updateOrderStatus(toCancel.id, 'accepted');
+  await orderService.updateOrderStatus(toCancel.id, 'preparing');
+  const cancelled = await orderService.updateOrderStatus(
+    toCancel.id,
+    'cancelled',
+    'Cancelar por llamada.',
+  );
+  assert.equal(cancelled.status, 'cancelled', 'el backend permite cancelar desde preparing');
+  assert.equal(cancelled.notes, 'Cancelar por llamada.');
+
+  const toNote = await order();
+  const noted = await orderService.updateOrderNotes(toNote.id, 'Entregar sin cubiertos.');
+  assert.equal(noted.notes, 'Entregar sin cubiertos.');
+  assert.equal(noted.status, 'pending', 'guardar la observación no cambia el estado');
+  assert.equal(calls.at(-1).call, `PATCH /room-service/orders/${toNote.id}/notes`);
+
+  await assert.rejects(
+    () => orderService.updateOrderNotes(toReject.id, 'Otra nota'),
+    /rechazó la operación/,
+    'un pedido terminal conserva su motivo',
   );
 
+  const pending = await orderService.getOrders({ status: 'pending' });
+  assert.deepEqual(
+    pending.map((item) => item.id),
+    [toNote.id],
+  );
+  assert.equal(calls.at(-1).call, 'GET /room-service/orders?status=pending');
+  assert.equal(await orderService.getOrderById('9c8b7a6d-0000-4000-8000-999999999999'), undefined);
+});
+
+test('conserjeria persiste estados, motivos y observaciones (mock hasta INT-11)', async () => {
   const concierge = await serviceRequestService.createRequest({
     bookingId: 'BKG-002',
     roomId: 'RM-201',

@@ -425,3 +425,140 @@ test('limpieza: si el backend rechaza la transición se muestra el estado real',
   );
   assert.equal(cardFor('101').status, 'En proceso', 'se recargó el estado real del backend');
 });
+
+// --- Room Service: backend falso de RoomServiceController (INT-10) --------
+//
+// Mismas reglas que RoomServiceOrderServiceImpl: transiciones exactas o 400 y
+// `notes` opcional junto con el cambio de estado.
+
+const rsOrder = (id, status, extra = {}) => ({
+  id,
+  bookingId: 'booking-rs',
+  roomId: 'room-305',
+  roomNumber: '305',
+  guestId: 'guest-1',
+  guestName: 'Ana López',
+  status,
+  notes: null,
+  currency: 'GTQ',
+  totalCents: 4500,
+  items: [
+    {
+      id: `${id}-item`,
+      productId: 'product-1',
+      productName: 'Club sándwich',
+      quantity: 1,
+      unitPriceCents: 4500,
+      lineTotalCents: 4500,
+    },
+  ],
+  chargeId: null,
+  requestedAt: '2026-10-03T12:00:00Z',
+  createdAt: '2026-10-03T12:00:00Z',
+  updatedAt: '2026-10-03T12:00:00Z',
+  ...extra,
+});
+
+function installRoomServiceBackend() {
+  const state = { orders: [rsOrder('order-1', 'pending')], requests: [] };
+  const allowed = {
+    pending: ['accepted', 'rejected', 'cancelled'],
+    accepted: ['preparing', 'cancelled'],
+    preparing: ['ready', 'cancelled'],
+    ready: ['on_the_way', 'cancelled'],
+    on_the_way: ['delivered'],
+  };
+  const json = (body, status = 200) =>
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { 'content-type': 'application/json' },
+    });
+
+  originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input, init = {}) => {
+    const path = new URL(String(input)).pathname.replace(/^\/api\/v1/, '');
+    const method = init.method ?? 'GET';
+    const body = init.body ? JSON.parse(String(init.body)) : undefined;
+    state.requests.push({ call: `${method} ${path}`, body });
+    if (method === 'GET' && path === '/room-service/products') return json([]);
+    if (method === 'GET' && path === '/room-service/orders') return json(state.orders);
+    const status = path.match(/^\/room-service\/orders\/([^/]+)\/status$/);
+    if (method === 'POST' && status) {
+      const order = state.orders.find((item) => item.id === status[1]);
+      if (!(allowed[order.status] ?? []).includes(body.status)) return json({ status: 400 }, 400);
+      order.status = body.status;
+      if (body.notes !== undefined) order.notes = body.notes;
+      return json(order);
+    }
+    return json({ message: `Ruta no mockeada: ${method} ${path}` }, 404);
+  };
+  return state;
+}
+
+let rsBackend;
+async function mountRoomService() {
+  rsBackend = installRoomServiceBackend();
+  await act(async () => {
+    view = create(
+      <MemoryRouter>
+        <PrivateWorkspace role="room-service" sessionName="Room Service Test" />
+      </MemoryRouter>,
+    );
+  });
+  for (let i = 0; i < 20 && !view.root.findAll((node) => hasClass(node, 'side-nav')).length; i++) {
+    await settle(300);
+  }
+  assert.ok(view.root.findAll((node) => hasClass(node, 'side-nav')).length, 'workspace cargado');
+}
+const orderCards = () =>
+  view.root.findAll((node) => node.type === 'article' && hasClass(node, 'rs-order-card'));
+const orderStatus = (card) => text(card.find((node) => hasClass(node, 'status-pill')));
+const statusCalls = () =>
+  rsBackend.requests.filter(({ call }) => call.endsWith('/status')).map(({ body }) => body);
+
+test('room service: los pedidos salen del backend con habitación, huésped y producto', async () => {
+  await mountRoomService();
+  const [card] = orderCards();
+  assert.ok(card, 'el pedido del backend aparece en Pedidos activos');
+  assert.match(text(card), /Habitación 305 · Ana López/);
+  assert.match(text(card), /Club sándwich/);
+  assert.equal(orderStatus(card), 'Pendiente');
+});
+
+test('room service: aceptar envía el estado al backend sin notas', async () => {
+  await mountRoomService();
+  await act(async () => buttons('Aceptar pedido', orderCards()[0])[0].props.onClick());
+  await settle();
+  assert.deepEqual(statusCalls(), [{ status: 'accepted' }]);
+  assert.equal(rsBackend.orders[0].status, 'accepted');
+  assert.equal(orderStatus(orderCards()[0]), 'Aceptado');
+});
+
+test('room service: rechazar envía el motivo junto con el cambio de estado', async () => {
+  await mountRoomService();
+  await act(async () => buttons('Rechazar', orderCards()[0])[0].props.onClick());
+  const textarea = view.root.find(
+    (node) => node.type === 'textarea' && hasClass(node, 'rs-rejection-textarea'),
+  );
+  await act(async () => textarea.props.onChange({ target: { value: 'Cocina cerrada' } }));
+  await act(async () => buttons('Confirmar rechazo')[0].props.onClick());
+  await settle();
+  assert.deepEqual(statusCalls(), [{ status: 'rejected', notes: 'Cocina cerrada' }]);
+  assert.equal(rsBackend.orders[0].status, 'rejected');
+  assert.equal(rsBackend.orders[0].notes, 'Cocina cerrada');
+});
+
+test('room service: si el backend rechaza la transición se recargan los pedidos reales', async () => {
+  await mountRoomService();
+  // El huésped canceló el pedido desde su portal; esta pantalla aún no lo sabe.
+  rsBackend.orders[0].status = 'cancelled';
+  await act(async () => buttons('Aceptar pedido', orderCards()[0])[0].props.onClick());
+  await settle();
+  assert.ok(
+    view.root
+      .findAll((node) => hasClass(node, 'toast'))
+      .some((node) => /rechazó la operación/.test(text(node))),
+    'se informa el rechazo del backend',
+  );
+  assert.equal(orderCards().length, 0, 'el pedido cancelado sale de Pedidos activos');
+});
