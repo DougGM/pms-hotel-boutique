@@ -1,196 +1,209 @@
 import { toDomain as toOrder, type Order, type OrderDto } from '@/shared/types/entities/order';
 import type { ID } from '@/shared/types/common';
-import { ORDER_STATUS_TRANSITIONS, type OrderStatus } from '@/shared/constants/statuses';
-import { bookingsDB, ordersDB, productsDB, roomsDB, usersDB } from '@/data/db';
-import { mockUtils, requireCollection, simulateLatency } from './mockUtils';
-import { guestAccountService } from './guestAccountService';
-import { hydrateCollection, persistCollection } from './mockPersistence';
+import type { OrderStatus } from '@/shared/constants/statuses';
+import { HttpError, httpClient } from './http-client';
+import { guestRequest } from './guestHttp';
 
-const ordersStorageKey = 'PMS_ORDERS_DB';
+// INT-10: el personal opera los pedidos contra `RoomServiceController`. El
+// backend decide las transiciones, descuenta/devuelve inventario y genera el
+// cargo al folio al entregar; este servicio no replica nada de eso.
 
-function getOrdersDB(): OrderDto[] {
-  return hydrateCollection(ordersStorageKey, ordersDB);
-}
+type RoomServiceOrderItemResponse = {
+  id: string;
+  productId: string;
+  productName?: string | null;
+  quantity: number;
+  unitPriceCents: number;
+  lineTotalCents?: number | null;
+};
 
-function persistOrdersDB(): void {
-  persistCollection(ordersStorageKey, ordersDB);
-}
+type RoomServiceOrderResponse = {
+  id: string;
+  bookingId: string;
+  roomId?: string | null;
+  roomNumber?: string | null;
+  guestId?: string | null;
+  guestName?: string | null;
+  status: OrderDto['status'];
+  notes?: string | null;
+  currency: string;
+  totalCents?: number | null;
+  items: RoomServiceOrderItemResponse[];
+  chargeId?: string | null;
+  requestedAt: string;
+  createdAt: string;
+  updatedAt: string;
+};
 
-function nextOrderId(): string {
-  const max = getOrdersDB().reduce((currentMax, order) => {
-    const match = /^ORD-(\d+)$/.exec(order.id);
-    return match ? Math.max(currentMax, Number(match[1])) : currentMax;
-  }, 0);
-  return `ORD-${String(max + 1).padStart(3, '0')}`;
-}
-
-function assertOrderExists(id: ID) {
-  const order = getOrdersDB().find((item) => item.id === id);
-  if (!order) throw new Error(`No existe el pedido ${id}.`);
-  return order;
-}
-
-function ensureValidTransition(current: OrderStatus, next: OrderStatus): void {
-  if (current === next) return;
-  if (!ORDER_STATUS_TRANSITIONS[current].includes(next)) {
-    throw new Error(`Transicion invalida de pedido: ${current} -> ${next}.`);
+function normalizeCurrency(value: string): OrderDto['currency'] {
+  if (value !== 'GTQ') {
+    throw new Error(`Room Service solo admite moneda GTQ; backend devolvio ${value}.`);
   }
+  return 'GTQ';
 }
 
-function toDtoStatus(status: OrderStatus): OrderDto['status'] {
+function toOrderDto(response: RoomServiceOrderResponse): OrderDto {
+  return {
+    id: response.id,
+    booking_id: response.bookingId,
+    room_id: response.roomId ?? '',
+    room_number: response.roomNumber ?? undefined,
+    guest_id: response.guestId ?? undefined,
+    guest_name: response.guestName ?? undefined,
+    items: response.items.map((item) => ({
+      product_id: item.productId,
+      quantity: item.quantity,
+      unit_price_cents: item.unitPriceCents,
+      product_name: item.productName ?? undefined,
+      line_total_cents: item.lineTotalCents ?? undefined,
+    })),
+    status: response.status,
+    notes: response.notes ?? undefined,
+    currency: normalizeCurrency(response.currency),
+    total_cents: response.totalCents ?? undefined,
+    charge_id: response.chargeId ?? undefined,
+    requested_at: response.requestedAt,
+    created_at: response.createdAt,
+    updated_at: response.updatedAt,
+  };
+}
+
+function toStatusParam(status: OrderStatus): OrderDto['status'] {
   return status === 'onTheWay' ? 'on_the_way' : status;
 }
 
-function validateChargeCreatorId(createdByUserId?: ID): ID | undefined {
-  if (!createdByUserId) return undefined;
-  const user = usersDB.find((item) => item.id === createdByUserId);
-  if (!user) throw new Error(`No existe el usuario operativo ${createdByUserId}.`);
-  return user.id;
+function withQuery(path: string, params: Record<string, string | undefined>): string {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value) query.set(key, value);
+  }
+  const search = query.toString();
+  return search ? `${path}?${search}` : path;
 }
 
-function ensureRoomServiceCharge(order: OrderDto, createdByUserId?: ID): Promise<ID> {
-  const existingChargeId = order.charge_id;
-  if (existingChargeId) return Promise.resolve(existingChargeId);
+function getHttpErrorMessage(error: unknown, fallback: string): string {
+  if (!(error instanceof HttpError)) return error instanceof Error ? error.message : fallback;
+  if (error.status === 400) {
+    return `${fallback} El backend rechazó la operación: el pedido cambió de estado, no hay stock suficiente o el folio no está abierto.`;
+  }
+  if (error.status === 401) return 'Tu sesión expiró. Inicia sesión nuevamente.';
+  if (error.status === 403) return 'No tienes permisos para operar Room Service.';
+  if (error.status === 404) return `${fallback} El pedido, la reserva o el folio no existe.`;
+  return fallback;
+}
 
-  const totalCents = order.items.reduce(
-    (sum, item) => sum + item.quantity * item.unit_price_cents,
-    0,
-  );
-  const validCreatedByUserId = validateChargeCreatorId(createdByUserId);
-  return guestAccountService
-    .createCharge({
-      booking_id: order.booking_id,
-      description: `Room service - Pedido ${order.id}`,
-      quantity: 1,
-      unit_price_cents: totalCents,
-      currency: order.currency,
-      category: 'consumption',
-      created_by_user_id: validCreatedByUserId,
-    })
-    .then((charge) => charge.id);
+async function request<T>(call: () => Promise<T>, fallback: string): Promise<T> {
+  try {
+    return await call();
+  } catch (error) {
+    throw new Error(getHttpErrorMessage(error, fallback));
+  }
 }
 
 export const orderService = {
-  async getOrders(): Promise<Order[]> {
-    await simulateLatency();
-    mockUtils.throwIfSimulatingError('No fue posible cargar los pedidos.');
-    return requireCollection(getOrdersDB(), 'ordersDB').map(toOrder);
+  async getOrders(filters: { bookingId?: ID; status?: OrderStatus } = {}): Promise<Order[]> {
+    const response = await request(
+      () =>
+        httpClient.get<RoomServiceOrderResponse[]>(
+          withQuery('/room-service/orders', {
+            bookingId: filters.bookingId,
+            status: filters.status ? toStatusParam(filters.status) : undefined,
+          }),
+        ),
+      'No fue posible cargar los pedidos.',
+    );
+    return response.map((item) => toOrder(toOrderDto(item)));
   },
   async getOrderById(id: ID): Promise<Order | undefined> {
-    await simulateLatency();
-    mockUtils.throwIfSimulatingError('No fue posible cargar el pedido.');
-    const order = getOrdersDB().find((item) => item.id === id);
-    return order ? toOrder(order) : undefined;
+    try {
+      const response = await httpClient.get<RoomServiceOrderResponse>(`/room-service/orders/${id}`);
+      return toOrder(toOrderDto(response));
+    } catch (error) {
+      if (error instanceof HttpError && error.status === 404) return undefined;
+      throw new Error(getHttpErrorMessage(error, 'No fue posible cargar el pedido.'));
+    }
   },
-  async getOrdersByGuestId(guestId: ID): Promise<Order[]> {
-    await simulateLatency();
-    mockUtils.throwIfSimulatingError('No fue posible cargar los pedidos.');
-    return requireCollection(getOrdersDB(), 'ordersDB')
-      .filter((item) => item.guest_id === guestId)
-      .map(toOrder);
-  },
-  async createOrder(data: {
+  /** Creación desde el personal: el backend toma habitación, huésped y precios de la reserva. */
+  async createStaffOrder(data: {
     bookingId: ID;
-    roomId: ID;
-    guestId: ID;
     items: { productId: ID; quantity: number }[];
     notes?: string;
   }): Promise<Order> {
-    await simulateLatency();
-    mockUtils.throwIfSimulatingError('No fue posible crear el pedido.');
-
-    const booking = bookingsDB.find((item) => item.id === data.bookingId);
-    if (!booking) throw new Error(`No existe la reserva ${data.bookingId}.`);
-    if (booking.guest_id !== data.guestId) {
-      throw new Error('La reserva no pertenece al huesped autenticado.');
-    }
-    if (booking.room_id !== data.roomId) {
-      throw new Error('La habitacion no coincide con la reserva activa.');
-    }
-    const room = roomsDB.find((item) => item.id === data.roomId);
-    if (!room) throw new Error(`No existe la habitacion ${data.roomId}.`);
     if (data.items.length === 0) throw new Error('Agrega al menos un producto al pedido.');
-
-    const items = data.items.map((item) => {
-      if (!Number.isInteger(item.quantity) || item.quantity < 1) {
-        throw new Error('La cantidad del producto debe ser mayor a cero.');
-      }
-      const product = productsDB.find((productItem) => productItem.id === item.productId);
-      if (!product || !product.active) {
-        throw new Error(`El producto ${item.productId} no esta disponible.`);
-      }
-      return {
-        product_id: product.id,
-        quantity: item.quantity,
-        unit_price_cents: product.price_cents,
-      };
-    });
-
-    const now = new Date().toISOString();
-    const order = {
-      id: nextOrderId(),
-      booking_id: booking.id,
-      room_id: room.id,
-      guest_id: data.guestId,
-      items,
-      status: 'pending' as const,
-      notes: data.notes?.trim() || undefined,
-      currency: booking.currency,
-      requested_at: now,
-      created_at: now,
-      updated_at: now,
-    };
-    getOrdersDB().unshift(order);
-    persistOrdersDB();
-    return toOrder(order);
+    const response = await request(
+      () =>
+        httpClient.post<RoomServiceOrderResponse>('/room-service/orders', {
+          bookingId: data.bookingId,
+          notes: data.notes?.trim() || undefined,
+          items: data.items.map((item) => ({
+            productId: item.productId,
+            quantity: item.quantity,
+          })),
+        }),
+      'No fue posible crear el pedido.',
+    );
+    return toOrder(toOrderDto(response));
   },
-  async cancelOrder(orderId: ID, guestId?: ID): Promise<Order> {
-    await simulateLatency();
-    mockUtils.throwIfSimulatingError('No fue posible cancelar el pedido.');
-
-    const order = assertOrderExists(orderId);
-    if (guestId && order.guest_id !== guestId) {
-      throw new Error('El pedido no pertenece al huesped autenticado.');
-    }
-    if (order.status !== 'pending' && order.status !== 'accepted') {
-      throw new Error('Este pedido ya no se puede cancelar.');
-    }
-
-    order.status = 'cancelled';
-    order.updated_at = new Date().toISOString();
-    persistOrdersDB();
-    return toOrder(order);
-  },
-  async updateOrderStatus(
-    orderId: ID,
-    status: OrderStatus,
-    notes?: string,
-    options: { createdByUserId?: ID } = {},
-  ): Promise<Order> {
-    await simulateLatency();
-    mockUtils.throwIfSimulatingError('No fue posible actualizar el pedido.');
-
-    const order = assertOrderExists(orderId);
-    const current = toOrder(order).status;
-    ensureValidTransition(current, status);
-    if (status === 'delivered') {
-      order.charge_id = await ensureRoomServiceCharge(order, options.createdByUserId);
-    }
-    order.status = toDtoStatus(status);
-    if (notes !== undefined) order.notes = notes.trim() || undefined;
-    order.updated_at = new Date().toISOString();
-    persistOrdersDB();
-    return toOrder(order);
+  /**
+   * Cambia el estado en backend. `notes` viaja junto con el cambio (p. ej. el
+   * motivo de un rechazo o cancelación); si se omite, el backend conserva las notas.
+   */
+  async updateOrderStatus(orderId: ID, status: OrderStatus, notes?: string): Promise<Order> {
+    const response = await request(
+      () =>
+        httpClient.post<RoomServiceOrderResponse>(`/room-service/orders/${orderId}/status`, {
+          status: toStatusParam(status),
+          notes,
+        }),
+      'No fue posible actualizar el pedido.',
+    );
+    return toOrder(toOrderDto(response));
   },
   async updateOrderNotes(orderId: ID, notes: string): Promise<Order> {
-    await simulateLatency();
-    mockUtils.throwIfSimulatingError('No fue posible guardar la observacion del pedido.');
-
-    const order = assertOrderExists(orderId);
-    order.notes = notes.trim() || undefined;
-    order.updated_at = new Date().toISOString();
-    persistOrdersDB();
-    return toOrder(order);
+    const response = await request(
+      () =>
+        httpClient.patch<RoomServiceOrderResponse>(`/room-service/orders/${orderId}/notes`, {
+          notes,
+        }),
+      'No fue posible guardar la observación del pedido.',
+    );
+    return toOrder(toOrderDto(response));
+  },
+  // --- Portal del huésped (INT-12) ---------------------------------------------
+  // La reserva sale del JWT de huésped: ninguna de estas llamadas envía bookingId.
+  async getGuestOrders(): Promise<Order[]> {
+    const response = await guestRequest(
+      () => httpClient.get<RoomServiceOrderResponse[]>('/guest/room-service/orders'),
+      'No fue posible cargar tus pedidos.',
+    );
+    return response.map((item) => toOrder(toOrderDto(item)));
+  },
+  async createGuestOrder(data: {
+    items: { productId: ID; quantity: number }[];
+    notes?: string;
+  }): Promise<Order> {
+    if (data.items.length === 0) throw new Error('Agrega al menos un producto al pedido.');
+    const response = await guestRequest(
+      () =>
+        httpClient.post<RoomServiceOrderResponse>('/guest/room-service/orders', {
+          notes: data.notes?.trim() || undefined,
+          items: data.items.map((item) => ({
+            productId: item.productId,
+            quantity: item.quantity,
+          })),
+        }),
+      'No fue posible enviar tu pedido.',
+    );
+    return toOrder(toOrderDto(response));
+  },
+  /** El backend decide si el pedido todavía se puede cancelar. */
+  async cancelGuestOrder(orderId: ID): Promise<Order> {
+    const response = await guestRequest(
+      () =>
+        httpClient.post<RoomServiceOrderResponse>(`/guest/room-service/orders/${orderId}/cancel`),
+      'No fue posible cancelar tu pedido.',
+    );
+    return toOrder(toOrderDto(response));
   },
 };
 export default orderService;

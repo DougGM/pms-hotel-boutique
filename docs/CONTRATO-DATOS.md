@@ -1,6 +1,6 @@
 # Contrato de datos — PMS Hotel Boutique
 
-**Última actualización:** 2026-09-11 · rama `web-14-servicios-faltantes`.
+**Última actualización:** 2026-10-04 · issue `#101` / INT-03.
 
 ## 1. Propósito y regla de gobierno
 
@@ -78,16 +78,50 @@ Servicios habilitados por WEB-14:
   `guestAccountService.voidCharge`.
 
 `checkIn`/`checkOut` aplican `BOOKING_STATUS_TRANSITIONS`; `assignRoom` usa
-`isRoomAssignable()`. El folio calcula `balance_cents` como cargos activos
-menos pagos completados menos depositos no reembolsados. `createCharge`,
-`createPayment` y `voidCharge` recalculan ese saldo guardado.
+`isRoomAssignable()`. En folios mock (`BKG-*`), el saldo se recalcula como
+cargos activos menos pagos completados menos depositos no reembolsados. En
+folios integrados con backend (UUID), `balance_cents` es autoridad del backend
+y se consulta desde `GET /bookings/{bookingId}/folio`; ningun cliente debe usar
+el calculo local como fuente oficial. `createCharge`, `createPayment` y
+`voidCharge` actualizan ese saldo guardado solo en el camino mock.
 `checkIn` marca la habitacion asignada como `occupied`. Los acompañantes se
 persisten por reserva y se validan contra capacidad y composición de adultos/
 niños antes de completar check-in.
 
+En reservas UUID, check-in usa `POST /bookings/{id}/check-in`, asignacion de
+habitacion usa `PUT /bookings/{id}` con `roomId` y acompanantes usan
+`GET /bookings/{bookingId}/companions`,
+`POST /bookings/{bookingId}/companions`,
+`PUT /bookings/{bookingId}/companions/{companionId}` y
+`DELETE /bookings/{bookingId}/companions/{companionId}`; el backend valida
+estado, habitacion, acompanantes y composicion. El frontend aplica esas
+mutaciones en orden `DELETE` -> `PUT` -> `POST` para no crear estados
+temporales invalidos por carreras de red.
+
 `checkOut` se bloquea si `balance_cents !== 0`; solo con saldo exactamente en cero cierra el folio,
 marca la reserva como `checked_out` y deja la habitacion `available` con
 `housekeeping_status: 'dirty'`.
+
+En reservas UUID, ese bloqueo financiero lo decide el backend: el frontend llama
+`POST /bookings/{id}/check-out`, muestra el `409` cuando el folio abierto tiene
+saldo distinto de cero y no fuerza el cambio local de estado.
+
+Actualizacion 2026-10-03 (#103): las funciones legacy de folio mock rechazan
+reservas UUID. `voidCharge(chargeId, reason)` queda reservada para cargos mock;
+si el cargo es UUID debe llamarse como `voidCharge(chargeId, reason, bookingId)`
+para operar contra el backend.
+
+Actualizacion 2026-10-04 (#101 / INT-03): `guestService` y `bookingService`
+consumen el backend para huespedes y reservas. El transporte backend usa
+camelCase (`firstName`, `guestId`, `roomTypeId`, `totalAmountCents`), pero la
+web conserva este contrato interno snake_case -> Mapper -> Model. Los servicios
+son el unico punto de adaptacion.
+
+Actualizacion 2026-10-04 (#102 / INT-04): las operaciones de recepcion
+integradas para reservas UUID ya no cambian estados solo en frontend. Check-in,
+check-out, asignacion de habitacion y acompanantes se ejecutan contra backend y
+las pantallas refrescan los datos posteriores desde los servicios, incluyendo
+habitaciones despues de check-in/check-out.
 
 ## 3. Entidad por entidad
 
@@ -747,8 +781,8 @@ entidad.
 | --- | --- | --- |
 | `id` | `string` | |
 | `user_id` | `string` | FK a `user` |
-| `module` | `'guest_accounts' \| 'cash' \| 'inventory' \| 'catalog' \| 'users' \| 'bookings'` | |
-| `action` | `'create' \| 'update' \| 'delete' \| 'void' \| 'open' \| 'close'` | |
+| `module` | `'guest_accounts' \| 'cash' \| 'inventory' \| 'catalog' \| 'users' \| 'bookings' \| string` | Valores futuros del backend se preservan; no se sustituyen por un modulo conocido. |
+| `action` | `'create' \| 'update' \| 'delete' \| 'void' \| 'open' \| 'close' \| string` | Valores futuros del backend se preservan; no se sustituyen por una accion conocida. |
 | `entity_type` / `entity_id` | `string` | La entidad afectada, sin FK tipado (cualquier entidad del contrato) |
 | `occurred_at` | `string` (timestamp) | |
 | `details?` | `string` | |

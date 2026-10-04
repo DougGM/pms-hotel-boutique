@@ -1,7 +1,8 @@
 const DEFAULT_API_BASE_URL = 'http://localhost:8080/api/v1';
 
 function getApiBaseUrl(): string {
-  return import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE_URL;
+  const env = (import.meta as ImportMeta & { env?: { VITE_API_BASE_URL?: string } }).env;
+  return env?.VITE_API_BASE_URL || DEFAULT_API_BASE_URL;
 }
 
 type RefreshHandler = () => Promise<string | null>;
@@ -56,6 +57,10 @@ export class HttpClient {
 
   put<T>(path: string, body?: unknown, init?: HttpClientInit): Promise<T> {
     return this.request<T>('PUT', path, body, init);
+  }
+
+  patch<T>(path: string, body?: unknown, init?: HttpClientInit): Promise<T> {
+    return this.request<T>('PATCH', path, body, init);
   }
 
   delete<T>(path: string, init?: HttpClientInit): Promise<T> {

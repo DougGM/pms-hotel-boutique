@@ -798,6 +798,124 @@ clave legacy `hotel-aurora.auth.v1`.
   desarrollo local con `strictPort`.
 - El resto de servicios mock permanece fuera del alcance de INT-01.
 
+## D-012 · INT-02: habitaciones, tipos, caracteristicas y tarifas usan backend
+
+**Fecha:** 2026-10-04 · **Estado:** aceptada e implementada en `roomService`.
+
+### Contexto
+
+La issue #100 pide reemplazar progresivamente los mocks de habitaciones, tipos
+de habitacion, caracteristicas y tarifas por la API REST real, sin modificar la
+UI ni crear un cliente HTTP alternativo. El backend expone controladores para
+`Room`, `RoomType`, `RoomFeature` y `Rate`; los precios viajan como
+`priceCents` y la habitacion mantiene dos conceptos separados:
+`status` y `housekeepingStatus`.
+
+### Decision
+
+`roomService` conserva las firmas que consumen las pantallas, pero su fuente
+oficial pasa a ser `http-client.ts`:
+
+- `GET/POST/PUT /rooms` y `GET /rooms/{id}`.
+- `GET/POST/PUT /room-types` y `GET /room-types/{id}`.
+- `GET /room-features`.
+- `GET/POST/PUT /rates`; no se asume `GET /rates/{id}`.
+
+El servicio adapta el contrato camelCase del backend a los DTOs internos
+snake_case y luego reutiliza los mappers existentes para devolver Models.
+Cuando `roomFeatureIds` se envia al actualizar un tipo, representa el reemplazo
+completo de sus caracteristicas; una lista vacia significa dejarlo sin
+caracteristicas.
+
+### Consecuencias
+
+- `src/data/db.ts` deja de ser fuente oficial para esas entidades en flujos
+  integrados. Solo queda como fallback de listados cuando el backend no esta
+  disponible o el harness responde 404; un 404 real en detalles por ID no
+  resuelve desde mocks.
+- Las escrituras de habitaciones, tipos y tarifas no simulan exito local:
+  pasan por API y propagan errores 400, 401, 403, 404 y 409 como mensajes de
+  operacion.
+- `priceCents`/`price_cents` sigue en centavos. No convertir a quetzales en
+  servicios ni DTOs.
+- No fusionar `status` y `housekeepingStatus`; la regla D-002 permanece vigente.
+- No pedir `rooms`, `room-types` ni `room-features` desde roles sin esos
+  permisos. En el workspace, Limpieza usa HousekeepingController y Room Service
+  usa los datos embebidos en sus pedidos; ninguno debe depender del catalogo de
+  habitaciones para cargar.
+
+## D-013 · INT-11: `cancelled` entra al contrato de `service_request`
+
+### Contexto
+
+`SERVICE_REQUEST_STATUSES` tenía cinco literales (plan MOV-04) y una
+cancelación del huésped se representaba como `rejected` (ver `services/README.md`,
+#72). El backend real ya distingue `cancelled` en `ServiceRequestStatus` y lo usa
+en Conserjería: `rejected` solo sale de `pending` (el personal no atiende la
+solicitud) y `cancelled` puede salir de `pending`, `accepted` o `in_progress`
+(se deja de atender). INT-11 pide que la cancelación respete esas reglas.
+
+### Decisión
+
+`cancelled` se agrega a `SERVICE_REQUEST_STATUSES` y a `ServiceRequestStatusDto`.
+Conserjería lo muestra como "Cancelada", distinto de "Rechazada".
+`SERVICE_REQUEST_STATUS_TRANSITIONS` se alinea con el flujo de Conserjería del
+backend; es solo referencia, los servicios no lo usan para validar.
+
+### Qué NO hacer
+
+- No volver a mapear `cancelled` a `rejected` en Conserjería: son decisiones
+  distintas para el huésped y para la trazabilidad.
+- No validar transiciones en el frontend: el backend responde `400` y la UI
+  recarga el estado real.
+
+### Alternativas consideradas
+
+- Mantener `cancelled → rejected`: se descartó porque ocultaba si el personal
+  rechazó la solicitud o si se dejó de atender después de aceptarla.
+
+### Pendiente
+
+- Avisar al equipo móvil: la lista acordada en MOV-04 cambió. El backend ya
+  devuelve `cancelled`, así que la app móvil también debe reconocerlo.
+- Housekeeping (INT-09) todavía muestra un `cancelled` de stayover como
+  `rejected`; se puede unificar cuando se revise esa pantalla.
+
+## D-014 · INT-12: Acceso de huésped con código, separado del login del personal
+
+### Contexto
+
+La issue #110 exige que el portal use Guest Access (código de reserva → JWT de
+huésped) y nunca el login del personal. El backend expone `POST
+/guest/auth/link`, que solo acepta el código con la reserva en check-in y emite un
+JWT `type: guest` sin refresh token. Hasta ahora el portal entraba por el login
+del personal con rol `GUEST`. Las rutas `/my-account/...` existen reservadas en
+`routes.ts`, pero `routes.ts` y `router.tsx` están congelados (Ronda 1).
+
+### Decisión
+
+- La pantalla "Acceso de huésped" ocupa la ruta pública existente
+  `/auth/register`, que antes mostraba un registro de cuenta de demo sin backend.
+  El huésped ingresa solo su código; no hay correo ni contraseña.
+- La sesión de huésped vive en el mismo `AuthProvider` (rol `GUEST`), pero se
+  obtiene únicamente con `authService.linkGuest`. `authService.login` rechaza
+  cuentas `ROLE_GUEST`.
+- Sin refresh token: la sesión dura lo que el token. Al vencer, el guard manda al
+  huésped a su pantalla de código con el aviso "Tu acceso venció".
+- Recepción muestra el `guestLinkCode` en el detalle de la reserva solo en
+  check-in.
+
+### Qué NO hacer
+
+- No enviar `bookingId` desde el portal: el backend toma la reserva del JWT.
+- No consumir endpoints del personal desde el portal (`/bookings`, `/guests`,
+  `/rooms`, `/admin/...`): responden 403 con el token de huésped.
+
+### Pendiente
+
+- Pedir a JEPG321 la ruta dedicada `/my-account/link-reservation` (y las demás
+  `/my-account/...`) para que el acceso de huésped no dependa de `/auth/register`.
+
 ## Cómo agregar una nueva decisión
 
 Copiar la estructura de D-001: **Contexto** (qué problema había y qué

@@ -68,6 +68,26 @@ function jwt(email, authorities, expiresIn = 60) {
   ].join('.');
 }
 
+// INT-12: el huésped canjea el código de su reserva por un JWT `type: guest`.
+const GUEST_CODE = 'GL-2026-0001';
+const GUEST_BOOKING_ID = '9f8e7d6c-0000-4000-8000-000000000001';
+let guestTokenSeconds = 60;
+
+function guestJwt(expiresIn) {
+  const now = Math.floor(Date.now() / 1000);
+  return [
+    encodeBase64Url({ alg: 'HS256', typ: 'JWT' }),
+    encodeBase64Url({
+      sub: `guest:${GUEST_BOOKING_ID}`,
+      authorities: ['ROLE_GUEST'],
+      type: 'guest',
+      iat: now,
+      exp: now + expiresIn,
+    }),
+    'signature',
+  ].join('.');
+}
+
 function authResponse(email, expiresIn = 60) {
   return {
     accessToken: jwt(email, accounts[email], expiresIn),
@@ -97,6 +117,7 @@ function decodeAuth(init) {
 function installFetch() {
   requests = [];
   failNextRefresh = false;
+  guestTokenSeconds = 60;
   globalThis.fetch = async (url, init = {}) => {
     const path = new URL(String(url)).pathname;
     const body = init.body ? JSON.parse(init.body) : undefined;
@@ -119,6 +140,52 @@ function installFetch() {
       return json(authResponse(email));
     }
     if (path === '/api/v1/auth/logout') return new Response(null, { status: 204 });
+    if (path === '/api/v1/guest/auth/link') {
+      if (body?.code !== GUEST_CODE) {
+        return json({ message: 'Guest link code not found' }, 400, 'Bad Request');
+      }
+      return json({
+        accessToken: guestJwt(guestTokenSeconds),
+        tokenType: 'Bearer',
+        expiresIn: guestTokenSeconds,
+      });
+    }
+    if (path.startsWith('/api/v1/guest/')) {
+      const payload = decodeAuth(init);
+      if (payload?.type !== 'guest') return json({ message: 'Forbidden' }, 403, 'Forbidden');
+      if (path === '/api/v1/guest/stay') {
+        return json({
+          bookingId: GUEST_BOOKING_ID,
+          guestId: '1a2b3c4d-0000-4000-8000-000000000001',
+          guestFirstName: 'Ana',
+          guestLastName: 'López',
+          roomId: '2b3c4d5e-0000-4000-8000-000000000001',
+          roomNumber: '305',
+          roomTypeId: '3c4d5e6f-0000-4000-8000-000000000001',
+          roomTypeName: 'Suite Jardín',
+          checkIn: '2026-10-03',
+          checkOut: '2026-10-06',
+          status: 'checked_in',
+          balanceCents: 45000,
+          currency: 'GTQ',
+        });
+      }
+      if (path === '/api/v1/guest/notifications/unread-count') return json({ unreadCount: 0 });
+      return json([]);
+    }
+    // El workspace de Limpieza carga su cola desde el backend (INT-09).
+    if (
+      path === '/api/v1/housekeeping/rooms' ||
+      path === '/api/v1/housekeeping/rooms/stayover-cleanings'
+    ) {
+      return json([]);
+    }
+    // El workspace de Room Service carga catálogo y pedidos desde el backend (INT-10).
+    if (path === '/api/v1/room-service/products' || path === '/api/v1/room-service/orders') {
+      return json([]);
+    }
+    // El workspace de Conserjería carga sus solicitudes desde el backend (INT-11).
+    if (path === '/api/v1/concierge/requests') return json([]);
     if (path === '/api/v1/probe') {
       const payload = decodeAuth(init);
       if (!payload) return json({ message: 'Unauthorized' }, 401, 'Unauthorized');
@@ -231,8 +298,8 @@ test('each staff role only sees its menu and direct unauthorized URLs are blocke
     ['limpieza', '/pms/housekeeping', 'Habitaciones', '/pms/cash', 4],
     ['conserjeria', '/pms/concierge', 'Solicitudes', '/pms/cash', 3],
     ['roomservice', '/pms/room-service', 'Pedidos activos', '/pms/users', 4],
-    ['huesped', '/pms/dashboard', 'Room service', '/pms/reception', 7],
-    ['admin', '/pms/dashboard', 'Administración', null, 48],
+    // 49: el grupo Huésped suma 'Notificaciones' (INT-12).
+    ['admin', '/pms/dashboard', 'Administración', null, 49],
   ];
   for (const [account, expectedPath, section, forbidden, count] of roles) {
     await login(`${account}@hotelboutique.test`);
@@ -443,4 +510,81 @@ test('shared service rejects wrong passwords and unknown email addresses', async
     /Correo o contraseña incorrectos/,
   );
   assert.equal(values.size, 0);
+});
+
+async function linkGuest(code) {
+  act(() => {
+    view.root.findByProps({ id: 'guest-link-code' }).props.onChange({ target: { value: code } });
+  });
+  await act(async () => {
+    await view.root.findByType('form').props.onSubmit({ preventDefault() {} });
+    await wait();
+  });
+}
+
+test('el login del personal rechaza cuentas de huésped', async () => {
+  await open('/auth/login');
+  await login('huesped@hotelboutique.test');
+  assert.equal(router.state.location.pathname, '/auth/login');
+  assert.ok(text().includes('código de su reserva'), 'indica usar el acceso de huésped');
+  assert.equal(values.size, 0, 'no persiste ninguna sesión');
+});
+
+test('el huésped entra con el código de su reserva y sale a su acceso', async () => {
+  await open('/auth/register');
+  assert.ok(text().includes('Acceso de huésped'));
+  await linkGuest(GUEST_CODE);
+
+  assert.equal(router.state.location.pathname, '/pms/dashboard');
+  const labels = view.root
+    .findByType('nav')
+    .findAllByType('button')
+    .map((button) => button.findByType('span').children.join(''));
+  assert.ok(labels.includes('Room service'));
+  assert.ok(labels.includes('Notificaciones'));
+  assert.equal(labels.length, 8);
+  assert.ok(requests.some((request) => request.path === '/api/v1/guest/auth/link'));
+  assert.ok(!requests.some((request) => request.path === '/api/v1/auth/login'));
+  assert.ok(
+    requests
+      .filter(
+        (request) =>
+          request.path.startsWith('/api/v1/guest/') && request.path !== '/api/v1/guest/auth/link',
+      )
+      .every((request) => request.authorization?.startsWith('Bearer ')),
+    'todas las rutas /guest viajan con el JWT de huésped',
+  );
+  assert.ok(
+    !requests.some((request) => /^\/api\/v1\/(bookings|guests|rooms|admin)/.test(request.path)),
+    'el portal no consume endpoints del personal',
+  );
+  const stored = JSON.parse(values.get('PMS_AUTH_SESSION'));
+  assert.equal(stored.user.role, 'GUEST');
+  assert.equal(stored.user.name, 'Ana López');
+  assert.equal(stored.refreshToken, '', 'el huésped no tiene refresh token');
+
+  await logoutFromWorkspace();
+  assert.equal(router.state.location.pathname, '/auth/register');
+  assert.equal(values.has('PMS_AUTH_SESSION'), false);
+});
+
+test('un código inválido muestra el error y no crea sesión', async () => {
+  await open('/auth/register');
+  await linkGuest('NO-EXISTE');
+  assert.equal(router.state.location.pathname, '/auth/register');
+  assert.ok(text().includes('El código no es válido'));
+  assert.equal(values.has('PMS_AUTH_SESSION'), false);
+});
+
+test('al vencer el token del huésped se le pide de nuevo el código', async () => {
+  guestTokenSeconds = 2;
+  await open('/auth/register');
+  await linkGuest(GUEST_CODE);
+  assert.equal(router.state.location.pathname, '/pms/dashboard');
+
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 2500));
+  });
+  assert.equal(router.state.location.pathname, '/auth/register');
+  assert.ok(text().includes('Tu acceso venció'));
 });

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Activity,
   ArrowRight,
@@ -37,19 +37,27 @@ import { catalogService } from '@/services/catalogService';
 import { inventoryService } from '@/services/inventoryService';
 import { personnelService } from '@/services/personnelService';
 import { promotionService } from '@/services/promotionService';
+import { reportingService, type OperationalReport } from '@/services/reportingService';
 import { roomService } from '@/services/roomService';
 import { ErrorState } from '@/shared/components/ErrorState';
 import { LoadingState } from '@/shared/components/LoadingState';
 import { toDtoCalendarDate } from '@/shared/types/common';
 import { formatCurrency } from '@/shared/utils/currency';
 import { exportDateSuffix, exportToCSV } from '@/shared/utils/exportCsv';
-import type { AuditAction, AuditLog, AuditModule } from '@/shared/types/entities/audit-log';
+import type {
+  AuditAction,
+  AuditLog,
+  AuditModule,
+  KnownAuditAction,
+  KnownAuditModule,
+} from '@/shared/types/entities/audit-log';
 import type { Booking } from '@/shared/types/entities/booking';
 import type { CashSession } from '@/shared/types/entities/cash-session';
 import type { InventoryItemCategory } from '@/shared/types/entities/inventory-item';
 import type { InventoryItemCategoryDto } from '@/shared/types/entities/inventory-item';
 import type { InventoryMovementReasonDto } from '@/shared/types/entities/inventory-movement';
 import type { InventoryMovementReason } from '@/shared/types/entities/inventory-movement';
+import type { Amenity as DomainAmenity } from '@/shared/types/entities/amenity';
 import type { Product } from '@/shared/types/entities/product';
 import type { Role } from '@/shared/types/entities/role';
 import type { Room, RoomStatusDto } from '@/shared/types/entities/room';
@@ -58,14 +66,17 @@ import type { User } from '@/shared/types/entities/user';
 
 type AdminUser = {
   id: number;
+  dbId: string;
   name: string;
   email: string;
+  password?: string;
   role: string;
   status: 'Activo' | 'Inactivo';
   lastAccess: string;
 };
 type AdminRole = {
   id: number;
+  dbId: string;
   code: string;
   name: string;
   description: string;
@@ -128,6 +139,7 @@ type Promo = {
 };
 type Amenity = {
   id: number;
+  dbId: string;
   name: string;
   schedule: string;
   available: boolean;
@@ -136,6 +148,7 @@ type Amenity = {
 };
 type RoomServiceItem = {
   id: number;
+  dbId: string;
   name: string;
   category: string;
   price: number;
@@ -249,6 +262,7 @@ const ROLE_ACCESS_GROUPS = [
       'Servicios de habitación',
       'Room service',
       'Mis solicitudes y pedidos',
+      'Notificaciones',
     ],
   },
 ] as const;
@@ -339,6 +353,14 @@ const amountToCents = (amount: number) => Math.round(amount * 100);
 
 const money = (amount: number) => formatCurrency(amountToCents(amount), 'GTQ');
 
+const activeOfficialBookingStatuses = new Set(['confirmed', 'checked_in', 'checked_out']);
+
+const countActiveOfficialBookings = (report: OperationalReport) =>
+  Object.entries(report.bookingsByStatus).reduce(
+    (sum, [status, count]) => (activeOfficialBookingStatuses.has(status) ? sum + count : sum),
+    0,
+  );
+
 const formatDbTime = (value: Date) =>
   value.toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit', hour12: false });
 
@@ -427,13 +449,103 @@ const INVENTORY_REASON_BY_LABEL = Object.fromEntries(
 const toInventoryCategoryDto = (category: InventoryItemCategory): InventoryItemCategoryDto =>
   category === 'roomService' ? 'room_service' : category;
 
+const splitFullName = (name: string) => {
+  const [firstName = '', ...lastNameParts] = name.trim().split(/\s+/).filter(Boolean);
+  return {
+    firstName,
+    lastName: lastNameParts.join(' ') || firstName,
+  };
+};
+
+const adminUserFromDomain = (user: User, roles: Role[], index: number): AdminUser => {
+  const role = roles.find((item: Role) => normalizeRoleCode(item.code) === user.role);
+  return {
+    id: parseDbId(user.id, index + 1),
+    dbId: user.id,
+    name: `${user.firstName} ${user.lastName}`,
+    email: user.email,
+    role: roleDisplayName(role) || user.role,
+    status: user.status === 'active' ? 'Activo' : 'Inactivo',
+    lastAccess: toDtoCalendarDate(user.updatedAt),
+  };
+};
+
+const adminUserFromAdminRoles = (user: User, roles: AdminRole[], index: number): AdminUser => {
+  const role = roles.find((item) => item.code === user.role);
+  return {
+    id: parseDbId(user.id, index + 1),
+    dbId: user.id,
+    name: `${user.firstName} ${user.lastName}`,
+    email: user.email,
+    role: role?.name ?? user.role,
+    status: user.status === 'active' ? 'Activo' : 'Inactivo',
+    lastAccess: toDtoCalendarDate(user.updatedAt),
+  };
+};
+
+const roleIdFromDisplay = (roles: AdminRole[], roleName: string) => {
+  const role = roles.find((item) => item.name === roleName);
+  if (!role) throw new Error('Selecciona un rol valido.');
+  return role.dbId;
+};
+
+const formatAmenitySchedule = (amenity: DomainAmenity) => {
+  if (amenity.opensAt && amenity.closesAt) return `${amenity.opensAt} - ${amenity.closesAt}`;
+  return 'Disponible';
+};
+
+const parseAmenitySchedule = (schedule: string) => {
+  const [opensAt, closesAt] = schedule
+    .split(/\s*(?:-|—|a)\s*/i)
+    .map((value) => value.trim())
+    .filter(Boolean);
+  return {
+    opensAt: /^\d{2}:\d{2}$/.test(opensAt ?? '') ? opensAt : undefined,
+    closesAt: /^\d{2}:\d{2}$/.test(closesAt ?? '') ? closesAt : undefined,
+  };
+};
+
+const adminAmenityFromDomain = (amenity: DomainAmenity, index: number): Amenity => ({
+  id: parseDbId(amenity.id, index + 1),
+  dbId: amenity.id,
+  name: amenity.name,
+  schedule: formatAmenitySchedule(amenity),
+  available: amenity.active,
+  status: amenity.active ? 'Activo' : 'Inactivo',
+  icon: ['Waves', 'Utensils', 'Dumbbell', 'Sparkles', 'Star', 'Wifi'][index % 6],
+});
+
+const adminProductFromDomain = (product: Product, index: number): RoomServiceItem => ({
+  id: parseDbId(product.id, index + 1),
+  dbId: product.id,
+  name: product.name,
+  category: 'Room Service',
+  price: centsToAmount(product.priceCents),
+  available: product.active,
+  status: product.active ? 'Activo' : 'Inactivo',
+  image: '',
+});
+
+const productSkuFromName = (name: string) => {
+  const slug = name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/gi, '-')
+    .replace(/^-+|-+$/g, '')
+    .toUpperCase();
+  return `RS-${slug || Date.now()}`;
+};
+
+const serviceErrorMessage = (error: unknown) =>
+  error instanceof Error ? error.message : 'No fue posible completar la operacion.';
+
 /**
  * Los módulos/acciones de auditoría reales (AuditModule/AuditAction) no
  * coinciden con el vocabulario que el prototipo Bolt inventó ('Tarifas',
  * 'Room Service', 'Edición'...) — son categorías distintas. Se traducen
  * los valores reales, no se inventan nuevos.
  */
-const AUDIT_MODULE_LABELS: Record<AuditModule, string> = {
+const AUDIT_MODULE_LABELS: Record<KnownAuditModule, string> = {
   guestAccounts: 'Cuentas de huésped',
   cash: 'Caja',
   inventory: 'Inventario',
@@ -442,7 +554,7 @@ const AUDIT_MODULE_LABELS: Record<AuditModule, string> = {
   bookings: 'Reservas',
 };
 
-const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
+const AUDIT_ACTION_LABELS: Record<KnownAuditAction, string> = {
   create: 'Creación',
   update: 'Actualización',
   delete: 'Eliminación',
@@ -453,6 +565,12 @@ const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
 
 const dashboardPeriodOptions: DashboardPeriod[] = ['Hoy', '7 días', '30 días', '90 días'];
 const reportPeriodOptions: ReportPeriod[] = ['Día', 'Semana', 'Mes', 'Año', 'Temporada'];
+const auditModuleLabel = (module: AuditModule) =>
+  module in AUDIT_MODULE_LABELS ? AUDIT_MODULE_LABELS[module as KnownAuditModule] : module;
+
+const auditActionLabel = (action: AuditAction) =>
+  action in AUDIT_ACTION_LABELS ? AUDIT_ACTION_LABELS[action as KnownAuditAction] : action;
+
 /*
 const dashboardSeries: Record<
   DashboardPeriod,
@@ -930,6 +1048,11 @@ type AdminData = {
 type ScreenState =
   { status: 'loading' } | { status: 'error'; message: string } | ({ status: 'ready' } & AdminData);
 
+type OperationalReportState =
+  | { status: 'idle' | 'loading' }
+  | { status: 'error'; message: string }
+  | { status: 'ready'; data: OperationalReport };
+
 function getErrorMessage(cause: unknown): string {
   return cause instanceof Error
     ? cause.message
@@ -942,8 +1065,8 @@ function buildAuditEntries(logs: AuditLog[], users: User[]): AuditEntry[] {
     user: userNameById(users, entry.userId),
     date: toDtoCalendarDate(entry.occurredAt),
     time: formatDbTime(entry.occurredAt),
-    module: AUDIT_MODULE_LABELS[entry.module],
-    action: AUDIT_ACTION_LABELS[entry.action],
+    module: auditModuleLabel(entry.module),
+    action: auditActionLabel(entry.action),
     description: `${entry.entityType} ${entry.entityId}`,
   }));
 }
@@ -990,8 +1113,8 @@ export function AdminContent({
           roomService.getRoomTypes(),
           roomService.getRoomFeatures(),
           roomService.getRates(),
-          catalogService.getAmenities(),
-          catalogService.getProducts(),
+          catalogService.getAdminAmenities(),
+          catalogService.getAdminProducts(),
           inventoryService.getItems(),
           inventoryService.getMovements(),
           bookingService.getBookings(),
@@ -1001,23 +1124,16 @@ export function AdminContent({
           promotionService.getPromotions(),
         ]);
 
-        const adminUsers: AdminUser[] = users.map((user, index) => {
-          const role = roles.find((item: Role) => normalizeRoleCode(item.code) === user.role);
-          return {
-            id: parseDbId(user.id, index + 1),
-            name: `${user.firstName} ${user.lastName}`,
-            email: user.email,
-            role: roleDisplayName(role) || user.role,
-            status: user.status === 'active' ? 'Activo' : 'Inactivo',
-            lastAccess: toDtoCalendarDate(user.updatedAt),
-          };
-        });
+        const adminUsers: AdminUser[] = users.map((user, index) =>
+          adminUserFromDomain(user, roles, index),
+        );
 
         const demoRolePermissionOverrides = loadDemoRolePermissionOverrides();
         const adminRoles: AdminRole[] = roles.map((role, index) => {
           const roleCode = normalizeRoleCode(role.code);
           return {
             id: parseDbId(role.id, index + 1),
+            dbId: role.id,
             code: roleCode,
             name: roleDisplayName(role),
             description: `Rol ${role.code}`,
@@ -1089,26 +1205,11 @@ export function AdminContent({
           status: promo.active ? 'Activa' : 'Inactiva',
         }));
 
-        const amenities: Amenity[] = amenitiesData.map((amenity, index) => ({
-          id: parseDbId(amenity.id, index + 1),
-          name: amenity.name,
-          schedule: 'Disponible',
-          available: amenity.active,
-          status: amenity.active ? 'Activo' : 'Inactivo',
-          icon: ['Waves', 'Utensils', 'Dumbbell', 'Sparkles', 'Star', 'Wifi'][index % 6],
-        }));
+        const amenities: Amenity[] = amenitiesData.map(adminAmenityFromDomain);
 
         const roomServiceItems: RoomServiceItem[] = products
           .filter((product: Product) => product.category === 'foodAndBeverage')
-          .map((product, index) => ({
-            id: parseDbId(product.id, index + 1),
-            name: product.name,
-            category: 'Room Service',
-            price: centsToAmount(product.priceCents),
-            available: product.active,
-            status: product.active ? 'Activo' : 'Inactivo',
-            image: '',
-          }));
+          .map(adminProductFromDomain);
 
         const inventory: InventoryProduct[] = inventoryItems.map((item, index) => {
           const product = products.find((productItem) => productItem.id === item.productId);
@@ -1267,15 +1368,15 @@ function AdminContentReady({
   initialAudit: AuditEntry[];
   recentActivity: AuditEntry[];
 }) {
-  const [users] = useState(initialAdminUsers);
+  const [users, setUsers] = useState(initialAdminUsers);
   const [roles, setRoles] = useState(initialAdminRoles);
   const [rooms, setRooms] = useState(initialAdminRooms);
   const [roomTypes, setRoomTypes] = useState(initialAdminRoomTypes);
   const [seasonRates, setSeasonRates] = useState(initialSeasonRates);
   const [dynamicRates, setDynamicRates] = useState(defaultDynamicRates);
   const [promos, setPromos] = useState(initialPromos);
-  const [amenities] = useState(initialAmenities);
-  const [rsItems] = useState(initialRoomServiceItems);
+  const [amenities, setAmenities] = useState(initialAmenities);
+  const [rsItems, setRsItems] = useState(initialRoomServiceItems);
   const [inventory, setInventory] = useState(initialInventory);
   const [movements, setMovements] = useState(initialMovements);
   const [cashMovements, setCashMovements] = useState(initialCashMovements);
@@ -1311,6 +1412,9 @@ function AdminContentReady({
   );
   const [reportFilter, setReportFilter] = useState<ReportPeriod>('Mes');
   const [reportTab, setReportTab] = useState<AdminReportTab>('Ocupación');
+  const [operationalReport, setOperationalReport] = useState<OperationalReportState>({
+    status: 'idle',
+  });
   const [dashboardTab, setDashboardTab] = useState<'Ocupación' | 'Ingresos' | 'Reservas'>(
     'Ocupación',
   );
@@ -1333,6 +1437,31 @@ function AdminContentReady({
         : 'Resumen operativo';
   const visibleReportTabs = reportTabsByGroup[reportGroup];
   const activeReportTab = visibleReportTabs.includes(reportTab) ? reportTab : visibleReportTabs[0];
+
+  const loadOperationalReport = useCallback(async (period: ReportPeriod) => {
+    const { start, end } = getReportPeriodRange(period);
+    setOperationalReport({ status: 'loading' });
+    try {
+      const data = await reportingService.getOperationalReport({
+        from: toDtoCalendarDate(start),
+        to: toDtoCalendarDate(end),
+      });
+      setOperationalReport({ status: 'ready', data });
+    } catch (cause) {
+      setOperationalReport({ status: 'error', message: getErrorMessage(cause) });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (
+      nav === 'Reportes' ||
+      nav === 'Resumen operativo' ||
+      nav === 'Reportes financieros' ||
+      nav === 'Análisis comercial'
+    ) {
+      void loadOperationalReport(reportFilter);
+    }
+  }, [loadOperationalReport, nav, reportFilter]);
 
   const resetSearch = () => {
     setSearch('');
@@ -1506,20 +1635,31 @@ function AdminContentReady({
     const maintenanceRooms = rooms.filter((room) => room.status === 'Mantenimiento').length;
     const occupancyPercent =
       rooms.length > 0 ? Math.round((occupiedRooms / rooms.length) * 1000) / 10 : 0;
-    const totalIncome = cashMovements
-      .filter((movement) => movement.type === 'Ingreso')
-      .reduce((sum, movement) => sum + movement.amount, 0);
-    const totalExpenses = cashMovements
-      .filter((movement) => movement.type === 'Egreso')
-      .reduce((sum, movement) => sum + movement.amount, 0);
     const latestCashSession =
       [...cashSessions].sort(
         (left, right) => right.openedAt.getTime() - left.openedAt.getTime(),
       )[0] ?? null;
+    const localTotalIncome = cashMovements
+      .filter((movement) => movement.type === 'Ingreso')
+      .reduce((sum, movement) => sum + movement.amount, 0);
+    const localTotalExpenses = cashMovements
+      .filter((movement) => movement.type === 'Egreso')
+      .reduce((sum, movement) => sum + movement.amount, 0);
+    const totalIncome =
+      latestCashSession?.totalIncomeCents !== undefined
+        ? centsToAmount(latestCashSession.totalIncomeCents)
+        : localTotalIncome;
+    const totalExpenses =
+      latestCashSession?.totalExpenseCents !== undefined
+        ? centsToAmount(latestCashSession.totalExpenseCents)
+        : localTotalExpenses;
     const openingBalance = latestCashSession
       ? centsToAmount(latestCashSession.openingBalanceCents)
       : 0;
-    const currentBalance = openingBalance + totalIncome - totalExpenses;
+    const currentBalance =
+      latestCashSession?.expectedBalanceCents !== undefined
+        ? centsToAmount(latestCashSession.expectedBalanceCents)
+        : openingBalance + totalIncome - totalExpenses;
     const dashboardChart = {
       data:
         dashboardTab === 'Ocupación'
@@ -1847,10 +1987,23 @@ function AdminContentReady({
                       <StatusSwitch
                         checked={u.status === 'Activo'}
                         label={u.status === 'Activo' ? 'Desactivar usuario' : 'Activar usuario'}
-                        onChange={() => {
-                          onAction(
-                            'Gestion de usuarios fuera de alcance: no se modifico la fuente.',
-                          );
+                        onChange={async () => {
+                          try {
+                            const updated = await personnelService.updateUser(u.dbId, {
+                              roleId: roleIdFromDisplay(roles, u.role),
+                              status: u.status === 'Activo' ? 'inactive' : 'active',
+                            });
+                            setUsers((current) =>
+                              current.map((item, index) =>
+                                item.dbId === u.dbId
+                                  ? adminUserFromAdminRoles(updated, roles, index)
+                                  : item,
+                              ),
+                            );
+                            onAction('Usuario actualizado correctamente');
+                          } catch (error) {
+                            onAction(serviceErrorMessage(error));
+                          }
                         }}
                       />
                     </td>
@@ -1929,10 +2082,45 @@ function AdminContentReady({
             user={editUser}
             roles={roles}
             onClose={() => setShowUserModal(false)}
-            onSave={(u) => {
-              void u;
-              onAction('Gestion de usuarios fuera de alcance: no se modifico la fuente.');
-              setShowUserModal(false);
+            onSave={async (u) => {
+              try {
+                const { firstName, lastName } = splitFullName(u.name);
+                const payload = {
+                  firstName,
+                  lastName,
+                  email: u.email,
+                  roleId: roleIdFromDisplay(roles, u.role),
+                  status: u.status === 'Activo' ? 'active' : 'inactive',
+                } as const;
+                let saved = editUser
+                  ? await personnelService.updateUser(editUser.dbId, payload)
+                  : await personnelService.createUser({
+                      firstName,
+                      lastName,
+                      email: u.email,
+                      password: u.password ?? '',
+                      roleId: payload.roleId,
+                    });
+                if (!editUser && payload.status === 'inactive') {
+                  saved = await personnelService.updateUser(saved.id, payload);
+                }
+                setUsers((current) =>
+                  editUser
+                    ? current.map((item, index) =>
+                        item.dbId === editUser.dbId
+                          ? adminUserFromAdminRoles(saved, roles, index)
+                          : item,
+                      )
+                    : [...current, adminUserFromAdminRoles(saved, roles, current.length)],
+                );
+                onAction(
+                  editUser ? 'Usuario actualizado correctamente' : 'Usuario creado correctamente',
+                );
+                setShowUserModal(false);
+                setEditUser(null);
+              } catch (error) {
+                onAction(serviceErrorMessage(error));
+              }
             }}
           />
         )}
@@ -2659,8 +2847,22 @@ function AdminContentReady({
                         <StatusSwitch
                           checked={a.status === 'Activo'}
                           label={a.status === 'Activo' ? 'Desactivar amenidad' : 'Activar amenidad'}
-                          onChange={() => {
-                            onAction('Amenidades fuera de alcance: no se modifico la fuente.');
+                          onChange={async () => {
+                            try {
+                              const updated = await catalogService.updateAmenity(a.dbId, {
+                                active: a.status !== 'Activo',
+                              });
+                              setAmenities((current) =>
+                                current.map((item, index) =>
+                                  item.dbId === a.dbId
+                                    ? adminAmenityFromDomain(updated, index)
+                                    : item,
+                                ),
+                              );
+                              onAction('Amenidad actualizada correctamente');
+                            } catch (error) {
+                              onAction(serviceErrorMessage(error));
+                            }
                           }}
                         />
                       </div>
@@ -2729,9 +2931,23 @@ function AdminContentReady({
                           item.status === 'Activo' ? 'Desactivar producto' : 'Activar producto'
                         }
                         onChange={() => {
-                          onAction(
-                            'Catalogo de Room Service fuera de alcance: no se modifico la fuente.',
-                          );
+                          void (async () => {
+                            try {
+                              const updated = await catalogService.updateAdminProduct(item.dbId, {
+                                active: item.status !== 'Activo',
+                              });
+                              setRsItems((current) =>
+                                current.map((entry, index) =>
+                                  entry.dbId === item.dbId
+                                    ? adminProductFromDomain(updated, index)
+                                    : entry,
+                                ),
+                              );
+                              onAction('Producto actualizado correctamente');
+                            } catch (error) {
+                              onAction(serviceErrorMessage(error));
+                            }
+                          })();
                         }}
                       />
                     </div>
@@ -2745,10 +2961,43 @@ function AdminContentReady({
           <AmenityModal
             amenity={editAmenity}
             onClose={() => setShowAmenityModal(false)}
-            onSave={(a) => {
-              void a;
-              onAction('Amenidades fuera de alcance: no se modifico la fuente.');
-              setShowAmenityModal(false);
+            onSave={async (a) => {
+              try {
+                const schedule = parseAmenitySchedule(a.schedule);
+                const payload = {
+                  name: a.name,
+                  description: a.schedule,
+                  category: 'hotel' as const,
+                  location: undefined,
+                  opensAt: schedule.opensAt,
+                  closesAt: schedule.closesAt,
+                  active: a.status === 'Activo',
+                };
+                const saved = editAmenity
+                  ? await catalogService.updateAmenity(editAmenity.dbId, payload)
+                  : await catalogService.createAmenity(payload);
+                setAmenities((current) =>
+                  editAmenity
+                    ? current.map((item, index) =>
+                        item.dbId === editAmenity.dbId
+                          ? { ...adminAmenityFromDomain(saved, index), icon: a.icon }
+                          : item,
+                      )
+                    : [
+                        ...current,
+                        { ...adminAmenityFromDomain(saved, current.length), icon: a.icon },
+                      ],
+                );
+                onAction(
+                  editAmenity
+                    ? 'Amenidad actualizada correctamente'
+                    : 'Amenidad creada correctamente',
+                );
+                setShowAmenityModal(false);
+                setEditAmenity(null);
+              } catch (error) {
+                onAction(serviceErrorMessage(error));
+              }
             }}
           />
         )}
@@ -2756,10 +3005,45 @@ function AdminContentReady({
           <RsItemModal
             item={editRsItem}
             onClose={() => setShowRsItemModal(false)}
-            onSave={(item) => {
-              void item;
-              onAction('Catalogo de Room Service fuera de alcance: no se modifico la fuente.');
-              setShowRsItemModal(false);
+            onSave={async (item) => {
+              try {
+                const payload = {
+                  sku: editRsItem?.dbId ? undefined : productSkuFromName(item.name),
+                  name: item.name,
+                  description: item.category,
+                  category: 'food_and_beverage' as const,
+                  priceCents: amountToCents(item.price),
+                  currency: 'GTQ' as const,
+                  active: item.status === 'Activo',
+                };
+                const saved = editRsItem
+                  ? await catalogService.updateAdminProduct(editRsItem.dbId, payload)
+                  : await catalogService.createAdminProduct({
+                      ...payload,
+                      sku: payload.sku ?? productSkuFromName(item.name),
+                    });
+                setRsItems((current) =>
+                  editRsItem
+                    ? current.map((entry, index) =>
+                        entry.dbId === editRsItem.dbId
+                          ? { ...adminProductFromDomain(saved, index), image: item.image }
+                          : entry,
+                      )
+                    : [
+                        ...current,
+                        { ...adminProductFromDomain(saved, current.length), image: item.image },
+                      ],
+                );
+                onAction(
+                  editRsItem
+                    ? 'Producto actualizado correctamente'
+                    : 'Producto creado correctamente',
+                );
+                setShowRsItemModal(false);
+                setEditRsItem(null);
+              } catch (error) {
+                onAction(serviceErrorMessage(error));
+              }
             }}
           />
         )}
@@ -2787,26 +3071,42 @@ function AdminContentReady({
     const occupiedRooms = rooms.filter((room) => room.status === 'Ocupada').length;
     const occupancyPercent =
       rooms.length > 0 ? Math.round((occupiedRooms / rooms.length) * 1000) / 10 : 0;
-    const confirmedReservations = periodBookings.filter((booking) =>
-      ['confirmed', 'checkedIn', 'checkedOut'].includes(booking.status),
-    ).length;
-    const cancelledReservations = periodCancelledBookings.length;
-    const totalReservations = periodBookings.length;
+    const officialReport = operationalReport.status === 'ready' ? operationalReport.data : null;
+    const activeReservations =
+      officialReport !== null
+        ? countActiveOfficialBookings(officialReport)
+        : periodBookings.filter((booking) =>
+            ['confirmed', 'checkedIn', 'checkedOut'].includes(booking.status),
+          ).length;
+    const cancelledReservations = officialReport?.cancellations ?? periodCancelledBookings.length;
+    const totalReservations = officialReport?.bookings ?? periodBookings.length;
     const cancellationRate =
       totalReservations > 0
         ? Math.round((cancelledReservations / totalReservations) * 1000) / 10
         : 0;
-    const totalIncome = periodCashMovements
-      .filter((movement) => movement.type === 'Ingreso')
-      .reduce((sum, movement) => sum + movement.amount, 0);
+    const totalIncome =
+      officialReport !== null
+        ? centsToAmount(officialReport.revenueCents)
+        : periodCashMovements
+            .filter((movement) => movement.type === 'Ingreso')
+            .reduce((sum, movement) => sum + movement.amount, 0);
     const incomeRows = periodCashMovements.filter((movement) => movement.type === 'Ingreso');
-    const reservationRows = periodBookings.map((booking) => ({
-      label: booking.confirmationCode,
-      reservations: 1,
-      checkIns: booking.status === 'checkedIn' || booking.status === 'checkedOut' ? 1 : 0,
-      checkOuts: booking.status === 'checkedOut' ? 1 : 0,
-      income: centsToAmount(booking.totalAmountCents),
-    }));
+    const reservationRows =
+      officialReport !== null
+        ? Object.entries(officialReport.bookingsByStatus).map(([status, count]) => ({
+            label: status,
+            reservations: count,
+            checkIns: status === 'checked_in' ? count : 0,
+            checkOuts: status === 'checked_out' ? count : 0,
+            income: 0,
+          }))
+        : periodBookings.map((booking) => ({
+            label: booking.confirmationCode,
+            reservations: 1,
+            checkIns: booking.status === 'checkedIn' || booking.status === 'checkedOut' ? 1 : 0,
+            checkOuts: booking.status === 'checkedOut' ? 1 : 0,
+            income: centsToAmount(booking.totalAmountCents),
+          }));
     const EmptyReport = ({ message }: { message: string }) => (
       <div className="hk-empty">
         <FileText size={20} />
@@ -2851,123 +3151,168 @@ function AdminContentReady({
             </button>
           ))}
         </div>
-        <div className="adm-report-content">
-          {activeReportTab === 'Ocupación' && (
-            <>
-              <div className="adm-report-stats">
-                <div className="metric-card">
-                  <div className="metric-icon sage">
-                    <BedDouble size={19} />
+        {operationalReport.status === 'loading' ? (
+          <LoadingState label="Cargando reporte operativo..." />
+        ) : operationalReport.status === 'error' ? (
+          <ErrorState
+            title="No pudimos cargar el reporte"
+            description={operationalReport.message}
+            onRetry={() => loadOperationalReport(reportFilter)}
+          />
+        ) : officialReport !== null && officialReport.bookings === 0 ? (
+          <EmptyReport message="No hay datos oficiales para este periodo" />
+        ) : (
+          <div className="adm-report-content">
+            {activeReportTab === 'Ocupación' && (
+              <>
+                <div className="adm-report-stats">
+                  <div className="metric-card">
+                    <div className="metric-icon sage">
+                      <BedDouble size={19} />
+                    </div>
+                    <div>
+                      <p>{officialReport ? 'Noches ocupadas' : 'Ocupación promedio'}</p>
+                      <h2>
+                        {officialReport ? officialReport.occupancyNights : `${occupancyPercent}%`}
+                      </h2>
+                      <span className="positive">
+                        {officialReport ? 'Reporting API' : 'Datos actuales'}
+                      </span>
+                    </div>
                   </div>
-                  <div>
-                    <p>Ocupación promedio</p>
-                    <h2>{occupancyPercent}%</h2>
-                    <span className="positive">Datos actuales</span>
-                  </div>
-                </div>
-                <div className="metric-card">
-                  <div className="metric-icon gold">
-                    <TrendingUp size={19} />
-                  </div>
-                  <div>
-                    <p>Tendencia</p>
-                    <h2>{occupiedRooms > 0 ? 'Con ocupacion' : 'Sin ocupacion'}</h2>
-                    <span className="positive">{reportFilter}</span>
-                  </div>
-                </div>
-              </div>
-              <MiniChart
-                data={rooms.length > 0 ? rooms.map((_, index) => index + 1) : [0]}
-                labels={rooms.length > 0 ? rooms.map((room) => room.number) : ['Sin datos']}
-              />
-            </>
-          )}
-          {activeReportTab === 'Ingresos' && (
-            <>
-              <div className="adm-report-stats">
-                <div className="metric-card">
-                  <div className="metric-icon gold">
-                    <Wallet size={19} />
-                  </div>
-                  <div>
-                    <p>Ingresos del periodo</p>
-                    <h2>{money(totalIncome)}</h2>
-                    <span className="positive">Caja registrada</span>
-                  </div>
-                </div>
-                <div className="metric-card">
-                  <div className="metric-icon sage">
-                    <DollarSign size={19} />
-                  </div>
-                  <div>
-                    <p>Promedio por corte</p>
-                    <h2>
-                      {incomeRows.length > 0 ? money(totalIncome / incomeRows.length) : money(0)}
-                    </h2>
-                    <span className="positive">{reportFilter}</span>
+                  <div className="metric-card">
+                    <div className="metric-icon gold">
+                      <TrendingUp size={19} />
+                    </div>
+                    <div>
+                      <p>Tendencia</p>
+                      <h2>
+                        {officialReport
+                          ? 'No disponible'
+                          : occupiedRooms > 0
+                            ? 'Con ocupacion'
+                            : 'Sin ocupacion'}
+                      </h2>
+                      <span className="positive">
+                        {officialReport ? 'Reporting API no expone tendencia' : reportFilter}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
-              <BarChart
-                data={incomeRows.length > 0 ? incomeRows.map((row) => row.amount) : [0]}
-                labels={incomeRows.length > 0 ? incomeRows.map((row) => row.date) : ['Sin datos']}
-              />
-            </>
-          )}
-          {activeReportTab === 'Reservas' && (
-            <AdminTable headers={['Periodo', 'Reservas', 'Check-ins', 'Check-outs', 'Ingresos']}>
-              {reservationRows.map((row) => (
-                <tr key={row.label}>
-                  <td>{row.label}</td>
-                  <td>{row.reservations}</td>
-                  <td>{row.checkIns}</td>
-                  <td>{row.checkOuts}</td>
-                  <td>{money(row.income)}</td>
-                </tr>
-              ))}
-            </AdminTable>
-          )}
-          {activeReportTab === 'Cancelaciones' && (
-            <>
-              <div className="adm-report-stats">
-                <div className="metric-card">
-                  <div className="metric-icon terracotta">
-                    <Ban size={19} />
+                {officialReport ? (
+                  <MiniChart
+                    data={[officialReport.occupancyNights, officialReport.roomServiceOrders]}
+                    labels={['Noches', 'Room service']}
+                  />
+                ) : (
+                  <MiniChart
+                    data={rooms.length > 0 ? rooms.map((_, index) => index + 1) : [0]}
+                    labels={rooms.length > 0 ? rooms.map((room) => room.number) : ['Sin datos']}
+                  />
+                )}
+              </>
+            )}
+            {activeReportTab === 'Ingresos' && (
+              <>
+                <div className="adm-report-stats">
+                  <div className="metric-card">
+                    <div className="metric-icon gold">
+                      <Wallet size={19} />
+                    </div>
+                    <div>
+                      <p>Ingresos del periodo</p>
+                      <h2>{money(totalIncome)}</h2>
+                      <span className="positive">
+                        {officialReport ? 'Reporting API' : 'Caja registrada'}
+                      </span>
+                    </div>
                   </div>
-                  <div>
-                    <p>Cancelaciones</p>
-                    <h2>{cancelledReservations}</h2>
-                    <span>Datos actuales</span>
+                  <div className="metric-card">
+                    <div className="metric-icon sage">
+                      <DollarSign size={19} />
+                    </div>
+                    <div>
+                      <p>Promedio por corte</p>
+                      <h2>
+                        {officialReport
+                          ? 'No disponible'
+                          : incomeRows.length > 0
+                            ? money(totalIncome / incomeRows.length)
+                            : money(0)}
+                      </h2>
+                      <span className="positive">
+                        {officialReport ? 'Reporting API no expone cortes' : reportFilter}
+                      </span>
+                    </div>
                   </div>
                 </div>
-                <div className="metric-card">
-                  <div className="metric-icon info">
-                    <Percent size={19} />
+                <BarChart
+                  data={officialReport ? [totalIncome] : incomeRows.map((row) => row.amount)}
+                  labels={
+                    officialReport
+                      ? [`${officialReport.from} / ${officialReport.to}`]
+                      : incomeRows.length > 0
+                        ? incomeRows.map((row) => row.date)
+                        : ['Sin datos']
+                  }
+                />
+              </>
+            )}
+            {activeReportTab === 'Reservas' && (
+              <AdminTable headers={['Periodo', 'Reservas', 'Check-ins', 'Check-outs', 'Ingresos']}>
+                {reservationRows.map((row) => (
+                  <tr key={row.label}>
+                    <td>{row.label}</td>
+                    <td>{row.reservations}</td>
+                    <td>{row.checkIns}</td>
+                    <td>{row.checkOuts}</td>
+                    <td>{money(row.income)}</td>
+                  </tr>
+                ))}
+              </AdminTable>
+            )}
+            {activeReportTab === 'Cancelaciones' && (
+              <>
+                <div className="adm-report-stats">
+                  <div className="metric-card">
+                    <div className="metric-icon terracotta">
+                      <Ban size={19} />
+                    </div>
+                    <div>
+                      <p>Cancelaciones</p>
+                      <h2>{cancelledReservations}</h2>
+                      <span>{officialReport ? 'Reporting API' : 'Datos actuales'}</span>
+                    </div>
                   </div>
-                  <div>
-                    <p>Tasa de cancelación</p>
-                    <h2>{cancellationRate}%</h2>
-                    <span className="positive">{confirmedReservations} reservas vigentes</span>
+                  <div className="metric-card">
+                    <div className="metric-icon info">
+                      <Percent size={19} />
+                    </div>
+                    <div>
+                      <p>Tasa de cancelación</p>
+                      <h2>{cancellationRate}%</h2>
+                      <span className="positive">{activeReservations} reservas vigentes</span>
+                    </div>
                   </div>
                 </div>
-              </div>
-              <MiniChart
-                data={[cancelledReservations, confirmedReservations]}
-                labels={['Canceladas', 'Vigentes']}
-                color="#a9483c"
-              />
-            </>
-          )}
-          {activeReportTab === 'Canales' && (
-            <EmptyReport message="El contrato actual de reservas no define canal de venta; no se muestran cifras simuladas." />
-          )}
-          {activeReportTab === 'Servicios' && (
-            <EmptyReport message="Los ingresos por servicio se veran aqui cuando exista una fuente contractual agregada." />
-          )}
-          {activeReportTab === 'Temporadas' && (
-            <EmptyReport message="La agrupacion por temporadas aun no tiene contrato de datos; se omiten metricas inventadas." />
-          )}
-        </div>
+                <MiniChart
+                  data={[cancelledReservations, activeReservations]}
+                  labels={['Canceladas', 'Vigentes']}
+                  color="#a9483c"
+                />
+              </>
+            )}
+            {activeReportTab === 'Canales' && (
+              <EmptyReport message="El contrato actual de reservas no define canal de venta; no se muestran cifras simuladas." />
+            )}
+            {activeReportTab === 'Servicios' && (
+              <EmptyReport message="Los ingresos por servicio se veran aqui cuando exista una fuente contractual agregada." />
+            )}
+            {activeReportTab === 'Temporadas' && (
+              <EmptyReport message="La agrupacion por temporadas aun no tiene contrato de datos; se omiten metricas inventadas." />
+            )}
+          </div>
+        )}
       </div>
     );
   }
@@ -3225,19 +3570,31 @@ function AdminContentReady({
   if (nav === 'Caja') {
     const visibleCashMovements = cashMovements;
     const visibleCashSessions = cashSessions;
-    const totalIngresos = visibleCashMovements
-      .filter((m) => m.type === 'Ingreso')
-      .reduce((s, m) => s + m.amount, 0);
-    const totalEgresos = visibleCashMovements
-      .filter((m) => m.type === 'Egreso')
-      .reduce((s, m) => s + m.amount, 0);
     const latestCashSession =
       [...visibleCashSessions].sort(
         (left, right) => right.openedAt.getTime() - left.openedAt.getTime(),
       )[0] ?? null;
+    const localIngresos = visibleCashMovements
+      .filter((m) => m.type === 'Ingreso')
+      .reduce((s, m) => s + m.amount, 0);
+    const localEgresos = visibleCashMovements
+      .filter((m) => m.type === 'Egreso')
+      .reduce((s, m) => s + m.amount, 0);
+    const totalIngresos =
+      latestCashSession?.totalIncomeCents !== undefined
+        ? centsToAmount(latestCashSession.totalIncomeCents)
+        : localIngresos;
+    const totalEgresos =
+      latestCashSession?.totalExpenseCents !== undefined
+        ? centsToAmount(latestCashSession.totalExpenseCents)
+        : localEgresos;
     const saldoInicial = latestCashSession
       ? centsToAmount(latestCashSession.openingBalanceCents)
       : 0;
+    const saldoActual =
+      latestCashSession?.expectedBalanceCents !== undefined
+        ? centsToAmount(latestCashSession.expectedBalanceCents)
+        : saldoInicial + totalIngresos - totalEgresos;
     return (
       <>
         <div className="adm-cash-grid">
@@ -3258,7 +3615,12 @@ function AdminContentReady({
               <p>Ingresos</p>
               <h2>{money(totalIngresos)}</h2>
               <span className="positive">
-                +{((totalIngresos / (saldoInicial + totalIngresos)) * 100).toFixed(1)}%
+                +
+                {(totalIngresos > 0
+                  ? (totalIngresos / (saldoInicial + totalIngresos)) * 100
+                  : 0
+                ).toFixed(1)}
+                %
               </span>
             </div>
           </div>
@@ -3277,7 +3639,7 @@ function AdminContentReady({
             </div>
             <div>
               <p>Saldo actual</p>
-              <h2>{money(saldoInicial + totalIngresos - totalEgresos)}</h2>
+              <h2>{money(saldoActual)}</h2>
             </div>
           </div>
         </div>
@@ -3293,10 +3655,10 @@ function AdminContentReady({
                   className="button secondary"
                   onClick={async () => {
                     try {
-                      const closed = await cashService.closeSession();
-                      setCashSessions((cur) =>
-                        cur.map((session) => (session.id === closed.id ? closed : session)),
-                      );
+                      await cashService.closeSession();
+                      const sessions = await cashService.getSessions();
+                      setCashSessions(sessions);
+                      setCashMovements([]);
                       setCashOpen(false);
                       onAction('Caja cerrada correctamente');
                     } catch (cause) {
@@ -3315,6 +3677,7 @@ function AdminContentReady({
                         openingBalanceCents: amountToCents(saldoInicial),
                       });
                       setCashSessions((cur) => [...cur, opened]);
+                      setCashMovements([]);
                       setCashOpen(true);
                       onAction('Caja abierta correctamente');
                     } catch (cause) {
@@ -3386,6 +3749,8 @@ function AdminContentReady({
                   },
                   ...cur,
                 ]);
+                const refreshed = await cashService.getSessions();
+                setCashSessions(refreshed);
                 onAction('Movimiento de caja registrado correctamente');
                 setShowCashModal(false);
               } catch (cause) {
@@ -3485,6 +3850,7 @@ function UserModal({
 }) {
   const [name, setName] = useState(user?.name ?? '');
   const [email, setEmail] = useState(user?.email ?? '');
+  const [password, setPassword] = useState('');
   const [role, setRole] = useState(user?.role ?? roles[0]?.name ?? '');
   const [status, setStatus] = useState<'Activo' | 'Inactivo'>(user?.status ?? 'Activo');
   return (
@@ -3495,8 +3861,10 @@ function UserModal({
       onSubmit={() =>
         onSave({
           id: user?.id ?? 0,
+          dbId: user?.dbId ?? '',
           name,
           email,
+          password: user ? undefined : password,
           role,
           status,
           lastAccess: user?.lastAccess ?? 'Sin acceso',
@@ -3532,6 +3900,18 @@ function UserModal({
           ))}
         </select>
       </label>
+      {!user && (
+        <label className="hk-form-label">
+          Contrasena temporal
+          <input
+            className="hk-form-select"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Contrasena inicial"
+          />
+        </label>
+      )}
       <label className="hk-form-label">
         Estado
         <select
@@ -3575,6 +3955,7 @@ function RoleModal({
       onSubmit={() =>
         onSave({
           id: role?.id ?? 0,
+          dbId: role?.dbId ?? '',
           code: role?.code ?? name.toLowerCase().replace(/\s+/g, '_'),
           name,
           description,
@@ -4152,7 +4533,17 @@ function AmenityModal({
       title={amenity ? 'Editar amenidad' : 'Nueva amenidad'}
       eyebrow="GESTIÓN DE AMENIDADES"
       onClose={onClose}
-      onSubmit={() => onSave({ id: amenity?.id ?? 0, name, schedule, available, status, icon })}
+      onSubmit={() =>
+        onSave({
+          id: amenity?.id ?? 0,
+          dbId: amenity?.dbId ?? '',
+          name,
+          schedule,
+          available,
+          status,
+          icon,
+        })
+      }
       submitLabel={amenity ? 'Guardar cambios' : 'Crear amenidad'}
     >
       <div className="rc-form-grid">
@@ -4235,6 +4626,7 @@ function RsItemModal({
       onSubmit={() =>
         onSave({
           id: item?.id ?? 0,
+          dbId: item?.dbId ?? '',
           name,
           category,
           price,

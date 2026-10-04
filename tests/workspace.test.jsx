@@ -4,7 +4,6 @@ import { create, act } from 'react-test-renderer';
 import { MemoryRouter } from 'react-router-dom';
 import { ReservationFormModal } from '@/modules/front-desk/components/workspace/ReceptionModals';
 import { PrivateWorkspace } from '@/private/workspace/PrivateWorkspace';
-import { serviceRequestService } from '@/services/serviceRequestService';
 import { calculateNights } from '@/shared/utils/date';
 import { toDomainCalendarDate } from '@/shared/types/common';
 
@@ -142,9 +141,122 @@ test('reserva manual: al corregir las fechas se recupera el flujo y guarda 2 noc
   assert.equal(saved[0].folio[0].amount, 1000);
 });
 
-// --- Limpieza --------------------------------------------------------------
+// --- Limpieza: backend falso de HousekeepingController (INT-09) -----------
+//
+// Replica la regla del backend: cada acción exige un estado de origen exacto y
+// responde 400 si no se cumple. La UI nunca debe cambiar sin esa confirmación.
+
+const hkRoom = (id, roomNumber, housekeepingStatus, extra = {}) => ({
+  id,
+  roomNumber,
+  roomTypeId: 'type-standard',
+  floor: Number(roomNumber[0]),
+  status: 'available',
+  housekeepingStatus,
+  notes: null,
+  updatedAt: '2026-10-03T08:00:00Z',
+  ...extra,
+});
+const hkStayover = (id, roomId, status, description) => ({
+  id,
+  bookingId: 'booking-1',
+  roomId,
+  roomNumber: null,
+  status,
+  description,
+  requestedAt: '2026-10-03T09:00:00Z',
+  startedAt: status === 'pending' ? null : '2026-10-03T09:10:00Z',
+  completedAt: status === 'completed' ? '2026-10-03T09:40:00Z' : null,
+  createdAt: '2026-10-03T09:00:00Z',
+  updatedAt: '2026-10-03T09:00:00Z',
+});
+
+let hkBackend;
+let originalFetch;
+afterEach(() => {
+  if (originalFetch) globalThis.fetch = originalFetch;
+  originalFetch = undefined;
+});
+
+function installHousekeepingBackend() {
+  const state = {
+    rooms: [
+      hkRoom('room-101', '101', 'dirty'),
+      hkRoom('room-102', '102', 'dirty'),
+      hkRoom('room-201', '201', 'cleaning', { cleaningStartedAt: '2026-10-03T08:30:00Z' }),
+      hkRoom('room-202', '202', 'clean', {
+        status: 'occupied',
+        cleaningStartedAt: '2026-10-03T07:00:00Z',
+        cleaningCompletedAt: '2026-10-03T07:40:00Z',
+      }),
+    ],
+    stayovers: [
+      hkStayover('stay-1', 'room-202', 'pending', 'Cambio de toallas'),
+      hkStayover('stay-2', 'room-202', 'in_progress', 'Repaso de baño'),
+      hkStayover('stay-3', 'room-101', 'completed', 'Tendido de cama'),
+      hkStayover('stay-4', 'room-102', 'cancelled', 'Cancelada por el huésped'),
+    ],
+    requests: [],
+  };
+  const turnover = {
+    start: ['dirty', 'cleaning', 'cleaningStartedAt'],
+    complete: ['cleaning', 'clean', 'cleaningCompletedAt'],
+    inspect: ['clean', 'inspected', 'inspectedAt'],
+  };
+  const stayoverFlow = {
+    start: ['pending', 'in_progress', 'startedAt'],
+    complete: ['in_progress', 'completed', 'completedAt'],
+  };
+  const json = (body, status = 200) =>
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { 'content-type': 'application/json' },
+    });
+
+  originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input, init = {}) => {
+    const path = new URL(String(input)).pathname.replace(/^\/api\/v1/, '');
+    const method = init.method ?? 'GET';
+    state.requests.push(`${method} ${path}`);
+    if (method === 'GET' && path === '/rooms') return json(state.rooms);
+    if (path === '/room-types' || path === '/room-features') return json({ status: 403 }, 403);
+    // El rol housekeeping no tiene `room-service.read`: el backend real responde 403.
+    if (path.startsWith('/room-service/')) return json({ status: 403 }, 403);
+    if (method === 'GET' && path === '/housekeeping/rooms') return json(state.rooms);
+    if (method === 'GET' && path === '/housekeeping/rooms/stayover-cleanings') {
+      return json(state.stayovers);
+    }
+    const stayover = path.match(/^\/housekeeping\/rooms\/stayover-cleanings\/([^/]+)\/(\w+)$/);
+    if (method === 'POST' && stayover) {
+      const index = state.stayovers.findIndex((item) => item.id === stayover[1]);
+      const [from, to, field] = stayoverFlow[stayover[2]];
+      if (state.stayovers[index].status !== from) return json({ status: 400 }, 400);
+      state.stayovers[index] = {
+        ...state.stayovers[index],
+        status: to,
+        [field]: '2026-10-03T10:00:00Z',
+      };
+      return json(state.stayovers[index]);
+    }
+    const room = path.match(/^\/housekeeping\/rooms\/([^/]+)\/(start|complete|inspect)$/);
+    if (method === 'POST' && room) {
+      const index = state.rooms.findIndex((item) => item.id === room[1]);
+      const [from, to, field] = turnover[room[2]];
+      if (state.rooms[index].housekeepingStatus !== from) return json({ status: 400 }, 400);
+      state.rooms[index] = {
+        ...state.rooms[index],
+        housekeepingStatus: to,
+        [field]: '2026-10-03T10:00:00Z',
+      };
+      return json(state.rooms[index]);
+    }
+    return json({ message: `Ruta no mockeada: ${method} ${path}` }, 404);
+  };
+  return state;
+}
 
 async function mountHousekeeping() {
+  hkBackend = installHousekeepingBackend();
   await act(async () => {
     view = create(
       <MemoryRouter>
@@ -182,13 +294,37 @@ const requestRows = () =>
       status: text(row.findAll((node) => hasClass(node, 'status-pill')).at(-1)),
       actions: row.findAll((node) => node.type === 'button').map(text),
     }));
+const roomCards = () =>
+  view.root
+    .findAll((node) => node.type === 'div' && hasClass(node, 'hk-room-card'))
+    .map((card) => ({
+      card,
+      number: text(card.find((node) => node.type === 'strong')),
+      status: text(card.find((node) => hasClass(node, 'status-pill'))),
+    }));
+const cardFor = (number) => roomCards().find((card) => card.number === `Habitación ${number}`);
 const toasts = () => view.root.findAll((node) => hasClass(node, 'toast')).map(text);
-const expectedOpenRequests = async () =>
-  (await serviceRequestService.getRequests()).filter(
-    (request) =>
-      (request.type === 'housekeeping' || request.type === 'maintenance') &&
-      ['pending', 'accepted', 'inProgress'].includes(request.status),
-  ).length;
+const expectedOpenRequests = () =>
+  hkBackend.stayovers.filter((request) => ['pending', 'in_progress'].includes(request.status))
+    .length;
+
+test('limpieza: el panel carga sin pedir datos para los que el rol no tiene permiso', async () => {
+  await mountHousekeeping();
+  assert.ok(hkBackend.requests.includes('GET /housekeeping/rooms'));
+  assert.ok(hkBackend.requests.includes('GET /housekeeping/rooms/stayover-cleanings'));
+  assert.deepEqual(
+    hkBackend.requests.filter((request) => request.includes('/room-service/')),
+    [],
+    'el catálogo de Room Service exige room-service.read',
+  );
+  assert.deepEqual(
+    hkBackend.requests.filter(
+      (request) => request.includes('/room-types') || request.includes('/room-features'),
+    ),
+    [],
+    'el catálogo de habitaciones exige room-types.read/room-features.read',
+  );
+});
 
 test('limpieza: "Reportar desperfecto" solo aparece en Inicio', async () => {
   await mountHousekeeping();
@@ -205,13 +341,12 @@ test('limpieza: cada solicitud ofrece solo la acción que su estado permite', as
   await mountHousekeeping();
   await goTo('Solicitudes');
   const rows = requestRows();
-  const rejectedInSource = (await serviceRequestService.getRequests()).filter(
-    (request) =>
-      (request.type === 'housekeeping' || request.type === 'maintenance') &&
-      request.status === 'rejected',
-  ).length;
-  assert.ok(rejectedInSource > 0, 'los datos mock incluyen una solicitud rechazada');
-  assert.equal(rows.filter((row) => row.status === 'Rechazada').length, rejectedInSource);
+  assert.equal(rows.length, hkBackend.stayovers.length, 'las solicitudes salen del backend');
+  assert.equal(
+    rows.filter((row) => row.status === 'Rechazada').length,
+    1,
+    'una tarea cancelled del backend se muestra como Rechazada',
+  );
   const allowed = {
     Pendiente: ['Atender solicitud'],
     'En proceso': ['Completar solicitud'],
@@ -226,44 +361,524 @@ test('limpieza: cada solicitud ofrece solo la acción que su estado permite', as
 
 test('limpieza: atender y completar una solicitud avanza sin transición inválida y actualiza el badge', async () => {
   await mountHousekeeping();
-  const openBefore = await expectedOpenRequests();
+  const openBefore = expectedOpenRequests();
   assert.equal(navBadge('Solicitudes'), openBefore ? String(openBefore) : undefined);
 
   await goTo('Solicitudes');
   const pending = requestRows().find((row) => row.status === 'Pendiente');
   assert.ok(pending, 'hay una solicitud pendiente para atender');
-  const room = text(pending.row.find((node) => node.type === 'strong'));
-  const rowFor = () =>
-    requestRows().find((row) => text(row.row.find((node) => node.type === 'strong')) === room);
+  const requestInfo = (row) => text(row.find((node) => hasClass(node, 'hk-req-info')));
+  const description = requestInfo(pending.row);
+  const rowFor = () => requestRows().find((row) => requestInfo(row.row) === description);
 
   await act(async () => buttons('Atender solicitud', pending.row)[0].props.onClick());
   await settle();
   assert.equal(rowFor().status, 'En proceso');
-  assert.ok(!toasts().some((toast) => /Transici[oó]n inv[aá]lida/i.test(toast)), toasts().join());
+  assert.ok(!toasts().some((toast) => /rechaz/i.test(toast)), toasts().join());
   assert.equal(navBadge('Solicitudes'), String(openBefore), 'sigue abierta: el badge no cambia');
 
   await act(async () => buttons('Completar solicitud', rowFor().row)[0].props.onClick());
   await settle();
   assert.equal(rowFor().status, 'Completada');
-  assert.ok(!toasts().some((toast) => /Transici[oó]n inv[aá]lida/i.test(toast)), toasts().join());
-  const openAfter = await expectedOpenRequests();
+  assert.ok(!toasts().some((toast) => /rechaz/i.test(toast)), toasts().join());
+  const openAfter = expectedOpenRequests();
   assert.equal(openAfter, openBefore - 1);
   assert.equal(navBadge('Solicitudes'), openAfter ? String(openAfter) : undefined);
+  assert.equal(
+    hkBackend.rooms.find((room) => room.id === 'room-202').status,
+    'occupied',
+    'stayover no libera la habitación',
+  );
 });
 
 test('limpieza: el badge de Habitaciones cuenta las pendientes y baja al iniciar una limpieza', async () => {
   await mountHousekeeping();
   await goTo('Habitaciones');
-  const pendingRooms = () =>
-    view.root.findAll(
-      (node) => node.type === 'span' && hasClass(node, 'status-pill') && text(node) === 'Pendiente',
-    ).length;
+  const pendingRooms = () => roomCards().filter((card) => card.status === 'Pendiente').length;
   const before = pendingRooms();
-  assert.ok(before > 0, 'hay habitaciones pendientes');
+  assert.equal(before, 2, 'las dos habitaciones dirty del backend');
   assert.equal(navBadge('Habitaciones'), String(before));
 
   await act(async () => buttons('Iniciar limpieza')[0].props.onClick());
   await settle();
   assert.equal(pendingRooms(), before - 1);
   assert.equal(navBadge('Habitaciones'), before - 1 ? String(before - 1) : undefined);
+  assert.equal(hkBackend.rooms[0].housekeepingStatus, 'cleaning', 'la transición pasó por la API');
+});
+
+test('limpieza: una habitación limpia se inspecciona contra el backend', async () => {
+  await mountHousekeeping();
+  await goTo('Habitaciones');
+  assert.equal(cardFor('202').status, 'Completada');
+
+  await act(async () => buttons('Inspeccionar', cardFor('202').card)[0].props.onClick());
+  await settle();
+  assert.equal(cardFor('202').status, 'Inspeccionada');
+  assert.equal(hkBackend.rooms[3].housekeepingStatus, 'inspected');
+  assert.equal(hkBackend.rooms[3].status, 'occupied', 'el turnover no toca Room.status');
+});
+
+test('limpieza: si el backend rechaza la transición se muestra el estado real', async () => {
+  await mountHousekeeping();
+  await goTo('Habitaciones');
+  assert.equal(cardFor('101').status, 'Pendiente');
+
+  // Otra persona inició la limpieza desde la app móvil; esta pantalla aún no lo sabe.
+  hkBackend.rooms[0] = { ...hkBackend.rooms[0], housekeepingStatus: 'cleaning' };
+  await act(async () => buttons('Iniciar limpieza', cardFor('101').card)[0].props.onClick());
+  await settle();
+
+  assert.ok(
+    toasts().some((toast) => /rechazó la transición/.test(toast)),
+    toasts().join(),
+  );
+  assert.equal(cardFor('101').status, 'En proceso', 'se recargó el estado real del backend');
+});
+
+// --- Room Service: backend falso de RoomServiceController (INT-10) --------
+//
+// Mismas reglas que RoomServiceOrderServiceImpl: transiciones exactas o 400 y
+// `notes` opcional junto con el cambio de estado.
+
+const rsOrder = (id, status, extra = {}) => ({
+  id,
+  bookingId: 'booking-rs',
+  roomId: 'room-305',
+  roomNumber: '305',
+  guestId: 'guest-1',
+  guestName: 'Ana López',
+  status,
+  notes: null,
+  currency: 'GTQ',
+  totalCents: 4500,
+  items: [
+    {
+      id: `${id}-item`,
+      productId: 'product-1',
+      productName: 'Club sándwich',
+      quantity: 1,
+      unitPriceCents: 4500,
+      lineTotalCents: 4500,
+    },
+  ],
+  chargeId: null,
+  requestedAt: '2026-10-03T12:00:00Z',
+  createdAt: '2026-10-03T12:00:00Z',
+  updatedAt: '2026-10-03T12:00:00Z',
+  ...extra,
+});
+
+function installRoomServiceBackend() {
+  const state = { orders: [rsOrder('order-1', 'pending')], requests: [] };
+  const allowed = {
+    pending: ['accepted', 'rejected', 'cancelled'],
+    accepted: ['preparing', 'cancelled'],
+    preparing: ['ready', 'cancelled'],
+    ready: ['on_the_way', 'cancelled'],
+    on_the_way: ['delivered'],
+  };
+  const json = (body, status = 200) =>
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { 'content-type': 'application/json' },
+    });
+
+  originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input, init = {}) => {
+    const path = new URL(String(input)).pathname.replace(/^\/api\/v1/, '');
+    const method = init.method ?? 'GET';
+    const body = init.body ? JSON.parse(String(init.body)) : undefined;
+    state.requests.push({ call: `${method} ${path}`, body });
+    if (method === 'GET' && path === '/rooms') return json({ status: 403 }, 403);
+    if (method === 'GET' && path === '/room-service/products') return json([]);
+    if (method === 'GET' && path === '/room-service/orders') return json(state.orders);
+    const status = path.match(/^\/room-service\/orders\/([^/]+)\/status$/);
+    if (method === 'POST' && status) {
+      const order = state.orders.find((item) => item.id === status[1]);
+      if (!(allowed[order.status] ?? []).includes(body.status)) return json({ status: 400 }, 400);
+      order.status = body.status;
+      if (body.notes !== undefined) order.notes = body.notes;
+      return json(order);
+    }
+    return json({ message: `Ruta no mockeada: ${method} ${path}` }, 404);
+  };
+  return state;
+}
+
+let rsBackend;
+async function mountRoomService() {
+  rsBackend = installRoomServiceBackend();
+  await act(async () => {
+    view = create(
+      <MemoryRouter>
+        <PrivateWorkspace role="room-service" sessionName="Room Service Test" />
+      </MemoryRouter>,
+    );
+  });
+  for (let i = 0; i < 20 && !view.root.findAll((node) => hasClass(node, 'side-nav')).length; i++) {
+    await settle(300);
+  }
+  assert.ok(view.root.findAll((node) => hasClass(node, 'side-nav')).length, 'workspace cargado');
+}
+const orderCards = () =>
+  view.root.findAll((node) => node.type === 'article' && hasClass(node, 'rs-order-card'));
+const orderStatus = (card) => text(card.find((node) => hasClass(node, 'status-pill')));
+const statusCalls = () =>
+  rsBackend.requests.filter(({ call }) => call.endsWith('/status')).map(({ body }) => body);
+
+test('room service: los pedidos salen del backend con habitación, huésped y producto', async () => {
+  await mountRoomService();
+  assert.deepEqual(
+    rsBackend.requests.filter(({ call }) => call === 'GET /rooms'),
+    [],
+    'Room Service no debe depender de rooms.read para cargar pedidos',
+  );
+  const [card] = orderCards();
+  assert.ok(card, 'el pedido del backend aparece en Pedidos activos');
+  assert.match(text(card), /Habitación 305 · Ana López/);
+  assert.match(text(card), /Club sándwich/);
+  assert.equal(orderStatus(card), 'Pendiente');
+});
+
+test('room service: aceptar envía el estado al backend sin notas', async () => {
+  await mountRoomService();
+  await act(async () => buttons('Aceptar pedido', orderCards()[0])[0].props.onClick());
+  await settle();
+  assert.deepEqual(statusCalls(), [{ status: 'accepted' }]);
+  assert.equal(rsBackend.orders[0].status, 'accepted');
+  assert.equal(orderStatus(orderCards()[0]), 'Aceptado');
+});
+
+test('room service: rechazar envía el motivo junto con el cambio de estado', async () => {
+  await mountRoomService();
+  await act(async () => buttons('Rechazar', orderCards()[0])[0].props.onClick());
+  const textarea = view.root.find(
+    (node) => node.type === 'textarea' && hasClass(node, 'rs-rejection-textarea'),
+  );
+  await act(async () => textarea.props.onChange({ target: { value: 'Cocina cerrada' } }));
+  await act(async () => buttons('Confirmar rechazo')[0].props.onClick());
+  await settle();
+  assert.deepEqual(statusCalls(), [{ status: 'rejected', notes: 'Cocina cerrada' }]);
+  assert.equal(rsBackend.orders[0].status, 'rejected');
+  assert.equal(rsBackend.orders[0].notes, 'Cocina cerrada');
+});
+
+test('room service: si el backend rechaza la transición se recargan los pedidos reales', async () => {
+  await mountRoomService();
+  // El huésped canceló el pedido desde su portal; esta pantalla aún no lo sabe.
+  rsBackend.orders[0].status = 'cancelled';
+  await act(async () => buttons('Aceptar pedido', orderCards()[0])[0].props.onClick());
+  await settle();
+  assert.ok(
+    view.root
+      .findAll((node) => hasClass(node, 'toast'))
+      .some((node) => /rechazó la operación/.test(text(node))),
+    'se informa el rechazo del backend',
+  );
+  assert.equal(orderCards().length, 0, 'el pedido cancelado sale de Pedidos activos');
+});
+
+// --- Conserjería: backend falso de ConciergeRequestController (INT-11) -----
+//
+// Mismas reglas que ConciergeRequestServiceImpl: transiciones exactas o 400,
+// notas del cambio de estado agregadas y responsable asignado al tomar la solicitud.
+
+const cgRequest = (id, status, extra = {}) => ({
+  id,
+  bookingId: 'booking-cg',
+  roomId: 'room-402',
+  roomNumber: '402',
+  guestId: 'guest-cg',
+  guestName: 'Luis Pérez',
+  responsibleUserId: null,
+  responsibleUserName: null,
+  responsibleUserEmail: null,
+  type: 'concierge',
+  description: 'Reservar cena para dos',
+  status,
+  notes: null,
+  chargeId: null,
+  requestedAt: '2026-10-04T10:00:00Z',
+  createdAt: '2026-10-04T10:00:00Z',
+  updatedAt: '2026-10-04T10:00:00Z',
+  ...extra,
+});
+
+function installConciergeBackend(initialStatus) {
+  const state = { requests: [cgRequest('cg-1', initialStatus)], calls: [] };
+  const allowed = {
+    pending: ['accepted', 'rejected', 'cancelled'],
+    accepted: ['in_progress', 'cancelled'],
+    in_progress: ['completed', 'cancelled'],
+  };
+  const json = (body, status = 200) =>
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { 'content-type': 'application/json' },
+    });
+
+  originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input, init = {}) => {
+    const path = new URL(String(input)).pathname.replace(/^\/api\/v1/, '');
+    const method = init.method ?? 'GET';
+    const body = init.body ? JSON.parse(String(init.body)) : undefined;
+    state.calls.push({ call: `${method} ${path}`, body });
+    if (method === 'GET' && path === '/concierge/requests') return json(state.requests);
+    const match = path.match(/^\/concierge\/requests\/([^/]+)(\/status)?$/);
+    const item = match && state.requests.find((request) => request.id === match[1]);
+    if (method === 'GET' && item && !match[2]) return json(item);
+    if (method === 'POST' && item && match[2]) {
+      if (!(allowed[item.status] ?? []).includes(body.status)) return json({ status: 400 }, 400);
+      item.status = body.status;
+      if (body.notes) item.notes = body.notes;
+      if (!item.responsibleUserId && body.status === 'accepted') {
+        item.responsibleUserId = 'user-1';
+        item.responsibleUserName = 'Douglas Gómez';
+      }
+      return json(item);
+    }
+    return json({ message: `Ruta no mockeada: ${method} ${path}` }, 404);
+  };
+  return state;
+}
+
+let cgBackend;
+async function mountConcierge(initialStatus = 'pending') {
+  cgBackend = installConciergeBackend(initialStatus);
+  await act(async () => {
+    view = create(
+      <MemoryRouter>
+        <PrivateWorkspace role="concierge" sessionName="Conserjería Test" />
+      </MemoryRouter>,
+    );
+  });
+  for (let i = 0; i < 20 && !view.root.findAll((node) => hasClass(node, 'side-nav')).length; i++) {
+    await settle(300);
+  }
+  assert.ok(view.root.findAll((node) => hasClass(node, 'side-nav')).length, 'workspace cargado');
+}
+const requestCards = () =>
+  view.root.findAll((node) => node.type === 'article' && hasClass(node, 'cg-request-card'));
+const requestStatus = (card) => text(card.findAll((node) => hasClass(node, 'status-pill')).at(-1));
+const conciergeStatusCalls = () =>
+  cgBackend.calls.filter(({ call }) => call.endsWith('/status')).map(({ body }) => body);
+const confirmReason = async (actionLabel, reason, confirmLabel) => {
+  await act(async () => buttons(actionLabel, requestCards()[0])[0].props.onClick());
+  const textarea = view.root.find(
+    (node) => node.type === 'textarea' && hasClass(node, 'cg-rejection-textarea'),
+  );
+  await act(async () => textarea.props.onChange({ target: { value: reason } }));
+  await act(async () => buttons(confirmLabel)[0].props.onClick());
+  await settle();
+};
+
+test('conserjería: las solicitudes salen del backend con habitación y huésped', async () => {
+  await mountConcierge();
+  const [card] = requestCards();
+  assert.ok(card, 'la solicitud del backend aparece en Solicitudes');
+  assert.match(text(card), /Habitación 402 · Luis Pérez/);
+  assert.equal(requestStatus(card), 'Pendiente');
+});
+
+test('conserjería: aceptar envía solo el estado y muestra el responsable del backend', async () => {
+  await mountConcierge();
+  await act(async () => buttons('Aceptar solicitud', requestCards()[0])[0].props.onClick());
+  await settle();
+  assert.deepEqual(conciergeStatusCalls(), [{ status: 'accepted' }]);
+  assert.equal(
+    requestStatus(requestCards()[0]),
+    'Aceptada',
+    'accepted ya no se muestra como En proceso',
+  );
+
+  await act(async () => buttons('Ver detalle', requestCards()[0])[0].props.onClick());
+  await settle();
+  assert.ok(
+    cgBackend.calls.some(({ call }) => call === 'GET /concierge/requests/cg-1'),
+    'el detalle se pide al backend',
+  );
+  assert.match(text(view.root.find((node) => hasClass(node, 'cg-detail-modal'))), /Douglas Gómez/);
+});
+
+test('conserjería: rechazar envía el motivo junto con el cambio de estado', async () => {
+  await mountConcierge();
+  await confirmReason('Rechazar', 'Sin disponibilidad', 'Confirmar rechazo');
+  assert.deepEqual(conciergeStatusCalls(), [{ status: 'rejected', notes: 'Sin disponibilidad' }]);
+  assert.equal(cgBackend.requests[0].status, 'rejected');
+});
+
+test('conserjería: cancelar una solicitud aceptada envía el motivo y la cierra', async () => {
+  await mountConcierge('accepted');
+  await confirmReason('Cancelar', 'Ya no lo necesita', 'Confirmar cancelación');
+  assert.deepEqual(conciergeStatusCalls(), [{ status: 'cancelled', notes: 'Ya no lo necesita' }]);
+  assert.equal(cgBackend.requests[0].status, 'cancelled');
+  assert.equal(requestCards().length, 0, 'la solicitud cancelada sale de las activas');
+});
+
+test('conserjería: si el backend rechaza la transición se recargan las solicitudes reales', async () => {
+  await mountConcierge();
+  // El huésped canceló desde su portal; esta pantalla aún no lo sabe.
+  cgBackend.requests[0].status = 'cancelled';
+  await act(async () => buttons('Aceptar solicitud', requestCards()[0])[0].props.onClick());
+  await settle();
+  assert.ok(
+    view.root
+      .findAll((node) => hasClass(node, 'toast'))
+      .some((node) => /rechazó la operación/.test(text(node))),
+    'se informa el rechazo del backend',
+  );
+  assert.equal(requestCards().length, 0, 'la solicitud cancelada sale de las activas');
+});
+
+// --- Portal del huésped: backend falso de GuestAccessController (INT-12) ----
+
+function installGuestPortalBackend() {
+  const state = {
+    calls: [],
+    notifications: [
+      {
+        id: 'n-1',
+        type: 'room_service_accepted',
+        title: 'Room Service',
+        message: 'Pedido aceptado',
+        read: false,
+        createdAt: '2026-10-04T09:00:00Z',
+      },
+      {
+        id: 'n-2',
+        type: 'concierge_accepted',
+        title: 'Concierge',
+        message: 'Solicitud aceptada',
+        read: false,
+        createdAt: '2026-10-04T09:30:00Z',
+      },
+    ],
+    orders: [],
+  };
+  const json = (body, status = 200) =>
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { 'content-type': 'application/json' },
+    });
+
+  originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input, init = {}) => {
+    const path = new URL(String(input)).pathname.replace(/^\/api\/v1/, '');
+    const method = init.method ?? 'GET';
+    const body = init.body ? JSON.parse(String(init.body)) : undefined;
+    state.calls.push({ call: `${method} ${path}`, body });
+    if (path === '/guest/stay') {
+      return json({
+        bookingId: 'booking-guest',
+        guestId: 'guest-1',
+        guestFirstName: 'Ana',
+        guestLastName: 'López',
+        roomId: 'room-305',
+        roomNumber: '305',
+        roomTypeName: 'Suite Jardín',
+        checkIn: '2026-10-03',
+        checkOut: '2026-10-06',
+        status: 'checked_in',
+        balanceCents: 45000,
+        currency: 'GTQ',
+      });
+    }
+    if (path === '/guest/room-service/products') {
+      return json([
+        {
+          id: 'product-1',
+          sku: 'FB-001',
+          name: 'Club sándwich',
+          category: 'food_and_beverage',
+          priceCents: 4500,
+          currency: 'GTQ',
+          active: true,
+        },
+      ]);
+    }
+    if (path === '/guest/room-service/orders' && method === 'POST') {
+      const order = {
+        id: 'order-1',
+        bookingId: 'booking-guest',
+        roomId: 'room-305',
+        roomNumber: '305',
+        status: 'pending',
+        notes: body.notes ?? null,
+        currency: 'GTQ',
+        items: body.items.map((item) => ({
+          id: 'i-1',
+          productId: item.productId,
+          productName: 'Club sándwich',
+          quantity: item.quantity,
+          unitPriceCents: 4500,
+        })),
+        requestedAt: '2026-10-04T10:00:00Z',
+        createdAt: '2026-10-04T10:00:00Z',
+        updatedAt: '2026-10-04T10:00:00Z',
+      };
+      state.orders.push(order);
+      return json(order, 201);
+    }
+    if (path === '/guest/notifications') return json(state.notifications);
+    if (path === '/guest/notifications/unread-count') {
+      return json({ unreadCount: state.notifications.filter((item) => !item.read).length });
+    }
+    if (path === '/guest/notifications/read-all' && method === 'POST') {
+      state.notifications.forEach((item) => (item.read = true));
+      return json(state.notifications);
+    }
+    if (path.startsWith('/guest/')) return json([]);
+    return json({ message: `Ruta no mockeada: ${method} ${path}` }, 404);
+  };
+  return state;
+}
+
+let guestBackend;
+async function mountGuestPortal() {
+  guestBackend = installGuestPortalBackend();
+  await act(async () => {
+    view = create(
+      <MemoryRouter>
+        <PrivateWorkspace role="guest" sessionName="Ana López" />
+      </MemoryRouter>,
+    );
+  });
+  for (let i = 0; i < 20 && !text(view.root).includes('Habitacion 305'); i++) {
+    await settle(300);
+  }
+  assert.ok(text(view.root).includes('Habitacion 305'), 'la estancia sale de /guest/stay');
+}
+
+test('portal del huésped: carga solo desde /guest, sin endpoints del personal', async () => {
+  await mountGuestPortal();
+  const paths = guestBackend.calls.map(({ call }) => call.split(' ')[1]);
+  assert.ok(paths.includes('/guest/stay'));
+  assert.ok(paths.includes('/guest/notifications/unread-count'));
+  assert.ok(
+    paths.every((path) => path.startsWith('/guest/')),
+    `solo rutas de huésped: ${paths.join(', ')}`,
+  );
+});
+
+test('portal del huésped: marcar todas usa read-all y el contador del backend', async () => {
+  await mountGuestPortal();
+  await goTo('Notificaciones');
+  assert.ok(text(view.root).includes('2 notificaciones sin leer'));
+
+  await act(async () => buttons('Marcar todas como leídas')[0].props.onClick());
+  await settle();
+  assert.ok(guestBackend.calls.some(({ call }) => call === 'POST /guest/notifications/read-all'));
+  assert.ok(!text(view.root).includes('notificaciones sin leer'), 'el contador quedó en cero');
+});
+
+test('portal del huésped: el pedido de Room Service no elige la reserva', async () => {
+  await mountGuestPortal();
+  await goTo('Room service');
+  await act(async () => buttons('Agregar')[0].props.onClick());
+  await act(async () => buttons('Enviar pedido')[0].props.onClick());
+  await settle();
+  const post = guestBackend.calls.find(({ call }) => call === 'POST /guest/room-service/orders');
+  assert.ok(post, 'el pedido va a /guest/room-service/orders');
+  assert.ok(!('bookingId' in post.body), 'la reserva la toma el backend del JWT');
+  assert.deepEqual(post.body.items, [{ productId: 'product-1', quantity: 1 }]);
 });

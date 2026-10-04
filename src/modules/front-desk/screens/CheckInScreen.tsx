@@ -207,9 +207,15 @@ export function CheckInScreen() {
     setRoomAssignedMessage(null);
 
     try {
-      const booking = await bookingService.assignRoom(screen.booking.id, selectedRoomId);
+      await bookingService.assignRoom(screen.booking.id, selectedRoomId);
+      const [booking, rooms] = await Promise.all([
+        bookingService.getBookingById(screen.booking.id),
+        roomService.getRooms(),
+      ]);
+      if (!booking) throw new Error('La reserva ya no esta disponible despues de asignar.');
       const room = screen.rooms.find((item) => item.id === selectedRoomId);
-      setScreen({ ...screen, booking });
+      setScreen({ ...screen, booking, rooms });
+      setSelectedRoomId(booking.roomId ?? selectedRoomId);
       setRoomAssignedMessage(
         `Habitación ${room?.roomNumber ?? selectedRoomId} asignada correctamente.`,
       );
@@ -245,11 +251,19 @@ export function CheckInScreen() {
         companions.map(toCompanionDto),
       );
       await bookingService.checkIn(screen.booking.id);
+      const [refreshedBooking, refreshedRooms] = await Promise.all([
+        bookingService.getBookingById(screen.booking.id),
+        roomService.getRooms(),
+      ]);
+      if (!refreshedBooking) {
+        throw new Error('El check-in se completo, pero la reserva ya no esta disponible.');
+      }
+      setScreen({ ...screen, booking: refreshedBooking, rooms: refreshedRooms });
       const account = await guestAccountService.getAccountByBookingId(screen.booking.id);
       if (!account) {
         throw new Error('El check-in se completó, pero no se encontró la cuenta del huésped.');
       }
-      navigate(`/pms/accounts/${account.id}`);
+      navigate(`/pms/accounts/${account.bookingId}`);
     } catch (cause) {
       setActionError(getErrorMessage(cause));
       setCheckingIn(false);
