@@ -286,6 +286,104 @@ function installFinancialFetchMock() {
   return { bookingId, chargeId, depositId };
 }
 
+function installCashFetchMock() {
+  let session = {
+    id: '7a4db6cf-d72a-4fc7-b7ec-0d07fbef5104',
+    openedByUserId: '6f1f5a3c-51f1-4c1e-9f66-d89d62eced0c',
+    openedAt: '2026-10-02T08:00:00Z',
+    openingBalanceCents: 100000,
+    currency: 'GTQ',
+    status: 'open',
+    totalIncomeCents: 0,
+    totalExpenseCents: 0,
+    expectedBalanceCents: 100000,
+    closedByUserId: null,
+    closedAt: null,
+    countedBalanceCents: null,
+    differenceCents: null,
+    notes: 'Caja de prueba',
+    createdAt: '2026-10-02T08:00:00Z',
+    updatedAt: '2026-10-02T08:00:00Z',
+  };
+  const movements = [];
+
+  globalThis.fetch = async (input, init = {}) => {
+    const url = new URL(String(input));
+    const path = url.pathname.replace(/^\/api\/v1/, '');
+    const method = init.method ?? 'GET';
+    const json = (body, status = 200) =>
+      new Response(JSON.stringify(body), {
+        status,
+        headers: { 'content-type': 'application/json' },
+      });
+
+    if (method === 'GET' && path === '/cash-sessions/current') return json(session);
+
+    if (method === 'POST' && path === '/cash-sessions/open') {
+      const request = JSON.parse(String(init.body ?? '{}'));
+      session = {
+        ...session,
+        id: 'e1c5846d-bdc9-4f0a-8dcf-ef9dd5670720',
+        openingBalanceCents: request.openingBalanceCents,
+        totalIncomeCents: 0,
+        totalExpenseCents: 0,
+        expectedBalanceCents: request.openingBalanceCents,
+        status: 'open',
+        notes: request.notes,
+      };
+      movements.length = 0;
+      return json(session, 201);
+    }
+
+    if (method === 'POST' && path === `/cash-sessions/${session.id}/close`) {
+      const request = JSON.parse(String(init.body ?? '{}'));
+      session = {
+        ...session,
+        status: 'closed',
+        closedAt: '2026-10-02T16:00:00Z',
+        countedBalanceCents: request.countedBalanceCents,
+        differenceCents: request.countedBalanceCents - session.expectedBalanceCents,
+        notes: request.notes ?? session.notes,
+      };
+      return json(session);
+    }
+
+    if (method === 'GET' && path === `/cash-sessions/${session.id}/movements`) {
+      return json(movements);
+    }
+
+    if (method === 'POST' && path === `/cash-sessions/${session.id}/movements`) {
+      const request = JSON.parse(String(init.body ?? '{}'));
+      const movement = {
+        id: `4e6e9400-879b-4b7e-8e8c-${String(movements.length + 1).padStart(12, '0')}`,
+        cashSessionId: session.id,
+        type: request.type,
+        concept: request.concept,
+        amountCents: request.amountCents,
+        currency: 'GTQ',
+        responsibleUserId: null,
+        occurredAt: '2026-10-02T09:00:00Z',
+        paymentId: null,
+        createdAt: '2026-10-02T09:00:00Z',
+      };
+      movements.unshift(movement);
+      session = {
+        ...session,
+        totalIncomeCents:
+          session.totalIncomeCents + (movement.type === 'income' ? movement.amountCents : 0),
+        totalExpenseCents:
+          session.totalExpenseCents + (movement.type === 'expense' ? movement.amountCents : 0),
+        expectedBalanceCents:
+          session.expectedBalanceCents +
+          (movement.type === 'income' ? movement.amountCents : -movement.amountCents),
+      };
+      return json(movement, 201);
+    }
+
+    return json({ message: `Ruta no mockeada en test: ${method} ${path}` }, 404);
+  };
+}
+
 test('bookingService.getBookings: async, con latencia simulada, devuelve Models (no DTOs)', async () => {
   const bookings = await assertServiceCall('bookingService.getBookings', () =>
     bookingService.getBookings(),
@@ -393,15 +491,16 @@ test('guestAccountService: usa backend para folio financiero integrado', async (
   assert.equal(refunded.status, 'refunded');
 });
 
-test('cashService.getSessions: async, con latencia simulada, devuelve Models', async () => {
-  const sessions = await assertServiceCall('cashService.getSessions', () =>
-    cashService.getSessions(),
-  );
+test('cashService.getSessions: usa backend y devuelve Models', async () => {
+  installCashFetchMock();
+  const sessions = await cashService.getSessions();
   assert.ok(Array.isArray(sessions) && sessions.length > 0);
   assert.ok(
     'openingBalanceCents' in sessions[0],
     'el Model de CashSession debe tener openingBalanceCents',
   );
+  assert.ok(!('openingBalanceCents' in sessions[0] && 'opening_balance_cents' in sessions[0]));
+  assert.equal(sessions[0].expectedBalanceCents, 100000);
 });
 
 test('personnelService.getUsers/getRoles/getPermissions: async, con latencia simulada, devuelven Models', async () => {
@@ -861,16 +960,6 @@ test('administracion: promociones, tarifas, inventario y caja persisten operacio
     cashMovement.responsibleUserId,
     undefined,
     'un movimiento de caja sin usuario operativo no debe atribuirse a un fallback',
-  );
-  await assert.rejects(
-    () =>
-      cashService.createMovement({
-        type: 'income',
-        concept: 'Usuario invalido',
-        amountCents: 100,
-        responsibleUserId: 'USR-NO-EXISTE',
-      }),
-    /usuario responsable/,
   );
   assert.equal((await cashService.getMovements()).length, beforeCashMovements.length + 1);
 });

@@ -157,15 +157,15 @@ servicios persistibles antes de mostrar exito: habitaciones/tipos/tarifas usan
 `roomService` (`PMS_ROOMS_DB`, `PMS_ROOM_TYPES_DB`, `PMS_RATES_DB`),
 promociones usan `promotionService` (`PMS_PROMOTIONS_DB`), inventario usa
 `inventoryService` (`PMS_INVENTORY_ITEMS_DB`,
-`PMS_INVENTORY_MOVEMENTS_DB`) y caja usa `cashService`
-(`PMS_CASH_SESSIONS_DB`, `PMS_CASH_MOVEMENTS_DB`). Usuarios/roles,
+`PMS_INVENTORY_MOVEMENTS_DB`) y caja usa `cashService` contra el backend real.
+Usuarios/roles,
 amenidades, catalogo de Room Service y tarifas dinamicas no mutan porque no
 tienen contrato de escritura vigente en esta rama; la UI informa fuera de
 alcance en vez de simular guardados locales.
-Inventario y caja solo guardan `responsible_user_id`/`opened_by_user_id`
-cuando el caller envia un `User.id` existente; si no hay usuario de sesion, el
-campo queda ausente y nunca se reemplaza por un administrador o recepcionista
-por defecto.
+Inventario solo guarda `responsible_user_id` cuando el caller envia un `User.id`
+existente; si no hay usuario de sesion, el campo queda ausente y nunca se
+reemplaza por un administrador o recepcionista por defecto. En caja, el
+responsable operativo lo define el backend desde la sesion autenticada.
 
 ## Forzar errores mock
 
@@ -204,3 +204,29 @@ refresh falla, limpia la sesion local para obligar un nuevo login.
 persistencia local, incluso si la confirmacion remota falla. `clearSession()`
 expone la limpieza local sincrona. La clave legacy `hotel-aurora.auth.v1` se
 elimina al restaurar o limpiar sesion.
+
+## Integracion con INT-06 (#104)
+
+`cashService` conserva su API de dominio para las pantallas administrativas,
+pero ya no usa `cashSessionsDB`, `cashMovementsDB` ni `localStorage` como fuente
+oficial. Las operaciones de caja se envian al backend Spring mediante
+`http-client.ts`:
+
+- `GET /cash-sessions/current` para consultar la jornada abierta del usuario.
+- `GET /cash-sessions/{id}/movements` para consultar movimientos.
+- `POST /cash-sessions/open` con `openingBalanceCents` y `notes`.
+- `POST /cash-sessions/{id}/movements` con `type`, `concept` y `amountCents`.
+- `POST /cash-sessions/{id}/close` con `countedBalanceCents` y `notes`.
+
+`getSessions()` mantiene el nombre de la API de dominio por compatibilidad con
+las pantallas existentes, pero hoy representa como maximo `[currentSession]`; no
+es un historial. Al cerrar caja, la UI debe volver a consultar `/current` y
+esperar `[]` si ya no hay jornada abierta. La apertura de una jornada envia el
+saldo inicial indicado por la pantalla de apertura y no hereda automaticamente
+el saldo esperado de una jornada anterior.
+
+Los montos siguen en centavos y la moneda se mantiene como `GTQ`. Los totales
+`totalIncomeCents`, `totalExpenseCents` y `expectedBalanceCents` son autoridad
+del backend; Administracion los usa cuando vienen en la respuesta y solo
+conserva calculos locales como respaldo visual para datos historicos sin esos
+campos.
