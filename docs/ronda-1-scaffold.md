@@ -54,6 +54,9 @@ consumos.
 no usan calculo local de saldo ni apertura/cierre mock. Las utilidades legacy
 de folio rechazan UUID y `voidCharge(chargeId, reason)` queda solo para cargos
 mock; un cargo UUID debe anularse con `voidCharge(chargeId, reason, bookingId)`.
+`GuestAccountScreen` carga folios UUID por `GET /bookings/{bookingId}/folio`
+y refresca el folio despues de registrar cargos o pagos, sin sumar/restar saldo
+en estado local.
 
 **Actualizacion 2026-09-22 (#72):** `GuestContent` resuelve al huesped desde la
 sesion, muestra sus reservas reales y ya no usa habitacion 402, fechas 2024 ni

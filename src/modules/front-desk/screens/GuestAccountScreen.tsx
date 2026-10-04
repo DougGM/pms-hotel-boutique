@@ -45,6 +45,12 @@ function amountToCents(value: string) {
   return Math.round(amount * 100);
 }
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i;
+
+function isUuid(value: string): boolean {
+  return UUID_PATTERN.test(value);
+}
+
 export function GuestAccountScreen() {
   const navigate = useNavigate();
   const { accountId } = useParams<'accountId'>();
@@ -67,6 +73,23 @@ export function GuestAccountScreen() {
   const [feedback, setFeedback] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
 
+  const loadFinancials = useCallback(async (bookingId: string) => {
+    const [selectedAccount, selectedCharges, selectedPayments, selectedDeposits] =
+      await Promise.all([
+        guestAccountService.getAccountByBookingId(bookingId),
+        guestAccountService.getChargesByBookingId(bookingId),
+        guestAccountService.getPaymentsByBookingId(bookingId),
+        guestAccountService.getDepositsByBookingId(bookingId),
+      ]);
+    if (!selectedAccount) throw new Error('No encontramos la cuenta asociada a esta reserva.');
+
+    setAccount(selectedAccount);
+    setCharges(selectedCharges);
+    setPayments(selectedPayments);
+    setDeposits(selectedDeposits);
+    return selectedAccount;
+  }, []);
+
   const loadAccount = useCallback(async () => {
     if (!accountId) {
       setError('No se indicó la cuenta de la estadía.');
@@ -77,28 +100,26 @@ export function GuestAccountScreen() {
     setLoading(true);
     setError(null);
     try {
-      const accounts = await guestAccountService.getAccounts();
-      const selectedAccount = accounts.find(
-        (item) => item.id === accountId || item.bookingId === accountId,
-      );
-      if (!selectedAccount)
-        throw new Error('No encontramos una cuenta para la estadía seleccionada.');
-      const [selectedBooking, selectedCharges, selectedPayments, selectedDeposits] =
-        await Promise.all([
-          bookingService.getBookingById(selectedAccount.bookingId),
-          guestAccountService.getChargesByBookingId(selectedAccount.bookingId),
-          guestAccountService.getPaymentsByBookingId(selectedAccount.bookingId),
-          guestAccountService.getDepositsByBookingId(selectedAccount.bookingId),
-        ]);
+      let selectedAccount: GuestAccount;
+      if (isUuid(accountId)) {
+        selectedAccount = await loadFinancials(accountId);
+      } else {
+        const accounts = await guestAccountService.getAccounts();
+        const legacyAccount = accounts.find(
+          (item) => item.id === accountId || item.bookingId === accountId,
+        );
+        if (!legacyAccount) {
+          throw new Error('No encontramos una cuenta para la estadía seleccionada.');
+        }
+        selectedAccount = await loadFinancials(legacyAccount.bookingId);
+      }
+
+      const selectedBooking = await bookingService.getBookingById(selectedAccount.bookingId);
       const selectedGuest = selectedBooking
         ? await guestService.getGuestById(selectedBooking.guestId)
         : undefined;
-      setAccount(selectedAccount);
       setBooking(selectedBooking ?? null);
       setGuest(selectedGuest ?? null);
-      setCharges(selectedCharges);
-      setPayments(selectedPayments);
-      setDeposits(selectedDeposits);
     } catch (cause: unknown) {
       setAccount(null);
       setBooking(null);
@@ -110,7 +131,7 @@ export function GuestAccountScreen() {
     } finally {
       setLoading(false);
     }
-  }, [accountId]);
+  }, [accountId, loadFinancials]);
 
   useEffect(() => {
     void loadAccount();
@@ -200,10 +221,7 @@ export function GuestAccountScreen() {
         unit_price_cents: amountCents,
         currency: account.currency,
       });
-      setCharges((current) => [...current, charge]);
-      setAccount((current) =>
-        current ? { ...current, balanceCents: current.balanceCents + charge.amountCents } : current,
-      );
+      await loadFinancials(account.bookingId);
       setFeedback(`Consumo de ${formatCurrency(charge.amountCents, charge.currency)} agregado.`);
       setIsModalOpen(false);
     } catch (cause: unknown) {
@@ -233,12 +251,7 @@ export function GuestAccountScreen() {
         method: 'cash',
         transaction_reference: paymentReference.trim() || undefined,
       });
-      setPayments((current) => [...current, payment]);
-      setAccount((current) =>
-        current
-          ? { ...current, balanceCents: current.balanceCents - payment.amountCents }
-          : current,
-      );
+      await loadFinancials(account.bookingId);
       setFeedback(`Pago de ${formatCurrency(payment.amountCents, payment.currency)} aplicado.`);
       setIsPaymentModalOpen(false);
     } catch (cause: unknown) {

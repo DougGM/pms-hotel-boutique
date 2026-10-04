@@ -103,6 +103,10 @@ integrado mezcle datos reales con el folio mock. En reservas UUID, el saldo
 oficial siempre viene de `GET /bookings/{bookingId}/folio`. `voidCharge`
 tambien exige `bookingId` cuando el `chargeId` es UUID; la firma antigua
 `voidCharge(chargeId, reason)` queda limitada a cargos mock.
+`GuestAccountScreen` tambien usa ese contrato: si la ruta recibe un UUID lo
+trata como `bookingId` y carga el folio por `getAccountByBookingId`; despues
+de crear cargos o pagos vuelve a consultar el folio en vez de ajustar
+`balanceCents` manualmente en React.
 
 Actualizacion 2026-09-17: `guestService.createGuest(data)` crea huespedes demo
 en `guestsDB`, genera el siguiente ID `GST-*`, agrega timestamps y devuelve
