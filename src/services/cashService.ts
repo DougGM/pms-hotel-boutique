@@ -9,121 +9,150 @@ import {
   type CashMovementDto,
 } from '@/shared/types/entities/cash-movement';
 import type { ID } from '@/shared/types/common';
-import { cashMovementsDB, cashSessionsDB, usersDB } from '@/data/db';
-import { mockUtils, requireCollection, simulateLatency } from './mockUtils';
-import { hydrateCollection, persistCollection } from './mockPersistence';
+import { HttpError, httpClient } from './http-client';
 
-const cashSessionsStorageKey = 'PMS_CASH_SESSIONS_DB';
-const cashMovementsStorageKey = 'PMS_CASH_MOVEMENTS_DB';
+type CashSessionResponse = {
+  id: string;
+  openedByUserId?: string | null;
+  openedAt: string;
+  openingBalanceCents: number;
+  currency: string;
+  status: 'open' | 'closed';
+  totalIncomeCents?: number | null;
+  totalExpenseCents?: number | null;
+  expectedBalanceCents?: number | null;
+  closedByUserId?: string | null;
+  closedAt?: string | null;
+  countedBalanceCents?: number | null;
+  differenceCents?: number | null;
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
 
-function getCashSessionsDB(): CashSessionDto[] {
-  return hydrateCollection(cashSessionsStorageKey, cashSessionsDB);
+type CashMovementResponse = {
+  id: string;
+  cashSessionId: string;
+  type: 'income' | 'expense';
+  concept: string;
+  amountCents: number;
+  currency: string;
+  responsibleUserId?: string | null;
+  occurredAt: string;
+  paymentId?: string | null;
+  createdAt: string;
+};
+
+function normalizeCurrency(value: string): CashSessionDto['currency'] {
+  if (value !== 'GTQ') {
+    throw new Error(`La caja solo admite moneda GTQ; backend devolvio ${value}.`);
+  }
+  return 'GTQ';
 }
 
-function persistCashSessionsDB(): void {
-  persistCollection(cashSessionsStorageKey, cashSessionsDB);
+function toCashSessionDto(response: CashSessionResponse): CashSessionDto {
+  return {
+    id: response.id,
+    opened_by_user_id: response.openedByUserId ?? undefined,
+    opened_at: response.openedAt,
+    opening_balance_cents: response.openingBalanceCents,
+    currency: normalizeCurrency(response.currency),
+    status: response.status,
+    total_income_cents: response.totalIncomeCents ?? undefined,
+    total_expense_cents: response.totalExpenseCents ?? undefined,
+    expected_balance_cents: response.expectedBalanceCents ?? undefined,
+    closed_by_user_id: response.closedByUserId ?? undefined,
+    closed_at: response.closedAt ?? undefined,
+    counted_balance_cents: response.countedBalanceCents ?? undefined,
+    difference_cents: response.differenceCents ?? undefined,
+    notes: response.notes ?? undefined,
+    created_at: response.createdAt,
+    updated_at: response.updatedAt,
+  };
 }
 
-function getCashMovementsDB(): CashMovementDto[] {
-  return hydrateCollection(cashMovementsStorageKey, cashMovementsDB);
+function toCashMovementDto(response: CashMovementResponse): CashMovementDto {
+  return {
+    id: response.id,
+    cash_session_id: response.cashSessionId,
+    type: response.type,
+    concept: response.concept,
+    amount_cents: response.amountCents,
+    currency: normalizeCurrency(response.currency),
+    responsible_user_id: response.responsibleUserId ?? undefined,
+    occurred_at: response.occurredAt,
+    payment_id: response.paymentId ?? undefined,
+    created_at: response.createdAt,
+  };
 }
 
-function persistCashMovementsDB(): void {
-  persistCollection(cashMovementsStorageKey, cashMovementsDB);
+function getHttpErrorMessage(error: unknown, fallback: string): string {
+  if (!(error instanceof HttpError)) return error instanceof Error ? error.message : fallback;
+  const data = error.data;
+  if (data && typeof data === 'object') {
+    const value = data as { message?: unknown; error?: unknown; detail?: unknown };
+    if (typeof value.message === 'string' && value.message.trim()) return value.message;
+    if (typeof value.error === 'string' && value.error.trim()) return value.error;
+    if (typeof value.detail === 'string' && value.detail.trim()) return value.detail;
+  }
+  if (error.status === 401) return 'Tu sesion expiro. Inicia sesion nuevamente.';
+  if (error.status === 403) return 'No tienes permisos para operar caja.';
+  if (error.status === 404) return 'No existe una jornada de caja abierta.';
+  if (error.status === 409) return 'La operacion de caja entro en conflicto con el estado actual.';
+  return fallback;
 }
 
-function createCashSessionId(): ID {
-  const max = getCashSessionsDB().reduce((currentMax, session) => {
-    const match = /^CS-(\d+)$/.exec(session.id);
-    return match ? Math.max(currentMax, Number(match[1])) : currentMax;
-  }, 0);
-  return `CS-${String(max + 1).padStart(3, '0')}`;
-}
-
-function createCashMovementId(): ID {
-  const max = getCashMovementsDB().reduce((currentMax, movement) => {
-    const match = /^CM-(\d+)$/.exec(movement.id);
-    return match ? Math.max(currentMax, Number(match[1])) : currentMax;
-  }, 0);
-  return `CM-${String(max + 1).padStart(3, '0')}`;
-}
-
-function resolveResponsibleUserId(responsibleUserId?: ID): ID | undefined {
-  if (!responsibleUserId) return undefined;
-  if (usersDB.some((user) => user.id === responsibleUserId)) return responsibleUserId;
-  throw new Error(`No existe el usuario responsable ${responsibleUserId}.`);
-}
-
-function getOpenSession(): CashSessionDto | undefined {
-  return [...getCashSessionsDB()]
-    .sort((left, right) => right.opened_at.localeCompare(left.opened_at))
-    .find((session) => session.status === 'open');
-}
-
-function calculateExpectedBalanceCents(sessionId: ID): number {
-  const session = getCashSessionsDB().find((item) => item.id === sessionId);
-  if (!session) throw new Error(`No existe la jornada de caja ${sessionId}.`);
-  const movements = getCashMovementsDB().filter(
-    (movement) => movement.cash_session_id === sessionId,
-  );
-  return movements.reduce(
-    (sum, movement) =>
-      movement.type === 'income' ? sum + movement.amount_cents : sum - movement.amount_cents,
-    session.opening_balance_cents,
-  );
+async function getCurrentSessionOrUndefined(): Promise<CashSession | undefined> {
+  try {
+    const response = await httpClient.get<CashSessionResponse>('/cash-sessions/current');
+    return toCashSession(toCashSessionDto(response));
+  } catch (error) {
+    if (error instanceof HttpError && error.status === 404) return undefined;
+    throw new Error(getHttpErrorMessage(error, 'No fue posible cargar la jornada de caja.'));
+  }
 }
 
 export const cashService = {
   async getSessions(): Promise<CashSession[]> {
-    await simulateLatency();
-    mockUtils.throwIfSimulatingError('No fue posible cargar las jornadas de caja.');
-    return requireCollection(getCashSessionsDB(), 'cashSessionsDB').map(toCashSession);
+    const current = await getCurrentSessionOrUndefined();
+    return current ? [current] : [];
   },
   async getSessionById(id: ID): Promise<CashSession | undefined> {
-    await simulateLatency();
-    mockUtils.throwIfSimulatingError('No fue posible cargar la jornada de caja.');
-    const session = getCashSessionsDB().find((item) => item.id === id);
-    return session ? toCashSession(session) : undefined;
+    const current = await getCurrentSessionOrUndefined();
+    return current?.id === id ? current : undefined;
   },
   async getMovementsBySessionId(sessionId: ID): Promise<CashMovement[]> {
-    await simulateLatency();
-    mockUtils.throwIfSimulatingError('No fue posible cargar los movimientos de caja.');
-    return requireCollection(getCashMovementsDB(), 'cashMovementsDB')
-      .filter((item) => item.cash_session_id === sessionId)
-      .map(toCashMovement);
+    try {
+      const response = await httpClient.get<CashMovementResponse[]>(
+        `/cash-sessions/${sessionId}/movements`,
+      );
+      return response.map((item) => toCashMovement(toCashMovementDto(item)));
+    } catch (error) {
+      throw new Error(getHttpErrorMessage(error, 'No fue posible cargar los movimientos de caja.'));
+    }
   },
   async getMovements(): Promise<CashMovement[]> {
-    await simulateLatency();
-    mockUtils.throwIfSimulatingError('No fue posible cargar los movimientos de caja.');
-    return requireCollection(getCashMovementsDB(), 'cashMovementsDB').map(toCashMovement);
+    const current = await getCurrentSessionOrUndefined();
+    return current ? this.getMovementsBySessionId(current.id) : [];
   },
   async openSession(data: {
     openingBalanceCents: number;
     responsibleUserId?: ID;
     notes?: string;
   }): Promise<CashSession> {
-    await simulateLatency();
-    mockUtils.throwIfSimulatingError('No fue posible abrir la caja.');
-    if (getOpenSession()) throw new Error('Ya existe una jornada de caja abierta.');
     if (!Number.isInteger(data.openingBalanceCents) || data.openingBalanceCents < 0) {
       throw new Error('El saldo inicial debe ser un entero mayor o igual a 0.');
     }
 
-    const now = new Date().toISOString();
-    const session: CashSessionDto = {
-      id: createCashSessionId(),
-      opened_by_user_id: resolveResponsibleUserId(data.responsibleUserId),
-      opened_at: now,
-      opening_balance_cents: data.openingBalanceCents,
-      currency: 'GTQ',
-      status: 'open',
-      notes: data.notes?.trim() || undefined,
-      created_at: now,
-      updated_at: now,
-    };
-    getCashSessionsDB().push(session);
-    persistCashSessionsDB();
-    return toCashSession(session);
+    try {
+      const response = await httpClient.post<CashSessionResponse>('/cash-sessions/open', {
+        openingBalanceCents: data.openingBalanceCents,
+        notes: data.notes?.trim() || undefined,
+      });
+      return toCashSession(toCashSessionDto(response));
+    } catch (error) {
+      throw new Error(getHttpErrorMessage(error, 'No fue posible abrir la caja.'));
+    }
   },
   async closeSession(
     data: {
@@ -133,27 +162,31 @@ export const cashService = {
       notes?: string;
     } = {},
   ): Promise<CashSession> {
-    await simulateLatency();
-    mockUtils.throwIfSimulatingError('No fue posible cerrar la caja.');
-    const session = data.sessionId
-      ? getCashSessionsDB().find((item) => item.id === data.sessionId)
-      : getOpenSession();
-    if (!session) throw new Error('No existe una jornada de caja abierta.');
-    if (session.status !== 'open') throw new Error('La jornada de caja ya esta cerrada.');
+    const session = data.sessionId ? undefined : await getCurrentSessionOrUndefined();
+    const sessionId = data.sessionId ?? session?.id;
+    if (!sessionId) throw new Error('No existe una jornada de caja abierta.');
+    const countedBalanceCents = data.countedBalanceCents ?? session?.expectedBalanceCents;
+    if (
+      typeof countedBalanceCents !== 'number' ||
+      !Number.isInteger(countedBalanceCents) ||
+      countedBalanceCents < 0
+    ) {
+      throw new Error('El saldo contado debe ser un entero mayor o igual a 0.');
+    }
+    const countedBalance = countedBalanceCents;
 
-    const expected = calculateExpectedBalanceCents(session.id);
-    const counted = data.countedBalanceCents ?? expected;
-    const now = new Date().toISOString();
-    session.status = 'closed';
-    session.closed_by_user_id = resolveResponsibleUserId(data.responsibleUserId);
-    session.closed_at = now;
-    session.expected_balance_cents = expected;
-    session.counted_balance_cents = counted;
-    session.difference_cents = counted - expected;
-    session.notes = data.notes?.trim() || session.notes;
-    session.updated_at = now;
-    persistCashSessionsDB();
-    return toCashSession(session);
+    try {
+      const response = await httpClient.post<CashSessionResponse>(
+        `/cash-sessions/${sessionId}/close`,
+        {
+          countedBalanceCents: countedBalance,
+          notes: data.notes?.trim() || undefined,
+        },
+      );
+      return toCashSession(toCashSessionDto(response));
+    } catch (error) {
+      throw new Error(getHttpErrorMessage(error, 'No fue posible cerrar la caja.'));
+    }
   },
   async createMovement(data: {
     type: 'income' | 'expense';
@@ -161,30 +194,29 @@ export const cashService = {
     amountCents: number;
     responsibleUserId?: ID;
   }): Promise<CashMovement> {
-    await simulateLatency();
-    mockUtils.throwIfSimulatingError('No fue posible registrar el movimiento de caja.');
-    const session = getOpenSession();
-    if (!session) throw new Error('No existe una jornada de caja abierta.');
     if (!data.concept.trim()) throw new Error('El movimiento requiere concepto.');
     if (!Number.isInteger(data.amountCents) || data.amountCents <= 0) {
       throw new Error('El monto debe ser un entero mayor a 0.');
     }
 
-    const now = new Date().toISOString();
-    const movement: CashMovementDto = {
-      id: createCashMovementId(),
-      cash_session_id: session.id,
-      type: data.type,
-      concept: data.concept.trim(),
-      amount_cents: data.amountCents,
-      currency: 'GTQ',
-      responsible_user_id: resolveResponsibleUserId(data.responsibleUserId),
-      occurred_at: now,
-      created_at: now,
-    };
-    getCashMovementsDB().unshift(movement);
-    persistCashMovementsDB();
-    return toCashMovement(movement);
+    const session = await getCurrentSessionOrUndefined();
+    if (!session) throw new Error('No existe una jornada de caja abierta.');
+
+    try {
+      const response = await httpClient.post<CashMovementResponse>(
+        `/cash-sessions/${session.id}/movements`,
+        {
+          type: data.type,
+          concept: data.concept.trim(),
+          amountCents: data.amountCents,
+        },
+      );
+      return toCashMovement(toCashMovementDto(response));
+    } catch (error) {
+      throw new Error(
+        getHttpErrorMessage(error, 'No fue posible registrar el movimiento de caja.'),
+      );
+    }
   },
 };
 export default cashService;

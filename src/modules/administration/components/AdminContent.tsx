@@ -1506,20 +1506,31 @@ function AdminContentReady({
     const maintenanceRooms = rooms.filter((room) => room.status === 'Mantenimiento').length;
     const occupancyPercent =
       rooms.length > 0 ? Math.round((occupiedRooms / rooms.length) * 1000) / 10 : 0;
-    const totalIncome = cashMovements
-      .filter((movement) => movement.type === 'Ingreso')
-      .reduce((sum, movement) => sum + movement.amount, 0);
-    const totalExpenses = cashMovements
-      .filter((movement) => movement.type === 'Egreso')
-      .reduce((sum, movement) => sum + movement.amount, 0);
     const latestCashSession =
       [...cashSessions].sort(
         (left, right) => right.openedAt.getTime() - left.openedAt.getTime(),
       )[0] ?? null;
+    const localTotalIncome = cashMovements
+      .filter((movement) => movement.type === 'Ingreso')
+      .reduce((sum, movement) => sum + movement.amount, 0);
+    const localTotalExpenses = cashMovements
+      .filter((movement) => movement.type === 'Egreso')
+      .reduce((sum, movement) => sum + movement.amount, 0);
+    const totalIncome =
+      latestCashSession?.totalIncomeCents !== undefined
+        ? centsToAmount(latestCashSession.totalIncomeCents)
+        : localTotalIncome;
+    const totalExpenses =
+      latestCashSession?.totalExpenseCents !== undefined
+        ? centsToAmount(latestCashSession.totalExpenseCents)
+        : localTotalExpenses;
     const openingBalance = latestCashSession
       ? centsToAmount(latestCashSession.openingBalanceCents)
       : 0;
-    const currentBalance = openingBalance + totalIncome - totalExpenses;
+    const currentBalance =
+      latestCashSession?.expectedBalanceCents !== undefined
+        ? centsToAmount(latestCashSession.expectedBalanceCents)
+        : openingBalance + totalIncome - totalExpenses;
     const dashboardChart = {
       data:
         dashboardTab === 'Ocupación'
@@ -3225,19 +3236,31 @@ function AdminContentReady({
   if (nav === 'Caja') {
     const visibleCashMovements = cashMovements;
     const visibleCashSessions = cashSessions;
-    const totalIngresos = visibleCashMovements
-      .filter((m) => m.type === 'Ingreso')
-      .reduce((s, m) => s + m.amount, 0);
-    const totalEgresos = visibleCashMovements
-      .filter((m) => m.type === 'Egreso')
-      .reduce((s, m) => s + m.amount, 0);
     const latestCashSession =
       [...visibleCashSessions].sort(
         (left, right) => right.openedAt.getTime() - left.openedAt.getTime(),
       )[0] ?? null;
+    const localIngresos = visibleCashMovements
+      .filter((m) => m.type === 'Ingreso')
+      .reduce((s, m) => s + m.amount, 0);
+    const localEgresos = visibleCashMovements
+      .filter((m) => m.type === 'Egreso')
+      .reduce((s, m) => s + m.amount, 0);
+    const totalIngresos =
+      latestCashSession?.totalIncomeCents !== undefined
+        ? centsToAmount(latestCashSession.totalIncomeCents)
+        : localIngresos;
+    const totalEgresos =
+      latestCashSession?.totalExpenseCents !== undefined
+        ? centsToAmount(latestCashSession.totalExpenseCents)
+        : localEgresos;
     const saldoInicial = latestCashSession
       ? centsToAmount(latestCashSession.openingBalanceCents)
       : 0;
+    const saldoActual =
+      latestCashSession?.expectedBalanceCents !== undefined
+        ? centsToAmount(latestCashSession.expectedBalanceCents)
+        : saldoInicial + totalIngresos - totalEgresos;
     return (
       <>
         <div className="adm-cash-grid">
@@ -3258,7 +3281,12 @@ function AdminContentReady({
               <p>Ingresos</p>
               <h2>{money(totalIngresos)}</h2>
               <span className="positive">
-                +{((totalIngresos / (saldoInicial + totalIngresos)) * 100).toFixed(1)}%
+                +
+                {(totalIngresos > 0
+                  ? (totalIngresos / (saldoInicial + totalIngresos)) * 100
+                  : 0
+                ).toFixed(1)}
+                %
               </span>
             </div>
           </div>
@@ -3277,7 +3305,7 @@ function AdminContentReady({
             </div>
             <div>
               <p>Saldo actual</p>
-              <h2>{money(saldoInicial + totalIngresos - totalEgresos)}</h2>
+              <h2>{money(saldoActual)}</h2>
             </div>
           </div>
         </div>
@@ -3293,10 +3321,10 @@ function AdminContentReady({
                   className="button secondary"
                   onClick={async () => {
                     try {
-                      const closed = await cashService.closeSession();
-                      setCashSessions((cur) =>
-                        cur.map((session) => (session.id === closed.id ? closed : session)),
-                      );
+                      await cashService.closeSession();
+                      const sessions = await cashService.getSessions();
+                      setCashSessions(sessions);
+                      setCashMovements([]);
                       setCashOpen(false);
                       onAction('Caja cerrada correctamente');
                     } catch (cause) {
@@ -3315,6 +3343,7 @@ function AdminContentReady({
                         openingBalanceCents: amountToCents(saldoInicial),
                       });
                       setCashSessions((cur) => [...cur, opened]);
+                      setCashMovements([]);
                       setCashOpen(true);
                       onAction('Caja abierta correctamente');
                     } catch (cause) {
@@ -3386,6 +3415,8 @@ function AdminContentReady({
                   },
                   ...cur,
                 ]);
+                const refreshed = await cashService.getSessions();
+                setCashSessions(refreshed);
                 onAction('Movimiento de caja registrado correctamente');
                 setShowCashModal(false);
               } catch (cause) {
