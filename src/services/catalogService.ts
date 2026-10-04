@@ -149,8 +149,8 @@ export const catalogService = {
     mockUtils.throwIfSimulatingError('No fue posible crear el producto.');
     if (!data.name.trim()) throw new Error('El producto requiere nombre.');
     if (!data.sku.trim()) throw new Error('El producto requiere SKU.');
-    if (!Number.isInteger(data.priceCents) || data.priceCents < 0) {
-      throw new Error('El precio debe ser un entero mayor o igual a 0.');
+    if (!Number.isInteger(data.priceCents) || data.priceCents < 1) {
+      throw new Error('El precio debe ser un entero mayor o igual a 1.');
     }
 
     const product = await httpClient.post<ApiProduct>(
@@ -164,9 +164,9 @@ export const catalogService = {
     mockUtils.throwIfSimulatingError('No fue posible actualizar el producto.');
     if (
       data.priceCents !== undefined &&
-      (!Number.isInteger(data.priceCents) || data.priceCents < 0)
+      (!Number.isInteger(data.priceCents) || data.priceCents < 1)
     ) {
-      throw new Error('El precio debe ser un entero mayor o igual a 0.');
+      throw new Error('El precio debe ser un entero mayor o igual a 1.');
     }
     const current = (await this.getAdminProducts()).find((product) => product.id === id);
     if (!current) throw new Error(`No existe el producto ${id}.`);

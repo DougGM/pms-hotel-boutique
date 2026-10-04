@@ -62,12 +62,14 @@ type AdminUser = {
   dbId: string;
   name: string;
   email: string;
+  password?: string;
   role: string;
   status: 'Activo' | 'Inactivo';
   lastAccess: string;
 };
 type AdminRole = {
   id: number;
+  dbId: string;
   code: string;
   name: string;
   description: string;
@@ -465,9 +467,10 @@ const adminUserFromAdminRoles = (user: User, roles: AdminRole[], index: number):
   };
 };
 
-const userRoleFromDisplay = (roles: AdminRole[], roleName: string): User['role'] => {
+const roleIdFromDisplay = (roles: AdminRole[], roleName: string) => {
   const role = roles.find((item) => item.name === roleName);
-  return (role?.code as User['role']) ?? 'reception';
+  if (!role) throw new Error('Selecciona un rol valido.');
+  return role.dbId;
 };
 
 const formatAmenitySchedule = (amenity: DomainAmenity) => {
@@ -1103,6 +1106,7 @@ export function AdminContent({
           const roleCode = normalizeRoleCode(role.code);
           return {
             id: parseDbId(role.id, index + 1),
+            dbId: role.id,
             code: roleCode,
             name: roleDisplayName(role),
             description: `Rol ${role.code}`,
@@ -1931,6 +1935,7 @@ function AdminContentReady({
                         onChange={async () => {
                           try {
                             const updated = await personnelService.updateUser(u.dbId, {
+                              roleId: roleIdFromDisplay(roles, u.role),
                               status: u.status === 'Activo' ? 'inactive' : 'active',
                             });
                             setUsers((current) =>
@@ -2029,12 +2034,21 @@ function AdminContentReady({
                   firstName,
                   lastName,
                   email: u.email,
-                  role: userRoleFromDisplay(roles, u.role),
+                  roleId: roleIdFromDisplay(roles, u.role),
                   status: u.status === 'Activo' ? 'active' : 'inactive',
                 } as const;
-                const saved = editUser
+                let saved = editUser
                   ? await personnelService.updateUser(editUser.dbId, payload)
-                  : await personnelService.createUser(payload);
+                  : await personnelService.createUser({
+                      firstName,
+                      lastName,
+                      email: u.email,
+                      password: u.password ?? '',
+                      roleId: payload.roleId,
+                    });
+                if (!editUser && payload.status === 'inactive') {
+                  saved = await personnelService.updateUser(saved.id, payload);
+                }
                 setUsers((current) =>
                   editUser
                     ? current.map((item, index) =>
@@ -3720,6 +3734,7 @@ function UserModal({
 }) {
   const [name, setName] = useState(user?.name ?? '');
   const [email, setEmail] = useState(user?.email ?? '');
+  const [password, setPassword] = useState('');
   const [role, setRole] = useState(user?.role ?? roles[0]?.name ?? '');
   const [status, setStatus] = useState<'Activo' | 'Inactivo'>(user?.status ?? 'Activo');
   return (
@@ -3733,6 +3748,7 @@ function UserModal({
           dbId: user?.dbId ?? '',
           name,
           email,
+          password: user ? undefined : password,
           role,
           status,
           lastAccess: user?.lastAccess ?? 'Sin acceso',
@@ -3768,6 +3784,18 @@ function UserModal({
           ))}
         </select>
       </label>
+      {!user && (
+        <label className="hk-form-label">
+          Contrasena temporal
+          <input
+            className="hk-form-select"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Contrasena inicial"
+          />
+        </label>
+      )}
       <label className="hk-form-label">
         Estado
         <select
@@ -3811,6 +3839,7 @@ function RoleModal({
       onSubmit={() =>
         onSave({
           id: role?.id ?? 0,
+          dbId: role?.dbId ?? '',
           code: role?.code ?? name.toLowerCase().replace(/\s+/g, '_'),
           name,
           description,

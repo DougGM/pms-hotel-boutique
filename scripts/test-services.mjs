@@ -227,6 +227,12 @@ const apiInventoryItems = [
 ];
 const apiInventoryMovements = [];
 
+function roleCodeById(roleId) {
+  const role = apiRoles.find((item) => item.id === roleId);
+  if (!role) return undefined;
+  return role.code;
+}
+
 function jsonResponse(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -247,6 +253,9 @@ const adminFetchMock = async (input, init = {}) => {
     return jsonResponse(apiProducts);
   }
   if (method === 'POST' && path === '/admin/room-service/products') {
+    if (!Number.isInteger(body.priceCents) || body.priceCents < 1) {
+      return jsonResponse({ message: 'priceCents must be greater than or equal to 1' }, 400);
+    }
     const product = {
       id: `11111111-1111-4111-8111-${String(apiProducts.length + 3).padStart(12, '0')}`,
       sku: body.sku,
@@ -266,6 +275,9 @@ const adminFetchMock = async (input, init = {}) => {
     const id = path.split('/').at(-1);
     const product = apiProducts.find((item) => item.id === id);
     if (!product) return jsonResponse({ message: 'Not found' }, 404);
+    if (!Number.isInteger(body.priceCents) || body.priceCents < 1) {
+      return jsonResponse({ message: 'priceCents must be greater than or equal to 1' }, 400);
+    }
     Object.assign(product, {
       sku: body.sku,
       name: body.name,
@@ -313,13 +325,21 @@ const adminFetchMock = async (input, init = {}) => {
   }
   if (method === 'GET' && path === '/admin/users') return jsonResponse(apiUsers);
   if (method === 'POST' && path === '/admin/users') {
+    if ('roleCode' in body || 'status' in body) {
+      return jsonResponse({ message: 'CreateUserRequest does not accept roleCode/status' }, 400);
+    }
+    if (!body.password || !body.roleId) {
+      return jsonResponse({ message: 'password and roleId are required' }, 400);
+    }
+    const roleCode = roleCodeById(body.roleId);
+    if (!roleCode) return jsonResponse({ message: 'Role not found' }, 400);
     const user = {
       id: `33333333-3333-4333-8333-${String(apiUsers.length + 4).padStart(12, '0')}`,
       firstName: body.firstName,
       lastName: body.lastName,
       email: body.email,
-      roleCode: body.roleCode,
-      status: body.status,
+      roleCode,
+      status: 'active',
       createdAt: apiNow,
       updatedAt: apiNow,
     };
@@ -334,11 +354,16 @@ const adminFetchMock = async (input, init = {}) => {
     const id = path.split('/').at(-1);
     const user = apiUsers.find((item) => item.id === id);
     if (!user) return jsonResponse({ message: 'Not found' }, 404);
+    if ('roleCode' in body || 'password' in body) {
+      return jsonResponse({ message: 'UpdateUserRequest does not accept roleCode/password' }, 400);
+    }
+    const roleCode = roleCodeById(body.roleId);
+    if (!roleCode) return jsonResponse({ message: 'Role not found' }, 400);
     Object.assign(user, {
       firstName: body.firstName,
       lastName: body.lastName,
       email: body.email,
-      roleCode: body.roleCode,
+      roleCode,
       status: body.status,
       updatedAt: apiNow,
     });
@@ -895,11 +920,14 @@ test('personnelService.getUsers/getRoles/getPermissions: async, con latencia sim
     firstName: 'Ana',
     lastName: 'Lopez',
     email: 'ana@example.com',
-    role: 'reception',
-    status: 'active',
+    password: 'Temporal123!',
+    roleId: apiRoles[0].id,
   });
   assert.equal(created.email, 'ana@example.com');
-  const disabled = await personnelService.updateUser(created.id, { status: 'inactive' });
+  const disabled = await personnelService.updateUser(created.id, {
+    roleId: apiRoles[0].id,
+    status: 'inactive',
+  });
   assert.equal(disabled.status, 'inactive');
 });
 
@@ -1305,10 +1333,13 @@ test('administracion: promociones, tarifas, inventario y caja persisten operacio
     firstName: 'Mario',
     lastName: 'Admin',
     email: 'mario.admin@example.com',
-    role: 'admin',
-    status: 'active',
+    password: 'Temporal123!',
+    roleId: apiRoles[0].id,
   });
-  const updatedUser = await personnelService.updateUser(user.id, { status: 'inactive' });
+  const updatedUser = await personnelService.updateUser(user.id, {
+    roleId: apiRoles[0].id,
+    status: 'inactive',
+  });
   assert.equal(updatedUser.status, 'inactive');
 
   const amenity = await catalogService.createAmenity({

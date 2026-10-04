@@ -234,8 +234,10 @@ cambiar estado.
 
 `personnelService.getUsers()`, `getUserById()` y `getRoles()` consumen
 `GET /admin/users`, `GET /admin/users/{id}` y `GET /admin/roles`; `roleCode`
-se normaliza al literal de rol usado por el frontend. `createUser()` y
-`updateUser()` usan `POST /admin/users` y `PUT /admin/users/{id}` para altas,
+se normaliza al literal de rol usado por el frontend solo en respuestas.
+`createUser()` usa el DTO real del backend con `firstName`, `lastName`,
+`email`, `password` y `roleId`; no envia `roleCode` ni `status`.
+`updateUser()` usa `firstName`, `lastName`, `email`, `roleId` y `status` para
 edicion y activacion/desactivacion. `getPermissions()` conserva el catalogo
 local por compatibilidad hasta que exista un endpoint dedicado.
 

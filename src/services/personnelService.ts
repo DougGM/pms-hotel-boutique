@@ -26,12 +26,20 @@ type ApiRole = {
   permissions: string[];
 };
 
-type SaveUserData = {
+type CreateUserData = {
   firstName: string;
   lastName: string;
   email: string;
-  role: User['role'];
-  status?: User['status'];
+  password: string;
+  roleId: string;
+};
+
+type UpdateUserData = {
+  firstName: string;
+  lastName: string;
+  email: string;
+  roleId: string;
+  status: User['status'];
 };
 
 const apiRoleToUserRole: Record<string, User['role']> = {
@@ -41,15 +49,6 @@ const apiRoleToUserRole: Record<string, User['role']> = {
   HOUSEKEEPING: 'housekeeping',
   CONCIERGE: 'concierge',
   ROOM_SERVICE: 'roomService',
-};
-
-const userRoleToApiRole: Record<User['role'], string> = {
-  admin: 'ADMIN',
-  guest: 'GUEST',
-  reception: 'RECEPTION',
-  housekeeping: 'HOUSEKEEPING',
-  concierge: 'CONCIERGE',
-  roomService: 'ROOM_SERVICE',
 };
 
 const normalizeRoleCode = (code: string): string => code.trim().toUpperCase();
@@ -73,12 +72,20 @@ const toUserDto = (api: ApiUser): UserDto => ({
   updated_at: api.updatedAt,
 });
 
-const toUserRequest = (data: SaveUserData) => ({
+const toCreateUserRequest = (data: CreateUserData) => ({
   firstName: data.firstName.trim(),
   lastName: data.lastName.trim(),
   email: data.email.trim().toLowerCase(),
-  roleCode: userRoleToApiRole[data.role],
-  status: data.status ?? 'active',
+  password: data.password,
+  roleId: data.roleId,
+});
+
+const toUpdateUserRequest = (data: UpdateUserData) => ({
+  firstName: data.firstName.trim(),
+  lastName: data.lastName.trim(),
+  email: data.email.trim().toLowerCase(),
+  roleId: data.roleId,
+  status: data.status,
 });
 
 const toSessionUser = ({ user }: (typeof sessionAccountsDB)[number]): User => {
@@ -134,27 +141,30 @@ export const personnelService = {
       return account ? toSessionUser(account) : undefined;
     }
   },
-  async createUser(data: SaveUserData): Promise<User> {
+  async createUser(data: CreateUserData): Promise<User> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible crear el usuario.');
     if (!data.firstName.trim()) throw new Error('El usuario requiere nombre.');
     if (!data.lastName.trim()) throw new Error('El usuario requiere apellido.');
     if (!data.email.trim()) throw new Error('El usuario requiere correo.');
+    if (!data.password.trim()) throw new Error('El usuario requiere contrasena.');
+    if (!data.roleId.trim()) throw new Error('El usuario requiere rol.');
 
-    const user = await httpClient.post<ApiUser>('/admin/users', toUserRequest(data));
+    const user = await httpClient.post<ApiUser>('/admin/users', toCreateUserRequest(data));
     return toUser(toUserDto(user));
   },
-  async updateUser(id: ID, data: Partial<SaveUserData>): Promise<User> {
+  async updateUser(id: ID, data: Partial<UpdateUserData>): Promise<User> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible actualizar el usuario.');
 
     const current = await this.getUserById(id);
     if (!current) throw new Error(`No existe el usuario ${id}.`);
-    const request = toUserRequest({
+    if (!data.roleId?.trim()) throw new Error('El usuario requiere rol.');
+    const request = toUpdateUserRequest({
       firstName: data.firstName ?? current.firstName,
       lastName: data.lastName ?? current.lastName,
       email: data.email ?? current.email,
-      role: data.role ?? current.role,
+      roleId: data.roleId,
       status: data.status ?? current.status,
     });
     const user = await httpClient.put<ApiUser>(`/admin/users/${id}`, request);
