@@ -1,5 +1,8 @@
-export type AuditModule = 'guestAccounts' | 'cash' | 'inventory' | 'catalog' | 'users' | 'bookings';
-export type AuditAction = 'create' | 'update' | 'delete' | 'void' | 'open' | 'close';
+export type KnownAuditModule =
+  'guestAccounts' | 'cash' | 'inventory' | 'catalog' | 'users' | 'bookings';
+export type AuditModule = KnownAuditModule | (string & {});
+export type KnownAuditAction = 'create' | 'update' | 'delete' | 'void' | 'open' | 'close';
+export type AuditAction = KnownAuditAction | (string & {});
 
 export interface AuditLog {
   id: string;

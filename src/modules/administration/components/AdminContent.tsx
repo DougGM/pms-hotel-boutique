@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Activity,
   ArrowRight,
@@ -37,13 +37,20 @@ import { catalogService } from '@/services/catalogService';
 import { inventoryService } from '@/services/inventoryService';
 import { personnelService } from '@/services/personnelService';
 import { promotionService } from '@/services/promotionService';
+import { reportingService, type OperationalReport } from '@/services/reportingService';
 import { roomService } from '@/services/roomService';
 import { ErrorState } from '@/shared/components/ErrorState';
 import { LoadingState } from '@/shared/components/LoadingState';
 import { toDtoCalendarDate } from '@/shared/types/common';
 import { formatCurrency } from '@/shared/utils/currency';
 import { exportDateSuffix, exportToCSV } from '@/shared/utils/exportCsv';
-import type { AuditAction, AuditLog, AuditModule } from '@/shared/types/entities/audit-log';
+import type {
+  AuditAction,
+  AuditLog,
+  AuditModule,
+  KnownAuditAction,
+  KnownAuditModule,
+} from '@/shared/types/entities/audit-log';
 import type { Booking } from '@/shared/types/entities/booking';
 import type { CashSession } from '@/shared/types/entities/cash-session';
 import type { InventoryItemCategory } from '@/shared/types/entities/inventory-item';
@@ -345,6 +352,14 @@ const amountToCents = (amount: number) => Math.round(amount * 100);
 
 const money = (amount: number) => formatCurrency(amountToCents(amount), 'GTQ');
 
+const activeOfficialBookingStatuses = new Set(['confirmed', 'checked_in', 'checked_out']);
+
+const countActiveOfficialBookings = (report: OperationalReport) =>
+  Object.entries(report.bookingsByStatus).reduce(
+    (sum, [status, count]) => (activeOfficialBookingStatuses.has(status) ? sum + count : sum),
+    0,
+  );
+
 const formatDbTime = (value: Date) =>
   value.toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit', hour12: false });
 
@@ -529,7 +544,7 @@ const serviceErrorMessage = (error: unknown) =>
  * 'Room Service', 'Edición'...) — son categorías distintas. Se traducen
  * los valores reales, no se inventan nuevos.
  */
-const AUDIT_MODULE_LABELS: Record<AuditModule, string> = {
+const AUDIT_MODULE_LABELS: Record<KnownAuditModule, string> = {
   guestAccounts: 'Cuentas de huésped',
   cash: 'Caja',
   inventory: 'Inventario',
@@ -538,7 +553,7 @@ const AUDIT_MODULE_LABELS: Record<AuditModule, string> = {
   bookings: 'Reservas',
 };
 
-const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
+const AUDIT_ACTION_LABELS: Record<KnownAuditAction, string> = {
   create: 'Creación',
   update: 'Actualización',
   delete: 'Eliminación',
@@ -549,6 +564,12 @@ const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
 
 const dashboardPeriodOptions: DashboardPeriod[] = ['Hoy', '7 días', '30 días', '90 días'];
 const reportPeriodOptions: ReportPeriod[] = ['Día', 'Semana', 'Mes', 'Año', 'Temporada'];
+const auditModuleLabel = (module: AuditModule) =>
+  module in AUDIT_MODULE_LABELS ? AUDIT_MODULE_LABELS[module as KnownAuditModule] : module;
+
+const auditActionLabel = (action: AuditAction) =>
+  action in AUDIT_ACTION_LABELS ? AUDIT_ACTION_LABELS[action as KnownAuditAction] : action;
+
 /*
 const dashboardSeries: Record<
   DashboardPeriod,
@@ -1026,6 +1047,11 @@ type AdminData = {
 type ScreenState =
   { status: 'loading' } | { status: 'error'; message: string } | ({ status: 'ready' } & AdminData);
 
+type OperationalReportState =
+  | { status: 'idle' | 'loading' }
+  | { status: 'error'; message: string }
+  | { status: 'ready'; data: OperationalReport };
+
 function getErrorMessage(cause: unknown): string {
   return cause instanceof Error
     ? cause.message
@@ -1038,8 +1064,8 @@ function buildAuditEntries(logs: AuditLog[], users: User[]): AuditEntry[] {
     user: userNameById(users, entry.userId),
     date: toDtoCalendarDate(entry.occurredAt),
     time: formatDbTime(entry.occurredAt),
-    module: AUDIT_MODULE_LABELS[entry.module],
-    action: AUDIT_ACTION_LABELS[entry.action],
+    module: auditModuleLabel(entry.module),
+    action: auditActionLabel(entry.action),
     description: `${entry.entityType} ${entry.entityId}`,
   }));
 }
@@ -1385,6 +1411,9 @@ function AdminContentReady({
   );
   const [reportFilter, setReportFilter] = useState<ReportPeriod>('Mes');
   const [reportTab, setReportTab] = useState<AdminReportTab>('Ocupación');
+  const [operationalReport, setOperationalReport] = useState<OperationalReportState>({
+    status: 'idle',
+  });
   const [dashboardTab, setDashboardTab] = useState<'Ocupación' | 'Ingresos' | 'Reservas'>(
     'Ocupación',
   );
@@ -1407,6 +1436,31 @@ function AdminContentReady({
         : 'Resumen operativo';
   const visibleReportTabs = reportTabsByGroup[reportGroup];
   const activeReportTab = visibleReportTabs.includes(reportTab) ? reportTab : visibleReportTabs[0];
+
+  const loadOperationalReport = useCallback(async (period: ReportPeriod) => {
+    const { start, end } = getReportPeriodRange(period);
+    setOperationalReport({ status: 'loading' });
+    try {
+      const data = await reportingService.getOperationalReport({
+        from: toDtoCalendarDate(start),
+        to: toDtoCalendarDate(end),
+      });
+      setOperationalReport({ status: 'ready', data });
+    } catch (cause) {
+      setOperationalReport({ status: 'error', message: getErrorMessage(cause) });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (
+      nav === 'Reportes' ||
+      nav === 'Resumen operativo' ||
+      nav === 'Reportes financieros' ||
+      nav === 'Análisis comercial'
+    ) {
+      void loadOperationalReport(reportFilter);
+    }
+  }, [loadOperationalReport, nav, reportFilter]);
 
   const resetSearch = () => {
     setSearch('');
@@ -3016,26 +3070,42 @@ function AdminContentReady({
     const occupiedRooms = rooms.filter((room) => room.status === 'Ocupada').length;
     const occupancyPercent =
       rooms.length > 0 ? Math.round((occupiedRooms / rooms.length) * 1000) / 10 : 0;
-    const confirmedReservations = periodBookings.filter((booking) =>
-      ['confirmed', 'checkedIn', 'checkedOut'].includes(booking.status),
-    ).length;
-    const cancelledReservations = periodCancelledBookings.length;
-    const totalReservations = periodBookings.length;
+    const officialReport = operationalReport.status === 'ready' ? operationalReport.data : null;
+    const activeReservations =
+      officialReport !== null
+        ? countActiveOfficialBookings(officialReport)
+        : periodBookings.filter((booking) =>
+            ['confirmed', 'checkedIn', 'checkedOut'].includes(booking.status),
+          ).length;
+    const cancelledReservations = officialReport?.cancellations ?? periodCancelledBookings.length;
+    const totalReservations = officialReport?.bookings ?? periodBookings.length;
     const cancellationRate =
       totalReservations > 0
         ? Math.round((cancelledReservations / totalReservations) * 1000) / 10
         : 0;
-    const totalIncome = periodCashMovements
-      .filter((movement) => movement.type === 'Ingreso')
-      .reduce((sum, movement) => sum + movement.amount, 0);
+    const totalIncome =
+      officialReport !== null
+        ? centsToAmount(officialReport.revenueCents)
+        : periodCashMovements
+            .filter((movement) => movement.type === 'Ingreso')
+            .reduce((sum, movement) => sum + movement.amount, 0);
     const incomeRows = periodCashMovements.filter((movement) => movement.type === 'Ingreso');
-    const reservationRows = periodBookings.map((booking) => ({
-      label: booking.confirmationCode,
-      reservations: 1,
-      checkIns: booking.status === 'checkedIn' || booking.status === 'checkedOut' ? 1 : 0,
-      checkOuts: booking.status === 'checkedOut' ? 1 : 0,
-      income: centsToAmount(booking.totalAmountCents),
-    }));
+    const reservationRows =
+      officialReport !== null
+        ? Object.entries(officialReport.bookingsByStatus).map(([status, count]) => ({
+            label: status,
+            reservations: count,
+            checkIns: status === 'checked_in' ? count : 0,
+            checkOuts: status === 'checked_out' ? count : 0,
+            income: 0,
+          }))
+        : periodBookings.map((booking) => ({
+            label: booking.confirmationCode,
+            reservations: 1,
+            checkIns: booking.status === 'checkedIn' || booking.status === 'checkedOut' ? 1 : 0,
+            checkOuts: booking.status === 'checkedOut' ? 1 : 0,
+            income: centsToAmount(booking.totalAmountCents),
+          }));
     const EmptyReport = ({ message }: { message: string }) => (
       <div className="hk-empty">
         <FileText size={20} />
@@ -3080,123 +3150,168 @@ function AdminContentReady({
             </button>
           ))}
         </div>
-        <div className="adm-report-content">
-          {activeReportTab === 'Ocupación' && (
-            <>
-              <div className="adm-report-stats">
-                <div className="metric-card">
-                  <div className="metric-icon sage">
-                    <BedDouble size={19} />
+        {operationalReport.status === 'loading' ? (
+          <LoadingState label="Cargando reporte operativo..." />
+        ) : operationalReport.status === 'error' ? (
+          <ErrorState
+            title="No pudimos cargar el reporte"
+            description={operationalReport.message}
+            onRetry={() => loadOperationalReport(reportFilter)}
+          />
+        ) : officialReport !== null && officialReport.bookings === 0 ? (
+          <EmptyReport message="No hay datos oficiales para este periodo" />
+        ) : (
+          <div className="adm-report-content">
+            {activeReportTab === 'Ocupación' && (
+              <>
+                <div className="adm-report-stats">
+                  <div className="metric-card">
+                    <div className="metric-icon sage">
+                      <BedDouble size={19} />
+                    </div>
+                    <div>
+                      <p>{officialReport ? 'Noches ocupadas' : 'Ocupación promedio'}</p>
+                      <h2>
+                        {officialReport ? officialReport.occupancyNights : `${occupancyPercent}%`}
+                      </h2>
+                      <span className="positive">
+                        {officialReport ? 'Reporting API' : 'Datos actuales'}
+                      </span>
+                    </div>
                   </div>
-                  <div>
-                    <p>Ocupación promedio</p>
-                    <h2>{occupancyPercent}%</h2>
-                    <span className="positive">Datos actuales</span>
-                  </div>
-                </div>
-                <div className="metric-card">
-                  <div className="metric-icon gold">
-                    <TrendingUp size={19} />
-                  </div>
-                  <div>
-                    <p>Tendencia</p>
-                    <h2>{occupiedRooms > 0 ? 'Con ocupacion' : 'Sin ocupacion'}</h2>
-                    <span className="positive">{reportFilter}</span>
-                  </div>
-                </div>
-              </div>
-              <MiniChart
-                data={rooms.length > 0 ? rooms.map((_, index) => index + 1) : [0]}
-                labels={rooms.length > 0 ? rooms.map((room) => room.number) : ['Sin datos']}
-              />
-            </>
-          )}
-          {activeReportTab === 'Ingresos' && (
-            <>
-              <div className="adm-report-stats">
-                <div className="metric-card">
-                  <div className="metric-icon gold">
-                    <Wallet size={19} />
-                  </div>
-                  <div>
-                    <p>Ingresos del periodo</p>
-                    <h2>{money(totalIncome)}</h2>
-                    <span className="positive">Caja registrada</span>
-                  </div>
-                </div>
-                <div className="metric-card">
-                  <div className="metric-icon sage">
-                    <DollarSign size={19} />
-                  </div>
-                  <div>
-                    <p>Promedio por corte</p>
-                    <h2>
-                      {incomeRows.length > 0 ? money(totalIncome / incomeRows.length) : money(0)}
-                    </h2>
-                    <span className="positive">{reportFilter}</span>
+                  <div className="metric-card">
+                    <div className="metric-icon gold">
+                      <TrendingUp size={19} />
+                    </div>
+                    <div>
+                      <p>Tendencia</p>
+                      <h2>
+                        {officialReport
+                          ? 'No disponible'
+                          : occupiedRooms > 0
+                            ? 'Con ocupacion'
+                            : 'Sin ocupacion'}
+                      </h2>
+                      <span className="positive">
+                        {officialReport ? 'Reporting API no expone tendencia' : reportFilter}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
-              <BarChart
-                data={incomeRows.length > 0 ? incomeRows.map((row) => row.amount) : [0]}
-                labels={incomeRows.length > 0 ? incomeRows.map((row) => row.date) : ['Sin datos']}
-              />
-            </>
-          )}
-          {activeReportTab === 'Reservas' && (
-            <AdminTable headers={['Periodo', 'Reservas', 'Check-ins', 'Check-outs', 'Ingresos']}>
-              {reservationRows.map((row) => (
-                <tr key={row.label}>
-                  <td>{row.label}</td>
-                  <td>{row.reservations}</td>
-                  <td>{row.checkIns}</td>
-                  <td>{row.checkOuts}</td>
-                  <td>{money(row.income)}</td>
-                </tr>
-              ))}
-            </AdminTable>
-          )}
-          {activeReportTab === 'Cancelaciones' && (
-            <>
-              <div className="adm-report-stats">
-                <div className="metric-card">
-                  <div className="metric-icon terracotta">
-                    <Ban size={19} />
+                {officialReport ? (
+                  <MiniChart
+                    data={[officialReport.occupancyNights, officialReport.roomServiceOrders]}
+                    labels={['Noches', 'Room service']}
+                  />
+                ) : (
+                  <MiniChart
+                    data={rooms.length > 0 ? rooms.map((_, index) => index + 1) : [0]}
+                    labels={rooms.length > 0 ? rooms.map((room) => room.number) : ['Sin datos']}
+                  />
+                )}
+              </>
+            )}
+            {activeReportTab === 'Ingresos' && (
+              <>
+                <div className="adm-report-stats">
+                  <div className="metric-card">
+                    <div className="metric-icon gold">
+                      <Wallet size={19} />
+                    </div>
+                    <div>
+                      <p>Ingresos del periodo</p>
+                      <h2>{money(totalIncome)}</h2>
+                      <span className="positive">
+                        {officialReport ? 'Reporting API' : 'Caja registrada'}
+                      </span>
+                    </div>
                   </div>
-                  <div>
-                    <p>Cancelaciones</p>
-                    <h2>{cancelledReservations}</h2>
-                    <span>Datos actuales</span>
+                  <div className="metric-card">
+                    <div className="metric-icon sage">
+                      <DollarSign size={19} />
+                    </div>
+                    <div>
+                      <p>Promedio por corte</p>
+                      <h2>
+                        {officialReport
+                          ? 'No disponible'
+                          : incomeRows.length > 0
+                            ? money(totalIncome / incomeRows.length)
+                            : money(0)}
+                      </h2>
+                      <span className="positive">
+                        {officialReport ? 'Reporting API no expone cortes' : reportFilter}
+                      </span>
+                    </div>
                   </div>
                 </div>
-                <div className="metric-card">
-                  <div className="metric-icon info">
-                    <Percent size={19} />
+                <BarChart
+                  data={officialReport ? [totalIncome] : incomeRows.map((row) => row.amount)}
+                  labels={
+                    officialReport
+                      ? [`${officialReport.from} / ${officialReport.to}`]
+                      : incomeRows.length > 0
+                        ? incomeRows.map((row) => row.date)
+                        : ['Sin datos']
+                  }
+                />
+              </>
+            )}
+            {activeReportTab === 'Reservas' && (
+              <AdminTable headers={['Periodo', 'Reservas', 'Check-ins', 'Check-outs', 'Ingresos']}>
+                {reservationRows.map((row) => (
+                  <tr key={row.label}>
+                    <td>{row.label}</td>
+                    <td>{row.reservations}</td>
+                    <td>{row.checkIns}</td>
+                    <td>{row.checkOuts}</td>
+                    <td>{money(row.income)}</td>
+                  </tr>
+                ))}
+              </AdminTable>
+            )}
+            {activeReportTab === 'Cancelaciones' && (
+              <>
+                <div className="adm-report-stats">
+                  <div className="metric-card">
+                    <div className="metric-icon terracotta">
+                      <Ban size={19} />
+                    </div>
+                    <div>
+                      <p>Cancelaciones</p>
+                      <h2>{cancelledReservations}</h2>
+                      <span>{officialReport ? 'Reporting API' : 'Datos actuales'}</span>
+                    </div>
                   </div>
-                  <div>
-                    <p>Tasa de cancelación</p>
-                    <h2>{cancellationRate}%</h2>
-                    <span className="positive">{confirmedReservations} reservas vigentes</span>
+                  <div className="metric-card">
+                    <div className="metric-icon info">
+                      <Percent size={19} />
+                    </div>
+                    <div>
+                      <p>Tasa de cancelación</p>
+                      <h2>{cancellationRate}%</h2>
+                      <span className="positive">{activeReservations} reservas vigentes</span>
+                    </div>
                   </div>
                 </div>
-              </div>
-              <MiniChart
-                data={[cancelledReservations, confirmedReservations]}
-                labels={['Canceladas', 'Vigentes']}
-                color="#a9483c"
-              />
-            </>
-          )}
-          {activeReportTab === 'Canales' && (
-            <EmptyReport message="El contrato actual de reservas no define canal de venta; no se muestran cifras simuladas." />
-          )}
-          {activeReportTab === 'Servicios' && (
-            <EmptyReport message="Los ingresos por servicio se veran aqui cuando exista una fuente contractual agregada." />
-          )}
-          {activeReportTab === 'Temporadas' && (
-            <EmptyReport message="La agrupacion por temporadas aun no tiene contrato de datos; se omiten metricas inventadas." />
-          )}
-        </div>
+                <MiniChart
+                  data={[cancelledReservations, activeReservations]}
+                  labels={['Canceladas', 'Vigentes']}
+                  color="#a9483c"
+                />
+              </>
+            )}
+            {activeReportTab === 'Canales' && (
+              <EmptyReport message="El contrato actual de reservas no define canal de venta; no se muestran cifras simuladas." />
+            )}
+            {activeReportTab === 'Servicios' && (
+              <EmptyReport message="Los ingresos por servicio se veran aqui cuando exista una fuente contractual agregada." />
+            )}
+            {activeReportTab === 'Temporadas' && (
+              <EmptyReport message="La agrupacion por temporadas aun no tiene contrato de datos; se omiten metricas inventadas." />
+            )}
+          </div>
+        )}
       </div>
     );
   }
