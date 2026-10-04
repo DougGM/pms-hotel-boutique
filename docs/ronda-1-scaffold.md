@@ -190,6 +190,13 @@ usa `/auth/login`, `/auth/refresh` y `/auth/logout` del backend Spring, y los
 roles/permisos de navegacion se derivan del JWT (`ROLE_*` y `authorities`).
 No cambia el alcance de pantallas ni el contrato visual Bolt.
 
+Nota 2026-10-04 (#100 / INT-02): la integracion de habitaciones, tipos,
+caracteristicas y tarifas se hizo en `roomService` sin cambiar pantallas ni CSS.
+Las rutas existentes de habitaciones, ocupacion, recepcion, motor publico y
+Administracion conservan su UI, pero ahora consumen `/rooms`, `/room-types`,
+`/room-features` y `/rates` mediante `http-client.ts`. `priceCents` permanece
+en centavos y `status`/`housekeepingStatus` siguen separados.
+
 Nota 2026-09-30 (#95): el workspace de Administracion usa el sidebar como
 navegacion primaria para subsecciones. `PrivateWorkspace` define grupos
 desplegables para Usuarios y roles, Habitaciones, Tarifas, Servicios,

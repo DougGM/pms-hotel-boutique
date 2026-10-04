@@ -218,6 +218,8 @@ function installHousekeepingBackend() {
     const path = new URL(String(input)).pathname.replace(/^\/api\/v1/, '');
     const method = init.method ?? 'GET';
     state.requests.push(`${method} ${path}`);
+    if (method === 'GET' && path === '/rooms') return json(state.rooms);
+    if (path === '/room-types' || path === '/room-features') return json({ status: 403 }, 403);
     // El rol housekeeping no tiene `room-service.read`: el backend real responde 403.
     if (path.startsWith('/room-service/')) return json({ status: 403 }, 403);
     if (method === 'GET' && path === '/housekeeping/rooms') return json(state.rooms);
@@ -314,6 +316,13 @@ test('limpieza: el panel carga sin pedir datos para los que el rol no tiene perm
     hkBackend.requests.filter((request) => request.includes('/room-service/')),
     [],
     'el catálogo de Room Service exige room-service.read',
+  );
+  assert.deepEqual(
+    hkBackend.requests.filter(
+      (request) => request.includes('/room-types') || request.includes('/room-features'),
+    ),
+    [],
+    'el catálogo de habitaciones exige room-types.read/room-features.read',
   );
 });
 
