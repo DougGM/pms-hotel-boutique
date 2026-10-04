@@ -44,7 +44,13 @@ import { LoadingState } from '@/shared/components/LoadingState';
 import { toDtoCalendarDate } from '@/shared/types/common';
 import { formatCurrency } from '@/shared/utils/currency';
 import { exportDateSuffix, exportToCSV } from '@/shared/utils/exportCsv';
-import type { AuditAction, AuditLog, AuditModule } from '@/shared/types/entities/audit-log';
+import type {
+  AuditAction,
+  AuditLog,
+  AuditModule,
+  KnownAuditAction,
+  KnownAuditModule,
+} from '@/shared/types/entities/audit-log';
 import type { Booking } from '@/shared/types/entities/booking';
 import type { CashSession } from '@/shared/types/entities/cash-session';
 import type { InventoryItemCategory } from '@/shared/types/entities/inventory-item';
@@ -538,7 +544,7 @@ const serviceErrorMessage = (error: unknown) =>
  * 'Room Service', 'Edición'...) — son categorías distintas. Se traducen
  * los valores reales, no se inventan nuevos.
  */
-const AUDIT_MODULE_LABELS: Record<AuditModule, string> = {
+const AUDIT_MODULE_LABELS: Record<KnownAuditModule, string> = {
   guestAccounts: 'Cuentas de huésped',
   cash: 'Caja',
   inventory: 'Inventario',
@@ -547,7 +553,7 @@ const AUDIT_MODULE_LABELS: Record<AuditModule, string> = {
   bookings: 'Reservas',
 };
 
-const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
+const AUDIT_ACTION_LABELS: Record<KnownAuditAction, string> = {
   create: 'Creación',
   update: 'Actualización',
   delete: 'Eliminación',
@@ -558,6 +564,12 @@ const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
 
 const dashboardPeriodOptions: DashboardPeriod[] = ['Hoy', '7 días', '30 días', '90 días'];
 const reportPeriodOptions: ReportPeriod[] = ['Día', 'Semana', 'Mes', 'Año', 'Temporada'];
+const auditModuleLabel = (module: AuditModule) =>
+  module in AUDIT_MODULE_LABELS ? AUDIT_MODULE_LABELS[module as KnownAuditModule] : module;
+
+const auditActionLabel = (action: AuditAction) =>
+  action in AUDIT_ACTION_LABELS ? AUDIT_ACTION_LABELS[action as KnownAuditAction] : action;
+
 /*
 const dashboardSeries: Record<
   DashboardPeriod,
@@ -1052,8 +1064,8 @@ function buildAuditEntries(logs: AuditLog[], users: User[]): AuditEntry[] {
     user: userNameById(users, entry.userId),
     date: toDtoCalendarDate(entry.occurredAt),
     time: formatDbTime(entry.occurredAt),
-    module: AUDIT_MODULE_LABELS[entry.module],
-    action: AUDIT_ACTION_LABELS[entry.action],
+    module: auditModuleLabel(entry.module),
+    action: auditActionLabel(entry.action),
     description: `${entry.entityType} ${entry.entityId}`,
   }));
 }

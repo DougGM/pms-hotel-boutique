@@ -755,8 +755,8 @@ entidad.
 | --- | --- | --- |
 | `id` | `string` | |
 | `user_id` | `string` | FK a `user` |
-| `module` | `'guest_accounts' \| 'cash' \| 'inventory' \| 'catalog' \| 'users' \| 'bookings'` | |
-| `action` | `'create' \| 'update' \| 'delete' \| 'void' \| 'open' \| 'close'` | |
+| `module` | `'guest_accounts' \| 'cash' \| 'inventory' \| 'catalog' \| 'users' \| 'bookings' \| string` | Valores futuros del backend se preservan; no se sustituyen por un modulo conocido. |
+| `action` | `'create' \| 'update' \| 'delete' \| 'void' \| 'open' \| 'close' \| string` | Valores futuros del backend se preservan; no se sustituyen por una accion conocida. |
 | `entity_type` / `entity_id` | `string` | La entidad afectada, sin FK tipado (cualquier entidad del contrato) |
 | `occurred_at` | `string` (timestamp) | |
 | `details?` | `string` | |

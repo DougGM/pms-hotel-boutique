@@ -1,9 +1,7 @@
 import {
   toDomain as toAuditLog,
-  type AuditActionDto,
   type AuditLog,
   type AuditLogDto,
-  type AuditModuleDto,
 } from '@/shared/types/entities/audit-log';
 import { auditLogsDB } from '@/data/db';
 import { mockUtils, requireCollection, simulateLatency } from './mockUtils';
@@ -21,22 +19,6 @@ type ApiAuditLog = {
   details?: string;
 };
 
-const knownModules = new Set<AuditModuleDto>([
-  'guest_accounts',
-  'cash',
-  'inventory',
-  'catalog',
-  'users',
-  'bookings',
-]);
-const knownActions = new Set<AuditActionDto>([
-  'create',
-  'update',
-  'delete',
-  'void',
-  'open',
-  'close',
-]);
 const defaultFrom = '2000-01-01T00:00:00-06:00';
 const defaultTo = '2100-01-01T00:00:00-06:00';
 
@@ -44,22 +26,14 @@ const isOfflineError = (error: unknown): boolean =>
   !(typeof error === 'object' && error !== null && 'status' in error) ||
   (typeof error === 'object' && error !== null && 'status' in error && error.status === 404);
 
-const toModule = (module: string): AuditModuleDto => {
-  const normalized = module === 'guestAccounts' ? 'guest_accounts' : module;
-  return knownModules.has(normalized as AuditModuleDto)
-    ? (normalized as AuditModuleDto)
-    : 'catalog';
-};
-
-const toAction = (action: string): AuditActionDto =>
-  knownActions.has(action as AuditActionDto) ? (action as AuditActionDto) : 'update';
+const toModule = (module: string) => (module === 'guestAccounts' ? 'guest_accounts' : module);
 
 function toAuditLogDto(api: ApiAuditLog): AuditLogDto {
   return {
     id: api.id,
     user_id: api.userId ?? '',
     module: toModule(api.module),
-    action: toAction(api.action),
+    action: api.action,
     entity_type: api.entityType,
     entity_id: api.entityId,
     occurred_at: api.occurredAt,

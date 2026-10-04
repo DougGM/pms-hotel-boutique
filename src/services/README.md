@@ -221,6 +221,8 @@ elimina al restaurar o limpiar sesion.
 `auditService.getLogs({ from, to })` consume `GET /admin/audit-logs` enviando
 los parametros reales `from` y `to` como date-time ISO. Si no se indica rango,
 usa una ventana amplia para mantener la carga inicial de Administracion.
+Si el backend agrega modulos o acciones nuevas, el servicio conserva esos
+valores en lugar de mapearlos a un fallback conocido.
 
 `reportingService.getOperationalReport({ from, to })` consume
 `GET /admin/reports/operations` y la vista de Reportes de Administracion usa

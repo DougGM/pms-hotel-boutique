@@ -138,6 +138,17 @@ const reportingAuditLogs = [
     occurredAt: reportingNow,
     details: 'Cambio de estado',
   },
+  {
+    id: '33333333-3333-4333-8333-444444444444',
+    userId: 'USR-001',
+    userEmail: 'admin@aurora.local',
+    module: 'rates',
+    action: 'approve',
+    entityType: 'rate',
+    entityId: 'RATE-001',
+    occurredAt: reportingNow,
+    details: 'Accion futura del backend',
+  },
 ];
 let lastReportingRequest = null;
 const apiNow = '2026-10-02T12:00:00.000Z';
@@ -1032,6 +1043,9 @@ test('auditService.getLogs: async, con latencia simulada, devuelve Models', asyn
   const logs = await assertServiceCall('auditService.getLogs', () => auditService.getLogs());
   assert.ok(Array.isArray(logs) && logs.length > 0);
   assert.ok('occurredAt' in logs[0], 'el Model de AuditLog debe tener occurredAt (camelCase)');
+  const futureLog = logs.find((log) => log.entityId === 'RATE-001');
+  assert.equal(futureLog?.module, 'rates', 'modulos nuevos de auditoria deben preservarse');
+  assert.equal(futureLog?.action, 'approve', 'acciones nuevas de auditoria deben preservarse');
   assert.equal(lastReportingRequest.path, '/admin/audit-logs');
   assert.ok(lastReportingRequest.search.has('from'), 'audit logs debe enviar from real');
   assert.ok(lastReportingRequest.search.has('to'), 'audit logs debe enviar to real');
