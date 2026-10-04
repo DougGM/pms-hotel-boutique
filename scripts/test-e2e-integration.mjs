@@ -64,6 +64,31 @@ test('INT-13: solo services puede depender de src/data/db', async () => {
   );
 });
 
+test('INT-13: servicios integrados no hacen fallback silencioso a mocks', async () => {
+  const integratedFiles = [
+    'src/services/bookingService.ts',
+    'src/services/guestService.ts',
+    'src/services/roomService.ts',
+  ];
+  const offenders = [];
+
+  for (const file of integratedFiles) {
+    const content = await readFile(file, 'utf8');
+    if (/\bisOfflineError\b/.test(content)) offenders.push(`${file}: isOfflineError`);
+  }
+
+  const roomService = await readFile('src/services/roomService.ts', 'utf8');
+  if (/['"]@\/data\/db['"]/.test(roomService)) {
+    offenders.push('src/services/roomService.ts: importa src/data/db');
+  }
+
+  assert.deepEqual(
+    offenders,
+    [],
+    `Los servicios integrados deben propagar errores del backend y no volver a mocks: ${offenders.join(', ')}`,
+  );
+});
+
 test('INT-13: no hay clientes HTTP alternativos ni llamadas fetch fuera del cliente central', async () => {
   const files = await collectFiles(sourceRoot, (file) => sourceExtensions.has(path.extname(file)));
   const offenders = [];

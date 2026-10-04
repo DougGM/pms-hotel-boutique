@@ -346,6 +346,40 @@ const apiRates = [
     updatedAt: apiNow,
   },
 ];
+const apiGuests = [
+  {
+    id: 'eeee5555-5555-4555-8555-111111111111',
+    firstName: 'Elena',
+    lastName: 'Castro',
+    email: 'elena@example.com',
+    phone: '+502 5555-1010',
+    nationality: 'Guatemalteca',
+    documentType: 'national_id',
+    documentNumber: '1000 20000 0101',
+    createdAt: apiNow,
+    updatedAt: apiNow,
+  },
+];
+const apiBookings = [
+  {
+    id: 'ffff6666-6666-4666-8666-111111111111',
+    confirmationCode: 'PMS-INT-0001',
+    guestLinkCode: 'LNK-INT-0001',
+    guestId: apiGuests[0].id,
+    roomTypeId: apiRoomTypes[0].id,
+    rateId: apiRates[0].id,
+    checkIn: '2026-12-10',
+    checkOut: '2026-12-12',
+    status: 'pending',
+    adults: 2,
+    children: 0,
+    totalAmountCents: 130000,
+    currency: 'GTQ',
+    notes: 'Reserva integrada inicial.',
+    createdAt: apiNow,
+    updatedAt: apiNow,
+  },
+];
 
 function roleCodeById(roleId) {
   const role = apiRoles.find((item) => item.id === roleId);
@@ -554,6 +588,74 @@ const adminFetchMock = async (input, init = {}) => {
       updatedAt: apiNow,
     });
     return jsonResponse(rate);
+  }
+
+  if (method === 'GET' && path === '/guests') return jsonResponse(apiGuests);
+  if (method === 'GET' && path.startsWith('/guests/')) {
+    const id = path.split('/').at(-1);
+    const guest = apiGuests.find((item) => item.id === id);
+    return guest ? jsonResponse(guest) : jsonResponse({ message: 'Not found' }, 404);
+  }
+  if (method === 'POST' && path === '/guests') {
+    const guest = {
+      id: `eeee5555-5555-4555-8555-${String(apiGuests.length + 2).padStart(12, '0')}`,
+      firstName: body.firstName,
+      lastName: body.lastName,
+      email: body.email,
+      phone: body.phone,
+      nationality: body.nationality,
+      documentType: body.documentType,
+      documentNumber: body.documentNumber,
+      notes: body.notes,
+      createdAt: apiNow,
+      updatedAt: apiNow,
+    };
+    apiGuests.push(guest);
+    return jsonResponse(guest, 201);
+  }
+  if (method === 'PUT' && path.startsWith('/guests/')) {
+    const id = path.split('/').at(-1);
+    const guest = apiGuests.find((item) => item.id === id);
+    if (!guest) return jsonResponse({ message: 'Not found' }, 404);
+    Object.assign(guest, body, { updatedAt: apiNow });
+    return jsonResponse(guest);
+  }
+
+  if (method === 'GET' && path === '/bookings') return jsonResponse(apiBookings);
+  if (method === 'GET' && path.startsWith('/bookings/')) {
+    const id = path.split('/').at(-1);
+    const booking = apiBookings.find((item) => item.id === id);
+    return booking ? jsonResponse(booking) : jsonResponse({ message: 'Not found' }, 404);
+  }
+  if (method === 'POST' && path === '/bookings') {
+    const booking = {
+      id: `ffff6666-6666-4666-8666-${String(apiBookings.length + 2).padStart(12, '0')}`,
+      confirmationCode: `PMS-INT-${String(apiBookings.length + 2).padStart(4, '0')}`,
+      guestLinkCode: `LNK-INT-${String(apiBookings.length + 2).padStart(4, '0')}`,
+      guestId: body.guestId,
+      roomId: body.roomId,
+      roomTypeId: body.roomTypeId,
+      rateId: body.rateId,
+      checkIn: body.checkIn,
+      checkOut: body.checkOut,
+      status: 'pending',
+      adults: body.adults,
+      children: body.children,
+      totalAmountCents: 130000,
+      currency: 'GTQ',
+      notes: body.notes,
+      createdAt: apiNow,
+      updatedAt: apiNow,
+    };
+    apiBookings.push(booking);
+    return jsonResponse(booking, 201);
+  }
+  if (method === 'PUT' && path.startsWith('/bookings/')) {
+    const id = path.split('/').at(-1);
+    const booking = apiBookings.find((item) => item.id === id);
+    if (!booking) return jsonResponse({ message: 'Not found' }, 404);
+    Object.assign(booking, body, { updatedAt: apiNow });
+    return jsonResponse(booking);
   }
 
   if (method === 'GET' && path === '/room-service/products') {

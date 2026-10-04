@@ -11,8 +11,8 @@ import { calculateNights } from '@/shared/utils/date';
 import { validateBookingCapacity } from '@/shared/utils/bookingCapacity';
 import { bookingsDB, ratesDB, roomsDB, roomTypesDB } from '@/data/db';
 import { closeAccountForCheckout, openOrSyncAccountForBooking } from './guestAccountService';
-import { mockUtils, requireCollection, simulateLatency } from './mockUtils';
-import { hydrateCollection, persistCollection, refreshCollection } from './mockPersistence';
+import { mockUtils, simulateLatency } from './mockUtils';
+import { hydrateCollection, persistCollection } from './mockPersistence';
 import { HttpError, httpClient } from './http-client';
 
 const bookingsStorageKey = 'pms.bookings';
@@ -60,8 +60,6 @@ type ApiCheckInResponse = {
 };
 
 const nowIso = () => new Date().toISOString();
-const isOfflineError = (error: unknown): boolean =>
-  !(error instanceof HttpError) || error.status === 404;
 const isHttpNotFound = (error: unknown): boolean =>
   error instanceof HttpError && error.status === 404;
 
@@ -235,44 +233,42 @@ export const bookingService = {
   async getBookings(): Promise<Booking[]> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar las reservas.');
-    try {
-      const bookings = await httpClient.get<ApiBooking[]>('/bookings');
-      return bookings.map(toBookingDto).map(toBooking);
-    } catch (error) {
-      if (!isOfflineError(error)) throw error;
-    }
-    return requireCollection(
-      refreshCollection(bookingsStorageKey, getBookingsCollection()),
-      'bookingsDB',
-    ).map(toBooking);
+    const bookings = await request(
+      () => httpClient.get<ApiBooking[]>('/bookings'),
+      'No fue posible cargar las reservas.',
+    );
+    return bookings.map(toBookingDto).map(toBooking);
   },
   async getBookingById(id: ID): Promise<Booking | undefined> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar la reserva.');
+    if (!isUuid(id)) {
+      const booking = getBookingsCollection().find((item) => item.id === id);
+      return booking ? toBooking(booking) : undefined;
+    }
+
     try {
       const booking = await httpClient.get<ApiBooking>(`/bookings/${id}`);
       return toBooking(toBookingDto(booking));
     } catch (error) {
-      if (isHttpNotFound(error) && isUuid(id)) return undefined;
-      if (!isOfflineError(error)) throw error;
+      if (isHttpNotFound(error)) return undefined;
+      throw new Error(getHttpErrorMessage(error, 'No fue posible cargar la reserva.'));
     }
-    const booking = getBookingsCollection().find((item) => item.id === id);
-    return booking ? toBooking(booking) : undefined;
   },
   async createBooking(data: CreateBookingDto): Promise<Booking> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible crear la reserva.');
     assertBookingCapacity(data);
 
-    try {
-      const booking = await httpClient.post<ApiBooking>('/bookings', toBookingRequest(data));
-      return toBooking(toBookingDto(booking));
-    } catch (error) {
-      if (!isOfflineError(error)) {
-        throw new Error(getHttpErrorMessage(error, 'No fue posible crear la reserva.'));
-      }
+    if (!isUuid(data.guest_id) || !isUuid(data.room_type_id)) {
       return createLocalBooking(data);
     }
+
+    const booking = await request(
+      () => httpClient.post<ApiBooking>('/bookings', toBookingRequest(data)),
+      'No fue posible crear la reserva.',
+    );
+    return toBooking(toBookingDto(booking));
   },
   async checkIn(bookingId: ID): Promise<Booking> {
     await simulateLatency();

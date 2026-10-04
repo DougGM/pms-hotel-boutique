@@ -209,6 +209,12 @@ Administracion conservan su UI, pero ahora consumen `/rooms`, `/room-types`,
 `/room-features` y `/rates` mediante `http-client.ts`. `priceCents` permanece
 en centavos y `status`/`housekeepingStatus` siguen separados.
 
+Nota 2026-10-04 (#111 / INT-13): esa integracion ya no conserva fallback local
+de listados en `roomService`; las rutas anteriores deben recibir backend real o
+mostrar el error. Huespedes y reservas tambien dejan de caer automaticamente a
+mocks para llamadas integradas; solo los IDs legacy explicitos del prototipo
+(`GST-*`, `BKG-*`, `RT-*`) mantienen comportamiento local.
+
 Nota 2026-09-30 (#95): el workspace de Administracion usa el sidebar como
 navegacion primaria para subsecciones. `PrivateWorkspace` define grupos
 desplegables para Usuarios y roles, Habitaciones, Tarifas, Servicios,
