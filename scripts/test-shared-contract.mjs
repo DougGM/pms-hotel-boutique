@@ -266,7 +266,7 @@ test('order: el status de cada registro pertenece a ORDER_STATUSES', () => {
   }
 });
 
-// Plan MOV-04 + `cancelled`, que ya devuelve el backend (docs/DECISIONES.md, D-012).
+// Plan MOV-04 + `cancelled`, que ya devuelve el backend (docs/DECISIONES.md, D-013).
 test('service_request: SERVICE_REQUEST_STATUSES coincide con MOV-04 y el backend', () => {
   assert.deepStrictEqual(SERVICE_REQUEST_STATUSES, [
     'pending',

@@ -798,7 +798,53 @@ clave legacy `hotel-aurora.auth.v1`.
   desarrollo local con `strictPort`.
 - El resto de servicios mock permanece fuera del alcance de INT-01.
 
-## D-012 · INT-11: `cancelled` entra al contrato de `service_request`
+## D-012 · INT-02: habitaciones, tipos, caracteristicas y tarifas usan backend
+
+**Fecha:** 2026-10-04 · **Estado:** aceptada e implementada en `roomService`.
+
+### Contexto
+
+La issue #100 pide reemplazar progresivamente los mocks de habitaciones, tipos
+de habitacion, caracteristicas y tarifas por la API REST real, sin modificar la
+UI ni crear un cliente HTTP alternativo. El backend expone controladores para
+`Room`, `RoomType`, `RoomFeature` y `Rate`; los precios viajan como
+`priceCents` y la habitacion mantiene dos conceptos separados:
+`status` y `housekeepingStatus`.
+
+### Decision
+
+`roomService` conserva las firmas que consumen las pantallas, pero su fuente
+oficial pasa a ser `http-client.ts`:
+
+- `GET/POST/PUT /rooms` y `GET /rooms/{id}`.
+- `GET/POST/PUT /room-types` y `GET /room-types/{id}`.
+- `GET /room-features`.
+- `GET/POST/PUT /rates`; no se asume `GET /rates/{id}`.
+
+El servicio adapta el contrato camelCase del backend a los DTOs internos
+snake_case y luego reutiliza los mappers existentes para devolver Models.
+Cuando `roomFeatureIds` se envia al actualizar un tipo, representa el reemplazo
+completo de sus caracteristicas; una lista vacia significa dejarlo sin
+caracteristicas.
+
+### Consecuencias
+
+- `src/data/db.ts` deja de ser fuente oficial para esas entidades en flujos
+  integrados. Solo queda como fallback de listados cuando el backend no esta
+  disponible o el harness responde 404; un 404 real en detalles por ID no
+  resuelve desde mocks.
+- Las escrituras de habitaciones, tipos y tarifas no simulan exito local:
+  pasan por API y propagan errores 400, 401, 403, 404 y 409 como mensajes de
+  operacion.
+- `priceCents`/`price_cents` sigue en centavos. No convertir a quetzales en
+  servicios ni DTOs.
+- No fusionar `status` y `housekeepingStatus`; la regla D-002 permanece vigente.
+- No pedir `rooms`, `room-types` ni `room-features` desde roles sin esos
+  permisos. En el workspace, Limpieza usa HousekeepingController y Room Service
+  usa los datos embebidos en sus pedidos; ninguno debe depender del catalogo de
+  habitaciones para cargar.
+
+## D-013 · INT-11: `cancelled` entra al contrato de `service_request`
 
 ### Contexto
 

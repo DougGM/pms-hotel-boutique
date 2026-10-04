@@ -452,7 +452,7 @@ const mapServiceStatus = (status: ServiceRequestStatus): GuestRequest['status'] 
     inProgress: 'En proceso',
     completed: 'Completada',
     rejected: 'Rechazada',
-    // Housekeeping todavía muestra un stayover cancelado como rechazado (D-012).
+    // Housekeeping todavía muestra un stayover cancelado como rechazado (D-013).
     cancelled: 'Rechazada',
   };
   return statuses[status];
@@ -738,8 +738,12 @@ const toConciergeRequest = (
  * otro rol (Limpieza, Conserjería) responde 403 y tumbaría la carga del panel.
  */
 const ROOM_SERVICE_READ_ROLES: readonly RoleId[] = ['admin', 'reception', 'room-service'];
+const ROOM_READ_ROLES: readonly RoleId[] = ['admin', 'reception', 'housekeeping'];
+const ROOM_CATALOG_READ_ROLES: readonly RoleId[] = ['admin', 'reception'];
 
 async function loadWorkspaceData(role: RoleId): Promise<WorkspaceState> {
+  const canReadRooms = ROOM_READ_ROLES.includes(role);
+  const canReadRoomCatalog = ROOM_CATALOG_READ_ROLES.includes(role);
   const [
     rooms,
     roomTypes,
@@ -756,9 +760,9 @@ async function loadWorkspaceData(role: RoleId): Promise<WorkspaceState> {
     housekeepingData,
     conciergeData,
   ] = await Promise.all([
-    roomService.getRooms(),
-    roomService.getRoomTypes(),
-    roomService.getRoomFeatures(),
+    canReadRooms ? roomService.getRooms() : [],
+    canReadRoomCatalog ? roomService.getRoomTypes() : [],
+    canReadRoomCatalog ? roomService.getRoomFeatures() : [],
     bookingService.getBookings(),
     guestService.getGuests(),
     ROOM_SERVICE_READ_ROLES.includes(role) ? catalogService.getProducts() : [],

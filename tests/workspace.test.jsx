@@ -218,6 +218,8 @@ function installHousekeepingBackend() {
     const path = new URL(String(input)).pathname.replace(/^\/api\/v1/, '');
     const method = init.method ?? 'GET';
     state.requests.push(`${method} ${path}`);
+    if (method === 'GET' && path === '/rooms') return json(state.rooms);
+    if (path === '/room-types' || path === '/room-features') return json({ status: 403 }, 403);
     // El rol housekeeping no tiene `room-service.read`: el backend real responde 403.
     if (path.startsWith('/room-service/')) return json({ status: 403 }, 403);
     if (method === 'GET' && path === '/housekeeping/rooms') return json(state.rooms);
@@ -314,6 +316,13 @@ test('limpieza: el panel carga sin pedir datos para los que el rol no tiene perm
     hkBackend.requests.filter((request) => request.includes('/room-service/')),
     [],
     'el catálogo de Room Service exige room-service.read',
+  );
+  assert.deepEqual(
+    hkBackend.requests.filter(
+      (request) => request.includes('/room-types') || request.includes('/room-features'),
+    ),
+    [],
+    'el catálogo de habitaciones exige room-types.read/room-features.read',
   );
 });
 
@@ -480,6 +489,7 @@ function installRoomServiceBackend() {
     const method = init.method ?? 'GET';
     const body = init.body ? JSON.parse(String(init.body)) : undefined;
     state.requests.push({ call: `${method} ${path}`, body });
+    if (method === 'GET' && path === '/rooms') return json({ status: 403 }, 403);
     if (method === 'GET' && path === '/room-service/products') return json([]);
     if (method === 'GET' && path === '/room-service/orders') return json(state.orders);
     const status = path.match(/^\/room-service\/orders\/([^/]+)\/status$/);
@@ -518,6 +528,11 @@ const statusCalls = () =>
 
 test('room service: los pedidos salen del backend con habitación, huésped y producto', async () => {
   await mountRoomService();
+  assert.deepEqual(
+    rsBackend.requests.filter(({ call }) => call === 'GET /rooms'),
+    [],
+    'Room Service no debe depender de rooms.read para cargar pedidos',
+  );
   const [card] = orderCards();
   assert.ok(card, 'el pedido del backend aparece en Pedidos activos');
   assert.match(text(card), /Habitación 305 · Ana López/);

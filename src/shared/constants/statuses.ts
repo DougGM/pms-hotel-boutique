@@ -128,7 +128,7 @@ export const ORDER_STATUS_TRANSITIONS: Record<OrderStatus, readonly OrderStatus[
 // --- service_request ---------------------------------------------------
 //
 // Entidad nueva (FASE 2.4), mismo caso que `order`. `cancelled` se agregó en
-// INT-11 para coincidir con el backend (docs/DECISIONES.md, D-012).
+// INT-11 para coincidir con el backend (docs/DECISIONES.md, D-013).
 export const SERVICE_REQUEST_STATUSES = [
   'pending',
   'accepted',
