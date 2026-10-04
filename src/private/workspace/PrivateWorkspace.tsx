@@ -740,10 +740,14 @@ const toConciergeRequest = (
 const ROOM_SERVICE_READ_ROLES: readonly RoleId[] = ['admin', 'reception', 'room-service'];
 const ROOM_READ_ROLES: readonly RoleId[] = ['admin', 'reception', 'housekeeping'];
 const ROOM_CATALOG_READ_ROLES: readonly RoleId[] = ['admin', 'reception'];
+const BOOKING_READ_ROLES: readonly RoleId[] = ['admin', 'reception'];
+const GUEST_READ_ROLES: readonly RoleId[] = ['admin', 'reception'];
 
 async function loadWorkspaceData(role: RoleId): Promise<WorkspaceState> {
   const canReadRooms = ROOM_READ_ROLES.includes(role);
   const canReadRoomCatalog = ROOM_CATALOG_READ_ROLES.includes(role);
+  const canReadBookings = BOOKING_READ_ROLES.includes(role);
+  const canReadGuests = GUEST_READ_ROLES.includes(role);
   const [
     rooms,
     roomTypes,
@@ -763,8 +767,8 @@ async function loadWorkspaceData(role: RoleId): Promise<WorkspaceState> {
     canReadRooms ? roomService.getRooms() : [],
     canReadRoomCatalog ? roomService.getRoomTypes() : [],
     canReadRoomCatalog ? roomService.getRoomFeatures() : [],
-    bookingService.getBookings(),
-    guestService.getGuests(),
+    canReadBookings ? bookingService.getBookings() : [],
+    canReadGuests ? guestService.getGuests() : [],
     ROOM_SERVICE_READ_ROLES.includes(role) ? catalogService.getProducts() : [],
     ROOM_SERVICE_READ_ROLES.includes(role) ? orderService.getOrders() : [],
     serviceRequestService.getRequests(),

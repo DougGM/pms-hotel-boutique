@@ -933,6 +933,130 @@ function installFinancialFetchMock() {
   return { bookingId, chargeId, depositId };
 }
 
+function installGuestBookingFetchMock() {
+  const previousFetch = globalThis.fetch;
+  const calls = [];
+  const now = '2026-10-04T12:00:00.000Z';
+  const guests = [
+    {
+      id: '7d2f8f2a-0b48-47a4-9bc3-3b1b0874d111',
+      firstName: 'Elena',
+      lastName: 'Castro',
+      email: 'elena@example.com',
+      phone: '+502 5555-1010',
+      nationality: 'Guatemalteca',
+      documentType: 'national_id',
+      documentNumber: '1000 20000 0101',
+      createdAt: now,
+      updatedAt: now,
+    },
+  ];
+  const bookings = [
+    {
+      id: '1f24bc67-4a9d-4c1d-9210-d661f60e1111',
+      confirmationCode: 'PMS-INT-0301',
+      guestLinkCode: 'LNK-INT-0301',
+      guestId: guests[0].id,
+      roomTypeId: apiRoomTypes[0].id,
+      rateId: apiRates[0].id,
+      checkIn: '2026-12-10',
+      checkOut: '2026-12-12',
+      status: 'pending',
+      adults: 2,
+      children: 0,
+      totalAmountCents: 130000,
+      currency: 'GTQ',
+      notes: 'Reserva integrada inicial.',
+      createdAt: now,
+      updatedAt: now,
+    },
+  ];
+  const json = (body, status = 200) =>
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { 'content-type': 'application/json' },
+    });
+
+  globalThis.fetch = async (input, init = {}) => {
+    const url = new URL(String(input));
+    const path = url.pathname.replace(/^\/api\/v1/, '');
+    const method = init.method ?? 'GET';
+    const body = init.body ? JSON.parse(String(init.body)) : undefined;
+    calls.push({ call: `${method} ${path}`, body });
+
+    if (method === 'GET' && path === '/guests') return json(guests);
+    if (method === 'GET' && path.startsWith('/guests/')) {
+      const id = path.split('/').at(-1);
+      const guest = guests.find((item) => item.id === id);
+      return guest ? json(guest) : json({ message: 'Not found' }, 404);
+    }
+    if (method === 'POST' && path === '/guests') {
+      const guest = {
+        id: '7d2f8f2a-0b48-47a4-9bc3-3b1b0874d222',
+        firstName: body.firstName,
+        lastName: body.lastName,
+        email: body.email,
+        phone: body.phone,
+        nationality: body.nationality,
+        documentType: body.documentType,
+        documentNumber: body.documentNumber,
+        notes: body.notes,
+        createdAt: now,
+        updatedAt: now,
+      };
+      guests.push(guest);
+      return json(guest, 201);
+    }
+    if (method === 'PUT' && path.startsWith('/guests/')) {
+      const id = path.split('/').at(-1);
+      const guest = guests.find((item) => item.id === id);
+      if (!guest) return json({ message: 'Not found' }, 404);
+      Object.assign(guest, body, { updatedAt: now });
+      return json(guest);
+    }
+
+    if (method === 'GET' && path === '/bookings') return json(bookings);
+    if (method === 'GET' && path.startsWith('/bookings/')) {
+      const id = path.split('/').at(-1);
+      const booking = bookings.find((item) => item.id === id);
+      return booking ? json(booking) : json({ message: 'Not found' }, 404);
+    }
+    if (method === 'POST' && path === '/bookings') {
+      const booking = {
+        id: '1f24bc67-4a9d-4c1d-9210-d661f60e2222',
+        confirmationCode: 'PMS-INT-0302',
+        guestLinkCode: 'LNK-INT-0302',
+        guestId: body.guestId,
+        roomTypeId: body.roomTypeId,
+        rateId: body.rateId,
+        checkIn: body.checkIn,
+        checkOut: body.checkOut,
+        status: 'pending',
+        adults: body.adults,
+        children: body.children,
+        totalAmountCents: 130000,
+        currency: 'GTQ',
+        notes: body.notes,
+        createdAt: now,
+        updatedAt: now,
+      };
+      bookings.push(booking);
+      return json(booking, 201);
+    }
+    if (method === 'PUT' && path.startsWith('/bookings/')) {
+      const id = path.split('/').at(-1);
+      const booking = bookings.find((item) => item.id === id);
+      if (!booking) return json({ message: 'Not found' }, 404);
+      Object.assign(booking, body, { updatedAt: now });
+      return json(booking);
+    }
+
+    return json({ message: `Ruta INT-03 no mockeada en test: ${method} ${path}` }, 404);
+  };
+
+  return { calls, guests, bookings, restore: () => (globalThis.fetch = previousFetch) };
+}
+
 function installCashFetchMock() {
   let session = {
     id: '7a4db6cf-d72a-4fc7-b7ec-0d07fbef5104',
@@ -1339,6 +1463,70 @@ test('roomService.createRoom/updateRoom/getRoomTypes: usan API real y devuelven 
     undefined,
     'un 404 real de /room-types/{id} no debe resolver desde roomTypesDB',
   );
+});
+
+test('INT-03: guestService y bookingService integran huespedes y reservas con backend', async (t) => {
+  const { calls, restore } = installGuestBookingFetchMock();
+  t.after(restore);
+
+  const guests = await assertServiceCall('guestService.getGuests integrado', () =>
+    guestService.getGuests(),
+  );
+  assert.equal(guests[0].firstName, 'Elena');
+  assert.ok(!('first_name' in guests[0]), 'guestService debe devolver Model, no DTO');
+
+  const createdGuest = await assertServiceCall('guestService.createGuest integrado', () =>
+    guestService.createGuest({
+      first_name: 'Mateo',
+      last_name: 'Rivas',
+      email: ' mateo@example.com ',
+      phone: '+502 5555-2020',
+      nationality: 'Guatemalteca',
+      document_type: 'passport',
+      document_number: ' GT0999999 ',
+    }),
+  );
+  assert.equal(createdGuest.email, 'mateo@example.com');
+  assert.equal(calls.at(-1).body.firstName, 'Mateo');
+  assert.equal(calls.at(-1).body.documentNumber, 'GT0999999');
+  assert.ok(!('first_name' in calls.at(-1).body), 'el backend recibe camelCase');
+
+  const updatedGuest = await assertServiceCall('guestService.updateGuest integrado', () =>
+    guestService.updateGuest(createdGuest.id, { phone: '+502 5555-3030' }),
+  );
+  assert.equal(updatedGuest.phone, '+502 5555-3030');
+
+  const bookings = await assertServiceCall('bookingService.getBookings integrado', () =>
+    bookingService.getBookings(),
+  );
+  assert.equal(bookings[0].guestId, guests[0].id);
+  assert.equal(bookings[0].roomTypeId, apiRoomTypes[0].id);
+  assert.ok(!('room_type_id' in bookings[0]), 'bookingService debe devolver Model, no DTO');
+
+  const createdBooking = await assertServiceCall('bookingService.createBooking integrado', () =>
+    bookingService.createBooking({
+      guest_id: createdGuest.id,
+      room_type_id: apiRoomTypes[0].id,
+      rate_id: apiRates[0].id,
+      check_in: '2026-12-15',
+      check_out: '2026-12-17',
+      adults: 2,
+      children: 0,
+      notes: '  Llegada tarde.  ',
+    }),
+  );
+  assert.equal(createdBooking.status, 'pending');
+  assert.equal(createdBooking.guestId, createdGuest.id);
+  assert.equal(calls.at(-1).body.guestId, createdGuest.id);
+  assert.equal(calls.at(-1).body.roomTypeId, apiRoomTypes[0].id);
+  assert.equal(calls.at(-1).body.notes, 'Llegada tarde.');
+  assert.ok(!('guest_id' in calls.at(-1).body), 'la reserva viaja en camelCase');
+
+  const updatedBooking = await assertServiceCall('bookingService.updateBooking integrado', () =>
+    bookingService.updateBooking(createdBooking.id, { adults: 1, children: 1 }),
+  );
+  assert.equal(updatedBooking.adults, 1);
+  assert.equal(updatedBooking.children, 1);
 });
 
 test('bookingService.checkIn/checkOut: validan transiciones con BOOKING_STATUS_TRANSITIONS', async () => {
