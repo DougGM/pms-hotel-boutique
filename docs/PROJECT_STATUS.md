@@ -45,6 +45,10 @@ documento resume el estado resultante, no el proceso para llegar a él.
 - Check-out de recepcion (#71): el folio integra estancia, consumos, pagos y
   depositos; bloquea salida con saldo pendiente y cierra cuenta/reserva enviando
   la habitacion a limpieza cuando el saldo queda saldado.
+- Recepcion integrada (#102 / INT-04): en reservas UUID, acompanantes,
+  asignacion de habitacion, check-in y check-out usan backend real; un saldo
+  pendiente llega como `409` y no fuerza cierre local. Los IDs legacy conservan
+  los mocks operativos del prototipo.
 - Administracion (#75): el workspace administrativo calcula dashboard/reportes
   desde servicios y persiste operaciones soportadas de habitaciones, tipos,
   tarifas, promociones, inventario y caja en las colecciones mock persistibles.

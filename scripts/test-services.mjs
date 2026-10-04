@@ -972,11 +972,27 @@ function installGuestBookingFetchMock() {
       updatedAt: now,
     },
   ];
+  const companions = [];
+  let folioBalanceCents = 75000;
   const json = (body, status = 200) =>
     new Response(JSON.stringify(body), {
       status,
       headers: { 'content-type': 'application/json' },
     });
+
+  const findBooking = (id) => bookings.find((item) => item.id === id);
+  const findRoom = (id) => apiRooms.find((item) => item.id === id);
+  const folio = (booking) => ({
+    accountId: '2f24bc67-4a9d-4c1d-9210-d661f60e9999',
+    bookingId: booking.id,
+    guestId: booking.guestId,
+    status: booking.status === 'checked_out' ? 'closed' : 'open',
+    balanceCents: folioBalanceCents,
+    currency: 'GTQ',
+    openedAt: now,
+    closedAt: booking.status === 'checked_out' ? now : null,
+    charges: [],
+  });
 
   globalThis.fetch = async (input, init = {}) => {
     const url = new URL(String(input));
@@ -1017,6 +1033,91 @@ function installGuestBookingFetchMock() {
     }
 
     if (method === 'GET' && path === '/bookings') return json(bookings);
+    const companionPathMatch = path.match(/^\/bookings\/([^/]+)\/companions(?:\/([^/]+))?$/);
+    if (companionPathMatch) {
+      const booking = findBooking(companionPathMatch[1]);
+      if (!booking) return json({ message: 'Booking not found' }, 404);
+      const companionId = companionPathMatch[2];
+      if (method === 'GET' && !companionId)
+        return json(companions.filter((item) => item.bookingId === booking.id));
+      if (method === 'POST' && !companionId) {
+        const companion = {
+          id: `3f24bc67-4a9d-4c1d-9210-${String(companions.length + 1).padStart(12, '0')}`,
+          bookingId: booking.id,
+          firstName: body.firstName,
+          lastName: body.lastName,
+          documentType: body.documentType,
+          documentNumber: body.documentNumber,
+          guestType: body.guestType,
+          createdAt: now,
+          updatedAt: now,
+        };
+        companions.push(companion);
+        return json(companion, 201);
+      }
+      if (method === 'PUT' && companionId) {
+        const companion = companions.find((item) => item.id === companionId);
+        if (!companion) return json({ message: 'Companion not found' }, 404);
+        Object.assign(companion, {
+          firstName: body.firstName,
+          lastName: body.lastName,
+          documentType: body.documentType,
+          documentNumber: body.documentNumber,
+          guestType: body.guestType,
+          updatedAt: now,
+        });
+        return json(companion);
+      }
+      if (method === 'DELETE' && companionId) {
+        const index = companions.findIndex((item) => item.id === companionId);
+        if (index === -1) return json({ message: 'Companion not found' }, 404);
+        companions.splice(index, 1);
+        return new Response(null, { status: 204 });
+      }
+    }
+    const bookingPathMatch = path.match(/^\/bookings\/([^/]+)(?:\/([^/]+))?$/);
+    if (bookingPathMatch?.[2] === 'check-in' && method === 'POST') {
+      const booking = findBooking(bookingPathMatch[1]);
+      if (!booking) return json({ message: 'Booking not found' }, 404);
+      booking.status = 'checked_in';
+      booking.updatedAt = now;
+      const room = findRoom(booking.roomId);
+      if (room) room.status = 'occupied';
+      return json({
+        bookingId: booking.id,
+        status: booking.status,
+        guestId: booking.guestId,
+        guestFirstName: 'Elena',
+        guestLastName: 'Castro',
+        roomId: booking.roomId,
+        roomNumber: room?.roomNumber ?? '101',
+        checkIn: booking.checkIn,
+        checkOut: booking.checkOut,
+        adults: booking.adults,
+        children: booking.children,
+        companionCount: companions.filter((item) => item.bookingId === booking.id).length,
+        totalOccupants: 1 + companions.filter((item) => item.bookingId === booking.id).length,
+        operationTimestamp: now,
+      });
+    }
+    if (bookingPathMatch?.[2] === 'check-out' && method === 'POST') {
+      const booking = findBooking(bookingPathMatch[1]);
+      if (!booking) return json({ message: 'Booking not found' }, 404);
+      if (folioBalanceCents !== 0)
+        return json({ message: 'Saldo pendiente en folio abierto' }, 409);
+      booking.status = 'checked_out';
+      booking.updatedAt = now;
+      const room = findRoom(booking.roomId);
+      if (room) {
+        room.status = 'available';
+        room.housekeepingStatus = 'dirty';
+      }
+      return json(booking);
+    }
+    if (bookingPathMatch?.[2] === 'folio' && method === 'GET') {
+      const booking = findBooking(bookingPathMatch[1]);
+      return booking ? json(folio(booking)) : json({ message: 'Booking not found' }, 404);
+    }
     if (method === 'GET' && path.startsWith('/bookings/')) {
       const id = path.split('/').at(-1);
       const booking = bookings.find((item) => item.id === id);
@@ -1055,7 +1156,16 @@ function installGuestBookingFetchMock() {
     return json({ message: `Ruta INT-03 no mockeada en test: ${method} ${path}` }, 404);
   };
 
-  return { calls, guests, bookings, restore: () => (globalThis.fetch = previousFetch) };
+  return {
+    calls,
+    guests,
+    bookings,
+    companions,
+    settleFolio: () => {
+      folioBalanceCents = 0;
+    },
+    restore: () => (globalThis.fetch = previousFetch),
+  };
 }
 
 function installCashFetchMock() {
@@ -1528,6 +1638,168 @@ test('INT-03: guestService y bookingService integran huespedes y reservas con ba
   );
   assert.equal(updatedBooking.adults, 1);
   assert.equal(updatedBooking.children, 1);
+});
+
+test('INT-04: recepcion usa backend para acompanantes, asignacion, check-in y checkout', async (t) => {
+  const { calls, bookings, settleFolio, restore } = installGuestBookingFetchMock();
+  t.after(restore);
+
+  const bookingId = bookings[0].id;
+  const roomId = apiRooms[0].id;
+
+  const assigned = await assertServiceCall('bookingService.assignRoom integrado', () =>
+    bookingService.assignRoom(bookingId, roomId),
+  );
+  assert.equal(assigned.roomId, roomId);
+  assert.equal(calls.at(-1).call, `PUT /bookings/${bookingId}`);
+  assert.deepEqual(calls.at(-1).body, { roomId });
+
+  const savedCompanions = await assertServiceCall(
+    'bookingCompanionService.saveCompanionsForBooking integrado',
+    () =>
+      bookingCompanionService.saveCompanionsForBooking(bookingId, [
+        {
+          first_name: 'Marcos',
+          last_name: 'Rodas',
+          document_type: 'national_id',
+          document_number: '1234 56789 0101',
+          guest_type: 'adult',
+        },
+      ]),
+  );
+  assert.equal(savedCompanions[0].bookingId, bookingId);
+  assert.deepEqual(
+    calls.slice(-3).map(({ call }) => call),
+    [
+      `GET /bookings/${bookingId}/companions`,
+      `POST /bookings/${bookingId}/companions`,
+      `GET /bookings/${bookingId}/companions`,
+    ],
+  );
+  assert.deepEqual(calls.at(-2).body, {
+    firstName: 'Marcos',
+    lastName: 'Rodas',
+    documentType: 'national_id',
+    documentNumber: '1234 56789 0101',
+    guestType: 'adult',
+  });
+
+  const updatedCompanions = await assertServiceCall(
+    'bookingCompanionService.saveCompanionsForBooking actualiza integrado',
+    () =>
+      bookingCompanionService.saveCompanionsForBooking(bookingId, [
+        {
+          id: savedCompanions[0].id,
+          first_name: 'Marco',
+          last_name: 'Rodas',
+          document_type: 'national_id',
+          document_number: '1234 56789 0101',
+          guest_type: 'adult',
+        },
+      ]),
+  );
+  assert.equal(updatedCompanions[0].firstName, 'Marco');
+  assert.deepEqual(
+    calls.slice(-3).map(({ call }) => call),
+    [
+      `GET /bookings/${bookingId}/companions`,
+      `PUT /bookings/${bookingId}/companions/${savedCompanions[0].id}`,
+      `GET /bookings/${bookingId}/companions`,
+    ],
+  );
+  assert.deepEqual(calls.at(-2).body, {
+    firstName: 'Marco',
+    lastName: 'Rodas',
+    documentType: 'national_id',
+    documentNumber: '1234 56789 0101',
+    guestType: 'adult',
+  });
+
+  const removedCompanions = await assertServiceCall(
+    'bookingCompanionService.saveCompanionsForBooking elimina integrado',
+    () => bookingCompanionService.saveCompanionsForBooking(bookingId, []),
+  );
+  assert.equal(removedCompanions.length, 0);
+  assert.deepEqual(
+    calls.slice(-3).map(({ call }) => call),
+    [
+      `GET /bookings/${bookingId}/companions`,
+      `DELETE /bookings/${bookingId}/companions/${savedCompanions[0].id}`,
+      `GET /bookings/${bookingId}/companions`,
+    ],
+  );
+
+  const recreatedCompanions = await assertServiceCall(
+    'bookingCompanionService.saveCompanionsForBooking recrea integrado',
+    () =>
+      bookingCompanionService.saveCompanionsForBooking(bookingId, [
+        {
+          first_name: 'Marcos',
+          last_name: 'Rodas',
+          document_type: 'national_id',
+          document_number: '1234 56789 0101',
+          guest_type: 'adult',
+        },
+      ]),
+  );
+  assert.equal(recreatedCompanions.length, 1);
+
+  await assertServiceCall(
+    'bookingCompanionService.saveCompanionsForBooking reemplaza integrado',
+    () =>
+      bookingCompanionService.saveCompanionsForBooking(bookingId, [
+        {
+          first_name: 'Sofia',
+          last_name: 'Rodas',
+          document_type: 'passport',
+          document_number: 'P-123',
+          guest_type: 'adult',
+        },
+      ]),
+  );
+  assert.deepEqual(
+    calls.slice(-4).map(({ call }) => call),
+    [
+      `GET /bookings/${bookingId}/companions`,
+      `DELETE /bookings/${bookingId}/companions/${recreatedCompanions[0].id}`,
+      `POST /bookings/${bookingId}/companions`,
+      `GET /bookings/${bookingId}/companions`,
+    ],
+  );
+
+  const companions = await assertServiceCall(
+    'bookingCompanionService.getCompanionsByBookingId integrado',
+    () => bookingCompanionService.getCompanionsByBookingId(bookingId),
+  );
+  assert.equal(companions.length, 1);
+  assert.equal(calls.at(-1).call, `GET /bookings/${bookingId}/companions`);
+
+  const checkedIn = await assertServiceCall('bookingService.checkIn integrado', () =>
+    bookingService.checkIn(bookingId),
+  );
+  assert.equal(checkedIn.status, 'checkedIn');
+  assert.deepEqual(
+    calls.slice(-2).map(({ call }) => call),
+    [`POST /bookings/${bookingId}/check-in`, `GET /bookings/${bookingId}`],
+  );
+  assert.equal(apiRooms[0].status, 'occupied');
+
+  await assert.rejects(
+    () => bookingService.checkOut(bookingId),
+    /Saldo pendiente en folio abierto/,
+    'un 409 del backend por saldo pendiente debe presentarse sin checkout local',
+  );
+  assert.equal(calls.at(-1).call, `POST /bookings/${bookingId}/check-out`);
+  assert.equal(bookings[0].status, 'checked_in');
+
+  settleFolio();
+  const checkedOut = await assertServiceCall('bookingService.checkOut integrado', () =>
+    bookingService.checkOut(bookingId),
+  );
+  assert.equal(checkedOut.status, 'checkedOut');
+  assert.equal(bookings[0].status, 'checked_out');
+  assert.equal(apiRooms[0].status, 'available');
+  assert.equal(apiRooms[0].housekeepingStatus, 'dirty');
 });
 
 test('bookingService.checkIn/checkOut: validan transiciones con BOOKING_STATUS_TRANSITIONS', async () => {

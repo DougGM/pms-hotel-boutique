@@ -77,6 +77,15 @@ del tipo de habitacion antes de persistir: `adults + children` no puede superar
 coherencia con `booking.adults/children` contando al huésped principal como un
 adulto.
 
+Desde INT-04, cuando el `bookingId` es UUID, esos mismos metodos de
+acompanantes consumen las rutas reales de `BookingCompanionController`
+(`GET`/`POST /bookings/{bookingId}/companions`,
+`PUT`/`DELETE /bookings/{bookingId}/companions/{companionId}`) y delegan al
+backend las reglas de estado, habitacion y composicion. Las validaciones locales
+quedan para reservas legacy `BKG-*`. La sincronizacion integrada se ejecuta en
+orden (`DELETE`, luego `PUT`, luego `POST`) para evitar carreras contra las
+validaciones de composicion del backend.
+
 `guestAccountService.createCharge(data)` crea un `Charge` real, lo marca como
 `posted`, calcula `amount_cents = quantity * unit_price_cents` y actualiza el
 `balance_cents` guardado de la cuenta abierta de esa reserva.
@@ -94,8 +103,8 @@ Actualizacion 2026-10-02 (#103): cuando el `bookingId` pertenece al backend
 real (UUID), `guestAccountService` usa `GuestFolioController`,
 `PaymentController` y `DepositController` mediante `http-client.ts` para folio,
 cargos, anulaciones, pagos, depositos, aplicacion y reembolso. Los IDs mock
-legacy (`BKG-*`) siguen usando la persistencia simulada mientras booking/check-in
-terminan su propia integracion; no son fuente oficial para flujos backend.
+legacy (`BKG-*`) siguen usando la persistencia simulada y no son fuente oficial
+para flujos backend.
 Actualizacion 2026-10-03 (#103): las utilidades legacy
 `openOrSyncAccountForBooking`, `closeAccountForCheckout` y
 `calculateAccountBalanceCents` rechazan reservas UUID para evitar que un flujo
@@ -122,9 +131,16 @@ ID `GST-*`, agrega timestamps y devuelve `Guest` de dominio.
 
 `bookingService.createBooking(data)` y `bookingService.updateBooking(id, data)`
 envian `POST /bookings` y `PUT /bookings/{id}` con camelCase (`guestId`,
-`roomTypeId`, `checkIn`, etc.). INT-03 no integra acciones operativas de
-reservas: confirmacion, cancelacion, asignacion, check-in y check-out siguen en
-el camino mock/legacy hasta INT-04 o la issue especifica que corresponda.
+`roomTypeId`, `checkIn`, etc.).
+
+Actualizacion 2026-10-04 (#102 / INT-04): para reservas UUID,
+`bookingService.assignRoom` usa `PUT /bookings/{id}` con `roomId`,
+`checkIn` usa `POST /bookings/{id}/check-in` y `checkOut` usa
+`POST /bookings/{id}/check-out`. El frontend no cambia estados localmente ni
+recalcula reglas financieras para esas reservas: si el backend responde `409`
+por saldo pendiente, el mensaje se presenta y la reserva permanece sin cerrar.
+Las pantallas de recepcion vuelven a consultar reserva, folio y habitaciones
+despues de check-in/check-out.
 
 La validacion local de capacidad se mantiene para `room_type_id` mock (`RT-*`).
 Cuando el `roomTypeId` es UUID se delega al backend, porque el dataset local no
