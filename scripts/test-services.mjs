@@ -573,7 +573,231 @@ test('bookingService.assignRoom: asigna solo habitaciones asignables con isRoomA
   );
 });
 
-test('housekeeping: persiste estado de habitacion, checklist, solicitudes y desperfectos', async () => {
+const HK_ROOM_ID = '0b6f4c2e-1d7a-4c5e-9f3b-2a1d0e9c8b70';
+const HK_BOOKING_ID = '5c2d8e1f-3b4a-4f6e-8d7c-1a2b3c4d5e6f';
+
+function installHousekeepingFetchMock() {
+  const previousFetch = globalThis.fetch;
+  const calls = [];
+  let room = {
+    id: HK_ROOM_ID,
+    roomNumber: '204',
+    roomTypeId: 'a1b2c3d4-0000-4000-8000-000000000001',
+    floor: 2,
+    status: 'occupied',
+    housekeepingStatus: 'dirty',
+    notes: null,
+    cleaningUserEmail: null,
+    cleaningStartedAt: null,
+    cleaningCompletedByUserEmail: null,
+    cleaningCompletedAt: null,
+    inspectorUserEmail: null,
+    inspectedAt: null,
+    updatedAt: '2026-10-03T08:00:00Z',
+  };
+  const stayovers = [
+    {
+      id: 'f1e2d3c4-0000-4000-8000-000000000001',
+      bookingId: HK_BOOKING_ID,
+      roomId: HK_ROOM_ID,
+      roomNumber: '204',
+      status: 'pending',
+      description: 'Cambio de toallas',
+      notes: null,
+      responsibleUserEmail: null,
+      startedByUserEmail: null,
+      completedByUserEmail: null,
+      requestedAt: '2026-10-03T09:00:00Z',
+      startedAt: null,
+      completedAt: null,
+      createdAt: '2026-10-03T09:00:00Z',
+      updatedAt: '2026-10-03T09:00:00Z',
+    },
+    {
+      id: 'f1e2d3c4-0000-4000-8000-000000000002',
+      bookingId: HK_BOOKING_ID,
+      roomId: HK_ROOM_ID,
+      roomNumber: '204',
+      status: 'cancelled',
+      description: 'Cancelada por el huesped',
+      requestedAt: '2026-10-03T07:00:00Z',
+      createdAt: '2026-10-03T07:00:00Z',
+      updatedAt: '2026-10-03T07:30:00Z',
+    },
+  ];
+  // Mismo flujo que HousekeepingServiceImpl: estado de origen exacto o 400.
+  const turnover = {
+    start: ['dirty', 'cleaning', 'cleaningStartedAt'],
+    complete: ['cleaning', 'clean', 'cleaningCompletedAt'],
+    inspect: ['clean', 'inspected', 'inspectedAt'],
+  };
+  const stayoverFlow = {
+    start: ['pending', 'in_progress', 'startedAt'],
+    complete: ['in_progress', 'completed', 'completedAt'],
+  };
+
+  globalThis.fetch = async (input, init = {}) => {
+    const url = new URL(String(input));
+    const path = url.pathname.replace(/^\/api\/v1/, '');
+    const method = init.method ?? 'GET';
+    calls.push(`${method} ${path}${url.search}`);
+    const json = (body, status = 200) =>
+      new Response(JSON.stringify(body), {
+        status,
+        headers: { 'content-type': 'application/json' },
+      });
+
+    if (method === 'GET' && path === '/housekeeping/rooms') return json([room]);
+
+    const roomAction = path.match(/^\/housekeeping\/rooms\/([^/]+)\/(start|complete|inspect)$/);
+    if (method === 'POST' && roomAction && roomAction[1] === HK_ROOM_ID) {
+      const [from, to, timestampField] = turnover[roomAction[2]];
+      if (room.housekeepingStatus !== from) {
+        return json({ status: 400, message: `Cannot ${roomAction[2]} room` }, 400);
+      }
+      room = {
+        ...room,
+        housekeepingStatus: to,
+        [timestampField]: '2026-10-03T10:30:00Z',
+        ...(to === 'cleaning'
+          ? { cleaningStartedAt: '2026-10-03T10:00:00Z', cleaningUserEmail: 'hk@aurora.test' }
+          : {}),
+      };
+      return json(room);
+    }
+
+    if (method === 'GET' && path === '/housekeeping/rooms/stayover-cleanings') {
+      const status = url.searchParams.get('status');
+      const bookingId = url.searchParams.get('bookingId');
+      return json(
+        stayovers.filter(
+          (item) =>
+            (!status || item.status === status) && (!bookingId || item.bookingId === bookingId),
+        ),
+      );
+    }
+
+    const stayoverAction = path.match(
+      /^\/housekeeping\/rooms\/stayover-cleanings\/([^/]+)\/(start|complete)$/,
+    );
+    if (method === 'POST' && stayoverAction) {
+      const index = stayovers.findIndex((item) => item.id === stayoverAction[1]);
+      if (index < 0) return json({ status: 404, message: 'Stayover cleaning not found' }, 404);
+      const [from, to, timestampField] = stayoverFlow[stayoverAction[2]];
+      if (stayovers[index].status !== from) return json({ status: 400, message: 'Cannot' }, 400);
+      stayovers[index] = {
+        ...stayovers[index],
+        status: to,
+        [timestampField]: '2026-10-03T11:00:00Z',
+      };
+      return json(stayovers[index]);
+    }
+
+    if (method === 'POST' && path === `/housekeeping/rooms/${HK_ROOM_ID}/stayover-cleanings`) {
+      const request = JSON.parse(String(init.body ?? '{}'));
+      const created = {
+        ...stayovers[0],
+        id: 'f1e2d3c4-0000-4000-8000-000000000003',
+        bookingId: request.bookingId,
+        status: 'pending',
+        description: request.description ?? 'Stayover cleaning',
+      };
+      stayovers.push(created);
+      return json(created, 201);
+    }
+
+    return json({ message: `Ruta no mockeada en test: ${method} ${path}` }, 404);
+  };
+  // Otros tests (caja) siguen usando el mock de fetch que estaba instalado.
+  return { calls, restore: () => (globalThis.fetch = previousFetch) };
+}
+
+test('housekeepingService: turnover contra backend, sin transiciones locales', async (t) => {
+  const { calls, restore } = installHousekeepingFetchMock();
+  t.after(restore);
+
+  const [room] = await housekeepingService.getRooms();
+  assert.equal(room.roomNumber, '204');
+  assert.equal(room.housekeepingStatus, 'dirty');
+  assert.equal(room.status, 'occupied');
+  assert.ok(!('housekeeping_status' in room), 'un Model no debe traer campos snake_case del DTO');
+
+  await housekeepingService.saveChecklist(HK_ROOM_ID, [{ label: 'Cama preparada', done: true }]);
+  assert.equal((await housekeepingService.getChecklists())[0].items[0].done, true);
+
+  const cleaning = await housekeepingService.startCleaning(HK_ROOM_ID);
+  assert.equal(cleaning.housekeepingStatus, 'cleaning');
+  assert.equal(cleaning.status, 'occupied', 'el turnover no toca el estado operativo');
+  assert.ok(cleaning.cleaningStartedAt instanceof Date);
+  assert.equal(cleaning.cleaningUserEmail, 'hk@aurora.test');
+  assert.deepEqual(
+    await housekeepingService.getChecklists(),
+    [],
+    'iniciar un turnover nuevo descarta el checklist del ciclo anterior',
+  );
+
+  await assert.rejects(
+    () => housekeepingService.inspectRoom(HK_ROOM_ID),
+    /rechazó la transición/,
+    'el backend decide: cleaning -> inspected se rechaza',
+  );
+
+  const clean = await housekeepingService.completeCleaning(HK_ROOM_ID);
+  assert.equal(clean.housekeepingStatus, 'clean');
+  assert.ok(clean.cleaningCompletedAt instanceof Date);
+
+  const inspected = await housekeepingService.inspectRoom(HK_ROOM_ID);
+  assert.equal(inspected.housekeepingStatus, 'inspected');
+  assert.ok(inspected.inspectedAt instanceof Date);
+
+  assert.deepEqual(
+    calls.filter((call) => call.startsWith('POST')),
+    [
+      `POST /housekeeping/rooms/${HK_ROOM_ID}/start`,
+      `POST /housekeeping/rooms/${HK_ROOM_ID}/inspect`,
+      `POST /housekeeping/rooms/${HK_ROOM_ID}/complete`,
+      `POST /housekeeping/rooms/${HK_ROOM_ID}/inspect`,
+    ],
+    'cada transicion pasa por su endpoint de HousekeepingController',
+  );
+});
+
+test('housekeepingService: stayover como flujo separado del turnover', async (t) => {
+  const { calls, restore } = installHousekeepingFetchMock();
+  t.after(restore);
+
+  const all = await housekeepingService.getStayoverCleanings();
+  assert.equal(all.length, 2);
+  assert.equal(all[0].type, 'housekeeping');
+  assert.equal(all[1].status, 'rejected', 'cancelled del backend se representa como rejected');
+
+  const pending = await housekeepingService.getStayoverCleanings({ status: 'pending' });
+  assert.equal(pending.length, 1);
+  assert.ok(calls.includes('GET /housekeeping/rooms/stayover-cleanings?status=pending'));
+
+  const started = await housekeepingService.startStayoverCleaning(pending[0].id);
+  assert.equal(started.status, 'inProgress');
+  assert.ok(started.startedAt instanceof Date);
+  const completed = await housekeepingService.completeStayoverCleaning(pending[0].id);
+  assert.equal(completed.status, 'completed');
+  assert.ok(completed.completedAt instanceof Date);
+
+  await housekeepingService.getStayoverCleanings({ status: 'inProgress' });
+  assert.ok(calls.includes('GET /housekeeping/rooms/stayover-cleanings?status=in_progress'));
+
+  const created = await housekeepingService.createStayoverCleaning(HK_ROOM_ID, {
+    bookingId: HK_BOOKING_ID,
+    description: '  Repaso de baño  ',
+  });
+  assert.equal(created.status, 'pending');
+  assert.equal(created.description, 'Repaso de baño');
+
+  const [room] = await housekeepingService.getRooms();
+  assert.equal(room.housekeepingStatus, 'dirty', 'stayover no cambia housekeepingStatus');
+  assert.equal(room.status, 'occupied', 'stayover no libera la habitacion');
+});
+
+test('housekeeping: persiste estado de habitacion mock, solicitudes y desperfectos', async () => {
   const room = await assertServiceCall('roomService.updateRoom housekeeping cleaning', () =>
     roomService.updateRoom('RM-101', { housekeeping_status: 'cleaning' }),
   );
@@ -583,40 +807,6 @@ test('housekeeping: persiste estado de habitacion, checklist, solicitudes y desp
     /"housekeeping_status":"cleaning"/,
     'el estado de limpieza debe quedar persistido en localStorage',
   );
-
-  await assertServiceCall('housekeepingService.saveChecklist', () =>
-    housekeepingService.saveChecklist(
-      'RM-101',
-      [
-        { label: 'Cama preparada', done: true },
-        { label: 'Bano limpio', done: false },
-      ],
-      {
-        status: 'cleaning',
-        startTime: '09:00',
-        endTime: null,
-        duration: null,
-      },
-    ),
-  );
-  const tasks = await housekeepingService.getTaskSnapshots();
-  const task = tasks.find((item) => item.roomId === 'RM-101');
-  assert.ok(task);
-  assert.equal(task.checklist[0].done, true);
-  assert.equal(task.checklist[1].done, false);
-
-  await assertServiceCall('housekeepingService.recordHistory', () =>
-    housekeepingService.recordHistory({
-      roomId: 'RM-101',
-      roomNumber: '101',
-      taskType: 'Limpieza de salida',
-      startedAt: '2026-09-22T09:00:00.000Z',
-      completedAt: '2026-09-22T09:30:00.000Z',
-      duration: '30 min',
-    }),
-  );
-  const history = await housekeepingService.getHistory();
-  assert.equal(history[0].roomId, 'RM-101');
 
   const pending = await assertServiceCall('serviceRequestService.createRequest', () =>
     serviceRequestService.createRequest({

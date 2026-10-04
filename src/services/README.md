@@ -113,10 +113,10 @@ solo en estado React ahora persisten en `localStorage` mediante la capa de
 servicios mock. `roomService.updateRoom()` guarda cambios de
 `housekeeping_status` en `PMS_ROOMS_DB`; `serviceRequestService` crea reportes
 de desperfectos (`maintenance`) y cambia estados de solicitudes en
-`PMS_SERVICE_REQUESTS_DB`; `housekeepingService` conserva snapshots de
-checklist, tiempos e historial operativo en `PMS_HOUSEKEEPING_STORE`. Los
-handlers del workspace esperan estos metodos antes de mostrar mensajes de
-exito, por lo que un error conserva el estado anterior visible.
+`PMS_SERVICE_REQUESTS_DB`. Los handlers del workspace esperan estos metodos
+antes de mostrar mensajes de exito, por lo que un error conserva el estado
+anterior visible. Desde INT-09 el turnover, las tareas stayover y el historial
+de Limpieza salen del backend — ver "Integracion con INT-09".
 Los reportes de desperfectos se asocian solo a una reserva real confirmada o
 en check-in para la habitacion; si no existe, el servicio rechaza la operacion
 en vez de crear un `booking_id` ficticio.
@@ -223,3 +223,46 @@ Los montos siguen en centavos y la moneda se mantiene como `GTQ`. Los totales
 del backend; Administracion los usa cuando vienen en la respuesta y solo
 conserva calculos locales como respaldo visual para datos historicos sin esos
 campos.
+
+## Integracion con INT-09 (#107)
+
+`housekeepingService` ya no guarda estados, tiempos ni historial en
+`localStorage`. Todas las operaciones van a `HousekeepingController` del backend
+mediante `http-client.ts` y devuelven Models (`Room`, `ServiceRequest`):
+
+- `getRooms({ housekeepingStatus? })` → `GET /housekeeping/rooms`.
+- `getRoom(roomId)` → `GET /housekeeping/rooms/{roomId}`.
+- `startCleaning` / `completeCleaning` / `inspectRoom` →
+  `POST /housekeeping/rooms/{roomId}/start|complete|inspect`.
+- `getStayoverCleanings({ bookingId?, status? })` →
+  `GET /housekeeping/rooms/stayover-cleanings`. Ambos filtros son opcionales:
+  sin filtros devuelve la cola completa (el rol housekeeping no tiene
+  `bookings.read`). Requiere el cambio de backend de la rama
+  `feature/housekeeping-stayover-listing`.
+- `createStayoverCleaning(roomId, { bookingId, description? })` →
+  `POST /housekeeping/rooms/{roomId}/stayover-cleanings`.
+- `startStayoverCleaning` / `completeStayoverCleaning` →
+  `POST /housekeeping/rooms/stayover-cleanings/{requestId}/start|complete`.
+
+Reglas:
+
+- `Room.status` (ocupacion) y `Room.housekeepingStatus` (limpieza) siguen
+  separados. El turnover `dirty -> cleaning -> clean -> inspected` solo cambia
+  `housekeepingStatus`; stayover es otro flujo (`ServiceRequest` con
+  `type: 'housekeeping'`) y no toca ninguno de los dos estados.
+- El backend decide si una transicion es valida. El frontend no replica las
+  reglas: la UI ofrece la accion y, si el backend responde `400`, `403` o `404`,
+  muestra el error y recarga el estado real.
+- `room` incorpora la trazabilidad opcional (`cleaningStartedAt`,
+  `cleaningCompletedAt`, `inspectedAt` y los correos de quien hizo cada paso).
+  Los tiempos e historial de la pantalla se calculan con esos campos y con
+  `startedAt`/`completedAt` de stayover. El backend solo conserva el ultimo
+  turnover de cada habitacion, asi que el historial muestra ese ultimo ciclo
+  mas las tareas stayover completadas.
+- Un `cancelled` de stayover se representa como `rejected`, igual que el resto
+  del contrato `service_request` del frontend.
+- El checklist es una ayuda visual sin contrato backend: vive en
+  `PMS_HOUSEKEEPING_CHECKLISTS` de este navegador y se descarta al iniciar un
+  turnover nuevo.
+- El workspace solo consulta Limpieza para el rol `housekeeping`; los demas
+  roles no tienen `housekeeping.read` y recibirian `403`.

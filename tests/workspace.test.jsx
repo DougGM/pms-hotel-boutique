@@ -4,7 +4,6 @@ import { create, act } from 'react-test-renderer';
 import { MemoryRouter } from 'react-router-dom';
 import { ReservationFormModal } from '@/modules/front-desk/components/workspace/ReceptionModals';
 import { PrivateWorkspace } from '@/private/workspace/PrivateWorkspace';
-import { serviceRequestService } from '@/services/serviceRequestService';
 import { calculateNights } from '@/shared/utils/date';
 import { toDomainCalendarDate } from '@/shared/types/common';
 
@@ -142,9 +141,116 @@ test('reserva manual: al corregir las fechas se recupera el flujo y guarda 2 noc
   assert.equal(saved[0].folio[0].amount, 1000);
 });
 
-// --- Limpieza --------------------------------------------------------------
+// --- Limpieza: backend falso de HousekeepingController (INT-09) -----------
+//
+// Replica la regla del backend: cada acción exige un estado de origen exacto y
+// responde 400 si no se cumple. La UI nunca debe cambiar sin esa confirmación.
+
+const hkRoom = (id, roomNumber, housekeepingStatus, extra = {}) => ({
+  id,
+  roomNumber,
+  roomTypeId: 'type-standard',
+  floor: Number(roomNumber[0]),
+  status: 'available',
+  housekeepingStatus,
+  notes: null,
+  updatedAt: '2026-10-03T08:00:00Z',
+  ...extra,
+});
+const hkStayover = (id, roomId, status, description) => ({
+  id,
+  bookingId: 'booking-1',
+  roomId,
+  roomNumber: null,
+  status,
+  description,
+  requestedAt: '2026-10-03T09:00:00Z',
+  startedAt: status === 'pending' ? null : '2026-10-03T09:10:00Z',
+  completedAt: status === 'completed' ? '2026-10-03T09:40:00Z' : null,
+  createdAt: '2026-10-03T09:00:00Z',
+  updatedAt: '2026-10-03T09:00:00Z',
+});
+
+let hkBackend;
+let originalFetch;
+afterEach(() => {
+  if (originalFetch) globalThis.fetch = originalFetch;
+  originalFetch = undefined;
+});
+
+function installHousekeepingBackend() {
+  const state = {
+    rooms: [
+      hkRoom('room-101', '101', 'dirty'),
+      hkRoom('room-102', '102', 'dirty'),
+      hkRoom('room-201', '201', 'cleaning', { cleaningStartedAt: '2026-10-03T08:30:00Z' }),
+      hkRoom('room-202', '202', 'clean', {
+        status: 'occupied',
+        cleaningStartedAt: '2026-10-03T07:00:00Z',
+        cleaningCompletedAt: '2026-10-03T07:40:00Z',
+      }),
+    ],
+    stayovers: [
+      hkStayover('stay-1', 'room-202', 'pending', 'Cambio de toallas'),
+      hkStayover('stay-2', 'room-202', 'in_progress', 'Repaso de baño'),
+      hkStayover('stay-3', 'room-101', 'completed', 'Tendido de cama'),
+      hkStayover('stay-4', 'room-102', 'cancelled', 'Cancelada por el huésped'),
+    ],
+  };
+  const turnover = {
+    start: ['dirty', 'cleaning', 'cleaningStartedAt'],
+    complete: ['cleaning', 'clean', 'cleaningCompletedAt'],
+    inspect: ['clean', 'inspected', 'inspectedAt'],
+  };
+  const stayoverFlow = {
+    start: ['pending', 'in_progress', 'startedAt'],
+    complete: ['in_progress', 'completed', 'completedAt'],
+  };
+  const json = (body, status = 200) =>
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { 'content-type': 'application/json' },
+    });
+
+  originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input, init = {}) => {
+    const path = new URL(String(input)).pathname.replace(/^\/api\/v1/, '');
+    const method = init.method ?? 'GET';
+    if (method === 'GET' && path === '/housekeeping/rooms') return json(state.rooms);
+    if (method === 'GET' && path === '/housekeeping/rooms/stayover-cleanings') {
+      return json(state.stayovers);
+    }
+    const stayover = path.match(/^\/housekeeping\/rooms\/stayover-cleanings\/([^/]+)\/(\w+)$/);
+    if (method === 'POST' && stayover) {
+      const index = state.stayovers.findIndex((item) => item.id === stayover[1]);
+      const [from, to, field] = stayoverFlow[stayover[2]];
+      if (state.stayovers[index].status !== from) return json({ status: 400 }, 400);
+      state.stayovers[index] = {
+        ...state.stayovers[index],
+        status: to,
+        [field]: '2026-10-03T10:00:00Z',
+      };
+      return json(state.stayovers[index]);
+    }
+    const room = path.match(/^\/housekeeping\/rooms\/([^/]+)\/(start|complete|inspect)$/);
+    if (method === 'POST' && room) {
+      const index = state.rooms.findIndex((item) => item.id === room[1]);
+      const [from, to, field] = turnover[room[2]];
+      if (state.rooms[index].housekeepingStatus !== from) return json({ status: 400 }, 400);
+      state.rooms[index] = {
+        ...state.rooms[index],
+        housekeepingStatus: to,
+        [field]: '2026-10-03T10:00:00Z',
+      };
+      return json(state.rooms[index]);
+    }
+    return json({ message: `Ruta no mockeada: ${method} ${path}` }, 404);
+  };
+  return state;
+}
 
 async function mountHousekeeping() {
+  hkBackend = installHousekeepingBackend();
   await act(async () => {
     view = create(
       <MemoryRouter>
@@ -182,13 +288,19 @@ const requestRows = () =>
       status: text(row.findAll((node) => hasClass(node, 'status-pill')).at(-1)),
       actions: row.findAll((node) => node.type === 'button').map(text),
     }));
+const roomCards = () =>
+  view.root
+    .findAll((node) => node.type === 'div' && hasClass(node, 'hk-room-card'))
+    .map((card) => ({
+      card,
+      number: text(card.find((node) => node.type === 'strong')),
+      status: text(card.find((node) => hasClass(node, 'status-pill'))),
+    }));
+const cardFor = (number) => roomCards().find((card) => card.number === `Habitación ${number}`);
 const toasts = () => view.root.findAll((node) => hasClass(node, 'toast')).map(text);
-const expectedOpenRequests = async () =>
-  (await serviceRequestService.getRequests()).filter(
-    (request) =>
-      (request.type === 'housekeeping' || request.type === 'maintenance') &&
-      ['pending', 'accepted', 'inProgress'].includes(request.status),
-  ).length;
+const expectedOpenRequests = () =>
+  hkBackend.stayovers.filter((request) => ['pending', 'in_progress'].includes(request.status))
+    .length;
 
 test('limpieza: "Reportar desperfecto" solo aparece en Inicio', async () => {
   await mountHousekeeping();
@@ -205,13 +317,12 @@ test('limpieza: cada solicitud ofrece solo la acción que su estado permite', as
   await mountHousekeeping();
   await goTo('Solicitudes');
   const rows = requestRows();
-  const rejectedInSource = (await serviceRequestService.getRequests()).filter(
-    (request) =>
-      (request.type === 'housekeeping' || request.type === 'maintenance') &&
-      request.status === 'rejected',
-  ).length;
-  assert.ok(rejectedInSource > 0, 'los datos mock incluyen una solicitud rechazada');
-  assert.equal(rows.filter((row) => row.status === 'Rechazada').length, rejectedInSource);
+  assert.equal(rows.length, hkBackend.stayovers.length, 'las solicitudes salen del backend');
+  assert.equal(
+    rows.filter((row) => row.status === 'Rechazada').length,
+    1,
+    'una tarea cancelled del backend se muestra como Rechazada',
+  );
   const allowed = {
     Pendiente: ['Atender solicitud'],
     'En proceso': ['Completar solicitud'],
@@ -226,44 +337,76 @@ test('limpieza: cada solicitud ofrece solo la acción que su estado permite', as
 
 test('limpieza: atender y completar una solicitud avanza sin transición inválida y actualiza el badge', async () => {
   await mountHousekeeping();
-  const openBefore = await expectedOpenRequests();
+  const openBefore = expectedOpenRequests();
   assert.equal(navBadge('Solicitudes'), openBefore ? String(openBefore) : undefined);
 
   await goTo('Solicitudes');
   const pending = requestRows().find((row) => row.status === 'Pendiente');
   assert.ok(pending, 'hay una solicitud pendiente para atender');
-  const room = text(pending.row.find((node) => node.type === 'strong'));
-  const rowFor = () =>
-    requestRows().find((row) => text(row.row.find((node) => node.type === 'strong')) === room);
+  const requestInfo = (row) => text(row.find((node) => hasClass(node, 'hk-req-info')));
+  const description = requestInfo(pending.row);
+  const rowFor = () => requestRows().find((row) => requestInfo(row.row) === description);
 
   await act(async () => buttons('Atender solicitud', pending.row)[0].props.onClick());
   await settle();
   assert.equal(rowFor().status, 'En proceso');
-  assert.ok(!toasts().some((toast) => /Transici[oó]n inv[aá]lida/i.test(toast)), toasts().join());
+  assert.ok(!toasts().some((toast) => /rechaz/i.test(toast)), toasts().join());
   assert.equal(navBadge('Solicitudes'), String(openBefore), 'sigue abierta: el badge no cambia');
 
   await act(async () => buttons('Completar solicitud', rowFor().row)[0].props.onClick());
   await settle();
   assert.equal(rowFor().status, 'Completada');
-  assert.ok(!toasts().some((toast) => /Transici[oó]n inv[aá]lida/i.test(toast)), toasts().join());
-  const openAfter = await expectedOpenRequests();
+  assert.ok(!toasts().some((toast) => /rechaz/i.test(toast)), toasts().join());
+  const openAfter = expectedOpenRequests();
   assert.equal(openAfter, openBefore - 1);
   assert.equal(navBadge('Solicitudes'), openAfter ? String(openAfter) : undefined);
+  assert.equal(
+    hkBackend.rooms.find((room) => room.id === 'room-202').status,
+    'occupied',
+    'stayover no libera la habitación',
+  );
 });
 
 test('limpieza: el badge de Habitaciones cuenta las pendientes y baja al iniciar una limpieza', async () => {
   await mountHousekeeping();
   await goTo('Habitaciones');
-  const pendingRooms = () =>
-    view.root.findAll(
-      (node) => node.type === 'span' && hasClass(node, 'status-pill') && text(node) === 'Pendiente',
-    ).length;
+  const pendingRooms = () => roomCards().filter((card) => card.status === 'Pendiente').length;
   const before = pendingRooms();
-  assert.ok(before > 0, 'hay habitaciones pendientes');
+  assert.equal(before, 2, 'las dos habitaciones dirty del backend');
   assert.equal(navBadge('Habitaciones'), String(before));
 
   await act(async () => buttons('Iniciar limpieza')[0].props.onClick());
   await settle();
   assert.equal(pendingRooms(), before - 1);
   assert.equal(navBadge('Habitaciones'), before - 1 ? String(before - 1) : undefined);
+  assert.equal(hkBackend.rooms[0].housekeepingStatus, 'cleaning', 'la transición pasó por la API');
+});
+
+test('limpieza: una habitación limpia se inspecciona contra el backend', async () => {
+  await mountHousekeeping();
+  await goTo('Habitaciones');
+  assert.equal(cardFor('202').status, 'Completada');
+
+  await act(async () => buttons('Inspeccionar', cardFor('202').card)[0].props.onClick());
+  await settle();
+  assert.equal(cardFor('202').status, 'Inspeccionada');
+  assert.equal(hkBackend.rooms[3].housekeepingStatus, 'inspected');
+  assert.equal(hkBackend.rooms[3].status, 'occupied', 'el turnover no toca Room.status');
+});
+
+test('limpieza: si el backend rechaza la transición se muestra el estado real', async () => {
+  await mountHousekeeping();
+  await goTo('Habitaciones');
+  assert.equal(cardFor('101').status, 'Pendiente');
+
+  // Otra persona inició la limpieza desde la app móvil; esta pantalla aún no lo sabe.
+  hkBackend.rooms[0] = { ...hkBackend.rooms[0], housekeepingStatus: 'cleaning' };
+  await act(async () => buttons('Iniciar limpieza', cardFor('101').card)[0].props.onClick());
+  await settle();
+
+  assert.ok(
+    toasts().some((toast) => /rechazó la transición/.test(toast)),
+    toasts().join(),
+  );
+  assert.equal(cardFor('101').status, 'En proceso', 'se recargó el estado real del backend');
 });

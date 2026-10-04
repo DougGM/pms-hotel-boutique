@@ -12,6 +12,16 @@ export interface RoomDTO {
   status: RoomStatusDto;
   housekeeping_status: RoomHousekeepingStatusDto;
   notes?: string;
+  /**
+   * Trazabilidad del turnover: solo la devuelve `GET /housekeeping/rooms`.
+   * Cada paso puede hacerlo una persona distinta (INT-09).
+   */
+  cleaning_user_email?: string;
+  cleaning_started_at?: string;
+  cleaning_completed_by_user_email?: string;
+  cleaning_completed_at?: string;
+  inspector_user_email?: string;
+  inspected_at?: string;
   created_at: string;
   updated_at: string;
 }

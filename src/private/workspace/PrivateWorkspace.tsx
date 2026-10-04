@@ -55,7 +55,11 @@ import { cashService } from '@/services/cashService';
 import { catalogService } from '@/services/catalogService';
 import { guestAccountService } from '@/services/guestAccountService';
 import { guestService } from '@/services/guestService';
-import { housekeepingService } from '@/services/housekeepingService';
+import {
+  housekeepingService,
+  type HousekeepingChecklist,
+  type HousekeepingChecklistItem,
+} from '@/services/housekeepingService';
 import { orderService } from '@/services/orderService';
 import { roomService } from '@/services/roomService';
 import { serviceRequestService } from '@/services/serviceRequestService';
@@ -115,7 +119,8 @@ type Task = {
   tone: 'warning' | 'info' | 'success';
 };
 
-type RoomStatus = 'Pendiente' | 'En proceso' | 'Completada';
+/** Etiqueta visible del turnover: dirty / cleaning / clean / inspected. */
+type RoomStatus = 'Pendiente' | 'En proceso' | 'Completada' | 'Inspeccionada';
 type CleaningRoom = {
   id: number;
   roomId: string;
@@ -125,6 +130,8 @@ type CleaningRoom = {
   cleaningType: string;
   priority: string;
   status: RoomStatus;
+  /** Estado real de limpieza que devolvió el backend; independiente de `Room.status`. */
+  housekeepingStatus: RoomHousekeepingStatus;
   startTime: string | null;
   endTime: string | null;
   duration: string | null;
@@ -449,6 +456,162 @@ const mapServiceStatus = (status: ServiceRequestStatus): GuestRequest['status'] 
 const isOpenGuestRequest = (request: GuestRequest) =>
   request.status === 'Pendiente' || request.status === 'En proceso';
 
+// --- Limpieza (INT-09) -------------------------------------------------------
+// Habitaciones y tareas stayover salen de `housekeepingService` (backend). La UI
+// solo traduce estados a etiquetas; las transiciones las valida el backend.
+
+const DEFAULT_CLEANING_CHECKLIST = [
+  'Cama preparada',
+  'Baño limpio',
+  'Toallas completas',
+  'Amenidades repuestas',
+  'Basura retirada',
+  'Piso limpio',
+];
+
+const cleaningStatusLabels: Record<RoomHousekeepingStatus, RoomStatus> = {
+  dirty: 'Pendiente',
+  cleaning: 'En proceso',
+  clean: 'Completada',
+  inspected: 'Inspeccionada',
+};
+
+const isCleaningDone = (status: RoomStatus) =>
+  status === 'Completada' || status === 'Inspeccionada';
+
+const formatCleaningDuration = (startedAt?: Date, completedAt?: Date): string | null => {
+  if (!startedAt || !completedAt) return null;
+  const minutes = Math.round((completedAt.getTime() - startedAt.getTime()) / 60000);
+  return minutes > 0 ? `${minutes} min` : null;
+};
+
+const toCleaningRoom = (
+  room: Room,
+  id: number,
+  type: string,
+  checklist?: HousekeepingChecklistItem[],
+): CleaningRoom => {
+  const status = cleaningStatusLabels[room.housekeepingStatus];
+  const done = isCleaningDone(status);
+  // Tras un checkout la habitación vuelve a `dirty` conservando los tiempos del
+  // ciclo anterior: solo se muestran mientras el ciclo actual los usa.
+  const startedAt = status === 'Pendiente' ? undefined : room.cleaningStartedAt;
+  const completedAt = done ? room.cleaningCompletedAt : undefined;
+  return {
+    id,
+    roomId: room.id,
+    number: room.roomNumber,
+    floor: `Piso ${room.floor}`,
+    type,
+    cleaningType: 'Limpieza de salida',
+    priority: room.housekeepingStatus === 'dirty' ? 'Alta' : 'Media',
+    status,
+    housekeepingStatus: room.housekeepingStatus,
+    startTime: startedAt ? formatDbTime(startedAt) : null,
+    endTime: completedAt ? formatDbTime(completedAt) : null,
+    duration: formatCleaningDuration(startedAt, completedAt),
+    checklist: checklist ?? DEFAULT_CLEANING_CHECKLIST.map((label) => ({ label, done })),
+  };
+};
+
+const toCleaningHistoryEntry = (
+  id: number,
+  room: string,
+  taskType: string,
+  startedAt: Date | undefined,
+  completedAt: Date,
+): HistoryEntry => ({
+  id,
+  room,
+  taskType,
+  date: toDtoCalendarDate(completedAt),
+  startTime: startedAt ? formatDbTime(startedAt) : '—',
+  endTime: formatDbTime(completedAt),
+  duration: formatCleaningDuration(startedAt, completedAt) ?? '—',
+  status: 'Completada',
+});
+
+const toStayoverRequest = (request: ServiceRequest, id: number, room: string): GuestRequest => ({
+  id,
+  requestId: request.id,
+  room,
+  request: request.description,
+  time: formatDbTime(request.requestedAt),
+  priority: 'Media',
+  status: mapServiceStatus(request.status),
+});
+
+type HousekeepingData = {
+  rooms: Room[];
+  stayovers: ServiceRequest[];
+  checklists: HousekeepingChecklist[];
+};
+
+async function fetchHousekeepingData(): Promise<HousekeepingData> {
+  const [rooms, stayovers, checklists] = await Promise.all([
+    housekeepingService.getRooms(),
+    housekeepingService.getStayoverCleanings(),
+    housekeepingService.getChecklists(),
+  ]);
+  return { rooms, stayovers, checklists };
+}
+
+/**
+ * Historial = último turnover completado de cada habitación + tareas stayover
+ * completadas. El backend no guarda un historial de turnovers anteriores.
+ */
+function buildHousekeepingState(
+  { rooms, stayovers, checklists }: HousekeepingData,
+  getRoomType: (room: Room) => string,
+): Pick<WorkspaceState, 'cleaningRooms' | 'guestRequests' | 'history'> {
+  const roomNumberById = new Map(rooms.map((room) => [room.id, room.roomNumber]));
+  const roomLabel = (roomId: string) => roomNumberById.get(roomId) ?? 'Sin habitación';
+
+  const cleaningRooms = rooms.map((room, index) =>
+    toCleaningRoom(
+      room,
+      index + 1,
+      getRoomType(room),
+      checklists.find((item) => item.roomId === room.id)?.items,
+    ),
+  );
+
+  const guestRequests = stayovers.map((request, index) =>
+    toStayoverRequest(request, index + 1, roomLabel(request.roomId)),
+  );
+
+  const completions = [
+    ...rooms
+      .filter((room) => room.cleaningCompletedAt)
+      .map((room) => ({
+        room: room.roomNumber,
+        taskType: 'Limpieza de salida',
+        startedAt: room.cleaningStartedAt,
+        completedAt: room.cleaningCompletedAt as Date,
+      })),
+    ...stayovers
+      .filter((request) => request.status === 'completed' && request.completedAt)
+      .map((request) => ({
+        room: roomLabel(request.roomId),
+        taskType: `Limpieza de estancia: ${request.description}`,
+        startedAt: request.startedAt,
+        completedAt: request.completedAt as Date,
+      })),
+  ].sort((left, right) => right.completedAt.getTime() - left.completedAt.getTime());
+
+  const history = completions.map((entry, index) =>
+    toCleaningHistoryEntry(
+      index + 1,
+      entry.room,
+      entry.taskType,
+      entry.startedAt,
+      entry.completedAt,
+    ),
+  );
+
+  return { cleaningRooms, guestRequests, history };
+}
+
 const scopedNav = (role: RoleId, label: string) => `${role}:${label}`;
 
 const roleAccessKey = (groupName: string, item: string) =>
@@ -475,7 +638,7 @@ type WorkspaceState = {
   recentActivity: { time: string; text: string; tone: string }[];
 };
 
-async function loadWorkspaceData(): Promise<WorkspaceState> {
+async function loadWorkspaceData(role?: RoleId): Promise<WorkspaceState> {
   const [
     rooms,
     roomTypes,
@@ -489,8 +652,7 @@ async function loadWorkspaceData(): Promise<WorkspaceState> {
     charges,
     payments,
     deposits,
-    housekeepingTasks,
-    housekeepingHistory,
+    housekeepingData,
   ] = await Promise.all([
     roomService.getRooms(),
     roomService.getRoomTypes(),
@@ -504,8 +666,8 @@ async function loadWorkspaceData(): Promise<WorkspaceState> {
     guestAccountService.getCharges(),
     guestAccountService.getPayments(),
     guestAccountService.getDeposits(),
-    housekeepingService.getTaskSnapshots(),
-    housekeepingService.getHistory(),
+    // Solo el rol de Limpieza tiene `housekeeping.read` en el backend.
+    role === 'housekeeping' ? fetchHousekeepingData() : null,
   ]);
 
   const recRooms: RecRoom[] = rooms.map((room, index) => {
@@ -650,88 +812,11 @@ async function loadWorkspaceData(): Promise<WorkspaceState> {
     };
   });
 
-  const guestRequests: GuestRequest[] = serviceRequests
-    .filter((request) => request.type === 'housekeeping' || request.type === 'maintenance')
-    .map((request, index) => {
-      const room = rooms.find((item) => item.id === request.roomId);
-      const id = parseDbId(request.id, index + 1);
-      return {
-        id,
-        requestId: request.id,
-        room: room?.roomNumber ?? 'Sin habitación',
-        request: request.description,
-        time: formatDbTime(request.requestedAt),
-        priority: request.type === 'maintenance' ? 'Alta' : 'Media',
-        status: mapServiceStatus(request.status),
-      };
-    });
-
-  const cleaningRooms: CleaningRoom[] = rooms.map((room, index) => {
-    const type = getRoomTypeLabel(room.roomTypeId, roomTypes);
-    const taskSnapshot = housekeepingTasks.find((item) => item.roomId === room.id);
-    const status: RoomStatus =
-      room.housekeepingStatus === 'clean' || room.housekeepingStatus === 'inspected'
-        ? 'Completada'
-        : room.housekeepingStatus === 'cleaning'
-          ? 'En proceso'
-          : 'Pendiente';
-    const defaultChecklist = [
-      'Cama preparada',
-      'Baño limpio',
-      'Toallas completas',
-      'Amenidades repuestas',
-      'Basura retirada',
-      'Piso limpio',
-    ].map((label) => ({ label, done: status === 'Completada' }));
-    const checklist = taskSnapshot?.checklist ?? defaultChecklist;
-
-    return {
-      id: index + 1,
-      roomId: room.id,
-      number: room.roomNumber,
-      floor: `Piso ${room.floor}`,
-      type,
-      cleaningType: room.status === 'occupied' ? 'Limpieza de estancia' : 'Limpieza de salida',
-      priority:
-        room.status === 'occupied' || room.housekeepingStatus === 'dirty' ? 'Alta' : 'Media',
-      status,
-      startTime:
-        taskSnapshot?.startTime ?? (status === 'En proceso' ? formatDbTime(room.updatedAt) : null),
-      endTime:
-        taskSnapshot?.endTime ?? (status === 'Completada' ? formatDbTime(room.updatedAt) : null),
-      duration: taskSnapshot?.duration ?? (status === 'Completada' ? '35 min' : null),
-      checklist,
-    };
-  });
-
-  const roomHistory: HistoryEntry[] = housekeepingHistory.map((entry, index) => ({
-    id: parseDbId(entry.id, 8000 + index),
-    room: entry.roomNumber,
-    taskType: entry.taskType,
-    date: toDtoCalendarDate(new Date(entry.completedAt)),
-    startTime: formatDbTime(new Date(entry.startedAt)),
-    endTime: formatDbTime(new Date(entry.completedAt)),
-    duration: entry.duration,
-    status: 'Completada' as const,
-  }));
-
-  const requestHistory: HistoryEntry[] = serviceRequests
-    .filter((request) => request.status === 'completed')
-    .map((request, index) => {
-      const room = rooms.find((item) => item.id === request.roomId);
-      return {
-        id: parseDbId(request.id, index + 1),
-        room: room?.roomNumber ?? 'Sin habitación',
-        taskType:
-          request.type === 'housekeeping' ? 'Solicitud: Limpieza' : `Solicitud: ${request.type}`,
-        date: toDtoCalendarDate(request.updatedAt),
-        startTime: formatDbTime(request.requestedAt),
-        endTime: formatDbTime(request.updatedAt),
-        duration: '45 min',
-        status: 'Completada' as const,
-      };
-    });
-  const history = [...roomHistory, ...requestHistory];
+  const { cleaningRooms, guestRequests, history } = housekeepingData
+    ? buildHousekeepingState(housekeepingData, (room) =>
+        getRoomTypeLabel(room.roomTypeId, roomTypes),
+      )
+    : { cleaningRooms: [], guestRequests: [], history: [] };
 
   const defects: DefectReport[] = serviceRequests
     .filter((request) => request.type === 'maintenance')
@@ -1297,7 +1382,8 @@ const EMPTY_WORKSPACE_DATA: WorkspaceState = {
 };
 
 export function PrivateWorkspace(props: PrivateWorkspaceProps) {
-  const skipLoad = props.role === 'admin' || props.role === 'guest';
+  const role = props.role;
+  const skipLoad = role === 'admin' || role === 'guest';
   const [screen, setScreen] = useState<LoaderState>(
     skipLoad ? { status: 'ready', ...EMPTY_WORKSPACE_DATA } : { status: 'loading' },
   );
@@ -1309,7 +1395,7 @@ export function PrivateWorkspace(props: PrivateWorkspaceProps) {
     async function load() {
       setScreen({ status: 'loading' });
       try {
-        const data = await loadWorkspaceData();
+        const data = await loadWorkspaceData(role);
         if (active) setScreen({ status: 'ready', ...data });
       } catch (cause) {
         if (active) setScreen({ status: 'error', message: getErrorMessage(cause) });
@@ -1320,7 +1406,7 @@ export function PrivateWorkspace(props: PrivateWorkspaceProps) {
     return () => {
       active = false;
     };
-  }, [skipLoad]);
+  }, [skipLoad, role]);
 
   if (screen.status === 'loading') {
     return <LoadingState label="Cargando el panel privado..." />;
@@ -1863,20 +1949,6 @@ function PrivateWorkspaceReady({
     }
   };
 
-  const toHousekeepingStatus = (status: RoomStatus): RoomHousekeepingStatus => {
-    if (status === 'En proceso') return 'cleaning';
-    if (status === 'Completada') return 'clean';
-    return 'dirty';
-  };
-
-  const calculateCleaningDuration = (startTime: string | null, endTime: string): string => {
-    if (!startTime) return '';
-    const [sh, sm] = startTime.split(':').map(Number);
-    const [eh, em] = endTime.split(':').map(Number);
-    const total = eh * 60 + em - (sh * 60 + sm);
-    return total > 0 ? `${total} min` : '';
-  };
-
   const updateTask = (taskId: number) => {
     setTasks((current) =>
       current.map((task) =>
@@ -1886,131 +1958,90 @@ function PrivateWorkspaceReady({
     notify('La tarea se marcó como completada');
   };
 
+  // Limpieza: cada acción espera la respuesta del backend antes de tocar la UI.
+  // Si el backend la rechaza (400/403/404), se recarga el estado real.
+  const refreshHousekeeping = async () => {
+    const typeByRoomId = new Map(hkRooms.map((room) => [room.roomId, room.type]));
+    const next = buildHousekeepingState(
+      await fetchHousekeepingData(),
+      (room) => typeByRoomId.get(room.id) ?? 'Estándar',
+    );
+    setHkRooms(next.cleaningRooms);
+    setHkRequests(next.guestRequests);
+    setHkHistory(next.history);
+  };
+
+  const failHousekeeping = async (cause: unknown) => {
+    notifyError(cause);
+    try {
+      await refreshHousekeeping();
+    } catch {
+      // El aviso anterior ya informa del fallo; se conserva el último estado conocido.
+    }
+  };
+
+  const replaceCleaningRoom = (next: CleaningRoom) => {
+    setHkRooms((current) => current.map((item) => (item.id === next.id ? next : item)));
+  };
+
   const startCleaning = async (roomId: number) => {
-    const now = new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
     const room = hkRooms.find((item) => item.id === roomId);
     if (!room) return;
 
     try {
-      await roomService.updateRoom(room.roomId, { housekeeping_status: 'cleaning' });
-      await housekeepingService.saveTaskSnapshot(room.roomId, {
-        status: 'cleaning',
-        startTime: now,
-        endTime: null,
-        duration: null,
-        checklist: room.checklist,
-      });
-      setHkRooms((current) =>
-        current.map((item) =>
-          item.id === roomId ? { ...item, status: 'En proceso', startTime: now } : item,
-        ),
-      );
+      const updated = await housekeepingService.startCleaning(room.roomId);
+      replaceCleaningRoom(toCleaningRoom(updated, room.id, room.type));
       notify('Limpieza iniciada correctamente');
     } catch (cause) {
-      notifyError(cause);
+      await failHousekeeping(cause);
     }
   };
 
   const finishCleaning = async (roomId: number) => {
-    const now = new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
-    const room = hkRooms.find((r) => r.id === roomId);
-    if (!room) return;
-    let duration = '';
-    if (room?.startTime) {
-      const [sh, sm] = room.startTime.split(':').map(Number);
-      const [eh, em] = now.split(':').map(Number);
-      const total = eh * 60 + em - (sh * 60 + sm);
-      duration = total > 0 ? `${total} min` : '';
-    }
-    const checklist = room.checklist.map((item) => ({ ...item, done: true }));
-    const timestamp = new Date().toISOString();
-    try {
-      await roomService.updateRoom(room.roomId, { housekeeping_status: 'clean' });
-      await housekeepingService.saveTaskSnapshot(room.roomId, {
-        status: 'clean',
-        startTime: room.startTime ?? now,
-        endTime: now,
-        duration: duration || room.duration,
-        checklist,
-      });
-      await housekeepingService.recordHistory({
-        roomId: room.roomId,
-        roomNumber: room.number,
-        taskType: room.cleaningType,
-        startedAt: timestamp,
-        completedAt: timestamp,
-        duration: duration || '-',
-      });
-      setHkRooms((current) =>
-        current.map((r) =>
-          r.id === roomId
-            ? {
-                ...r,
-                status: 'Completada',
-                endTime: now,
-                duration: duration || r.duration,
-                checklist,
-              }
-            : r,
-        ),
-      );
-      if (room) {
-        setHkHistory((prev) => [
-          {
-            id: Date.now(),
-            room: room.number,
-            taskType: room.cleaningType,
-            date: 'Hoy',
-            startTime: room.startTime ?? now,
-            endTime: now,
-            duration: duration || '—',
-            status: 'Completada',
-          },
-          ...prev,
-        ]);
-      }
-      notify('Habitación marcada como limpia');
-    } catch (cause) {
-      notifyError(cause);
-    }
-  };
-
-  const changeRoomStatus = async (roomId: number, status: RoomStatus) => {
     const room = hkRooms.find((item) => item.id === roomId);
     if (!room) return;
 
-    const nextHousekeepingStatus = toHousekeepingStatus(status);
-    const now = new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
-    const updates: Partial<CleaningRoom> = { status };
-    if (status === 'Pendiente') {
-      updates.startTime = null;
-      updates.endTime = null;
-      updates.duration = null;
+    try {
+      const updated = await housekeepingService.completeCleaning(room.roomId);
+      const checklist = room.checklist.map((item) => ({ ...item, done: true }));
+      await housekeepingService.saveChecklist(room.roomId, checklist);
+      replaceCleaningRoom(toCleaningRoom(updated, room.id, room.type, checklist));
+      if (updated.cleaningCompletedAt) {
+        const entry = toCleaningHistoryEntry(
+          Date.now(),
+          room.number,
+          'Limpieza de salida',
+          updated.cleaningStartedAt,
+          updated.cleaningCompletedAt,
+        );
+        setHkHistory((prev) => [entry, ...prev]);
+      }
+      notify('Habitación marcada como limpia');
+    } catch (cause) {
+      await failHousekeeping(cause);
     }
-    if (status === 'En proceso' && !room.startTime) updates.startTime = now;
-    if (status === 'Completada') {
-      updates.endTime = now;
-      updates.duration = calculateCleaningDuration(room.startTime, now) || room.duration;
-      updates.checklist = room.checklist.map((item) => ({ ...item, done: true }));
-    }
+  };
+
+  const inspectRoom = async (roomId: number) => {
+    const room = hkRooms.find((item) => item.id === roomId);
+    if (!room) return;
 
     try {
-      await roomService.updateRoom(room.roomId, { housekeeping_status: nextHousekeepingStatus });
-      await housekeepingService.saveTaskSnapshot(room.roomId, {
-        status: nextHousekeepingStatus,
-        startTime: updates.startTime ?? room.startTime,
-        endTime: updates.endTime ?? room.endTime,
-        duration: updates.duration ?? room.duration,
-        checklist: updates.checklist ?? room.checklist,
-      });
-      setHkRooms((current) =>
-        current.map((item) => (item.id === roomId ? { ...item, ...updates } : item)),
-      );
-      setHkShowStatusModal(null);
-      notify('Estado actualizado correctamente');
+      const updated = await housekeepingService.inspectRoom(room.roomId);
+      replaceCleaningRoom(toCleaningRoom(updated, room.id, room.type, room.checklist));
+      notify('Habitación inspeccionada correctamente');
     } catch (cause) {
-      notifyError(cause);
+      await failHousekeeping(cause);
     }
+  };
+
+  // "Cambiar estado" solo ofrece las acciones que expone el backend; no existe
+  // un endpoint para devolver una habitación a `dirty` (lo hace el checkout).
+  const changeRoomStatus = async (roomId: number, status: RoomStatus) => {
+    setHkShowStatusModal(null);
+    if (status === 'En proceso') await startCleaning(roomId);
+    if (status === 'Completada') await finishCleaning(roomId);
+    if (status === 'Inspeccionada') await inspectRoom(roomId);
   };
 
   const attendRequest = async (reqId: number) => {
@@ -2018,13 +2049,15 @@ function PrivateWorkspaceReady({
     if (!request) return;
 
     try {
-      await serviceRequestService.updateRequestStatus(request.requestId, 'accepted');
+      const updated = await housekeepingService.startStayoverCleaning(request.requestId);
       setHkRequests((current) =>
-        current.map((item) => (item.id === reqId ? { ...item, status: 'En proceso' } : item)),
+        current.map((item) =>
+          item.id === reqId ? { ...item, status: mapServiceStatus(updated.status) } : item,
+        ),
       );
-      notify('Solicitud asignada correctamente');
+      notify('Limpieza de estancia iniciada correctamente');
     } catch (cause) {
-      notifyError(cause);
+      await failHousekeeping(cause);
     }
   };
 
@@ -2033,26 +2066,25 @@ function PrivateWorkspaceReady({
     if (!req) return;
 
     try {
-      await serviceRequestService.updateRequestStatus(req.requestId, 'completed');
+      const updated = await housekeepingService.completeStayoverCleaning(req.requestId);
       setHkRequests((current) =>
-        current.map((item) => (item.id === reqId ? { ...item, status: 'Completada' } : item)),
+        current.map((item) =>
+          item.id === reqId ? { ...item, status: mapServiceStatus(updated.status) } : item,
+        ),
       );
-      setHkHistory((prev) => [
-        {
-          id: Date.now(),
-          room: req.room,
-          taskType: `Solicitud: ${req.request}`,
-          date: 'Hoy',
-          startTime: req.time,
-          endTime: new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }),
-          duration: '—',
-          status: 'Completada',
-        },
-        ...prev,
-      ]);
-      notify('Solicitud completada correctamente · El huésped ha sido informado');
+      if (updated.completedAt) {
+        const entry = toCleaningHistoryEntry(
+          Date.now(),
+          req.room,
+          `Limpieza de estancia: ${req.request}`,
+          updated.startedAt,
+          updated.completedAt,
+        );
+        setHkHistory((prev) => [entry, ...prev]);
+      }
+      notify('Limpieza de estancia completada correctamente');
     } catch (cause) {
-      notifyError(cause);
+      await failHousekeeping(cause);
     }
   };
 
@@ -2065,12 +2097,7 @@ function PrivateWorkspaceReady({
     );
 
     try {
-      await housekeepingService.saveChecklist(room.roomId, checklist, {
-        status: toHousekeepingStatus(room.status),
-        startTime: room.startTime,
-        endTime: room.endTime,
-        duration: room.duration,
-      });
+      await housekeepingService.saveChecklist(room.roomId, checklist);
       setHkRooms((current) =>
         current.map((item) => (item.id === roomId ? { ...item, checklist } : item)),
       );
@@ -2884,6 +2911,7 @@ function PrivateWorkspaceReady({
               setSearch={setHkSearch}
               onStartCleaning={startCleaning}
               onFinishCleaning={finishCleaning}
+              onInspect={inspectRoom}
               onChangeStatus={changeRoomStatus}
               onAttendRequest={attendRequest}
               onCompleteRequest={completeRequest}
@@ -3816,6 +3844,7 @@ function HousekeepingContent({
   setSearch,
   onStartCleaning,
   onFinishCleaning,
+  onInspect,
   onChangeStatus,
   onAttendRequest,
   onCompleteRequest,
@@ -3844,6 +3873,7 @@ function HousekeepingContent({
   setSearch: (value: string) => void;
   onStartCleaning: (id: number) => void;
   onFinishCleaning: (id: number) => void;
+  onInspect: (id: number) => void;
   onChangeStatus: (id: number, status: RoomStatus) => void;
   onAttendRequest: (id: number) => void;
   onCompleteRequest: (id: number) => void;
@@ -3865,7 +3895,7 @@ function HousekeepingContent({
 }) {
   const pending = rooms.filter((r) => r.status === 'Pendiente').length;
   const inProgress = rooms.filter((r) => r.status === 'En proceso').length;
-  const completed = rooms.filter((r) => r.status === 'Completada').length;
+  const completed = rooms.filter((r) => isCleaningDone(r.status)).length;
   const reqPending = requests.filter((r) => r.status === 'Pendiente').length;
   const reqInProgress = requests.filter((r) => r.status === 'En proceso').length;
   const reqCompleted = requests.filter((r) => r.status === 'Completada').length;
@@ -4084,6 +4114,12 @@ function HousekeepingContent({
                 >
                   Completadas
                 </button>
+                <button
+                  className={hkFilter === 'Inspeccionada' ? 'active' : ''}
+                  onClick={() => setHkFilter('Inspeccionada')}
+                >
+                  Inspeccionadas
+                </button>
               </div>
             </div>
           </div>
@@ -4155,7 +4191,12 @@ function HousekeepingContent({
                     </button>
                   )}
                   {room.status === 'Completada' && (
-                    <span className="hk-done-label">Limpieza completada</span>
+                    <button className="button small primary" onClick={() => onInspect(room.id)}>
+                      Inspeccionar
+                    </button>
+                  )}
+                  {room.status === 'Inspeccionada' && (
+                    <span className="hk-done-label">Habitación inspeccionada</span>
                   )}
                   <button className="button small secondary" onClick={() => onOpenDetail(room)}>
                     Ver detalle
@@ -4171,6 +4212,7 @@ function HousekeepingContent({
             onClose={onCloseDetail}
             onStartCleaning={onStartCleaning}
             onFinishCleaning={onFinishCleaning}
+            onInspect={onInspect}
             onToggleChecklist={onToggleChecklist}
             onOpenDefectModal={onOpenDefectModal}
             onOpenStatusModal={(r) => {
@@ -4224,7 +4266,7 @@ function HousekeepingContent({
             </div>
           </div>
           <div className="task-list">
-            {rooms.filter((r) => r.status !== 'Completada').length === 0 &&
+            {rooms.filter((r) => !isCleaningDone(r.status)).length === 0 &&
               requests.filter(isOpenGuestRequest).length === 0 && (
                 <div className="hk-empty">
                   <Sparkles size={22} />
@@ -4232,7 +4274,7 @@ function HousekeepingContent({
                 </div>
               )}
             {rooms
-              .filter((r) => r.status !== 'Completada')
+              .filter((r) => !isCleaningDone(r.status))
               .map((room) => (
                 <div className="task-row" key={room.id}>
                   <div className="task-status-dot" />
@@ -4366,6 +4408,7 @@ function HousekeepingContent({
           onClose={onCloseDetail}
           onStartCleaning={onStartCleaning}
           onFinishCleaning={onFinishCleaning}
+          onInspect={onInspect}
           onToggleChecklist={onToggleChecklist}
           onOpenDefectModal={onOpenDefectModal}
           onOpenStatusModal={(r) => {
@@ -4394,6 +4437,7 @@ function RoomDetailModal({
   onClose,
   onStartCleaning,
   onFinishCleaning,
+  onInspect,
   onToggleChecklist,
   onOpenDefectModal,
   onOpenStatusModal,
@@ -4403,6 +4447,7 @@ function RoomDetailModal({
   onClose: () => void;
   onStartCleaning: (id: number) => void;
   onFinishCleaning: (id: number) => void;
+  onInspect: (id: number) => void;
   onToggleChecklist: (roomId: number, index: number) => void;
   onOpenDefectModal: () => void;
   onOpenStatusModal: (room: CleaningRoom) => void;
@@ -4503,7 +4548,18 @@ function RoomDetailModal({
             </button>
           )}
           {room.status === 'Completada' && (
-            <span className="hk-done-label">Limpieza completada</span>
+            <button
+              className="button primary"
+              onClick={() => {
+                onInspect(room.id);
+                onClose();
+              }}
+            >
+              Inspeccionar
+            </button>
+          )}
+          {room.status === 'Inspeccionada' && (
+            <span className="hk-done-label">Habitación inspeccionada</span>
           )}
           <button
             className="button secondary"
@@ -4550,11 +4606,10 @@ function StatusModal({
             <X size={18} />
           </button>
         </div>
-        <p className="login-helper">Selecciona el nuevo estado de la habitación.</p>
+        <p className="login-helper">
+          Selecciona el nuevo estado. El sistema valida que el cambio siga el flujo de limpieza.
+        </p>
         <div className="hk-status-options">
-          <button className="hk-status-option" onClick={() => onChangeStatus(room.id, 'Pendiente')}>
-            <span className="hk-summary-dot warning" /> Pendiente
-          </button>
           <button
             className="hk-status-option"
             onClick={() => onChangeStatus(room.id, 'En proceso')}
@@ -4566,6 +4621,12 @@ function StatusModal({
             onClick={() => onChangeStatus(room.id, 'Completada')}
           >
             <span className="hk-summary-dot success" /> Completada
+          </button>
+          <button
+            className="hk-status-option"
+            onClick={() => onChangeStatus(room.id, 'Inspeccionada')}
+          >
+            <span className="hk-summary-dot success" /> Inspeccionada
           </button>
         </div>
       </div>

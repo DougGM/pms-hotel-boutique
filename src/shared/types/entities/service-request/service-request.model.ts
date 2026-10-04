@@ -15,6 +15,8 @@ export interface ServiceRequest {
   notes?: string;
   chargeId?: string;
   requestedAt: Date;
+  startedAt?: Date;
+  completedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
