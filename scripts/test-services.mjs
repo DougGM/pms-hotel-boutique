@@ -137,6 +137,155 @@ async function assertServiceCall(label, call) {
   return value;
 }
 
+function installFinancialFetchMock() {
+  const bookingId = '8f3d5bb0-9c0a-4c24-8e56-5e3fd5406c4a';
+  const guestId = '81f20327-2f16-4b6d-9dc5-caa25c822d31';
+  const accountId = '64d6cfcc-22f4-4c2e-b01d-c00f737dc6e1';
+  const chargeId = 'a8082035-e41a-40b8-b08f-a3856346f3c2';
+  const paymentId = 'ca458699-01eb-4576-a0e9-925b81a4d83e';
+  const depositId = '9a3b8b2b-604f-47d4-a8db-c72ce367508f';
+  const now = '2026-10-02T10:00:00Z';
+  const charges = [
+    {
+      id: chargeId,
+      bookingId,
+      productId: null,
+      description: 'Estadia base',
+      quantity: 1,
+      unitPriceCents: 50000,
+      amountCents: 50000,
+      currency: 'GTQ',
+      category: 'stay',
+      status: 'posted',
+      chargedAt: now,
+      createdByUserId: null,
+      voidReason: null,
+      createdAt: now,
+    },
+  ];
+  const payments = [];
+  const deposits = [];
+  const folio = () => ({
+    accountId,
+    bookingId,
+    guestId,
+    status: 'open',
+    balanceCents:
+      charges
+        .filter((charge) => charge.status === 'posted')
+        .reduce((sum, charge) => sum + charge.amountCents, 0) -
+      payments
+        .filter((payment) => payment.status === 'completed')
+        .reduce((sum, payment) => sum + payment.amountCents, 0) -
+      deposits
+        .filter((deposit) => deposit.status === 'held' || deposit.status === 'applied')
+        .reduce((sum, deposit) => sum + deposit.amountCents, 0),
+    currency: 'GTQ',
+    openedAt: now,
+    closedAt: null,
+    activeChargesCents: charges
+      .filter((charge) => charge.status === 'posted')
+      .reduce((sum, charge) => sum + charge.amountCents, 0),
+    voidedChargesCents: charges
+      .filter((charge) => charge.status === 'voided')
+      .reduce((sum, charge) => sum + charge.amountCents, 0),
+    completedPaymentsCents: payments
+      .filter((payment) => payment.status === 'completed')
+      .reduce((sum, payment) => sum + payment.amountCents, 0),
+    charges,
+  });
+
+  globalThis.fetch = async (input, init = {}) => {
+    const url = new URL(String(input));
+    const path = url.pathname.replace(/^\/api\/v1/, '');
+    const method = init.method ?? 'GET';
+    const json = (body, status = 200) =>
+      new Response(JSON.stringify(body), {
+        status,
+        headers: { 'content-type': 'application/json' },
+      });
+
+    if (method === 'GET' && path === `/bookings/${bookingId}/folio`) return json(folio());
+    if (method === 'POST' && path === `/bookings/${bookingId}/folio/open`) return json(folio());
+    if (method === 'GET' && path === `/bookings/${bookingId}/charges`) return json(charges);
+    if (method === 'POST' && path === `/bookings/${bookingId}/charges`) {
+      const request = JSON.parse(String(init.body ?? '{}'));
+      const charge = {
+        id: 'b8082035-e41a-40b8-b08f-a3856346f3c2',
+        bookingId,
+        productId: request.productId ?? null,
+        description: request.description,
+        quantity: request.quantity,
+        unitPriceCents: request.unitPriceCents,
+        amountCents: request.quantity * request.unitPriceCents,
+        currency: 'GTQ',
+        category: request.category,
+        status: 'posted',
+        chargedAt: now,
+        createdByUserId: null,
+        voidReason: null,
+        createdAt: now,
+      };
+      charges.push(charge);
+      return json(charge, 201);
+    }
+    if (method === 'POST' && path === `/bookings/${bookingId}/charges/${chargeId}/void`) {
+      const request = JSON.parse(String(init.body ?? '{}'));
+      charges[0] = { ...charges[0], status: 'voided', voidReason: request.reason };
+      return json(charges[0]);
+    }
+    if (method === 'GET' && path === `/bookings/${bookingId}/payments`) return json(payments);
+    if (method === 'POST' && path === `/bookings/${bookingId}/payments`) {
+      const request = JSON.parse(String(init.body ?? '{}'));
+      const payment = {
+        id: paymentId,
+        bookingId,
+        amountCents: request.amountCents,
+        currency: 'GTQ',
+        method: request.method,
+        status: 'completed',
+        transactionReference: request.transactionReference ?? null,
+        paidAt: now,
+        processedByUserId: null,
+        createdAt: now,
+      };
+      payments.push(payment);
+      return json(payment, 201);
+    }
+    if (method === 'GET' && path === `/bookings/${bookingId}/deposits`) return json(deposits);
+    if (method === 'POST' && path === `/bookings/${bookingId}/deposits`) {
+      const request = JSON.parse(String(init.body ?? '{}'));
+      const deposit = {
+        id: depositId,
+        bookingId,
+        guestId,
+        amountCents: request.amountCents,
+        currency: 'GTQ',
+        method: request.method,
+        status: 'held',
+        collectedAt: now,
+        refundedAt: null,
+        notes: request.notes ?? null,
+        createdAt: now,
+        updatedAt: now,
+      };
+      deposits.push(deposit);
+      return json(deposit, 201);
+    }
+    if (method === 'POST' && path === `/bookings/${bookingId}/deposits/${depositId}/apply`) {
+      deposits[0] = { ...deposits[0], status: 'applied', updatedAt: now };
+      return json(deposits[0]);
+    }
+    if (method === 'POST' && path === `/bookings/${bookingId}/deposits/${depositId}/refund`) {
+      deposits[0] = { ...deposits[0], status: 'refunded', refundedAt: now, updatedAt: now };
+      return json(deposits[0]);
+    }
+    return json({ message: `Ruta financiera no mockeada en test: ${method} ${path}` }, 404);
+  };
+
+  return { bookingId, chargeId, depositId };
+}
+
 function installCashFetchMock() {
   let session = {
     id: '7a4db6cf-d72a-4fc7-b7ec-0d07fbef5104',
@@ -292,6 +441,65 @@ test('guestAccountService.getAccounts: async, con latencia simulada, devuelve Mo
   assert.ok(Array.isArray(accounts) && accounts.length > 0);
   assert.ok('balanceCents' in accounts[0], 'el Model de GuestAccount debe tener balanceCents');
   assert.ok(!('balance_cents' in accounts[0]), 'un Model no debe traer campos snake_case del DTO');
+});
+
+test('guestAccountService: usa backend para folio financiero integrado', async () => {
+  const { bookingId, chargeId, depositId } = installFinancialFetchMock();
+  const account = await guestAccountService.getAccountByBookingId(bookingId);
+  assert.ok(account);
+  assert.equal(account.bookingId, bookingId);
+  assert.equal(account.balanceCents, 50000);
+
+  const charge = await guestAccountService.createCharge({
+    booking_id: bookingId,
+    description: 'Consumo minibar',
+    quantity: 2,
+    unit_price_cents: 1500,
+    currency: 'GTQ',
+    category: 'consumption',
+  });
+  assert.equal(charge.amountCents, 3000);
+  assert.equal(charge.status, 'posted');
+  assert.ok(!('amount_cents' in charge), 'createCharge integrado debe devolver Model');
+
+  const voided = await guestAccountService.voidCharge(chargeId, 'Correccion de cargo', bookingId);
+  assert.equal(voided.status, 'voided');
+  assert.equal(voided.voidReason, 'Correccion de cargo');
+
+  assert.throws(
+    () => guestAccountService.calculateBalanceCents(bookingId),
+    /folio mock/,
+    'el saldo oficial de una reserva UUID no debe calcularse localmente',
+  );
+  await assert.rejects(
+    () => guestAccountService.voidCharge(chargeId, 'Sin booking'),
+    /requiere bookingId/,
+    'un cargo UUID sin bookingId no debe caer al mock legacy',
+  );
+
+  const payment = await guestAccountService.createPayment({
+    booking_id: bookingId,
+    amount_cents: 20000,
+    currency: 'GTQ',
+    method: 'cash',
+    transaction_reference: 'REC-001',
+  });
+  assert.equal(payment.amountCents, 20000);
+  assert.equal(payment.status, 'completed');
+
+  const deposit = await guestAccountService.createDeposit({
+    bookingId,
+    amountCents: 10000,
+    method: 'cash',
+    notes: 'Garantia',
+  });
+  assert.equal(deposit.status, 'held');
+
+  const applied = await guestAccountService.applyDeposit(bookingId, depositId);
+  assert.equal(applied.status, 'applied');
+
+  const refunded = await guestAccountService.refundDeposit(bookingId, depositId, 'Devolucion');
+  assert.equal(refunded.status, 'refunded');
 });
 
 test('cashService.getSessions: usa backend y devuelve Models', async () => {

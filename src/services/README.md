@@ -90,6 +90,24 @@ depositos no `refunded`. `checkOut` bloquea si queda saldo pendiente; cuando el
 saldo esta exactamente en cero cierra la cuenta, marca la reserva como
 `checkedOut` y deja la habitacion `available` + `dirty` para limpieza.
 
+Actualizacion 2026-10-02 (#103): cuando el `bookingId` pertenece al backend
+real (UUID), `guestAccountService` usa `GuestFolioController`,
+`PaymentController` y `DepositController` mediante `http-client.ts` para folio,
+cargos, anulaciones, pagos, depositos, aplicacion y reembolso. Los IDs mock
+legacy (`BKG-*`) siguen usando la persistencia simulada mientras booking/check-in
+terminan su propia integracion; no son fuente oficial para flujos backend.
+Actualizacion 2026-10-03 (#103): las utilidades legacy
+`openOrSyncAccountForBooking`, `closeAccountForCheckout` y
+`calculateAccountBalanceCents` rechazan reservas UUID para evitar que un flujo
+integrado mezcle datos reales con el folio mock. En reservas UUID, el saldo
+oficial siempre viene de `GET /bookings/{bookingId}/folio`. `voidCharge`
+tambien exige `bookingId` cuando el `chargeId` es UUID; la firma antigua
+`voidCharge(chargeId, reason)` queda limitada a cargos mock.
+`GuestAccountScreen` tambien usa ese contrato: si la ruta recibe un UUID lo
+trata como `bookingId` y carga el folio por `getAccountByBookingId`; despues
+de crear cargos o pagos vuelve a consultar el folio en vez de ajustar
+`balanceCents` manualmente en React.
+
 Actualizacion 2026-09-17: `guestService.createGuest(data)` crea huespedes demo
 en `guestsDB`, genera el siguiente ID `GST-*`, agrega timestamps y devuelve
 `Guest` de dominio. El motor publico de reservas lo usa para no pedir al
