@@ -128,6 +128,7 @@ type Promo = {
 };
 type Amenity = {
   id: number;
+  dbId: string;
   name: string;
   schedule: string;
   available: boolean;
@@ -213,7 +214,15 @@ const ROLE_ACCESS_GROUPS = [
   {
     name: 'RECEPCIÓN',
     roleCodes: ['reception'],
-    items: ['Resumen', 'Calendario', 'Reservas', 'Huéspedes', 'Disponibilidad', 'Habitaciones', 'Caja'],
+    items: [
+      'Resumen',
+      'Calendario',
+      'Reservas',
+      'Huéspedes',
+      'Disponibilidad',
+      'Habitaciones',
+      'Caja',
+    ],
   },
   {
     name: 'LIMPIEZA',
@@ -1084,7 +1093,11 @@ export function AdminContent({
         const amenities: Amenity[] = amenitiesData.map((amenity, index) => ({
           id: parseDbId(amenity.id, index + 1),
           name: amenity.name,
-          schedule: 'Disponible',
+          dbId: amenity.id,
+          schedule:
+            amenity.opensAt && amenity.closesAt
+              ? `${amenity.opensAt} - ${amenity.closesAt}`
+              : 'Disponible',
           available: amenity.active,
           status: amenity.active ? 'Activo' : 'Inactivo',
           icon: ['Waves', 'Utensils', 'Dumbbell', 'Sparkles', 'Star', 'Wifi'][index % 6],
@@ -1259,15 +1272,15 @@ function AdminContentReady({
   initialAudit: AuditEntry[];
   recentActivity: AuditEntry[];
 }) {
-  const [users] = useState(initialAdminUsers);
+  const [users, setUsers] = useState(initialAdminUsers);
   const [roles, setRoles] = useState(initialAdminRoles);
   const [rooms, setRooms] = useState(initialAdminRooms);
   const [roomTypes, setRoomTypes] = useState(initialAdminRoomTypes);
   const [seasonRates, setSeasonRates] = useState(initialSeasonRates);
   const [dynamicRates, setDynamicRates] = useState(defaultDynamicRates);
   const [promos, setPromos] = useState(initialPromos);
-  const [amenities] = useState(initialAmenities);
-  const [rsItems] = useState(initialRoomServiceItems);
+  const [amenities, setAmenities] = useState(initialAmenities);
+  const [rsItems, setRsItems] = useState(initialRoomServiceItems);
   const [inventory, setInventory] = useState(initialInventory);
   const [movements, setMovements] = useState(initialMovements);
   const [cashMovements, setCashMovements] = useState(initialCashMovements);
@@ -1840,9 +1853,17 @@ function AdminContentReady({
                         checked={u.status === 'Activo'}
                         label={u.status === 'Activo' ? 'Desactivar usuario' : 'Activar usuario'}
                         onChange={() => {
-                          onAction(
-                            'Gestion de usuarios fuera de alcance: no se modifico la fuente.',
+                          setUsers((current) =>
+                            current.map((user) =>
+                              user.id === u.id
+                                ? {
+                                    ...user,
+                                    status: user.status === 'Activo' ? 'Inactivo' : 'Activo',
+                                  }
+                                : user,
+                            ),
                           );
+                          onAction(`Usuario ${u.status === 'Activo' ? 'desactivado' : 'activado'}`);
                         }}
                       />
                     </td>
@@ -2651,8 +2672,27 @@ function AdminContentReady({
                         <StatusSwitch
                           checked={a.status === 'Activo'}
                           label={a.status === 'Activo' ? 'Desactivar amenidad' : 'Activar amenidad'}
-                          onChange={() => {
-                            onAction('Amenidades fuera de alcance: no se modifico la fuente.');
+                          onChange={async () => {
+                            const active = a.status !== 'Activo';
+                            try {
+                              const updated = await catalogService.updateAmenity(a.dbId, {
+                                active,
+                              });
+                              setAmenities((current) =>
+                                current.map((amenity) =>
+                                  amenity.id === a.id
+                                    ? {
+                                        ...amenity,
+                                        available: updated.active,
+                                        status: updated.active ? 'Activo' : 'Inactivo',
+                                      }
+                                    : amenity,
+                                ),
+                              );
+                              onAction('Amenidad actualizada correctamente');
+                            } catch (cause) {
+                              notifyError(cause);
+                            }
                           }}
                         />
                       </div>
@@ -2721,8 +2761,20 @@ function AdminContentReady({
                           item.status === 'Activo' ? 'Desactivar producto' : 'Activar producto'
                         }
                         onChange={() => {
+                          setRsItems((current) =>
+                            current.map((roomServiceItem) =>
+                              roomServiceItem.id === item.id
+                                ? {
+                                    ...roomServiceItem,
+                                    available: roomServiceItem.status !== 'Activo',
+                                    status:
+                                      roomServiceItem.status === 'Activo' ? 'Inactivo' : 'Activo',
+                                  }
+                                : roomServiceItem,
+                            ),
+                          );
                           onAction(
-                            'Catalogo de Room Service fuera de alcance: no se modifico la fuente.',
+                            `Producto de Room Service ${item.status === 'Activo' ? 'desactivado' : 'activado'}`,
                           );
                         }}
                       />
@@ -2737,10 +2789,50 @@ function AdminContentReady({
           <AmenityModal
             amenity={editAmenity}
             onClose={() => setShowAmenityModal(false)}
-            onSave={(a) => {
-              void a;
-              onAction('Amenidades fuera de alcance: no se modifico la fuente.');
-              setShowAmenityModal(false);
+            onSave={async (a) => {
+              try {
+                const saved = editAmenity
+                  ? await catalogService.updateAmenity(editAmenity.dbId, {
+                      name: a.name,
+                      opens_at: a.schedule.includes(' - ') ? a.schedule.split(' - ')[0] : undefined,
+                      closes_at: a.schedule.includes(' - ')
+                        ? a.schedule.split(' - ')[1]
+                        : undefined,
+                      active: a.status === 'Activo' && a.available,
+                    })
+                  : await catalogService.createAmenity({
+                      name: a.name,
+                      opens_at: a.schedule.includes(' - ') ? a.schedule.split(' - ')[0] : undefined,
+                      closes_at: a.schedule.includes(' - ')
+                        ? a.schedule.split(' - ')[1]
+                        : undefined,
+                      active: a.status === 'Activo' && a.available,
+                    });
+                const next: Amenity = {
+                  ...a,
+                  id: editAmenity?.id ?? parseDbId(saved.id, Date.now()),
+                  dbId: saved.id,
+                  available: saved.active,
+                  status: saved.active ? 'Activo' : 'Inactivo',
+                  schedule:
+                    saved.opensAt && saved.closesAt
+                      ? `${saved.opensAt} - ${saved.closesAt}`
+                      : a.schedule,
+                };
+                setAmenities((current) =>
+                  editAmenity
+                    ? current.map((item) => (item.id === editAmenity.id ? next : item))
+                    : [...current, next],
+                );
+                onAction(
+                  editAmenity
+                    ? 'Amenidad actualizada correctamente'
+                    : 'Amenidad creada correctamente',
+                );
+                setShowAmenityModal(false);
+              } catch (cause) {
+                notifyError(cause);
+              }
             }}
           />
         )}
@@ -3553,10 +3645,7 @@ function RoleModal({
   const [permissions, setPermissions] = useState<Record<string, boolean>>(
     role?.permissions ?? Object.fromEntries(ALL_PERMISSIONS.map((p) => [p, false])),
   );
-  const setGroupPermissions = (
-    group: (typeof ROLE_ACCESS_GROUPS)[number],
-    selected: boolean,
-  ) => {
+  const setGroupPermissions = (group: (typeof ROLE_ACCESS_GROUPS)[number], selected: boolean) => {
     setPermissions((current) => ({
       ...current,
       ...Object.fromEntries(group.items.map((p) => [roleAccessKey(group.name, p), selected])),
@@ -4147,7 +4236,17 @@ function AmenityModal({
       title={amenity ? 'Editar amenidad' : 'Nueva amenidad'}
       eyebrow="GESTIÓN DE AMENIDADES"
       onClose={onClose}
-      onSubmit={() => onSave({ id: amenity?.id ?? 0, name, schedule, available, status, icon })}
+      onSubmit={() =>
+        onSave({
+          id: amenity?.id ?? 0,
+          dbId: amenity?.dbId ?? '',
+          name,
+          schedule,
+          available,
+          status,
+          icon,
+        })
+      }
       submitLabel={amenity ? 'Guardar cambios' : 'Crear amenidad'}
     >
       <div className="rc-form-grid">

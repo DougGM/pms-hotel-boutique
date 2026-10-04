@@ -141,6 +141,12 @@ inventario de cocina crea un movimiento real con `inventoryService.createMovemen
 seleccionada, muestra `bookingId`, habitacion, estado, fechas y notas disponibles,
 sin completar datos ausentes con valores inventados.
 
+Actualizacion 2026-10-03: el catalogo de Amenidades expone `createAmenity()` y
+`updateAmenity()` sobre `PMS_AMENITIES_DB`, con validacion de nombre, estado y
+persistencia mock en `localStorage`. La vista administrativa conecta esos
+metodos al alta, edicion y switch de disponibilidad; los switches de Usuarios
+y Room Service actualizan inmediatamente su estado local visible.
+
 Actualizacion 2026-09-24 (#75): Administracion ya no muestra metricas
 operativas hardcodeadas como si fueran actuales. `AdminContent` calcula
 dashboard/reportes desde habitaciones, reservas, caja, inventario y auditoria
@@ -151,9 +157,9 @@ promociones usan `promotionService` (`PMS_PROMOTIONS_DB`), inventario usa
 `inventoryService` (`PMS_INVENTORY_ITEMS_DB`,
 `PMS_INVENTORY_MOVEMENTS_DB`) y caja usa `cashService`
 (`PMS_CASH_SESSIONS_DB`, `PMS_CASH_MOVEMENTS_DB`). Usuarios/roles,
-amenidades, catalogo de Room Service y tarifas dinamicas no mutan porque no
-tienen contrato de escritura vigente en esta rama; la UI informa fuera de
-alcance en vez de simular guardados locales.
+catalogo de Room Service y tarifas dinamicas aun no tienen contrato de
+escritura persistente en esta rama; Room Service conserva el feedback de
+activacion en el estado local de la vista.
 Inventario y caja solo guardan `responsible_user_id`/`opened_by_user_id`
 cuando el caller envia un `User.id` existente; si no hay usuario de sesion, el
 campo queda ausente y nunca se reemplaza por un administrador o recepcionista

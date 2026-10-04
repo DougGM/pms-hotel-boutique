@@ -211,6 +211,7 @@ export function AccountPreferencesModal({
           <button
             type="button"
             className={notifyArrivals ? 'account-toggle on' : 'account-toggle'}
+            aria-pressed={notifyArrivals}
             onClick={() => setNotifyArrivals((value) => !value)}
           >
             <span>
@@ -221,6 +222,7 @@ export function AccountPreferencesModal({
           <button
             type="button"
             className={notifyHousekeeping ? 'account-toggle on' : 'account-toggle'}
+            aria-pressed={notifyHousekeeping}
             onClick={() => setNotifyHousekeeping((value) => !value)}
           >
             <span>
@@ -231,6 +233,7 @@ export function AccountPreferencesModal({
           <button
             type="button"
             className={notifyCash ? 'account-toggle on' : 'account-toggle'}
+            aria-pressed={notifyCash}
             onClick={() => setNotifyCash((value) => !value)}
           >
             <span>
