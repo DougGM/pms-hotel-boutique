@@ -44,15 +44,15 @@ Servicios disponibles: `authService`, `roomService`, `bookingService`,
 `auditService`, `orderService`, `serviceRequestService` y `notificationService`. Las
 operaciones de creación reciben los DTOs de entrada definidos en
 `src/shared/types/entities`; sus respuestas siempre son modelos de dominio.
-Todos excepto `authService` leen de `src/data/db.ts`, la única "base de datos"
-simulada del proyecto — ver `src/ARCHITECTURE.md`. Desde INT-01,
-`authService` usa el backend Spring configurado con `VITE_API_BASE_URL`.
+Los servicios que aun no tienen integracion backend leen de `src/data/db.ts`,
+la unica "base de datos" simulada del proyecto — ver `src/ARCHITECTURE.md`.
+Desde INT-01, `authService` usa el backend Spring configurado con
+`VITE_API_BASE_URL`; las integraciones posteriores se documentan abajo.
 
-Nota frontend beta: `personnelService.getUsers()` usa `sessionAccountsDB` como
-fuente visible de usuarios/roles para que Administracion muestre las mismas
-cuentas que se usan para iniciar sesion. `personnelService.getRoles()` y
-`getPermissions()` siguen leyendo `rolesDB` y `permissionsDB`; `usersDB` queda
-como directorio operativo historico del Lote D.
+Nota frontend beta: `personnelService.getPermissions()` sigue leyendo
+`permissionsDB` porque el backend expone permisos como claves dentro de cada
+rol, no como recurso independiente. `usersDB` queda como directorio operativo
+historico del Lote D.
 
 ## WEB-14: servicios faltantes de la vertical Ronda 1
 
@@ -215,6 +215,48 @@ refresh falla, limpia la sesion local para obligar un nuevo login.
 persistencia local, incluso si la confirmacion remota falla. `clearSession()`
 expone la limpieza local sincrona. La clave legacy `hotel-aurora.auth.v1` se
 elimina al restaurar o limpiar sesion.
+
+## Integracion con INT-07
+
+`catalogService.getProducts()` conserva el catalogo operativo de Room Service
+en `GET /room-service/products`, pensado para devolver productos disponibles.
+Para Administracion se agrego `getAdminProducts()` sobre
+`GET /admin/room-service/products`, que incluye activos e inactivos, junto con
+`POST /admin/room-service/products` y
+`PUT /admin/room-service/products/{id}` para crear, editar y activar/desactivar
+productos sin cambiar el comportamiento de las pantallas operativas.
+
+`getAmenities()` conserva la lectura compatible con huespedes en
+`GET /admin/amenities?active=true`. Administracion usa `getAdminAmenities()`
+sobre `GET /admin/amenities` para ver activas e inactivas, y las escrituras
+`POST /admin/amenities` / `PUT /admin/amenities/{id}` para crear, editar y
+cambiar estado.
+
+`personnelService.getUsers()`, `getUserById()` y `getRoles()` consumen
+`GET /admin/users`, `GET /admin/users/{id}` y `GET /admin/roles`; `roleCode`
+se normaliza al literal de rol usado por el frontend solo en respuestas.
+`createUser()` usa el DTO real del backend con `firstName`, `lastName`,
+`email`, `password` y `roleId`; no envia `roleCode` ni `status`.
+`updateUser()` usa `firstName`, `lastName`, `email`, `roleId` y `status` para
+edicion y activacion/desactivacion. `getPermissions()` conserva el catalogo
+local por compatibilidad hasta que exista un endpoint dedicado.
+
+`promotionService` usa `GET/POST/PUT /admin/promotions`. Como el backend no
+expone `GET /admin/promotions/{id}`, las actualizaciones obtienen primero la
+lista, mezclan los campos parciales del UI y envian el request completo que
+requiere Spring.
+
+`inventoryService` usa `GET /inventory/items`,
+`GET /inventory/items/{id}`, `GET /inventory/items/{id}/movements`,
+`POST /inventory/items/{id}/movements` y
+`PUT /admin/inventory/items/{id}`. El backend no acepta `currentQuantity` en
+el upsert administrativo, por lo que un ajuste manual de existencias se aplica
+con un movimiento compensatorio `restock` o `shrinkage`.
+
+Las lecturas anteriores conservan un fallback local solo cuando el backend no
+esta disponible o el harness de pruebas responde 404 a rutas no mockeadas; las
+respuestas HTTP reales distintas de 404 se propagan como error. Las escrituras
+usan el contrato HTTP del backend.
 
 ## Integracion con INT-06 (#104)
 
