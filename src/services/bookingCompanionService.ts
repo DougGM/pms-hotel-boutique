@@ -50,7 +50,6 @@ function toCompanionDto(api: ApiBookingCompanion, bookingId: ID): BookingCompani
 
 function toCompanionRequest(companion: UpsertBookingCompanionDto) {
   return {
-    id: companion.id,
     firstName: companion.first_name.trim(),
     lastName: companion.last_name.trim(),
     documentType: companion.document_type,
@@ -81,6 +80,13 @@ async function request<T>(call: () => Promise<T>, fallback: string): Promise<T> 
   } catch (error) {
     throw new Error(getHttpErrorMessage(error, fallback));
   }
+}
+
+async function getBackendCompanions(bookingId: ID): Promise<ApiBookingCompanion[]> {
+  return request(
+    () => httpClient.get<ApiBookingCompanion[]>(`/bookings/${bookingId}/companions`),
+    'No fue posible cargar los acompanantes.',
+  );
 }
 
 function getLastBookingCompanionNumber(): number {
@@ -153,10 +159,7 @@ export const bookingCompanionService = {
     mockUtils.throwIfSimulatingError('No fue posible cargar los acompanantes.');
 
     if (isUuid(bookingId)) {
-      const companions = await request(
-        () => httpClient.get<ApiBookingCompanion[]>(`/bookings/${bookingId}/companions`),
-        'No fue posible cargar los acompanantes.',
-      );
+      const companions = await getBackendCompanions(bookingId);
       return companions.map((item) => toCompanionDto(item, bookingId)).map(toBookingCompanion);
     }
 
@@ -175,14 +178,38 @@ export const bookingCompanionService = {
     const companions = data.map(normalizeCompanion);
 
     if (isUuid(bookingId)) {
-      const saved = await request(
-        () =>
-          httpClient.put<ApiBookingCompanion[]>(
-            `/bookings/${bookingId}/companions`,
-            companions.map(toCompanionRequest),
+      const existing = await getBackendCompanions(bookingId);
+      const nextIds = new Set(companions.map((item) => item.id).filter(Boolean));
+      await Promise.all([
+        ...existing
+          .filter((item) => !nextIds.has(item.id))
+          .map((item) =>
+            request(
+              () => httpClient.delete<void>(`/bookings/${bookingId}/companions/${item.id}`),
+              'No fue posible eliminar un acompanante.',
+            ),
           ),
-        'No fue posible guardar los acompanantes.',
-      );
+        ...companions.map((companion) =>
+          companion.id
+            ? request(
+                () =>
+                  httpClient.put<ApiBookingCompanion>(
+                    `/bookings/${bookingId}/companions/${companion.id}`,
+                    toCompanionRequest(companion),
+                  ),
+                'No fue posible actualizar un acompanante.',
+              )
+            : request(
+                () =>
+                  httpClient.post<ApiBookingCompanion>(
+                    `/bookings/${bookingId}/companions`,
+                    toCompanionRequest(companion),
+                  ),
+                'No fue posible crear un acompanante.',
+              ),
+        ),
+      ]);
+      const saved = await getBackendCompanions(bookingId);
       return saved.map((item) => toCompanionDto(item, bookingId)).map(toBookingCompanion);
     }
 

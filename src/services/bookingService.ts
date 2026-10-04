@@ -42,6 +42,23 @@ type ApiBooking = {
   updatedAt?: string | null;
 };
 
+type ApiCheckInResponse = {
+  bookingId: string;
+  status: BookingDto['status'] | Booking['status'];
+  guestId: string;
+  guestFirstName: string;
+  guestLastName: string;
+  roomId: string;
+  roomNumber: string;
+  checkIn: string;
+  checkOut: string;
+  adults: number;
+  children: number;
+  companionCount: number;
+  totalOccupants: number;
+  operationTimestamp: string;
+};
+
 const nowIso = () => new Date().toISOString();
 const isOfflineError = (error: unknown): boolean =>
   !(error instanceof HttpError) || error.status === 404;
@@ -262,9 +279,13 @@ export const bookingService = {
     mockUtils.throwIfSimulatingError('No fue posible hacer check-in.');
 
     if (isUuid(bookingId)) {
-      const booking = await request(
-        () => httpClient.post<ApiBooking>(`/bookings/${bookingId}/check-in`),
+      await request(
+        () => httpClient.post<ApiCheckInResponse>(`/bookings/${bookingId}/check-in`),
         'No fue posible hacer check-in.',
+      );
+      const booking = await request(
+        () => httpClient.get<ApiBooking>(`/bookings/${bookingId}`),
+        'No fue posible cargar la reserva actualizada despues del check-in.',
       );
       return toBooking(toBookingDto(booking));
     }

@@ -90,8 +90,11 @@ niños antes de completar check-in.
 
 En reservas UUID, check-in usa `POST /bookings/{id}/check-in`, asignacion de
 habitacion usa `PUT /bookings/{id}` con `roomId` y acompanantes usan
-`GET`/`PUT /bookings/{bookingId}/companions`; el backend valida estado,
-habitacion, acompanantes y composicion.
+`GET /bookings/{bookingId}/companions`,
+`POST /bookings/{bookingId}/companions`,
+`PUT /bookings/{bookingId}/companions/{companionId}` y
+`DELETE /bookings/{bookingId}/companions/{companionId}`; el backend valida
+estado, habitacion, acompanantes y composicion.
 
 `checkOut` se bloquea si `balance_cents !== 0`; solo con saldo exactamente en cero cierra el folio,
 marca la reserva como `checked_out` y deja la habitacion `available` con

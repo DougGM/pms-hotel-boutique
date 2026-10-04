@@ -78,7 +78,9 @@ coherencia con `booking.adults/children` contando al huésped principal como un
 adulto.
 
 Desde INT-04, cuando el `bookingId` es UUID, esos mismos metodos de
-acompanantes consumen `GET`/`PUT /bookings/{bookingId}/companions` y delegan al
+acompanantes consumen las rutas reales de `BookingCompanionController`
+(`GET`/`POST /bookings/{bookingId}/companions`,
+`PUT`/`DELETE /bookings/{bookingId}/companions/{companionId}`) y delegan al
 backend las reglas de estado, habitacion y composicion. Las validaciones locales
 quedan para reservas legacy `BKG-*`.
 

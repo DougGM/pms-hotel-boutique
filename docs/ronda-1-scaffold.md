@@ -60,7 +60,8 @@ en estado local.
 
 **Actualizacion 2026-10-04 (#102 / INT-04):** recepcion integrada usa backend
 real para acompanantes, asignacion, check-in y check-out en reservas UUID.
-`bookingCompanionService` consume `/bookings/{bookingId}/companions`;
+`bookingCompanionService` sincroniza con `GET`/`POST /bookings/{bookingId}/companions`
+y `PUT`/`DELETE /bookings/{bookingId}/companions/{companionId}`;
 `bookingService.assignRoom` envia `roomId` por `PUT /bookings/{id}`;
 `checkIn` y `checkOut` llaman `POST /bookings/{id}/check-in` y
 `POST /bookings/{id}/check-out`. `CheckOutScreen` ya no bloquea el intento por
