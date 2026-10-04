@@ -39,7 +39,14 @@ const statusClass = (status: OrderStatus): string =>
 const orderTotal = (order: RoomServiceOrder) =>
   order.items.reduce((sum, item) => sum + item.quantity * item.price, 0);
 
-type MenuItem = { name: string; description: string; price: number; category: string };
+type MenuCategory = 'Desayunos' | 'Almuerzos' | 'Cenas' | 'Bebidas';
+type MenuItem = {
+  name: string;
+  description: string;
+  price: number;
+  category: string;
+  menuCategory: MenuCategory;
+};
 
 const PRODUCT_CATEGORY_LABELS: Record<string, string> = {
   foodAndBeverage: 'Alimentos y bebidas',
@@ -67,12 +74,28 @@ const INVENTORY_UNIT_LABELS: Record<string, string> = {
 
 /**
  * Fija a propósito: es la taxonomía de tabs del menú (Desayunos/Almuerzos/
- * Cenas/Bebidas/Botanas), más fina que `ProductCategory` del contrato
+ * Cenas/Bebidas), más fina que `ProductCategory` del contrato
  * (`minibar`|`shop`|`foodAndBeverage`|`other`). Ampliar el DTO de `product`
  * para cubrirla está bloqueado por D-005 (docs/DECISIONES.md) — no tocar
  * hasta que se decida la taxonomía de categorías en equipo.
  */
-const menuCategories = ['Desayunos', 'Almuerzos', 'Cenas', 'Bebidas', 'Botanas'];
+const menuCategories: MenuCategory[] = ['Desayunos', 'Almuerzos', 'Cenas', 'Bebidas'];
+
+function menuCategoryForProduct(name: string): MenuCategory {
+  const normalizedName = name.toLocaleLowerCase();
+  if (normalizedName.includes('desayuno')) return 'Desayunos';
+  if (
+    ['café', 'cafe', 'té', 'te ', 'jugo', 'refresco', 'agua', 'bebida'].some((term) =>
+      normalizedName.includes(term),
+    )
+  ) {
+    return 'Bebidas';
+  }
+  if (['pasta', 'filete', 'sopa', 'hamburguesa'].some((term) => normalizedName.includes(term))) {
+    return 'Cenas';
+  }
+  return 'Almuerzos';
+}
 
 const inventoryStatusClass = (status: string) =>
   status === 'Disponible' ? 'success' : status === 'Bajo' ? 'warning' : 'terracotta';
@@ -129,6 +152,7 @@ export function RoomServiceContent({
   const [inventoryQuantity, setInventoryQuantity] = useState('1');
   const [inventoryNotes, setInventoryNotes] = useState('');
   const [inventorySaving, setInventorySaving] = useState(false);
+  const [activeMenuCategory, setActiveMenuCategory] = useState<MenuCategory>('Desayunos');
 
   const loadCatalog = async () => {
     setCatalog({ status: 'loading' });
@@ -145,6 +169,7 @@ export function RoomServiceContent({
           description: product.description ?? product.sku,
           price: Math.round(product.priceCents / 100),
           category: PRODUCT_CATEGORY_LABELS[product.category] ?? product.category,
+          menuCategory: menuCategoryForProduct(product.name),
         }));
 
       const inventory: InventoryItem[] = inventoryItemsData
@@ -170,6 +195,7 @@ export function RoomServiceContent({
   }, []);
 
   const menuItems = catalog.status === 'ready' ? catalog.menu : [];
+  const visibleMenuItems = menuItems.filter((item) => item.menuCategory === activeMenuCategory);
   const inventoryItems = catalog.status === 'ready' ? catalog.inventory : [];
   const selectedInventoryItem = inventoryItems.find((item) => item.id === inventoryItemId);
 
@@ -602,11 +628,18 @@ export function RoomServiceContent({
             <FileText size={14} /> Actualizar
           </button>
         </div>
-        <div className="rs-menu-categories">
+        <div className="rs-menu-categories" role="tablist" aria-label="Categorías del menú">
           {menuCategories.map((cat) => (
-            <span key={cat} className="rs-menu-cat">
+            <button
+              key={cat}
+              type="button"
+              role="tab"
+              aria-selected={activeMenuCategory === cat}
+              className={`rs-menu-cat ${activeMenuCategory === cat ? 'active' : ''}`}
+              onClick={() => setActiveMenuCategory(cat)}
+            >
               {cat}
-            </span>
+            </button>
           ))}
         </div>
         {catalog.status === 'loading' && <LoadingState label="Cargando el menú..." />}
@@ -617,15 +650,15 @@ export function RoomServiceContent({
             onRetry={() => void loadCatalog()}
           />
         )}
-        {catalog.status === 'ready' && menuItems.length === 0 && (
+        {catalog.status === 'ready' && visibleMenuItems.length === 0 && (
           <EmptyState
             title="Sin productos"
             description="No hay productos de alimentos y bebidas activos en el catálogo."
           />
         )}
-        {catalog.status === 'ready' && menuItems.length > 0 && (
+        {catalog.status === 'ready' && visibleMenuItems.length > 0 && (
           <div className="rs-menu-grid">
-            {menuItems.map((item) => (
+            {visibleMenuItems.map((item) => (
               <div className="rs-menu-item" key={item.name}>
                 <div className="rs-menu-icon">
                   <Utensils size={18} />
@@ -779,7 +812,7 @@ export function RoomServiceContent({
                 </p>
               )}
               <label>
-                Cantidad recibida
+                Cantidad recibida ({selectedInventoryItem?.unit ?? 'unidades'})
                 <input
                   type="number"
                   min="1"

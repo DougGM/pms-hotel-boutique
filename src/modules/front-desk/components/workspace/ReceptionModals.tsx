@@ -227,7 +227,7 @@ export function ReservationFormModal({
         </div>
         <div className="rc-form-scroll">
           <h4 className="rc-form-section-title">Datos del huésped</h4>
-          <div className="rc-form-grid">
+          <div className="rc-form-grid grid grid-cols-1 md:grid-cols-2 gap-4">
             <label className="rc-field">
               <span>Nombre</span>
               <input
@@ -265,7 +265,7 @@ export function ReservationFormModal({
           </div>
 
           <h4 className="rc-form-section-title">Estadía</h4>
-          <div className="rc-form-grid">
+          <div className="rc-form-grid grid grid-cols-1 md:grid-cols-2 gap-4">
             <label className="rc-field">
               <span>Entrada</span>
               <input

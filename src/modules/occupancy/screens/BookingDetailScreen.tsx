@@ -416,7 +416,11 @@ export function BookingDetailScreen() {
       )}
 
       {isEditing && canEdit && (
-        <form className="occupancy-form" onSubmit={handleSubmit} noValidate>
+        <form
+          className="occupancy-form grid grid-cols-1 md:grid-cols-2 gap-4"
+          onSubmit={handleSubmit}
+          noValidate
+        >
           <Select
             label="Tipo de habitación"
             required
