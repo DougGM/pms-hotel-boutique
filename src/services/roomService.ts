@@ -101,6 +101,8 @@ const nowIso = () => new Date().toISOString();
 const isOfflineError = (error: unknown): boolean =>
   !(typeof error === 'object' && error !== null && 'status' in error) ||
   (typeof error === 'object' && error !== null && 'status' in error && error.status === 404);
+const isHttpNotFound = (error: unknown): boolean =>
+  error instanceof HttpError && error.status === 404;
 
 function getRoomsDB(): RoomDto[] {
   return hydrateCollection(roomsStorageKey, roomsDB);
@@ -305,6 +307,7 @@ export const roomService = {
       const room = await httpClient.get<ApiRoom>(`/rooms/${id}`);
       return toRoom(toRoomDto(room));
     } catch (error) {
+      if (isHttpNotFound(error)) return undefined;
       if (!isOfflineError(error)) throw error;
       const room = getRoomsDB().find((item) => item.id === id);
       return room ? toRoom(room) : undefined;
@@ -346,6 +349,7 @@ export const roomService = {
       const roomType = await httpClient.get<ApiRoomType>(`/room-types/${id}`);
       return toRoomType(toRoomTypeDto(roomType));
     } catch (error) {
+      if (isHttpNotFound(error)) return undefined;
       if (!isOfflineError(error)) throw error;
       const roomType = getRoomTypesDB().find((item) => item.id === id);
       return roomType ? toRoomType(roomType) : undefined;

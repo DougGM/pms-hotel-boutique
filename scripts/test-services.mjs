@@ -69,7 +69,7 @@ await build({
       export { orderService } from './src/services/orderService';
       export { serviceRequestService } from './src/services/serviceRequestService';
       export { notificationService } from './src/services/notificationService';
-      export { notificationReadsDB } from './src/data/db';
+      export { notificationReadsDB, roomsDB } from './src/data/db';
       export { mockUtils } from './src/services/mockUtils';
     `,
     resolveDir: '.',
@@ -120,6 +120,7 @@ const {
   serviceRequestService,
   notificationService,
   notificationReadsDB,
+  roomsDB,
   mockUtils,
 } = require(require.resolve('../.cache/services-harness.cjs'));
 
@@ -314,6 +315,16 @@ const apiRooms = [
     floor: 3,
     status: 'occupied',
     housekeepingStatus: 'clean',
+    createdAt: apiNow,
+    updatedAt: apiNow,
+  },
+  {
+    id: 'RM-203',
+    roomNumber: '203',
+    roomTypeId: apiRoomTypes[0].id,
+    floor: 2,
+    status: 'available',
+    housekeepingStatus: 'inspected',
     createdAt: apiNow,
     updatedAt: apiNow,
   },
@@ -1317,6 +1328,17 @@ test('roomService.createRoom/updateRoom/getRoomTypes: usan API real y devuelven 
     roomService.getRoomById(room.id),
   );
   assert.equal(reloaded.roomNumber, '909');
+
+  assert.equal(
+    await roomService.getRoomById('RM-NO-EXISTE'),
+    undefined,
+    'un 404 real de /rooms/{id} no debe caer al mock local',
+  );
+  assert.equal(
+    await roomService.getRoomTypeById('RT-01'),
+    undefined,
+    'un 404 real de /room-types/{id} no debe resolver desde roomTypesDB',
+  );
 });
 
 test('bookingService.checkIn/checkOut: validan transiciones con BOOKING_STATUS_TRANSITIONS', async () => {
@@ -1487,7 +1509,7 @@ test('check-in de recepcion persiste acompanantes, titular y ocupacion de habita
   );
   assert.equal(checkedIn.status, 'checkedIn');
 
-  const room = await roomService.getRoomById('RM-203');
+  const room = roomsDB.find((item) => item.id === 'RM-203');
   assert.equal(room.status, 'occupied', 'el check-in debe marcar la habitacion como ocupada');
 
   const persisted = await bookingCompanionService.getCompanionsByBookingId('BKG-007');
@@ -1996,9 +2018,9 @@ test('check-out exige saldo exactamente cero, cierra folio y envia habitacion a 
   assert.equal(closed.status, 'closed');
   assert.equal(closed.balanceCents, 0);
 
-  const room = await roomService.getRoomById('RM-301');
+  const room = roomsDB.find((item) => item.id === 'RM-301');
   assert.equal(room.status, 'available');
-  assert.equal(room.housekeepingStatus, 'dirty');
+  assert.equal(room.housekeeping_status, 'dirty');
 
   await assert.rejects(
     () => bookingService.checkOut('BKG-003'),

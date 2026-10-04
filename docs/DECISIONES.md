@@ -830,14 +830,17 @@ caracteristicas.
 ### Consecuencias
 
 - `src/data/db.ts` deja de ser fuente oficial para esas entidades en flujos
-  integrados. Solo queda como fallback de lectura cuando el backend no esta
-  disponible o el harness responde 404.
+  integrados. Solo queda como fallback de listados cuando el backend no esta
+  disponible o el harness responde 404; un 404 real en detalles por ID no
+  resuelve desde mocks.
 - Las escrituras de habitaciones, tipos y tarifas no simulan exito local:
   pasan por API y propagan errores 400, 401, 403, 404 y 409 como mensajes de
   operacion.
 - `priceCents`/`price_cents` sigue en centavos. No convertir a quetzales en
   servicios ni DTOs.
 - No fusionar `status` y `housekeepingStatus`; la regla D-002 permanece vigente.
+- No pedir `room-types` ni `room-features` desde roles sin esos permisos. En el
+  workspace, Limpieza no debe depender del catalogo de habitaciones para cargar.
 
 ## Cómo agregar una nueva decisión
 

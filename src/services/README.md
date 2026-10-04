@@ -235,11 +235,18 @@ internos snake_case y despues aplica los mappers existentes para devolver
 Models. `status` y `housekeepingStatus` permanecen separados; `priceCents` se
 mantiene en centavos y no se duplica ninguna regla de negocio del backend.
 
-Las lecturas conservan fallback local solo cuando el backend no esta disponible
-o el harness responde 404 a una ruta no mockeada. Las escrituras de
-habitaciones, tipos y tarifas usan el contrato HTTP real; los errores 400, 401,
-403, 404 y 409 se propagan como mensajes de operacion para que la UI existente
-muestre el fallo sin mutar estado local.
+Los listados conservan fallback local solo cuando el backend no esta disponible
+o el harness responde 404 a una ruta no mockeada. Los detalles por ID no ocultan
+un 404 real: `getRoomById()` y `getRoomTypeById()` devuelven `undefined` si el
+backend indica que el recurso no existe. Las escrituras de habitaciones, tipos
+y tarifas usan el contrato HTTP real; los errores 400, 401, 403, 404 y 409 se
+propagan como mensajes de operacion para que la UI existente muestre el fallo
+sin mutar estado local.
+
+`PrivateWorkspace` carga `room-types` y `room-features` solo para roles que
+tienen ese catalogo en su dominio (`admin` y `reception`). Limpieza carga sus
+habitaciones desde HousekeepingController y no dispara llamadas que el backend
+rechazaria con 403 por falta de `room-types.read`/`room-features.read`.
 
 ## Integracion con INT-08
 
