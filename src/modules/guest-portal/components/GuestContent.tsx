@@ -30,6 +30,7 @@ import { guestAccountService } from '@/services/guestAccountService';
 import { guestService } from '@/services/guestService';
 import { notificationService } from '@/services/notificationService';
 import { orderService } from '@/services/orderService';
+import { reportingService, type StayReceipt } from '@/services/reportingService';
 import { roomService } from '@/services/roomService';
 import { serviceRequestService } from '@/services/serviceRequestService';
 import { ErrorState } from '@/shared/components/ErrorState';
@@ -87,6 +88,8 @@ function parseDbId(id: string, fallback: number) {
 function centsToAmount(cents: number) {
   return Math.round(cents / 100);
 }
+
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function formatDbTime(value?: Date) {
   if (!value) return '';
@@ -243,12 +246,70 @@ function buildReservationReceiptPdf(reservation: Reservation) {
   return pdf;
 }
 
-function downloadReservationReceiptPdf(reservation: Reservation) {
-  const pdf = buildReservationReceiptPdf(reservation);
+function receiptToReservation(reservation: Reservation, receipt: StayReceipt): Reservation {
+  return {
+    ...reservation,
+    guest: {
+      ...reservation.guest,
+      name: receipt.stay.guestFirstName,
+      lastName: receipt.stay.guestLastName,
+    },
+    roomNumber: receipt.stay.roomNumber ?? reservation.roomNumber,
+    roomType: receipt.stay.roomTypeName.includes('Suite')
+      ? 'Suite'
+      : receipt.stay.roomTypeName.includes('Deluxe')
+        ? 'Deluxe'
+        : reservation.roomType,
+    checkIn: receipt.stay.checkIn,
+    checkOut: receipt.stay.checkOut,
+    folio: [
+      ...receipt.charges.map((charge, index) => ({
+        id: parseDbId(charge.id, index + 1),
+        concept: charge.description,
+        category: 'Cargo',
+        amount: centsToAmount(charge.amountCents),
+        date: toDtoCalendarDate(charge.chargedAt),
+        type: 'Cargo' as const,
+        status: charge.status === 'voided' ? ('Anulado' as const) : ('Activo' as const),
+      })),
+      ...receipt.payments.map((payment, index) => ({
+        id: parseDbId(payment.id, 4000 + index),
+        concept: 'Pago registrado',
+        category: 'Pago',
+        amount: centsToAmount(payment.amountCents),
+        date: toDtoCalendarDate(payment.paidAt ?? payment.createdAt),
+        type: 'Pago' as const,
+        status:
+          payment.status === 'failed' || payment.status === 'refunded'
+            ? ('Anulado' as const)
+            : ('Activo' as const),
+      })),
+      ...receipt.deposits.map((deposit, index) => ({
+        id: parseDbId(deposit.id, 6000 + index),
+        concept: 'Depósito garantía',
+        category: 'Depósito',
+        amount: centsToAmount(deposit.amountCents),
+        date: toDtoCalendarDate(deposit.collectedAt),
+        type: 'Depósito' as const,
+        status: deposit.status === 'refunded' ? ('Anulado' as const) : ('Activo' as const),
+      })),
+    ],
+  };
+}
+
+async function downloadReservationReceiptPdf(reservation: Reservation) {
+  const source =
+    reservation.bookingId && uuidPattern.test(reservation.bookingId)
+      ? receiptToReservation(
+          reservation,
+          await reportingService.getStayReceipt(reservation.bookingId),
+        )
+      : reservation;
+  const pdf = buildReservationReceiptPdf(source);
   const blob = new Blob([pdf], { type: 'application/pdf' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
-  const safeCode = reservation.code.replace(/[^a-z0-9-]/gi, '-').toLowerCase();
+  const safeCode = source.code.replace(/[^a-z0-9-]/gi, '-').toLowerCase();
   link.href = url;
   link.download = `recibo-${safeCode}.pdf`;
   document.body.appendChild(link);
@@ -1260,8 +1321,8 @@ function GuestContentReady({
           <ReceiptModal
             reservation={receiptRes}
             onClose={() => setReceiptResId(null)}
-            onDownload={() => {
-              downloadReservationReceiptPdf(receiptRes);
+            onDownload={async () => {
+              await downloadReservationReceiptPdf(receiptRes);
               setReceiptResId(null);
               onAction('Recibo descargado en PDF');
             }}

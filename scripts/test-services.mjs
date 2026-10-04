@@ -63,6 +63,7 @@ await build({
       export { personnelService } from './src/services/personnelService';
       export { inventoryService } from './src/services/inventoryService';
       export { auditService } from './src/services/auditService';
+      export { reportingService } from './src/services/reportingService';
       export { promotionService } from './src/services/promotionService';
       export { housekeepingService } from './src/services/housekeepingService';
       export { orderService } from './src/services/orderService';
@@ -112,6 +113,7 @@ const {
   personnelService,
   inventoryService,
   auditService,
+  reportingService,
   promotionService,
   housekeepingService,
   orderService,
@@ -121,6 +123,34 @@ const {
   mockUtils,
 } = require(require.resolve('../.cache/services-harness.cjs'));
 
+const reportingNow = '2026-10-02T12:00:00.000-06:00';
+const reportingBookingId = '11111111-1111-4111-8111-111111111111';
+const reportingGuestId = '22222222-2222-4222-8222-222222222222';
+const reportingAuditLogs = [
+  {
+    id: '33333333-3333-4333-8333-333333333333',
+    userId: 'USR-001',
+    userEmail: 'admin@aurora.local',
+    module: 'bookings',
+    action: 'update',
+    entityType: 'booking',
+    entityId: reportingBookingId,
+    occurredAt: reportingNow,
+    details: 'Cambio de estado',
+  },
+  {
+    id: '33333333-3333-4333-8333-444444444444',
+    userId: 'USR-001',
+    userEmail: 'admin@aurora.local',
+    module: 'rates',
+    action: 'approve',
+    entityType: 'rate',
+    entityId: 'RATE-001',
+    occurredAt: reportingNow,
+    details: 'Accion futura del backend',
+  },
+];
+let lastReportingRequest = null;
 const apiNow = '2026-10-02T12:00:00.000Z';
 const apiProducts = [
   {
@@ -245,6 +275,74 @@ const adminFetchMock = async (input, init = {}) => {
   const method = init.method ?? 'GET';
   const path = url.pathname.replace('/api/v1', '');
   const body = init.body ? JSON.parse(String(init.body)) : undefined;
+  lastReportingRequest = { path, search: url.searchParams };
+
+  if (method === 'GET' && path === '/admin/audit-logs') {
+    return jsonResponse(reportingAuditLogs);
+  }
+
+  if (method === 'GET' && path === '/admin/reports/operations') {
+    return jsonResponse({
+      from: url.searchParams.get('from'),
+      to: url.searchParams.get('to'),
+      bookings: 3,
+      cancellations: 1,
+      revenueCents: 250000,
+      occupancyNights: 5,
+      bookingsByStatus: { checked_in: 1, checked_out: 1, cancelled: 1 },
+      roomServiceOrders: 4,
+    });
+  }
+
+  if (method === 'GET' && path === `/admin/bookings/${reportingBookingId}/receipt`) {
+    return jsonResponse({
+      stay: {
+        bookingId: reportingBookingId,
+        guestId: reportingGuestId,
+        guestFirstName: 'Ana',
+        guestLastName: 'Lopez',
+        roomId: '44444444-4444-4444-8444-444444444444',
+        roomNumber: '101',
+        roomTypeId: '55555555-5555-4555-8555-555555555555',
+        roomTypeName: 'Suite',
+        checkIn: '2026-10-01',
+        checkOut: '2026-10-03',
+        status: 'checked_out',
+        balanceCents: 0,
+        currency: 'GTQ',
+      },
+      charges: [
+        {
+          id: '66666666-6666-4666-8666-666666666666',
+          bookingId: reportingBookingId,
+          description: 'Estancia',
+          quantity: 1,
+          unitPriceCents: 250000,
+          amountCents: 250000,
+          currency: 'GTQ',
+          category: 'stay',
+          status: 'posted',
+          chargedAt: reportingNow,
+          createdAt: reportingNow,
+        },
+      ],
+      payments: [
+        {
+          id: '77777777-7777-4777-8777-777777777777',
+          bookingId: reportingBookingId,
+          amountCents: 250000,
+          currency: 'GTQ',
+          method: 'cash',
+          status: 'completed',
+          paidAt: reportingNow,
+          createdAt: reportingNow,
+        },
+      ],
+      deposits: [],
+      finalBalanceCents: 0,
+      currency: 'GTQ',
+    });
+  }
 
   if (method === 'GET' && path === '/room-service/products') {
     return jsonResponse(apiProducts.filter((item) => item.active));
@@ -459,7 +557,6 @@ const adminFetchMock = async (input, init = {}) => {
 };
 
 globalThis.fetch = adminFetchMock;
-
 const MIN_LATENCY_MS = 250; // 300ms nominal, con margen por scheduling
 const MAX_LATENCY_MS = 900; // 600ms nominal, con margen para CI lento
 
@@ -946,6 +1043,32 @@ test('auditService.getLogs: async, con latencia simulada, devuelve Models', asyn
   const logs = await assertServiceCall('auditService.getLogs', () => auditService.getLogs());
   assert.ok(Array.isArray(logs) && logs.length > 0);
   assert.ok('occurredAt' in logs[0], 'el Model de AuditLog debe tener occurredAt (camelCase)');
+  const futureLog = logs.find((log) => log.entityId === 'RATE-001');
+  assert.equal(futureLog?.module, 'rates', 'modulos nuevos de auditoria deben preservarse');
+  assert.equal(futureLog?.action, 'approve', 'acciones nuevas de auditoria deben preservarse');
+  assert.equal(lastReportingRequest.path, '/admin/audit-logs');
+  assert.ok(lastReportingRequest.search.has('from'), 'audit logs debe enviar from real');
+  assert.ok(lastReportingRequest.search.has('to'), 'audit logs debe enviar to real');
+});
+
+test('reportingService: usa ReportingController para reporte operativo y recibo', async () => {
+  const report = await assertServiceCall('reportingService.getOperationalReport', () =>
+    reportingService.getOperationalReport({ from: '2026-10-01', to: '2026-10-02' }),
+  );
+  assert.equal(lastReportingRequest.path, '/admin/reports/operations');
+  assert.equal(lastReportingRequest.search.get('from'), '2026-10-01');
+  assert.equal(lastReportingRequest.search.get('to'), '2026-10-02');
+  assert.equal(report.revenueCents, 250000);
+  assert.equal(report.cancellations, 1);
+
+  const receipt = await assertServiceCall('reportingService.getStayReceipt', () =>
+    reportingService.getStayReceipt(reportingBookingId),
+  );
+  assert.equal(lastReportingRequest.path, `/admin/bookings/${reportingBookingId}/receipt`);
+  assert.equal(receipt.finalBalanceCents, 0);
+  assert.equal(receipt.charges[0].amountCents, 250000);
+  assert.ok(!('amount_cents' in receipt.charges[0]), 'Charge de recibo debe ser Model');
+  assert.equal(receipt.payments[0].amountCents, 250000);
 });
 
 // --- C. Mecanismo de error forzado ------------------------------------------

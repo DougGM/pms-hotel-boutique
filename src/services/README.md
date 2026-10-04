@@ -216,6 +216,29 @@ persistencia local, incluso si la confirmacion remota falla. `clearSession()`
 expone la limpieza local sincrona. La clave legacy `hotel-aurora.auth.v1` se
 elimina al restaurar o limpiar sesion.
 
+## Integracion con INT-08
+
+`auditService.getLogs({ from, to })` consume `GET /admin/audit-logs` enviando
+los parametros reales `from` y `to` como date-time ISO. Si no se indica rango,
+usa una ventana amplia para mantener la carga inicial de Administracion.
+Si el backend agrega modulos o acciones nuevas, el servicio conserva esos
+valores en lugar de mapearlos a un fallback conocido.
+
+`reportingService.getOperationalReport({ from, to })` consume
+`GET /admin/reports/operations` y la vista de Reportes de Administracion usa
+ese agregado oficial para ingresos, reservas, cancelaciones, noches ocupadas y
+ordenes de Room Service del periodo seleccionado.
+Cuando existe ese reporte oficial, Administracion no mezcla sus cifras con
+reservas, habitaciones o cortes de caja locales: las reservas vigentes salen de
+`bookingsByStatus` y los promedios o tendencias no expuestos por Reporting API
+se muestran como no disponibles.
+
+`reportingService.getStayReceipt(bookingId)` consume
+`GET /admin/bookings/{bookingId}/receipt`, normaliza cargos, pagos y depositos
+a modelos de dominio y se usa al descargar recibos de estancia cuando la
+reserva tiene un UUID de backend. Las reservas demo `BKG-*` conservan el
+recibo local como fallback de prototipo.
+
 ## Integracion con INT-07
 
 `catalogService.getProducts()` conserva el catalogo operativo de Room Service

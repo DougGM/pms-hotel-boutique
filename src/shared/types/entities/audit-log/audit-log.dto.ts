@@ -1,6 +1,8 @@
-export type AuditModuleDto =
+export type KnownAuditModuleDto =
   'guest_accounts' | 'cash' | 'inventory' | 'catalog' | 'users' | 'bookings';
-export type AuditActionDto = 'create' | 'update' | 'delete' | 'void' | 'open' | 'close';
+export type AuditModuleDto = KnownAuditModuleDto | (string & {});
+export type KnownAuditActionDto = 'create' | 'update' | 'delete' | 'void' | 'open' | 'close';
+export type AuditActionDto = KnownAuditActionDto | (string & {});
 
 /**
  * Registro de auditoría (Lote D, WEB-12): quién, cuándo, qué módulo, qué
