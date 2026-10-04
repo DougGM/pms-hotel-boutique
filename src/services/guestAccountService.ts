@@ -225,7 +225,17 @@ function isStayCharge(charge: ChargeDto): boolean {
   return charge.category === 'stay';
 }
 
+function assertMockBookingId(bookingId: ID, operation: string): void {
+  if (isUuid(bookingId)) {
+    throw new Error(
+      `${operation} no puede usar el folio mock para una reserva integrada con backend.`,
+    );
+  }
+}
+
 export function calculateAccountBalanceCents(bookingId: ID): number {
+  assertMockBookingId(bookingId, 'El calculo local de saldo');
+
   const chargesTotal = getChargesDB()
     .filter((charge) => charge.booking_id === bookingId && charge.status === 'posted')
     .reduce((sum, charge) => sum + charge.amount_cents, 0);
@@ -275,6 +285,8 @@ function ensureStayCharge(booking: BookingDto, now = new Date().toISOString()): 
 }
 
 export function openOrSyncAccountForBooking(booking: BookingDto): GuestAccountDto {
+  assertMockBookingId(booking.id, 'La apertura o sincronizacion local de cuenta');
+
   const now = new Date().toISOString();
   let account = getGuestAccountsDB().find((item) => item.booking_id === booking.id);
 
@@ -304,6 +316,8 @@ export function openOrSyncAccountForBooking(booking: BookingDto): GuestAccountDt
 }
 
 export function closeAccountForCheckout(booking: BookingDto): GuestAccountDto {
+  assertMockBookingId(booking.id, 'El cierre local de cuenta');
+
   const now = new Date().toISOString();
   const account = getGuestAccountsDB().find((item) => item.booking_id === booking.id);
   if (!account) throw new Error(`No existe una cuenta para la reserva ${booking.id}.`);
@@ -424,6 +438,16 @@ export const guestAccountService = {
     return toCharge(charge);
   },
   async voidCharge(chargeId: ID, reason: string, bookingId?: ID): Promise<Charge> {
+    if (isUuid(chargeId) && !bookingId) {
+      throw new Error(
+        'La anulacion de un cargo integrado requiere bookingId para operar contra el backend.',
+      );
+    }
+    if (isUuid(chargeId) && bookingId && !isUuid(bookingId)) {
+      throw new Error(
+        'La anulacion de un cargo integrado requiere una reserva integrada con backend.',
+      );
+    }
     if (bookingId && isUuid(bookingId) && isUuid(chargeId)) {
       if (!reason.trim()) throw new Error('Se requiere un motivo para anular el cargo.');
       try {

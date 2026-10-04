@@ -50,6 +50,11 @@ a `bookingService.checkOut`, que cierra el folio, pasa la reserva a
 `dirty`). `GuestAccountScreen` permite registrar pagos en el folio ademas de
 consumos.
 
+**Actualizacion 2026-10-03 (#103):** los folios integrados con backend (UUID)
+no usan calculo local de saldo ni apertura/cierre mock. Las utilidades legacy
+de folio rechazan UUID y `voidCharge(chargeId, reason)` queda solo para cargos
+mock; un cargo UUID debe anularse con `voidCharge(chargeId, reason, bookingId)`.
+
 **Actualizacion 2026-09-22 (#72):** `GuestContent` resuelve al huesped desde la
 sesion, muestra sus reservas reales y ya no usa habitacion 402, fechas 2024 ni
 estancia fija del prototipo. Crear/cancelar pedidos y solicitudes, editar perfil,

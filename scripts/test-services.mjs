@@ -466,6 +466,17 @@ test('guestAccountService: usa backend para folio financiero integrado', async (
   assert.equal(voided.status, 'voided');
   assert.equal(voided.voidReason, 'Correccion de cargo');
 
+  assert.throws(
+    () => guestAccountService.calculateBalanceCents(bookingId),
+    /folio mock/,
+    'el saldo oficial de una reserva UUID no debe calcularse localmente',
+  );
+  await assert.rejects(
+    () => guestAccountService.voidCharge(chargeId, 'Sin booking'),
+    /requiere bookingId/,
+    'un cargo UUID sin bookingId no debe caer al mock legacy',
+  );
+
   const payment = await guestAccountService.createPayment({
     booking_id: bookingId,
     amount_cents: 20000,

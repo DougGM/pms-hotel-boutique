@@ -96,6 +96,13 @@ real (UUID), `guestAccountService` usa `GuestFolioController`,
 cargos, anulaciones, pagos, depositos, aplicacion y reembolso. Los IDs mock
 legacy (`BKG-*`) siguen usando la persistencia simulada mientras booking/check-in
 terminan su propia integracion; no son fuente oficial para flujos backend.
+Actualizacion 2026-10-03 (#103): las utilidades legacy
+`openOrSyncAccountForBooking`, `closeAccountForCheckout` y
+`calculateAccountBalanceCents` rechazan reservas UUID para evitar que un flujo
+integrado mezcle datos reales con el folio mock. En reservas UUID, el saldo
+oficial siempre viene de `GET /bookings/{bookingId}/folio`. `voidCharge`
+tambien exige `bookingId` cuando el `chargeId` es UUID; la firma antigua
+`voidCharge(chargeId, reason)` queda limitada a cargos mock.
 
 Actualizacion 2026-09-17: `guestService.createGuest(data)` crea huespedes demo
 en `guestsDB`, genera el siguiente ID `GST-*`, agrega timestamps y devuelve
