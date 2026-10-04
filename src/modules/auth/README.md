@@ -1,86 +1,79 @@
-# Autenticacion del personal - WEB-06 con WEB-05
+# Autenticacion del personal - INT-01
 
 ## Contrato
 
-El flujo es `StaffLoginPage` -> `AuthProvider` -> fachada de `modules/auth/services`
--> `services/authService.ts`. La fachada agrega permisos de navegacion a
-`AuthSession`; no guarda datos ni conoce fixtures. `SessionUserDTO`,
-`LoginDTO`, `AuthResponseDTO` y `AuthSession` viven en
-`shared/types/entities/session/` (no en el barrel general de `shared/types/entities`);
-`UserRole` viene de `shared/types/common` (ADMIN, GUEST, RECEPTION, HOUSEKEEPING,
-CONCIERGE y ROOM_SERVICE).
+El flujo es `StaffLoginPage` -> `AuthProvider` -> fachada de
+`modules/auth/services` -> `services/authService.ts` -> backend Spring.
 
-**`shared/types/entities/user/`** modela el rol del directorio de personal
-(admin/guest/reception/housekeeping/concierge/roomService) y debe mantenerse
-alineado con los roles de acceso del PMS. `shared/types/entities/session/`
-sigue existiendo para modelar token, expiracion y permisos de navegacion.
+`services/authService.ts` conserva la API que consume la UI (`login`,
+`restore`, `logout`, `getCurrentSession`, `getCurrentUser`) pero ya no valida
+credenciales contra `sessionAccountsDB`. El backend esperado expone:
 
-## Cuentas y permisos
+- `POST /auth/login` con `{ email, password }`.
+- `POST /auth/refresh` con `{ refreshToken }`.
+- `POST /auth/logout` con `{ refreshToken }` y respuesta `204`.
 
-Contrasena publica de demostracion: `AuroraDemo2026!`.
+`VITE_API_BASE_URL` debe apuntar al prefijo del backend, por defecto
+`http://localhost:8080/api/v1`.
 
-| Cuenta                         | Rol          | Entradas visibles y permitidas                                         |
-| ------------------------------ | ------------ | ---------------------------------------------------------------------- |
-| admin@hotelboutique.test       | ADMIN        | Panel, recepcion, limpieza, room service, conserjeria, caja y usuarios |
-| huesped@hotelboutique.test     | GUEST        | Panel general; portal de huesped pendiente                             |
-| recepcion@hotelboutique.test   | RECEPTION    | Panel, recepcion y operacion front desk                                |
-| limpieza@hotelboutique.test    | HOUSEKEEPING | Panel y limpieza                                                       |
-| conserjeria@hotelboutique.test | CONCIERGE    | Panel y conserjeria                                                    |
-| roomservice@hotelboutique.test | ROOM_SERVICE | Entra directo a `/pms/room-service` y usa el workspace de pedidos      |
+## Sesion y permisos
 
-La matriz de navegacion vive en `models/session.ts`; los enlaces, destinos de
-login y guardas comparten esta politica. El contrato ya distingue departamentos
-operativos desde la sesion, por eso RECEPCION, HOUSEKEEPING, CONCIERGE y
-ROOM_SERVICE aterrizan en sus rutas dedicadas cuando no hay URL privada previa.
-Si el equipo cambia literales o agrega portal de huesped, ajustar la matriz y
-las pruebas junto con ese contrato. Las secciones siguen siendo provisionales;
-este cambio no implementa sus funciones de negocio.
+El backend devuelve `accessToken`, `refreshToken`, `tokenType` y `expiresIn`.
+El frontend normaliza esa respuesta al contrato `AuthSession`: decodifica el
+JWT para leer `sub`, `ROLE_*`, `authorities`, `iat` y `exp`.
 
-Frontend beta usa estas mismas cuentas como fuente visible de usuarios en
-Administracion: `personnelService.getUsers()` deriva sus modelos desde
-`sessionAccountsDB`. Los permisos y nombres de rol siguen cruzandose con
-`rolesDB`/`permissionsDB`, por lo que cambiar un usuario aqui cambia login y
-la tabla administrativa a la vez.
+La fachada del modulo agrega permisos de navegacion (`Permission`) a partir del
+rol y de las authorities reales. `RequireSession` y `RequirePermission` siguen
+usando la sesion del provider, sin consultar fixtures mock.
 
-## Persistencia y cierre
+Los roles de sesion vigentes siguen siendo:
 
-WEB-05 es el unico propietario de `PMS_AUTH_SESSION` y del token de `httpClient`.
-`login` valida correo y contrasena, persiste el DTO y devuelve una `AuthSession`
-con fechas de dominio. La sesion vence ocho horas despues del login, sin cierre
-por inactividad ni renovacion al navegar. `getCurrentSession` restaura la fecha,
-comprueba vencimiento/estructura y reconstruye el usuario desde los datos mock,
-sin confiar en roles editados en el almacenamiento. `getCurrentUser` conserva
-su API y delega en la misma recuperacion.
+- `ADMIN`
+- `GUEST`
+- `RECEPTION`
+- `HOUSEKEEPING`
+- `CONCIERGE`
+- `ROOM_SERVICE`
 
-`logout` elimina inmediatamente persistencia y token HTTP, antes de la latencia
-y del posible error simulado. `clearSession` es la limpieza local sincrona que
-comparte esa operacion. Las solicitudes canceladas u obsoletas no guardan
-credenciales. AuthProvider cancela operaciones al desmontarse, recuperar otra
-sesion o cerrar sesion; el evento storage sincroniza cambios entre pestanas.
+La matriz de navegacion vive en `models/session.ts`. Si el backend cambia
+literales de roles o authorities, actualizar mapper, guards, tests y docs en el
+mismo PR.
 
-Las cuentas antiguas `@hotel.test` y la clave `hotel-aurora.auth.v1` se retiran:
-es necesario iniciar sesion de nuevo. Tambien se invalidan sesiones antiguas
-de WEB-05 con el token generico o un vencimiento fuera del nuevo plazo.
+## Persistencia, refresh y logout
 
-Todo sigue siendo una demo: los tokens y contrasenas son publicos y manipulables;
-la autorizacion real debe validarse en el servidor al integrar un backend.
+La persistencia local usa `PMS_AUTH_SESSION`. Guarda tokens y metadatos de
+sesion, nunca password ni permisos frontend materializados.
 
-## Errores y pruebas
+`http-client.ts` agrega `Authorization: Bearer <accessToken>` automaticamente.
+Al restaurar una sesion persistida, `authService` valida el `exp` del JWT y
+refresca antes de entregar la sesion si el access token ya vencio o vence en la
+ventana preventiva. Esto mantiene separadas las 8 horas de sesion frontend
+(`expiresAt`) de la expiracion real del JWT (`accessExpiresAt`).
+Si una peticion protegida responde `401`, intenta `POST /auth/refresh` una sola
+vez, actualiza access/refresh token y reintenta la peticion original una sola
+vez. Si refresh falla, limpia la sesion local y el usuario debe iniciar sesion
+de nuevo.
 
-Se usan los mecanismos de WEB-05: `mockUtils.setForceError(true)`,
-`setDelay(ms)` y `reset()`. Un error al recuperar sesion muestra una pantalla que
-permite reintentar. Ya no se utiliza `VITE_AUTH_FORCE_ERROR`.
+`logout` intenta revocar el refresh token con `POST /auth/logout`, pero siempre
+limpia la sesion local aunque el backend falle. La clave legacy
+`hotel-aurora.auth.v1` se elimina durante restauracion o limpieza.
 
-`npm run test:auth` ejecuta 14 pruebas con React Test Renderer, React Router en
-memoria y el servicio compartido real de la demo. Cubren login y contrasenas,
-seis roles, URLs denegadas, retorno seguro, persistencia, vencimiento, 404,
-recuperacion ante errores, sesion corrupta, cambios entre pestanas, token HTTP,
-logout con error simulado, migracion del almacenamiento y cancelacion del login.
+## CORS
 
-El usuario confirmo las pruebas manuales de la version conectada a WEB-05 y
-autorizo integrarla el 2026-09-07. WEB-06 se integra en `develop` sin conflictos.
-Las pruebas automaticas y la revision manual estan aprobadas; el merge no
-cierra automaticamente la issue #18.
+El backend local revisado permite `http://localhost:3000` en `CorsConfig`.
+Este frontend fija Vite en `http://localhost:3000` con `strictPort` para que el
+origen de desarrollo coincida con ese contrato. Si el puerto 3000 esta ocupado,
+liberarlo o ampliar CORS del backend antes de probar login real.
 
-Para futuras regresiones: probar las seis cuentas, contrasena incorrecta,
-recarga, acceso a una seccion ajena, cierre y navegacion Atras/Adelante.
+## Pruebas
+
+`npm run test:auth` mockea `fetch` con el contrato Spring y cubre:
+
+- login exitoso y credenciales invalidas;
+- Bearer automatico;
+- refresh preventivo al restaurar JWT vencido;
+- refresh + retry unico;
+- refresh fallido con limpieza local;
+- logout con envio de refresh token;
+- restauracion de sesion;
+- guards por rol y permisos.

@@ -17,6 +17,8 @@ export interface CashSessionDTO {
   opening_balance_cents: number;
   currency: Currency;
   status: CashSessionStatusDto;
+  total_income_cents?: number;
+  total_expense_cents?: number;
   closed_by_user_id?: string;
   closed_at?: string;
   expected_balance_cents?: number;

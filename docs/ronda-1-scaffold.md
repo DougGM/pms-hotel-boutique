@@ -50,6 +50,14 @@ a `bookingService.checkOut`, que cierra el folio, pasa la reserva a
 `dirty`). `GuestAccountScreen` permite registrar pagos en el folio ademas de
 consumos.
 
+**Actualizacion 2026-10-03 (#103):** los folios integrados con backend (UUID)
+no usan calculo local de saldo ni apertura/cierre mock. Las utilidades legacy
+de folio rechazan UUID y `voidCharge(chargeId, reason)` queda solo para cargos
+mock; un cargo UUID debe anularse con `voidCharge(chargeId, reason, bookingId)`.
+`GuestAccountScreen` carga folios UUID por `GET /bookings/{bookingId}/folio`
+y refresca el folio despues de registrar cargos o pagos, sin sumar/restar saldo
+en estado local.
+
 **Actualizacion 2026-09-22 (#72):** `GuestContent` resuelve al huesped desde la
 sesion, muestra sus reservas reales y ya no usa habitacion 402, fechas 2024 ni
 estancia fija del prototipo. Crear/cancelar pedidos y solicitudes, editar perfil,
@@ -175,6 +183,12 @@ del `PrivateLayout` clasico para `/pms/reception`, `/pms/housekeeping`,
 `/pms/room-service`, `/pms/concierge` y `/pms/dashboard`. `StaffLoginPage`
 restaura una URL privada segura si existe; si no existe, usa el rol de sesion
 para entrar directo al workspace operativo correspondiente.
+
+Nota 2026-10-01 (#99 / INT-01): el login y las guardas conservan la UI y rutas
+existentes, pero la sesion ya no nace de `sessionAccountsDB`. `authService`
+usa `/auth/login`, `/auth/refresh` y `/auth/logout` del backend Spring, y los
+roles/permisos de navegacion se derivan del JWT (`ROLE_*` y `authorities`).
+No cambia el alcance de pantallas ni el contrato visual Bolt.
 
 Nota 2026-09-30 (#95): el workspace de Administracion usa el sidebar como
 navegacion primaria para subsecciones. `PrivateWorkspace` define grupos

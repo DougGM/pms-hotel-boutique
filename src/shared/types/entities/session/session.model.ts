@@ -14,4 +14,7 @@ export interface AuthSession {
   token: string;
   refreshToken: string;
   expiresAt: Date;
+  accessExpiresAt?: Date;
+  tokenType?: string;
+  authorities: string[];
 }

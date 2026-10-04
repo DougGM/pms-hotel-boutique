@@ -249,7 +249,7 @@ export function CheckInScreen() {
       if (!account) {
         throw new Error('El check-in se completó, pero no se encontró la cuenta del huésped.');
       }
-      navigate(`/pms/accounts/${account.id}`);
+      navigate(`/pms/accounts/${account.bookingId}`);
     } catch (cause) {
       setActionError(getErrorMessage(cause));
       setCheckingIn(false);

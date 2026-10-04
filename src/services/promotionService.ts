@@ -5,25 +5,20 @@ import {
 } from '@/shared/types/entities/promotion';
 import { promotionsDB } from '@/data/db';
 import { mockUtils, requireCollection, simulateLatency } from './mockUtils';
-import { hydrateCollection, persistCollection } from './mockPersistence';
+import { httpClient } from './http-client';
 
-const promotionsStorageKey = 'PMS_PROMOTIONS_DB';
-
-function getPromotionsDB(): PromotionDto[] {
-  return hydrateCollection(promotionsStorageKey, promotionsDB);
-}
-
-function persistPromotionsDB(): void {
-  persistCollection(promotionsStorageKey, promotionsDB);
-}
-
-function createPromotionId(): string {
-  const max = getPromotionsDB().reduce((currentMax, promotion) => {
-    const match = /^PROM-(\d+)$/.exec(promotion.id);
-    return match ? Math.max(currentMax, Number(match[1])) : currentMax;
-  }, 0);
-  return `PROM-${String(max + 1).padStart(3, '0')}`;
-}
+type ApiPromotion = {
+  id: string;
+  code: string;
+  name: string;
+  description?: string;
+  discountPercent: number;
+  validFrom: string;
+  validTo?: string;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
 
 type SavePromotionData = {
   code: string;
@@ -35,11 +30,64 @@ type SavePromotionData = {
   active?: boolean;
 };
 
+const isOfflineError = (error: unknown): boolean =>
+  !(typeof error === 'object' && error !== null && 'status' in error) ||
+  (typeof error === 'object' && error !== null && 'status' in error && error.status === 404);
+
+function toPromotionDto(api: ApiPromotion): PromotionDto {
+  return {
+    id: api.id,
+    code: api.code,
+    name: api.name,
+    description: api.description ?? '',
+    discount_percent: api.discountPercent,
+    valid_from: api.validFrom,
+    valid_to: api.validTo ?? api.validFrom,
+    active: api.active,
+    created_at: api.createdAt,
+    updated_at: api.updatedAt,
+  };
+}
+
+function toRequest(data: SavePromotionData) {
+  return {
+    code: data.code.trim().toUpperCase(),
+    name: data.name.trim(),
+    description: data.description.trim(),
+    discountPercent: data.discount_percent,
+    validFrom: data.valid_from,
+    validTo: data.valid_to,
+    active: data.active ?? true,
+  };
+}
+
+async function getPromotionRequest(id: string, data: Partial<SavePromotionData>) {
+  const promotions = await httpClient.get<ApiPromotion[]>('/admin/promotions');
+  const found = promotions.find((promotion) => promotion.id === id);
+  if (!found) throw new Error(`No existe la promocion ${id}.`);
+  const current = toPromotionDto(found);
+  return toRequest({
+    code: data.code ?? current.code,
+    name: data.name ?? current.name,
+    description: data.description ?? current.description,
+    discount_percent: data.discount_percent ?? current.discount_percent,
+    valid_from: data.valid_from ?? current.valid_from,
+    valid_to: data.valid_to ?? current.valid_to,
+    active: data.active ?? current.active,
+  });
+}
+
 export const promotionService = {
   async getPromotions(): Promise<Promotion[]> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar las promociones.');
-    return requireCollection(getPromotionsDB(), 'promotionsDB').map(toPromotion);
+    try {
+      const promotions = await httpClient.get<ApiPromotion[]>('/admin/promotions');
+      return promotions.map(toPromotionDto).map(toPromotion);
+    } catch (error) {
+      if (!isOfflineError(error)) throw error;
+      return requireCollection(promotionsDB, 'promotionsDB').map(toPromotion);
+    }
   },
   async createPromotion(data: SavePromotionData): Promise<Promotion> {
     await simulateLatency();
@@ -50,44 +98,20 @@ export const promotionService = {
       throw new Error('El descuento debe ser un entero mayor a 0.');
     }
 
-    const now = new Date().toISOString();
-    const promotion: PromotionDto = {
-      id: createPromotionId(),
-      code: data.code.trim().toUpperCase(),
-      name: data.name.trim(),
-      description: data.description.trim(),
-      discount_percent: data.discount_percent,
-      valid_from: data.valid_from,
-      valid_to: data.valid_to,
-      active: data.active ?? true,
-      created_at: now,
-      updated_at: now,
-    };
-    getPromotionsDB().push(promotion);
-    persistPromotionsDB();
-    return toPromotion(promotion);
+    const promotion = await httpClient.post<ApiPromotion>('/admin/promotions', toRequest(data));
+    return toPromotion(toPromotionDto(promotion));
   },
   async updatePromotion(id: string, data: Partial<SavePromotionData>): Promise<Promotion> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible actualizar la promocion.');
-
-    const promotion = getPromotionsDB().find((item) => item.id === id);
-    if (!promotion) throw new Error(`No existe la promocion ${id}.`);
     if (data.discount_percent !== undefined) {
       if (!Number.isInteger(data.discount_percent) || data.discount_percent <= 0) {
         throw new Error('El descuento debe ser un entero mayor a 0.');
       }
-      promotion.discount_percent = data.discount_percent;
     }
-    if (data.code !== undefined) promotion.code = data.code.trim().toUpperCase();
-    if (data.name !== undefined) promotion.name = data.name.trim();
-    if (data.description !== undefined) promotion.description = data.description.trim();
-    if (data.valid_from !== undefined) promotion.valid_from = data.valid_from;
-    if (data.valid_to !== undefined) promotion.valid_to = data.valid_to;
-    if (data.active !== undefined) promotion.active = data.active;
-    promotion.updated_at = new Date().toISOString();
-    persistPromotionsDB();
-    return toPromotion(promotion);
+    const request = await getPromotionRequest(id, data);
+    const promotion = await httpClient.put<ApiPromotion>(`/admin/promotions/${id}`, request);
+    return toPromotion(toPromotionDto(promotion));
   },
 };
 export default promotionService;

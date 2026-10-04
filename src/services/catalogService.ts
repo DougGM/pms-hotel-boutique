@@ -1,77 +1,238 @@
-import { toDomain as toAmenity, type Amenity } from '@/shared/types/entities/amenity';
-import { toDomain as toProduct, type Product } from '@/shared/types/entities/product';
+import {
+  toDomain as toAmenity,
+  type Amenity,
+  type AmenityDto,
+} from '@/shared/types/entities/amenity';
+import {
+  toDomain as toProduct,
+  type Product,
+  type ProductDto,
+} from '@/shared/types/entities/product';
 import { amenitiesDB, productsDB } from '@/data/db';
 import { mockUtils, requireCollection, simulateLatency } from './mockUtils';
-import { hydrateCollection, persistCollection } from './mockPersistence';
+import { httpClient } from './http-client';
 
-const amenitiesStorageKey = 'PMS_AMENITIES_DB';
+type ApiAmenity = {
+  id: string;
+  name: string;
+  description?: string;
+  category: AmenityDto['category'];
+  location?: string;
+  opensAt?: string;
+  closesAt?: string;
+  active: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+};
 
-function getAmenitiesDB() {
-  return hydrateCollection(amenitiesStorageKey, amenitiesDB);
-}
-
-function createAmenityId(): string {
-  const max = getAmenitiesDB().reduce((currentMax, amenity) => {
-    const match = /^AMN-(\d+)$/.exec(amenity.id);
-    return match ? Math.max(currentMax, Number(match[1])) : currentMax;
-  }, 0);
-  return `AMN-${String(max + 1).padStart(2, '0')}`;
-}
+type ApiProduct = {
+  id: string;
+  sku: string;
+  name: string;
+  description?: string;
+  category: ProductDto['category'];
+  priceCents: number;
+  currency?: ProductDto['currency'];
+  active: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+};
 
 export type SaveAmenityData = {
   name: string;
   description?: string;
-  opens_at?: string;
-  closes_at?: string;
+  category: AmenityDto['category'];
+  location?: string;
+  opensAt?: string;
+  closesAt?: string;
   active?: boolean;
 };
+
+type SaveProductData = {
+  sku: string;
+  name: string;
+  description?: string;
+  category: ProductDto['category'];
+  priceCents: number;
+  currency?: ProductDto['currency'];
+  active?: boolean;
+};
+
+const nowIso = () => new Date().toISOString();
+const isOfflineError = (error: unknown): boolean =>
+  !(typeof error === 'object' && error !== null && 'status' in error) ||
+  (typeof error === 'object' && error !== null && 'status' in error && error.status === 404);
+
+function mapAmenityFromApi(api: ApiAmenity): AmenityDto {
+  const createdAt = api.createdAt ?? nowIso();
+  return {
+    id: api.id,
+    name: api.name,
+    description: api.description,
+    category: api.category,
+    location: api.location,
+    opens_at: api.opensAt,
+    closes_at: api.closesAt,
+    active: api.active,
+    created_at: createdAt,
+    updated_at: api.updatedAt ?? createdAt,
+  };
+}
+
+function mapProductFromApi(api: ApiProduct): ProductDto {
+  const timestamp = api.createdAt ?? nowIso();
+  return {
+    id: api.id,
+    sku: api.sku,
+    name: api.name,
+    description: api.description,
+    category: api.category,
+    price_cents: api.priceCents,
+    currency: api.currency ?? 'GTQ',
+    stock_quantity: 0,
+    reorder_level: 0,
+    active: api.active,
+    created_at: timestamp,
+    updated_at: api.updatedAt ?? timestamp,
+  };
+}
+
+function toAmenityRequest(data: SaveAmenityData) {
+  return {
+    name: data.name.trim(),
+    description: data.description?.trim() || undefined,
+    category: data.category,
+    location: data.location?.trim() || undefined,
+    opensAt: data.opensAt || undefined,
+    closesAt: data.closesAt || undefined,
+    active: data.active ?? true,
+  };
+}
+
+function toProductRequest(data: SaveProductData) {
+  return {
+    sku: data.sku.trim().toUpperCase(),
+    name: data.name.trim(),
+    description: data.description?.trim() || undefined,
+    category: data.category,
+    priceCents: data.priceCents,
+    currency: data.currency ?? 'GTQ',
+    active: data.active ?? true,
+  };
+}
+
 export const catalogService = {
   async getProducts(): Promise<Product[]> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar los productos.');
-    return requireCollection(productsDB, 'productsDB').map(toProduct);
+    try {
+      const products = await httpClient.get<ApiProduct[]>('/room-service/products');
+      return products.map(mapProductFromApi).map(toProduct);
+    } catch (error) {
+      if (!isOfflineError(error)) throw error;
+      return requireCollection(productsDB, 'productsDB').map(toProduct);
+    }
+  },
+  async getAdminProducts(): Promise<Product[]> {
+    await simulateLatency();
+    mockUtils.throwIfSimulatingError('No fue posible cargar el catalogo administrativo.');
+    try {
+      const products = await httpClient.get<ApiProduct[]>('/admin/room-service/products');
+      return products.map(mapProductFromApi).map(toProduct);
+    } catch (error) {
+      if (!isOfflineError(error)) throw error;
+      return requireCollection(productsDB, 'productsDB').map(toProduct);
+    }
+  },
+  async createAdminProduct(data: SaveProductData): Promise<Product> {
+    await simulateLatency();
+    mockUtils.throwIfSimulatingError('No fue posible crear el producto.');
+    if (!data.name.trim()) throw new Error('El producto requiere nombre.');
+    if (!data.sku.trim()) throw new Error('El producto requiere SKU.');
+    if (!Number.isInteger(data.priceCents) || data.priceCents < 1) {
+      throw new Error('El precio debe ser un entero mayor o igual a 1.');
+    }
+
+    const product = await httpClient.post<ApiProduct>(
+      '/admin/room-service/products',
+      toProductRequest(data),
+    );
+    return toProduct(mapProductFromApi(product));
+  },
+  async updateAdminProduct(id: string, data: Partial<SaveProductData>): Promise<Product> {
+    await simulateLatency();
+    mockUtils.throwIfSimulatingError('No fue posible actualizar el producto.');
+    if (
+      data.priceCents !== undefined &&
+      (!Number.isInteger(data.priceCents) || data.priceCents < 1)
+    ) {
+      throw new Error('El precio debe ser un entero mayor o igual a 1.');
+    }
+    const current = (await this.getAdminProducts()).find((product) => product.id === id);
+    if (!current) throw new Error(`No existe el producto ${id}.`);
+    const product = await httpClient.put<ApiProduct>(
+      `/admin/room-service/products/${id}`,
+      toProductRequest({
+        sku: data.sku ?? current.sku,
+        name: data.name ?? current.name,
+        description: data.description ?? current.description,
+        category:
+          data.category ??
+          (current.category === 'foodAndBeverage' ? 'food_and_beverage' : current.category),
+        priceCents: data.priceCents ?? current.priceCents,
+        currency: data.currency ?? current.currency,
+        active: data.active ?? current.active,
+      }),
+    );
+    return toProduct(mapProductFromApi(product));
   },
   async getAmenities(): Promise<Amenity[]> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar las amenidades.');
-    return requireCollection(getAmenitiesDB(), 'amenitiesDB').map(toAmenity);
+    try {
+      const amenities = await httpClient.get<ApiAmenity[]>('/admin/amenities?active=true');
+      return amenities.map(mapAmenityFromApi).map(toAmenity);
+    } catch (error) {
+      if (!isOfflineError(error)) throw error;
+      return requireCollection(amenitiesDB, 'amenitiesDB').map(toAmenity);
+    }
+  },
+  async getAdminAmenities(): Promise<Amenity[]> {
+    await simulateLatency();
+    mockUtils.throwIfSimulatingError('No fue posible cargar las amenidades.');
+    try {
+      const amenities = await httpClient.get<ApiAmenity[]>('/admin/amenities');
+      return amenities.map(mapAmenityFromApi).map(toAmenity);
+    } catch (error) {
+      if (!isOfflineError(error)) throw error;
+      return requireCollection(amenitiesDB, 'amenitiesDB').map(toAmenity);
+    }
   },
   async createAmenity(data: SaveAmenityData): Promise<Amenity> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible crear la amenidad.');
     if (!data.name.trim()) throw new Error('La amenidad requiere nombre.');
-    const now = new Date().toISOString();
-    const amenity = {
-      id: createAmenityId(),
-      name: data.name.trim(),
-      description: data.description?.trim(),
-      category: 'hotel' as const,
-      opens_at: data.opens_at,
-      closes_at: data.closes_at,
-      active: data.active ?? true,
-      created_at: now,
-      updated_at: now,
-    };
-    getAmenitiesDB().push(amenity);
-    persistCollection(amenitiesStorageKey, getAmenitiesDB());
-    return toAmenity(amenity);
+    const amenity = await httpClient.post<ApiAmenity>('/admin/amenities', toAmenityRequest(data));
+    return toAmenity(mapAmenityFromApi(amenity));
   },
   async updateAmenity(id: string, data: Partial<SaveAmenityData>): Promise<Amenity> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible actualizar la amenidad.');
-    const amenity = getAmenitiesDB().find((item) => item.id === id);
-    if (!amenity) throw new Error(`No existe la amenidad ${id}.`);
-    if (data.name !== undefined) {
-      if (!data.name.trim()) throw new Error('La amenidad requiere nombre.');
-      amenity.name = data.name.trim();
-    }
-    if (data.description !== undefined) amenity.description = data.description.trim();
-    if (data.opens_at !== undefined) amenity.opens_at = data.opens_at;
-    if (data.closes_at !== undefined) amenity.closes_at = data.closes_at;
-    if (data.active !== undefined) amenity.active = data.active;
-    amenity.updated_at = new Date().toISOString();
-    persistCollection(amenitiesStorageKey, getAmenitiesDB());
-    return toAmenity(amenity);
+    const current = (await this.getAdminAmenities()).find((amenity) => amenity.id === id);
+    if (!current) throw new Error(`No existe la amenidad ${id}.`);
+    const amenity = await httpClient.put<ApiAmenity>(
+      `/admin/amenities/${id}`,
+      toAmenityRequest({
+        name: data.name ?? current.name,
+        description: data.description ?? current.description,
+        category: data.category ?? current.category,
+        location: data.location ?? current.location,
+        opensAt: data.opensAt ?? current.opensAt,
+        closesAt: data.closesAt ?? current.closesAt,
+        active: data.active ?? current.active,
+      }),
+    );
+    return toAmenity(mapAmenityFromApi(amenity));
   },
 };
 export default catalogService;
