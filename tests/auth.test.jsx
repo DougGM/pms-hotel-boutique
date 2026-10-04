@@ -126,6 +126,10 @@ function installFetch() {
     ) {
       return json([]);
     }
+    // El workspace de Room Service carga catálogo y pedidos desde el backend (INT-10).
+    if (path === '/api/v1/room-service/products' || path === '/api/v1/room-service/orders') {
+      return json([]);
+    }
     if (path === '/api/v1/probe') {
       const payload = decodeAuth(init);
       if (!payload) return json({ message: 'Unauthorized' }, 401, 'Unauthorized');

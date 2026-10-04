@@ -1,10 +1,110 @@
 import { toDomain as toOrder, type Order, type OrderDto } from '@/shared/types/entities/order';
 import type { ID } from '@/shared/types/common';
-import { ORDER_STATUS_TRANSITIONS, type OrderStatus } from '@/shared/constants/statuses';
-import { bookingsDB, ordersDB, productsDB, roomsDB, usersDB } from '@/data/db';
+import type { OrderStatus } from '@/shared/constants/statuses';
+import { bookingsDB, ordersDB, productsDB, roomsDB } from '@/data/db';
 import { mockUtils, requireCollection, simulateLatency } from './mockUtils';
-import { guestAccountService } from './guestAccountService';
+import { HttpError, httpClient } from './http-client';
 import { hydrateCollection, persistCollection } from './mockPersistence';
+
+// INT-10: el personal opera los pedidos contra `RoomServiceController`. El
+// backend decide las transiciones, descuenta/devuelve inventario y genera el
+// cargo al folio al entregar; este servicio no replica nada de eso.
+
+type RoomServiceOrderItemResponse = {
+  id: string;
+  productId: string;
+  productName?: string | null;
+  quantity: number;
+  unitPriceCents: number;
+  lineTotalCents?: number | null;
+};
+
+type RoomServiceOrderResponse = {
+  id: string;
+  bookingId: string;
+  roomId?: string | null;
+  roomNumber?: string | null;
+  guestId?: string | null;
+  guestName?: string | null;
+  status: OrderDto['status'];
+  notes?: string | null;
+  currency: string;
+  totalCents?: number | null;
+  items: RoomServiceOrderItemResponse[];
+  chargeId?: string | null;
+  requestedAt: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+function normalizeCurrency(value: string): OrderDto['currency'] {
+  if (value !== 'GTQ') {
+    throw new Error(`Room Service solo admite moneda GTQ; backend devolvio ${value}.`);
+  }
+  return 'GTQ';
+}
+
+function toOrderDto(response: RoomServiceOrderResponse): OrderDto {
+  return {
+    id: response.id,
+    booking_id: response.bookingId,
+    room_id: response.roomId ?? '',
+    room_number: response.roomNumber ?? undefined,
+    guest_id: response.guestId ?? undefined,
+    guest_name: response.guestName ?? undefined,
+    items: response.items.map((item) => ({
+      product_id: item.productId,
+      quantity: item.quantity,
+      unit_price_cents: item.unitPriceCents,
+      product_name: item.productName ?? undefined,
+      line_total_cents: item.lineTotalCents ?? undefined,
+    })),
+    status: response.status,
+    notes: response.notes ?? undefined,
+    currency: normalizeCurrency(response.currency),
+    total_cents: response.totalCents ?? undefined,
+    charge_id: response.chargeId ?? undefined,
+    requested_at: response.requestedAt,
+    created_at: response.createdAt,
+    updated_at: response.updatedAt,
+  };
+}
+
+function toStatusParam(status: OrderStatus): OrderDto['status'] {
+  return status === 'onTheWay' ? 'on_the_way' : status;
+}
+
+function withQuery(path: string, params: Record<string, string | undefined>): string {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value) query.set(key, value);
+  }
+  const search = query.toString();
+  return search ? `${path}?${search}` : path;
+}
+
+function getHttpErrorMessage(error: unknown, fallback: string): string {
+  if (!(error instanceof HttpError)) return error instanceof Error ? error.message : fallback;
+  if (error.status === 400) {
+    return `${fallback} El backend rechazó la operación: el pedido cambió de estado, no hay stock suficiente o el folio no está abierto.`;
+  }
+  if (error.status === 401) return 'Tu sesión expiró. Inicia sesión nuevamente.';
+  if (error.status === 403) return 'No tienes permisos para operar Room Service.';
+  if (error.status === 404) return `${fallback} El pedido, la reserva o el folio no existe.`;
+  return fallback;
+}
+
+async function request<T>(call: () => Promise<T>, fallback: string): Promise<T> {
+  try {
+    return await call();
+  } catch (error) {
+    throw new Error(getHttpErrorMessage(error, fallback));
+  }
+}
+
+// --- Portal del huésped (pendiente INT-12) -----------------------------------
+// El huésped entra con un token sin `room-service.*`; sus endpoints son
+// `/guest/room-service/...`. Hasta INT-12 estos métodos siguen sobre el mock.
 
 const ordersStorageKey = 'PMS_ORDERS_DB';
 
@@ -24,63 +124,74 @@ function nextOrderId(): string {
   return `ORD-${String(max + 1).padStart(3, '0')}`;
 }
 
-function assertOrderExists(id: ID) {
-  const order = getOrdersDB().find((item) => item.id === id);
-  if (!order) throw new Error(`No existe el pedido ${id}.`);
-  return order;
-}
-
-function ensureValidTransition(current: OrderStatus, next: OrderStatus): void {
-  if (current === next) return;
-  if (!ORDER_STATUS_TRANSITIONS[current].includes(next)) {
-    throw new Error(`Transicion invalida de pedido: ${current} -> ${next}.`);
-  }
-}
-
-function toDtoStatus(status: OrderStatus): OrderDto['status'] {
-  return status === 'onTheWay' ? 'on_the_way' : status;
-}
-
-function validateChargeCreatorId(createdByUserId?: ID): ID | undefined {
-  if (!createdByUserId) return undefined;
-  const user = usersDB.find((item) => item.id === createdByUserId);
-  if (!user) throw new Error(`No existe el usuario operativo ${createdByUserId}.`);
-  return user.id;
-}
-
-function ensureRoomServiceCharge(order: OrderDto, createdByUserId?: ID): Promise<ID> {
-  const existingChargeId = order.charge_id;
-  if (existingChargeId) return Promise.resolve(existingChargeId);
-
-  const totalCents = order.items.reduce(
-    (sum, item) => sum + item.quantity * item.unit_price_cents,
-    0,
-  );
-  const validCreatedByUserId = validateChargeCreatorId(createdByUserId);
-  return guestAccountService
-    .createCharge({
-      booking_id: order.booking_id,
-      description: `Room service - Pedido ${order.id}`,
-      quantity: 1,
-      unit_price_cents: totalCents,
-      currency: order.currency,
-      category: 'consumption',
-      created_by_user_id: validCreatedByUserId,
-    })
-    .then((charge) => charge.id);
-}
-
 export const orderService = {
-  async getOrders(): Promise<Order[]> {
-    await simulateLatency();
-    mockUtils.throwIfSimulatingError('No fue posible cargar los pedidos.');
-    return requireCollection(getOrdersDB(), 'ordersDB').map(toOrder);
+  async getOrders(filters: { bookingId?: ID; status?: OrderStatus } = {}): Promise<Order[]> {
+    const response = await request(
+      () =>
+        httpClient.get<RoomServiceOrderResponse[]>(
+          withQuery('/room-service/orders', {
+            bookingId: filters.bookingId,
+            status: filters.status ? toStatusParam(filters.status) : undefined,
+          }),
+        ),
+      'No fue posible cargar los pedidos.',
+    );
+    return response.map((item) => toOrder(toOrderDto(item)));
   },
   async getOrderById(id: ID): Promise<Order | undefined> {
-    await simulateLatency();
-    mockUtils.throwIfSimulatingError('No fue posible cargar el pedido.');
-    const order = getOrdersDB().find((item) => item.id === id);
-    return order ? toOrder(order) : undefined;
+    try {
+      const response = await httpClient.get<RoomServiceOrderResponse>(`/room-service/orders/${id}`);
+      return toOrder(toOrderDto(response));
+    } catch (error) {
+      if (error instanceof HttpError && error.status === 404) return undefined;
+      throw new Error(getHttpErrorMessage(error, 'No fue posible cargar el pedido.'));
+    }
+  },
+  /** Creación desde el personal: el backend toma habitación, huésped y precios de la reserva. */
+  async createStaffOrder(data: {
+    bookingId: ID;
+    items: { productId: ID; quantity: number }[];
+    notes?: string;
+  }): Promise<Order> {
+    if (data.items.length === 0) throw new Error('Agrega al menos un producto al pedido.');
+    const response = await request(
+      () =>
+        httpClient.post<RoomServiceOrderResponse>('/room-service/orders', {
+          bookingId: data.bookingId,
+          notes: data.notes?.trim() || undefined,
+          items: data.items.map((item) => ({
+            productId: item.productId,
+            quantity: item.quantity,
+          })),
+        }),
+      'No fue posible crear el pedido.',
+    );
+    return toOrder(toOrderDto(response));
+  },
+  /**
+   * Cambia el estado en backend. `notes` viaja junto con el cambio (p. ej. el
+   * motivo de un rechazo o cancelación); si se omite, el backend conserva las notas.
+   */
+  async updateOrderStatus(orderId: ID, status: OrderStatus, notes?: string): Promise<Order> {
+    const response = await request(
+      () =>
+        httpClient.post<RoomServiceOrderResponse>(`/room-service/orders/${orderId}/status`, {
+          status: toStatusParam(status),
+          notes,
+        }),
+      'No fue posible actualizar el pedido.',
+    );
+    return toOrder(toOrderDto(response));
+  },
+  async updateOrderNotes(orderId: ID, notes: string): Promise<Order> {
+    const response = await request(
+      () =>
+        httpClient.patch<RoomServiceOrderResponse>(`/room-service/orders/${orderId}/notes`, {
+          notes,
+        }),
+      'No fue posible guardar la observación del pedido.',
+    );
+    return toOrder(toOrderDto(response));
   },
   async getOrdersByGuestId(guestId: ID): Promise<Order[]> {
     await simulateLatency();
@@ -148,7 +259,8 @@ export const orderService = {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cancelar el pedido.');
 
-    const order = assertOrderExists(orderId);
+    const order = getOrdersDB().find((item) => item.id === orderId);
+    if (!order) throw new Error(`No existe el pedido ${orderId}.`);
     if (guestId && order.guest_id !== guestId) {
       throw new Error('El pedido no pertenece al huesped autenticado.');
     }
@@ -157,37 +269,6 @@ export const orderService = {
     }
 
     order.status = 'cancelled';
-    order.updated_at = new Date().toISOString();
-    persistOrdersDB();
-    return toOrder(order);
-  },
-  async updateOrderStatus(
-    orderId: ID,
-    status: OrderStatus,
-    notes?: string,
-    options: { createdByUserId?: ID } = {},
-  ): Promise<Order> {
-    await simulateLatency();
-    mockUtils.throwIfSimulatingError('No fue posible actualizar el pedido.');
-
-    const order = assertOrderExists(orderId);
-    const current = toOrder(order).status;
-    ensureValidTransition(current, status);
-    if (status === 'delivered') {
-      order.charge_id = await ensureRoomServiceCharge(order, options.createdByUserId);
-    }
-    order.status = toDtoStatus(status);
-    if (notes !== undefined) order.notes = notes.trim() || undefined;
-    order.updated_at = new Date().toISOString();
-    persistOrdersDB();
-    return toOrder(order);
-  },
-  async updateOrderNotes(orderId: ID, notes: string): Promise<Order> {
-    await simulateLatency();
-    mockUtils.throwIfSimulatingError('No fue posible guardar la observacion del pedido.');
-
-    const order = assertOrderExists(orderId);
-    order.notes = notes.trim() || undefined;
     order.updated_at = new Date().toISOString();
     persistOrdersDB();
     return toOrder(order);

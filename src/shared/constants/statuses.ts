@@ -116,8 +116,9 @@ export type OrderStatus = (typeof ORDER_STATUSES)[number];
 export const ORDER_STATUS_TRANSITIONS: Record<OrderStatus, readonly OrderStatus[]> = {
   pending: ['accepted', 'rejected', 'cancelled'],
   accepted: ['preparing', 'cancelled'],
-  preparing: ['ready'],
-  ready: ['onTheWay'],
+  // Igual que RoomServiceOrderServiceImpl: se cancela hasta `ready`, no en camino.
+  preparing: ['ready', 'cancelled'],
+  ready: ['onTheWay', 'cancelled'],
   onTheWay: ['delivered'],
   delivered: [],
   rejected: [],
