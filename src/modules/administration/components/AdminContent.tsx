@@ -262,6 +262,7 @@ const ROLE_ACCESS_GROUPS = [
       'Servicios de habitación',
       'Room service',
       'Mis solicitudes y pedidos',
+      'Notificaciones',
     ],
   },
 ] as const;

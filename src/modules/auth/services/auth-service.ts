@@ -11,9 +11,15 @@ export const authService = {
       await sharedAuthService.login(credentials.email, credentials.password, signal),
     );
   },
+  async linkGuest(code: string, signal?: AbortSignal): Promise<Session> {
+    return toSession(await sharedAuthService.linkGuest(code, signal));
+  },
   async restore(signal?: AbortSignal): Promise<Session | null> {
     const session = await sharedAuthService.getCurrentSession(signal);
     return session ? toSession(session) : null;
   },
   logout: () => sharedAuthService.logout(),
+  markGuestAccessExpired: () => sharedAuthService.markGuestAccessExpired(),
+  isGuestAccessExpired: () => sharedAuthService.isGuestAccessExpired(),
+  clearGuestAccessExpired: () => sharedAuthService.clearGuestAccessExpired(),
 };

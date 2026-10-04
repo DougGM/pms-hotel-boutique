@@ -31,10 +31,12 @@ export type GuestNotification = {
 export type GuestServiceRequest = {
   id: number;
   sourceId: string;
+  /** Limpieza de estancia (`/guest/housekeeping`) o Conserjería (`/guest/concierge`). */
+  kind: 'housekeeping' | 'concierge';
   type: string;
   description: string;
   time: string;
-  status: 'Pendiente' | 'En proceso' | 'Completada' | 'Cancelada';
+  status: 'Pendiente' | 'Aceptada' | 'En proceso' | 'Completada' | 'Cancelada';
   room: string;
 };
 
@@ -61,7 +63,8 @@ export type GuestOrder = {
   sourceId: string;
   items: { name: string; quantity: number; price: number }[];
   time: string;
-  status: 'Pendiente' | 'Aceptado' | 'En preparación' | 'En camino' | 'Entregado' | 'Cancelado';
+  status:
+    'Pendiente' | 'Aceptado' | 'En preparación' | 'Listo' | 'En camino' | 'Entregado' | 'Cancelado';
   note: string;
   room: string;
 };
@@ -86,7 +89,10 @@ export const resStatusClass = (status: ReservationStatus): string =>
 export const orderStatusClass = (status: string): string =>
   status === 'Pendiente'
     ? 'warning'
-    : status === 'Aceptado' || status === 'En preparación' || status === 'En camino'
+    : status === 'Aceptado' ||
+        status === 'En preparación' ||
+        status === 'Listo' ||
+        status === 'En camino'
       ? 'info'
       : status === 'Entregado'
         ? 'success'
@@ -110,9 +116,10 @@ export function ReservationDetailModal({
 }: {
   reservation: Reservation;
   onClose: () => void;
-  onModify: () => void;
-  onCancel: () => void;
-  onReceipt: () => void;
+  /** Sin callback, la acción no tiene endpoint de huésped y se consulta en recepción (INT-12). */
+  onModify?: () => void;
+  onCancel?: () => void;
+  onReceipt?: () => void;
 }) {
   const nights = Math.max(
     1,
@@ -165,11 +172,13 @@ export function ReservationDetailModal({
           </div>
           <div>
             <small>Tarifa/noche</small>
-            <strong>{money(reservation.rate)}</strong>
+            <strong>
+              {reservation.rate > 0 ? money(reservation.rate) : 'Consulta en recepción'}
+            </strong>
           </div>
           <div>
             <small>Total estancia</small>
-            <strong>{money(total)}</strong>
+            <strong>{reservation.rate > 0 ? money(total) : 'Consulta en recepción'}</strong>
           </div>
         </div>
         <div className="gs-detail-section">
@@ -201,20 +210,31 @@ export function ReservationDetailModal({
           <button className="button secondary" onClick={onClose}>
             Cerrar
           </button>
-          <button className="button secondary" onClick={onReceipt}>
-            <Download size={15} /> Recibo
-          </button>
+          {onReceipt && (
+            <button className="button secondary" onClick={onReceipt}>
+              <Download size={15} /> Recibo
+            </button>
+          )}
           {!['Cancelada', 'Anulada', 'Check-out'].includes(reservation.status) && (
             <>
-              <button className="button secondary" onClick={onModify}>
-                <CalendarDays size={15} /> Modificar
-              </button>
-              <button className="button terracotta-btn" onClick={onCancel}>
-                <Ban size={15} /> Cancelar
-              </button>
+              {onModify && (
+                <button className="button secondary" onClick={onModify}>
+                  <CalendarDays size={15} /> Modificar
+                </button>
+              )}
+              {onCancel && (
+                <button className="button terracotta-btn" onClick={onCancel}>
+                  <Ban size={15} /> Cancelar
+                </button>
+              )}
             </>
           )}
         </div>
+        {!onReceipt && !onModify && !onCancel && (
+          <p className="muted">
+            Para modificar tu reserva, cancelarla o pedir tu recibo, consulta en recepción.
+          </p>
+        )}
       </div>
     </div>
   );

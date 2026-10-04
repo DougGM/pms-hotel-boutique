@@ -14,7 +14,6 @@ import {
   Home,
   LogOut,
   Package,
-  Pencil,
   Plus,
   ShieldCheck,
   Sparkles,
@@ -24,29 +23,21 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { Reservation, GuestInfo } from '@/private/workspace/PrivateWorkspace';
-import { bookingService } from '@/services/bookingService';
 import { catalogService } from '@/services/catalogService';
-import { guestAccountService } from '@/services/guestAccountService';
-import { guestService } from '@/services/guestService';
-import { notificationService } from '@/services/notificationService';
+import { guestPortalService, type GuestStay } from '@/services/guestPortalService';
+import { housekeepingService } from '@/services/housekeepingService';
+import { notificationService, type Notification } from '@/services/notificationService';
 import { orderService } from '@/services/orderService';
-import { reportingService, type StayReceipt } from '@/services/reportingService';
-import { roomService } from '@/services/roomService';
 import { serviceRequestService } from '@/services/serviceRequestService';
 import { ErrorState } from '@/shared/components/ErrorState';
 import { LoadingState } from '@/shared/components/LoadingState';
-import type { Booking } from '@/shared/types/entities/booking';
-import type { Guest } from '@/shared/types/entities/guest';
-import type { RoomType as RoomTypeModel } from '@/shared/types/entities/room-type';
+import type { Order } from '@/shared/types/entities/order';
+import type { Product } from '@/shared/types/entities/product';
+import type { ServiceRequest } from '@/shared/types/entities/service-request';
 import { toDomainCalendarDate, toDtoCalendarDate } from '@/shared/types/common';
 import { calculateNights } from '@/shared/utils/date';
 import {
   CancelOrderModal,
-  CancelReservationModal,
-  EditProfileModal,
-  LinkReservationModal,
-  ModifyReservationModal,
-  ReceiptModal,
   RequestServiceModal,
   ReservationDetailModal,
   money,
@@ -80,267 +71,43 @@ const AMENITY_ICONS: LucideIcon[] = [
   Clock,
 ];
 
-function parseDbId(id: string, fallback: number) {
-  const value = Number(id.replace(/\D/g, ''));
-  return Number.isFinite(value) && value > 0 ? value : fallback;
-}
-
 function centsToAmount(cents: number) {
   return Math.round(cents / 100);
 }
-
-const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function formatDbTime(value?: Date) {
   if (!value) return '';
   return value.toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit', hour12: false });
 }
 
-function pdfText(value: string) {
-  const bytes = ['FE', 'FF'];
-  for (let i = 0; i < value.length; i += 1) {
-    const code = value.charCodeAt(i);
-    bytes.push(code.toString(16).padStart(4, '0').toUpperCase().slice(0, 2));
-    bytes.push(code.toString(16).padStart(4, '0').toUpperCase().slice(2));
-  }
-  return `<${bytes.join('')}>`;
-}
-
-function wrapPdfLine(value: string, maxLength: number) {
-  const words = value.split(' ');
-  const lines: string[] = [];
-  let current = '';
-
-  words.forEach((word) => {
-    const next = current ? `${current} ${word}` : word;
-    if (next.length <= maxLength) {
-      current = next;
-      return;
-    }
-    if (current) lines.push(current);
-    current = word;
-  });
-
-  if (current) lines.push(current);
-  return lines;
-}
-
-function buildReservationReceiptPdf(reservation: Reservation) {
-  const active = reservation.folio.filter((entry) => entry.status === 'Activo');
-  const charges = active
-    .filter((entry) => entry.type === 'Cargo')
-    .reduce((sum, entry) => sum + entry.amount, 0);
-  const payments = active
-    .filter((entry) => entry.type === 'Pago')
-    .reduce((sum, entry) => sum + entry.amount, 0);
-  const deposits = active
-    .filter((entry) => entry.type === 'Depósito')
-    .reduce((sum, entry) => sum + entry.amount, 0);
-  const balance = Math.max(0, charges - payments - deposits);
-  const nights = Math.max(
-    1,
-    calculateNights(
-      toDomainCalendarDate(reservation.checkIn),
-      toDomainCalendarDate(reservation.checkOut),
-    ),
-  );
-
-  const pageStreams: string[] = [];
-  let content = '';
-  let y = 790;
-
-  const addPage = () => {
-    if (content) pageStreams.push(content);
-    content = '';
-    y = 790;
-  };
-
-  const drawText = (text: string, x: number, size = 10, bold = false) => {
-    if (y < 64) addPage();
-    const font = bold ? 'F2' : 'F1';
-    content += `BT /${font} ${size} Tf ${x} ${y} Td ${pdfText(text)} Tj ET\n`;
-    y -= size + 7;
-  };
-
-  const drawRule = () => {
-    content += `0.78 0.72 0.64 RG 48 ${y} m 547 ${y} l S\n`;
-    y -= 18;
-  };
-
-  drawText('Hotel Aurora', 48, 18, true);
-  drawText('Sede Centro · RFC AUR850101', 48, 10);
-  y -= 8;
-  drawText(`Recibo de reserva #${reservation.code}`, 48, 15, true);
-  drawText(`Generado el ${new Date().toLocaleDateString('es-MX')}`, 48, 10);
-  drawRule();
-
-  drawText('Titular', 48, 11, true);
-  drawText(`${reservation.guest.name} ${reservation.guest.lastName}`, 48, 11);
-  drawText(reservation.guest.email, 48, 10);
-  y -= 8;
-
-  drawText('Estancia', 48, 11, true);
-  drawText(`Habitación: ${reservation.roomNumber} · ${reservation.roomType}`, 48, 10);
-  drawText(`Fechas: ${fmtDate(reservation.checkIn)} - ${fmtDate(reservation.checkOut)}`, 48, 10);
-  drawText(`Noches: ${nights}`, 48, 10);
-  drawRule();
-
-  drawText('Detalle de cargos', 48, 12, true);
-  if (active.length === 0) {
-    drawText('Sin movimientos registrados', 48, 10);
-  } else {
-    active.forEach((entry) => {
-      const sign = entry.type === 'Cargo' ? '+' : '-';
-      const amount = `${sign}${money(entry.amount)}`;
-      wrapPdfLine(`${entry.type} · ${entry.concept}`, 68).forEach((line, index) => {
-        drawText(index === 0 ? `${line}  ${amount}` : line, 48, 10, index === 0);
-      });
-      drawText(`${fmtDate(entry.date)}${entry.method ? ` · ${entry.method}` : ''}`, 64, 9);
-      y -= 2;
-    });
-  }
-  drawRule();
-
-  drawText(`Cargos: ${money(charges)}`, 48, 10);
-  drawText(`Pagos: -${money(payments)}`, 48, 10);
-  drawText(`Depósitos: -${money(deposits)}`, 48, 10);
-  drawText(`Saldo pendiente: ${money(balance)}`, 48, 12, true);
-
-  if (content) pageStreams.push(content);
-
-  const pageRefs: { pageId: number; contentId: number }[] = [];
-  let nextId = 5;
-  pageStreams.forEach(() => {
-    pageRefs.push({ pageId: nextId, contentId: nextId + 1 });
-    nextId += 2;
-  });
-
-  const objects: string[] = [];
-  objects[1] = '<< /Type /Catalog /Pages 2 0 R >>';
-  objects[2] =
-    `<< /Type /Pages /Kids [${pageRefs.map((page) => `${page.pageId} 0 R`).join(' ')}] ` +
-    `/Count ${pageRefs.length} >>`;
-  objects[3] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>';
-  objects[4] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>';
-  pageRefs.forEach((page, index) => {
-    const stream = pageStreams[index];
-    objects[page.pageId] =
-      '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] ' +
-      '/Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> ' +
-      `/Contents ${page.contentId} 0 R >>`;
-    objects[page.contentId] = `<< /Length ${stream.length} >>\nstream\n${stream}endstream`;
-  });
-
-  let pdf = '%PDF-1.4\n';
-  const offsets = [0];
-  for (let id = 1; id < objects.length; id += 1) {
-    offsets[id] = pdf.length;
-    pdf += `${id} 0 obj\n${objects[id]}\nendobj\n`;
-  }
-  const xrefOffset = pdf.length;
-  pdf += `xref\n0 ${objects.length}\n0000000000 65535 f \n`;
-  for (let id = 1; id < objects.length; id += 1) {
-    pdf += `${offsets[id].toString().padStart(10, '0')} 00000 n \n`;
-  }
-  pdf += `trailer\n<< /Size ${objects.length} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
-  return pdf;
-}
-
-function receiptToReservation(reservation: Reservation, receipt: StayReceipt): Reservation {
-  return {
-    ...reservation,
-    guest: {
-      ...reservation.guest,
-      name: receipt.stay.guestFirstName,
-      lastName: receipt.stay.guestLastName,
-    },
-    roomNumber: receipt.stay.roomNumber ?? reservation.roomNumber,
-    roomType: receipt.stay.roomTypeName.includes('Suite')
-      ? 'Suite'
-      : receipt.stay.roomTypeName.includes('Deluxe')
-        ? 'Deluxe'
-        : reservation.roomType,
-    checkIn: receipt.stay.checkIn,
-    checkOut: receipt.stay.checkOut,
-    folio: [
-      ...receipt.charges.map((charge, index) => ({
-        id: parseDbId(charge.id, index + 1),
-        concept: charge.description,
-        category: 'Cargo',
-        amount: centsToAmount(charge.amountCents),
-        date: toDtoCalendarDate(charge.chargedAt),
-        type: 'Cargo' as const,
-        status: charge.status === 'voided' ? ('Anulado' as const) : ('Activo' as const),
-      })),
-      ...receipt.payments.map((payment, index) => ({
-        id: parseDbId(payment.id, 4000 + index),
-        concept: 'Pago registrado',
-        category: 'Pago',
-        amount: centsToAmount(payment.amountCents),
-        date: toDtoCalendarDate(payment.paidAt ?? payment.createdAt),
-        type: 'Pago' as const,
-        status:
-          payment.status === 'failed' || payment.status === 'refunded'
-            ? ('Anulado' as const)
-            : ('Activo' as const),
-      })),
-      ...receipt.deposits.map((deposit, index) => ({
-        id: parseDbId(deposit.id, 6000 + index),
-        concept: 'Depósito garantía',
-        category: 'Depósito',
-        amount: centsToAmount(deposit.amountCents),
-        date: toDtoCalendarDate(deposit.collectedAt),
-        type: 'Depósito' as const,
-        status: deposit.status === 'refunded' ? ('Anulado' as const) : ('Activo' as const),
-      })),
-    ],
-  };
-}
-
-async function downloadReservationReceiptPdf(reservation: Reservation) {
-  const source =
-    reservation.bookingId && uuidPattern.test(reservation.bookingId)
-      ? receiptToReservation(
-          reservation,
-          await reportingService.getStayReceipt(reservation.bookingId),
-        )
-      : reservation;
-  const pdf = buildReservationReceiptPdf(source);
-  const blob = new Blob([pdf], { type: 'application/pdf' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  const safeCode = source.code.replace(/[^a-z0-9-]/gi, '-').toLowerCase();
-  link.href = url;
-  link.download = `recibo-${safeCode}.pdf`;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 0);
-}
-
-function getRoomTypeLabel(
-  roomTypeId: string | undefined,
-  roomTypes: RoomTypeModel[],
-): Reservation['roomType'] {
-  const roomType = roomTypes.find((type) => type.id === roomTypeId);
-  const name = roomType?.name.toLowerCase() ?? '';
-  if (name.includes('suite')) return 'Suite';
-  if (name.includes('deluxe')) return 'Deluxe';
-  return 'Estándar';
-}
-
-function mapReservationStatus(status: Booking['status']): Reservation['status'] {
+// Estado de la reserva tal como lo devuelve `/guest/stay` (literales del backend).
+function mapStayStatus(status: string): Reservation['status'] {
+  if (status === 'checked_in') return 'Check-in';
+  if (status === 'checked_out') return 'Check-out';
   if (status === 'confirmed') return 'Confirmada';
-  if (status === 'checkedIn') return 'Check-in';
-  if (status === 'checkedOut') return 'Check-out';
   if (status === 'cancelled') return 'Cancelada';
-  if (status === 'noShow') return 'Anulada';
+  if (status === 'no_show') return 'Anulada';
   return 'Pendiente';
 }
 
+function roomTypeLabel(name?: string): Reservation['roomType'] {
+  const normalized = name?.toLowerCase() ?? '';
+  if (normalized.includes('suite')) return 'Suite';
+  if (normalized.includes('deluxe')) return 'Deluxe';
+  return 'Estándar';
+}
+
+const PRODUCT_CATEGORY_LABELS: Record<Product['category'], string> = {
+  foodAndBeverage: 'Alimentos y bebidas',
+  minibar: 'Minibar',
+  shop: 'Tienda',
+  other: 'Otros',
+};
+
 function mapOrderStatus(status: string): GuestOrder['status'] {
   if (status === 'accepted') return 'Aceptado';
-  if (status === 'preparing' || status === 'ready') return 'En preparación';
+  if (status === 'preparing') return 'En preparación';
+  if (status === 'ready') return 'Listo';
   if (status === 'onTheWay') return 'En camino';
   if (status === 'delivered') return 'Entregado';
   if (status === 'cancelled' || status === 'rejected') return 'Cancelado';
@@ -350,8 +117,31 @@ function mapOrderStatus(status: string): GuestOrder['status'] {
 function mapRequestStatus(status: string): GuestServiceRequest['status'] {
   if (status === 'completed') return 'Completada';
   if (status === 'cancelled' || status === 'rejected') return 'Cancelada';
-  if (status === 'accepted' || status === 'inProgress') return 'En proceso';
+  if (status === 'accepted') return 'Aceptada';
+  if (status === 'inProgress') return 'En proceso';
   return 'Pendiente';
+}
+
+const CANCELLABLE_GUEST_ORDER_STATUSES: readonly GuestOrder['status'][] = [
+  'Pendiente',
+  'Aceptado',
+  'En preparación',
+  'Listo',
+];
+
+const CANCELLABLE_CONCIERGE_STATUSES: readonly GuestServiceRequest['status'][] = [
+  'Pendiente',
+  'Aceptada',
+  'En proceso',
+];
+
+function canCancelGuestOrder(order: GuestOrder): boolean {
+  return CANCELLABLE_GUEST_ORDER_STATUSES.includes(order.status);
+}
+
+function canCancelGuestRequest(request: GuestServiceRequest): boolean {
+  if (request.kind === 'housekeeping') return request.status === 'Pendiente';
+  return CANCELLABLE_CONCIERGE_STATUSES.includes(request.status);
 }
 
 type ScreenState =
@@ -362,81 +152,108 @@ type ScreenState =
       profile: GuestInfo;
       reservations: PortalReservation[];
       notifications: GuestNotification[];
+      unreadCount: number;
       serviceRequests: GuestServiceRequest[];
       menu: GuestMenuItem[];
       orders: GuestOrder[];
       amenities: GuestAmenity[];
     };
 
+/**
+ * La única reserva visible es la del JWT de huésped (`/guest/stay`): el portal
+ * nunca elige un bookingId ni consulta reservas ajenas (INT-12).
+ */
 type PortalReservation = Reservation & {
   bookingId: string;
   guestId: string;
   roomId?: string;
-  roomTypeId: string;
-  adults: number;
-  children: number;
   balanceCents: number;
-  currency: Booking['currency'];
 };
 
-function normalize(value: string) {
-  return value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .trim();
+function toPortalReservation(stay: GuestStay, profile: GuestInfo): PortalReservation {
+  return {
+    id: 1,
+    bookingId: stay.bookingId,
+    guestId: stay.guestId,
+    roomId: stay.roomId,
+    balanceCents: stay.balanceCents,
+    code: stay.bookingId.slice(0, 8).toUpperCase(),
+    checkIn: toDtoCalendarDate(stay.checkIn),
+    checkOut: toDtoCalendarDate(stay.checkOut),
+    roomNumber: stay.roomNumber ?? 'Sin asignar',
+    roomType: roomTypeLabel(stay.roomTypeName),
+    // `/guest/stay` no expone tarifa ni ocupación: la UI las muestra como "consulta en recepción".
+    rate: 0,
+    guestCount: 0,
+    status: mapStayStatus(stay.status),
+    origin: 'Hotel Aurora',
+    observations: '',
+    checkInTime: null,
+    checkOutTime: null,
+    cancelReason: '',
+    voidReason: '',
+    guest: profile,
+    companions: [],
+    folio: [],
+  };
 }
 
-function findGuestForSession(guests: Guest[], sessionEmail?: string, sessionName?: string) {
-  const email = sessionEmail?.trim().toLowerCase();
-  if (email) {
-    const byEmail = guests.find((guest) => guest.email?.toLowerCase() === email);
-    if (byEmail) return byEmail;
-  }
-
-  const nameTokens = normalize(sessionName ?? '')
-    .split(/\s+/)
-    .filter(Boolean);
-  if (nameTokens.length === 0) return undefined;
-
-  return guests.find((guest) => {
-    const guestName = normalize(`${guest.firstName} ${guest.lastName}`);
-    return nameTokens.every((token) => guestName.includes(token));
-  });
+function toGuestOrder(order: Order, id: number, fallbackRoom: string): GuestOrder {
+  return {
+    id,
+    sourceId: order.id,
+    items: order.items.map((item) => ({
+      name: item.productName ?? item.productId,
+      quantity: item.quantity,
+      price: centsToAmount(item.unitPriceCents),
+    })),
+    time: formatDbTime(order.requestedAt),
+    status: mapOrderStatus(order.status),
+    note: order.notes ?? '',
+    room: order.roomNumber ?? fallbackRoom,
+  };
 }
 
-function isVisibleAsActive(status: Booking['status']) {
-  return status === 'checkedIn' || status === 'confirmed' || status === 'pending';
+function toGuestRequest(
+  request: ServiceRequest,
+  id: number,
+  kind: GuestServiceRequest['kind'],
+  fallbackRoom: string,
+): GuestServiceRequest {
+  return {
+    id,
+    sourceId: request.id,
+    kind,
+    type: kind === 'housekeeping' ? 'Limpieza' : 'Servicio',
+    description: request.description,
+    time: formatDbTime(request.requestedAt),
+    status: mapRequestStatus(request.status),
+    room: request.roomNumber ?? fallbackRoom,
+  };
 }
 
-function sortBookingsForPortal(left: Booking, right: Booking) {
-  const leftActive = isVisibleAsActive(left.status) ? 0 : 1;
-  const rightActive = isVisibleAsActive(right.status) ? 0 : 1;
-  if (leftActive !== rightActive) return leftActive - rightActive;
-  return right.checkIn.getTime() - left.checkIn.getTime();
+function toGuestNotification(notification: Notification, id: number): GuestNotification {
+  return {
+    id,
+    sourceId: notification.id,
+    title: notification.title,
+    message: notification.message,
+    time: formatDbTime(notification.createdAt),
+    read: notification.read,
+    category: notification.type.startsWith('room_service') ? 'Pedido' : 'Servicio',
+  };
 }
 
-function calculateReservationBalanceCents(reservation: Reservation) {
-  const active = reservation.folio.filter((item) => item.status === 'Activo');
-  const charges = active
-    .filter((item) => item.type === 'Cargo')
-    .reduce((sum, item) => sum + item.amount, 0);
-  const credits = active
-    .filter((item) => item.type !== 'Cargo')
-    .reduce((sum, item) => sum + item.amount, 0);
-  return Math.round((charges - credits) * 100);
-}
-
-function mapServiceRequestType(type: string) {
-  return type === 'Limpieza' ? 'housekeeping' : 'concierge';
-}
-
-function mapDocumentTypeToDto(type: string) {
-  if (type === 'nationalId' || type === 'DPI' || type === 'INE' || type === 'Cédula') {
-    return 'national_id' as const;
-  }
-  if (type === 'driverLicense') return 'driver_license' as const;
-  return 'passport' as const;
+function toGuestMenuItem(product: Product, id: number): GuestMenuItem {
+  return {
+    id,
+    productId: product.id,
+    name: product.name,
+    description: product.description ?? product.sku,
+    price: centsToAmount(product.priceCents),
+    category: PRODUCT_CATEGORY_LABELS[product.category] ?? product.category,
+    available: product.active,
+  };
 }
 
 function getErrorMessage(cause: unknown): string {
@@ -448,13 +265,12 @@ export function GuestContent({
   onAction,
   onNavigate,
   onLogout,
-  sessionName,
-  sessionEmail,
 }: {
   nav: string;
   onAction: (message: string) => void;
   onNavigate: (nav: string) => void;
   onLogout: () => void;
+  // La identidad sale del JWT de huésped; estas props de sesión ya no se usan para buscarla.
   sessionUserId?: string;
   sessionName?: string;
   sessionEmail?: string;
@@ -468,206 +284,46 @@ export function GuestContent({
     async function load() {
       setScreen({ status: 'loading' });
       try {
-        const [
-          bookings,
-          guests,
-          rooms,
-          roomTypes,
-          products,
-          amenitiesData,
-          charges,
-          payments,
-          deposits,
-        ] = await Promise.all([
-          bookingService.getBookings(),
-          guestService.getGuests(),
-          roomService.getRooms(),
-          roomService.getRoomTypes(),
-          catalogService.getProducts(),
-          catalogService.getAmenities(),
-          guestAccountService.getCharges(),
-          guestAccountService.getPayments(),
-          guestAccountService.getDeposits(),
-        ]);
+        const [stay, amenitiesData, products, ordersRaw, stayovers, concierge, notificationsRaw] =
+          await Promise.all([
+            guestPortalService.getStay(),
+            catalogService.getGuestAmenities(),
+            catalogService.getGuestProducts(),
+            orderService.getGuestOrders(),
+            housekeepingService.getGuestStayoverRequests(),
+            serviceRequestService.getGuestConciergeRequests(),
+            notificationService.getGuestNotifications(),
+          ]);
+        const unreadCount = await notificationService.getGuestUnreadCount();
 
-        const activeGuest = findGuestForSession(guests, sessionEmail, sessionName);
-        const guestBookings = activeGuest
-          ? bookings
-              .filter((booking) => booking.guestId === activeGuest.id)
-              .sort(sortBookingsForPortal)
-          : [];
-        const activeBooking =
-          guestBookings.find((booking) => booking.status === 'checkedIn') ?? guestBookings[0];
-        const activeRoom = activeBooking
-          ? rooms.find((room) => room.id === activeBooking.roomId)
-          : undefined;
-        const activeRoomNumber = activeRoom?.roomNumber ?? 'Sin asignar';
+        // Perfil: `/guest/stay` solo trae el nombre; el resto se consulta en recepción.
+        const profile: GuestInfo = {
+          name: stay.guestFirstName,
+          lastName: stay.guestLastName,
+          phone: '',
+          email: '',
+          docType: '',
+          docNumber: '',
+          birthDate: '',
+          nationality: '',
+        };
+        const reservations = [toPortalReservation(stay, profile)];
+        const roomNumber = stay.roomNumber ?? 'Sin asignar';
 
-        const profile: GuestInfo = activeGuest
-          ? {
-              name: activeGuest.firstName,
-              lastName: activeGuest.lastName,
-              phone: activeGuest.phone ?? '',
-              email: activeGuest.email ?? '',
-              docType: activeGuest.documentType ?? 'DPI',
-              docNumber: activeGuest.documentNumber ?? '',
-              birthDate: '',
-              nationality: activeGuest.nationality ?? '',
-            }
-          : {
-              name: '',
-              lastName: '',
-              phone: '',
-              email: '',
-              docType: 'DPI',
-              docNumber: '',
-              birthDate: '',
-              nationality: '',
-            };
-
-        const accounts = await guestAccountService.getAccounts();
-
-        const reservations: PortalReservation[] = guestBookings.map((booking, index) => {
-          const bookingCharges = charges.filter((charge) => charge.bookingId === booking.id);
-          const bookingPayments = payments.filter((payment) => payment.bookingId === booking.id);
-          const bookingDeposits = deposits.filter((deposit) => deposit.bookingId === booking.id);
-          const bookingAccount = accounts.find((account) => account.bookingId === booking.id);
-          const room = rooms.find((item) => item.id === booking.roomId);
-          const nights = Math.max(1, calculateNights(booking.checkIn, booking.checkOut));
-          const status = mapReservationStatus(booking.status);
-          const folio: Reservation['folio'] = [
-            ...bookingCharges.map((charge, chargeIndex) => ({
-              id: parseDbId(charge.id, chargeIndex + 1),
-              concept: charge.description,
-              category: 'Cargo',
-              amount: centsToAmount(charge.amountCents),
-              date: toDtoCalendarDate(charge.chargedAt),
-              type: 'Cargo' as const,
-              status: charge.status === 'voided' ? ('Anulado' as const) : ('Activo' as const),
-            })),
-            ...bookingPayments.map((payment, paymentIndex) => ({
-              id: parseDbId(payment.id, 4000 + paymentIndex),
-              concept: 'Pago registrado',
-              category: 'Pago',
-              amount: centsToAmount(payment.amountCents),
-              date: toDtoCalendarDate(payment.paidAt ?? payment.createdAt),
-              type: 'Pago' as const,
-              status:
-                payment.status === 'failed' || payment.status === 'refunded'
-                  ? ('Anulado' as const)
-                  : ('Activo' as const),
-            })),
-            ...bookingDeposits.map((deposit, depositIndex) => ({
-              id: parseDbId(deposit.id, 6000 + depositIndex),
-              concept: 'Depósito garantía',
-              category: 'Depósito',
-              amount: centsToAmount(deposit.amountCents),
-              date: toDtoCalendarDate(deposit.collectedAt),
-              type: 'Depósito' as const,
-              status: deposit.status === 'refunded' ? ('Anulado' as const) : ('Activo' as const),
-            })),
-          ];
-          const reservation = {
-            id: parseDbId(booking.id, index + 1),
-            bookingId: booking.id,
-            guestId: booking.guestId,
-            roomId: booking.roomId,
-            roomTypeId: booking.roomTypeId,
-            adults: booking.adults,
-            children: booking.children,
-            balanceCents: bookingAccount?.balanceCents ?? 0,
-            currency: booking.currency,
-            code: booking.confirmationCode,
-            checkIn: toDtoCalendarDate(booking.checkIn),
-            checkOut: toDtoCalendarDate(booking.checkOut),
-            roomNumber: room?.roomNumber ?? activeRoomNumber,
-            roomType: getRoomTypeLabel(booking.roomTypeId, roomTypes),
-            rate: centsToAmount(booking.totalAmountCents) / nights,
-            guestCount: booking.adults + booking.children,
-            status,
-            origin: 'Online',
-            observations: booking.notes ?? '',
-            checkInTime:
-              status === 'Check-in' || status === 'Check-out'
-                ? formatDbTime(booking.updatedAt)
-                : null,
-            checkOutTime: status === 'Check-out' ? formatDbTime(booking.updatedAt) : null,
-            cancelReason: status === 'Cancelada' ? (booking.notes ?? '') : '',
-            voidReason: status === 'Anulada' ? (booking.notes ?? '') : '',
-            guest: profile,
-            companions: [],
-            folio,
-          };
-          return {
-            ...reservation,
-            balanceCents:
-              bookingAccount?.balanceCents ?? calculateReservationBalanceCents(reservation),
-          };
-        });
-
-        const [requests, guestOrdersRaw, notificationsRaw] = await Promise.all([
-          activeGuest
-            ? serviceRequestService.getRequestsByGuestId(activeGuest.id)
-            : Promise.resolve([]),
-          activeGuest ? orderService.getOrdersByGuestId(activeGuest.id) : Promise.resolve([]),
-          activeGuest
-            ? notificationService.getNotificationsByGuestId(activeGuest.id)
-            : Promise.resolve([]),
-        ]);
-
-        const serviceRequests: GuestServiceRequest[] = requests.map((request, index) => ({
-          id: parseDbId(request.id, index + 1),
-          sourceId: request.id,
-          type:
-            request.type === 'housekeeping'
-              ? 'Limpieza'
-              : request.type === 'maintenance'
-                ? 'Mantenimiento'
-                : 'Servicio',
-          description: request.description,
-          time: formatDbTime(request.requestedAt),
-          status: mapRequestStatus(request.status),
-          room: rooms.find((item) => item.id === request.roomId)?.roomNumber ?? activeRoomNumber,
-        }));
-
-        const orders: GuestOrder[] = guestOrdersRaw.map((order, index) => ({
-          id: parseDbId(order.id, index + 1),
-          sourceId: order.id,
-          items: order.items.map((item) => {
-            const product = products.find((productItem) => productItem.id === item.productId);
-            return {
-              name: product?.name ?? item.productId,
-              quantity: item.quantity,
-              price: centsToAmount(item.unitPriceCents),
-            };
-          }),
-          time: formatDbTime(order.requestedAt),
-          status: mapOrderStatus(order.status),
-          note: order.notes ?? '',
-          room: rooms.find((item) => item.id === order.roomId)?.roomNumber ?? activeRoomNumber,
-        }));
-
-        const notifications: GuestNotification[] = notificationsRaw.map((item, index) => ({
-          id: index + 1,
-          sourceId: item.id,
-          title: item.title,
-          message: item.message,
-          time: formatDbTime(item.occurredAt),
-          read: item.read,
-          category: item.category === 'order' ? 'Pedido' : 'Servicio',
-        }));
-
-        const menu: GuestMenuItem[] = products
-          .filter((product) => product.category === 'foodAndBeverage')
-          .map((product, index) => ({
-            id: parseDbId(product.id, index + 1),
-            productId: product.id,
-            name: product.name,
-            description: product.description ?? product.sku,
-            price: centsToAmount(product.priceCents),
-            category: 'Room service',
-            available: product.active,
-          }));
+        const serviceRequests: GuestServiceRequest[] = [
+          ...stayovers.map((request) => ({ request, kind: 'housekeeping' as const })),
+          ...concierge.map((request) => ({ request, kind: 'concierge' as const })),
+        ]
+          .sort(
+            (left, right) =>
+              right.request.requestedAt.getTime() - left.request.requestedAt.getTime(),
+          )
+          .map(({ request, kind }, index) => toGuestRequest(request, index + 1, kind, roomNumber));
+        const orders = ordersRaw.map((order, index) => toGuestOrder(order, index + 1, roomNumber));
+        const notifications = notificationsRaw.map((item, index) =>
+          toGuestNotification(item, index + 1),
+        );
+        const menu = products.map((product, index) => toGuestMenuItem(product, index + 1));
 
         const amenities: GuestAmenity[] = amenitiesData.map((amenity, index) => ({
           name: amenity.name,
@@ -686,6 +342,7 @@ export function GuestContent({
             profile,
             reservations,
             notifications,
+            unreadCount,
             serviceRequests,
             menu,
             orders,
@@ -701,7 +358,7 @@ export function GuestContent({
     return () => {
       active = false;
     };
-  }, [reloadToken, sessionEmail, sessionName]);
+  }, [reloadToken]);
 
   if (screen.status === 'loading') {
     return <LoadingState label="Cargando tu portal de huésped..." />;
@@ -726,6 +383,7 @@ export function GuestContent({
       initialProfile={screen.profile}
       initialReservations={screen.reservations}
       initialNotifications={screen.notifications}
+      initialUnreadCount={screen.unreadCount}
       initialServiceRequests={screen.serviceRequests}
       initialMenu={screen.menu}
       initialOrders={screen.orders}
@@ -742,6 +400,7 @@ function GuestContentReady({
   initialProfile,
   initialReservations,
   initialNotifications,
+  initialUnreadCount,
   initialServiceRequests,
   initialMenu,
   initialOrders,
@@ -754,14 +413,16 @@ function GuestContentReady({
   initialProfile: GuestInfo;
   initialReservations: PortalReservation[];
   initialNotifications: GuestNotification[];
+  initialUnreadCount: number;
   initialServiceRequests: GuestServiceRequest[];
   initialMenu: GuestMenuItem[];
   initialOrders: GuestOrder[];
   amenities: GuestAmenity[];
 }) {
-  const [reservations, setReservations] = useState<PortalReservation[]>(initialReservations);
-  const [profile, setProfile] = useState<GuestInfo>(initialProfile);
+  const reservations = initialReservations;
+  const profile = initialProfile;
   const [notifications, setNotifications] = useState<GuestNotification[]>(initialNotifications);
+  const [unreadCount, setUnreadCount] = useState(initialUnreadCount);
   const [serviceRequests, setServiceRequests] =
     useState<GuestServiceRequest[]>(initialServiceRequests);
   const [orders, setOrders] = useState<GuestOrder[]>(initialOrders);
@@ -769,11 +430,6 @@ function GuestContentReady({
   const [orderNote, setOrderNote] = useState('');
 
   const [detailResId, setDetailResId] = useState<number | null>(null);
-  const [modifyResId, setModifyResId] = useState<number | null>(null);
-  const [cancelResId, setCancelResId] = useState<number | null>(null);
-  const [receiptResId, setReceiptResId] = useState<number | null>(null);
-  const [showLink, setShowLink] = useState(false);
-  const [showEditProfile, setShowEditProfile] = useState(false);
   const [showRequestService, setShowRequestService] = useState<'Limpieza' | 'Articulos' | null>(
     null,
   );
@@ -785,12 +441,6 @@ function GuestContentReady({
 
   const detailRes =
     detailResId !== null ? (reservations.find((r) => r.id === detailResId) ?? null) : null;
-  const modifyRes =
-    modifyResId !== null ? (reservations.find((r) => r.id === modifyResId) ?? null) : null;
-  const cancelRes =
-    cancelResId !== null ? (reservations.find((r) => r.id === cancelResId) ?? null) : null;
-  const receiptRes =
-    receiptResId !== null ? (reservations.find((r) => r.id === receiptResId) ?? null) : null;
 
   const activeReservations = reservations.filter(
     (r) => !['Cancelada', 'Anulada', 'Check-out'].includes(r.status),
@@ -810,8 +460,6 @@ function GuestContentReady({
         : resFilter === 'Pasadas'
           ? pastReservations
           : cancelledReservations;
-
-  const unreadCount = notifications.filter((n) => !n.read).length;
 
   const cartTotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
@@ -838,40 +486,19 @@ function GuestContentReady({
       prev.map((c) => (c.id === id ? { ...c, quantity: Math.max(1, c.quantity + delta) } : c)),
     );
 
+  // Portal del huésped: el backend toma la reserva del JWT; ninguna acción envía bookingId.
   const submitOrder = async () => {
     if (cart.length === 0) return;
-    if (!currentStay?.roomId) {
-      onAction('No hay una reserva con habitacion asignada para crear el pedido.');
-      return;
-    }
     try {
-      const order = await orderService.createOrder({
-        bookingId: currentStay.bookingId,
-        roomId: currentStay.roomId,
-        guestId: currentStay.guestId,
+      const order = await orderService.createGuestOrder({
         items: cart.map((item) => ({ productId: item.productId, quantity: item.quantity })),
         notes: orderNote,
       });
-      const newOrder: GuestOrder = {
-        id: parseDbId(order.id, orders.length + 1),
-        sourceId: order.id,
-        items: order.items.map((item) => {
-          const product = initialMenu.find((menuItem) => menuItem.productId === item.productId);
-          return {
-            name: product?.name ?? item.productId,
-            quantity: item.quantity,
-            price: centsToAmount(item.unitPriceCents),
-          };
-        }),
-        time: formatDbTime(order.requestedAt),
-        status: mapOrderStatus(order.status),
-        note: order.notes ?? '',
-        room: currentStay.roomNumber,
-      };
+      const newOrder = toGuestOrder(order, orders.length + 1, currentStay?.roomNumber ?? '');
       setOrders((prev) => [newOrder, ...prev]);
       setCart([]);
       setOrderNote('');
-      onAction(`Pedido #${newOrder.id} enviado a la habitacion ${currentStay.roomNumber}`);
+      onAction(`Pedido #${newOrder.id} enviado a la habitación ${newOrder.room}`);
     } catch (cause) {
       onAction(getErrorMessage(cause));
     }
@@ -879,11 +506,13 @@ function GuestContentReady({
 
   const cancelOrder = async (orderId: number) => {
     const order = orders.find((item) => item.id === orderId);
-    if (!order || !currentStay) return;
+    if (!order) return;
     try {
-      await orderService.cancelOrder(order.sourceId, currentStay.guestId);
+      const updated = await orderService.cancelGuestOrder(order.sourceId);
       setOrders((prev) =>
-        prev.map((item) => (item.id === orderId ? { ...item, status: 'Cancelado' } : item)),
+        prev.map((item) =>
+          item.id === orderId ? { ...item, status: mapOrderStatus(updated.status) } : item,
+        ),
       );
       setCancelOrderId(null);
       onAction(`Pedido #${orderId} cancelado correctamente`);
@@ -897,27 +526,21 @@ function GuestContentReady({
     description: string;
     time: string;
   }) => {
-    if (!currentStay?.roomId) {
-      onAction('No hay una reserva con habitacion asignada para crear la solicitud.');
-      return;
-    }
+    // Limpieza va a stayover (Housekeeping); artículos y demás pedidos van a Conserjería.
+    const kind: GuestServiceRequest['kind'] =
+      data.type === 'Limpieza' ? 'housekeeping' : 'concierge';
+    const payload = { description: data.description, notes: `Horario preferido: ${data.time}` };
     try {
-      const request = await serviceRequestService.createRequest({
-        bookingId: currentStay.bookingId,
-        roomId: currentStay.roomId,
-        guestId: currentStay.guestId,
-        type: mapServiceRequestType(data.type),
-        description: `${data.description} (${data.time})`,
-      });
-      const newReq: GuestServiceRequest = {
-        id: parseDbId(request.id, serviceRequests.length + 1),
-        sourceId: request.id,
-        type: data.type,
-        description: request.description,
-        time: formatDbTime(request.requestedAt),
-        status: mapRequestStatus(request.status),
-        room: currentStay.roomNumber,
-      };
+      const request =
+        kind === 'housekeeping'
+          ? await housekeepingService.createGuestStayoverRequest(payload)
+          : await serviceRequestService.createGuestConciergeRequest(payload);
+      const newReq = toGuestRequest(
+        request,
+        serviceRequests.length + 1,
+        kind,
+        currentStay?.roomNumber ?? '',
+      );
       setServiceRequests((prev) => [newReq, ...prev]);
       setShowRequestService(null);
       onAction('Solicitud enviada correctamente');
@@ -928,11 +551,16 @@ function GuestContentReady({
 
   const cancelServiceRequest = async (reqId: number) => {
     const request = serviceRequests.find((item) => item.id === reqId);
-    if (!request || !currentStay) return;
+    if (!request) return;
     try {
-      await serviceRequestService.cancelRequest(request.sourceId, currentStay.guestId);
+      const updated =
+        request.kind === 'housekeeping'
+          ? await housekeepingService.cancelGuestStayoverRequest(request.sourceId)
+          : await serviceRequestService.cancelGuestConciergeRequest(request.sourceId);
       setServiceRequests((prev) =>
-        prev.map((item) => (item.id === reqId ? { ...item, status: 'Cancelada' } : item)),
+        prev.map((item) =>
+          item.id === reqId ? { ...item, status: mapRequestStatus(updated.status) } : item,
+        ),
       );
       onAction('Solicitud cancelada');
     } catch (cause) {
@@ -940,133 +568,34 @@ function GuestContentReady({
     }
   };
 
-  const saveProfile = async (updated: GuestInfo) => {
-    const guestId = reservations[0]?.guestId;
-    if (!guestId) return;
+  // El contador sale del backend; se vuelve a pedir después de cada cambio.
+  const refreshUnreadCount = async () => {
     try {
-      const guest = await guestService.updateGuest(guestId, {
-        first_name: updated.name,
-        last_name: updated.lastName,
-        phone: updated.phone,
-        email: updated.email,
-        document_type: mapDocumentTypeToDto(updated.docType),
-        document_number: updated.docNumber,
-        nationality: updated.nationality,
-      });
-      setProfile({
-        ...updated,
-        name: guest.firstName,
-        lastName: guest.lastName,
-        phone: guest.phone ?? '',
-        email: guest.email ?? '',
-        docType: guest.documentType ?? updated.docType,
-        docNumber: guest.documentNumber ?? '',
-        nationality: guest.nationality ?? '',
-      });
-      setShowEditProfile(false);
-      onAction('Perfil actualizado correctamente');
-    } catch (cause) {
-      onAction(getErrorMessage(cause));
-    }
-  };
-
-  const saveReservationModify = async (
-    id: number,
-    updates: { checkIn: string; checkOut: string; guestCount: number; observations: string },
-  ) => {
-    const reservation = reservations.find((item) => item.id === id);
-    if (!reservation) return;
-    const children = Math.min(reservation.children, Math.max(0, updates.guestCount - 1));
-    const adults = updates.guestCount - children;
-    try {
-      const booking = await bookingService.updateBooking(reservation.bookingId, {
-        check_in: updates.checkIn,
-        check_out: updates.checkOut,
-        adults,
-        children,
-        notes: updates.observations,
-      });
-      setReservations((prev) =>
-        prev.map((item) =>
-          item.id === id
-            ? {
-                ...item,
-                checkIn: toDtoCalendarDate(booking.checkIn),
-                checkOut: toDtoCalendarDate(booking.checkOut),
-                adults: booking.adults,
-                children: booking.children,
-                guestCount: booking.adults + booking.children,
-                observations: booking.notes ?? '',
-              }
-            : item,
-        ),
-      );
-      setModifyResId(null);
-      setDetailResId(null);
-      onAction('Modificacion de reserva guardada correctamente.');
-    } catch (cause) {
-      onAction(getErrorMessage(cause));
-    }
-  };
-
-  const confirmCancelReservation = async (id: number, reason: string) => {
-    const reservation = reservations.find((item) => item.id === id);
-    if (!reservation) return;
-    try {
-      await bookingService.cancelBooking(reservation.bookingId, reason);
-      setReservations((prev) =>
-        prev.map((item) =>
-          item.id === id ? { ...item, status: 'Cancelada', cancelReason: reason } : item,
-        ),
-      );
-      setCancelResId(null);
-      setDetailResId(null);
-      onAction('Reserva cancelada correctamente');
-    } catch (cause) {
-      onAction(getErrorMessage(cause));
-    }
-  };
-
-  const linkReservation = async (code: string) => {
-    const guestId = reservations[0]?.guestId;
-    if (!guestId) return;
-    try {
-      const bookings = await bookingService.getBookings();
-      const booking = bookings.find(
-        (item) =>
-          item.confirmationCode.toUpperCase() === code.toUpperCase() ||
-          item.guestLinkCode.toUpperCase() === code.toUpperCase(),
-      );
-      if (!booking || booking.guestId !== guestId) {
-        throw new Error('No encontramos una reserva vigente para este huesped con ese codigo.');
-      }
-      setShowLink(false);
-      onAction(`Reserva ${booking.confirmationCode} vinculada a tu cuenta`);
-    } catch (cause) {
-      onAction(getErrorMessage(cause));
+      setUnreadCount(await notificationService.getGuestUnreadCount());
+    } catch {
+      setUnreadCount(notifications.filter((item) => !item.read).length);
     }
   };
 
   const markNotificationRead = async (id: number) => {
     const notification = notifications.find((item) => item.id === id);
-    const guestId = reservations[0]?.guestId;
-    if (!notification || !guestId) return;
+    if (!notification || notification.read) return;
     try {
-      await notificationService.markNotificationRead(guestId, notification.sourceId);
+      await notificationService.markGuestNotificationRead(notification.sourceId);
       setNotifications((prev) =>
         prev.map((item) => (item.id === id ? { ...item, read: true } : item)),
       );
+      await refreshUnreadCount();
     } catch (cause) {
       onAction(getErrorMessage(cause));
     }
   };
   const markAllRead = async () => {
-    const guestId = reservations[0]?.guestId;
-    if (!guestId) return;
     try {
-      await notificationService.markAllRead(guestId);
-      setNotifications((prev) => prev.map((item) => ({ ...item, read: true })));
-      onAction('Todas las notificaciones marcadas como leidas');
+      const updated = await notificationService.markAllGuestNotificationsRead();
+      setNotifications(updated.map((item, index) => toGuestNotification(item, index + 1)));
+      await refreshUnreadCount();
+      onAction('Todas las notificaciones marcadas como leídas');
     } catch (cause) {
       onAction(getErrorMessage(cause));
     }
@@ -1089,16 +618,14 @@ function GuestContentReady({
                       {currentStay.roomType} · Habitacion {currentStay.roomNumber}
                     </h4>
                     <p>
-                      {fmtDate(currentStay.checkIn)} — {fmtDate(currentStay.checkOut)} ·{' '}
-                      {currentStay.adults} adultos
-                      {currentStay.children > 0 ? ` · ${currentStay.children} menores` : ''}
+                      {fmtDate(currentStay.checkIn)} — {fmtDate(currentStay.checkOut)}
                     </p>
                   </>
                 ) : (
                   <>
-                    <span className="status-pill warning">Sin reserva activa</span>
-                    <h4>Vincula una reserva</h4>
-                    <p>Ingresa tu codigo para ver tu estancia.</p>
+                    <span className="status-pill warning">Sin estancia activa</span>
+                    <h4>Tu estancia no está activa</h4>
+                    <p>El portal funciona desde el check-in hasta el check-out.</p>
                   </>
                 )}
               </div>
@@ -1193,11 +720,8 @@ function GuestContentReady({
           <div className="panel-heading">
             <div>
               <h3>Mis reservas</h3>
-              <p>Consulta y gestiona todas tus reservas</p>
+              <p>Tu estancia actual. Para otras reservas o cambios, consulta en recepción.</p>
             </div>
-            <button className="button small primary" onClick={() => setShowLink(true)}>
-              <Plus size={15} /> Vincular reserva
-            </button>
           </div>
           <div className="toolbar">
             <div className="filter-dropdown">
@@ -1269,11 +793,14 @@ function GuestContentReady({
                       </span>
                     </div>
                     <div className="gs-res-card-meta">
+                      {res.guestCount > 0 && (
+                        <span>
+                          <BedDouble size={14} /> {res.guestCount} huéspedes
+                        </span>
+                      )}
                       <span>
-                        <BedDouble size={14} /> {res.guestCount} huéspedes
-                      </span>
-                      <span>
-                        <Wallet size={14} /> {money(res.rate * nights)}
+                        <Wallet size={14} />{' '}
+                        {res.rate > 0 ? money(res.rate * nights) : 'Consulta en recepción'}
                       </span>
                       <span>
                         <CalendarDays size={14} /> {res.origin}
@@ -1286,50 +813,7 @@ function GuestContentReady({
           </div>
         </div>
         {detailRes && (
-          <ReservationDetailModal
-            reservation={detailRes}
-            onClose={() => setDetailResId(null)}
-            onModify={() => {
-              setDetailResId(null);
-              setModifyResId(detailRes.id);
-            }}
-            onCancel={() => {
-              setDetailResId(null);
-              setCancelResId(detailRes.id);
-            }}
-            onReceipt={() => {
-              setDetailResId(null);
-              setReceiptResId(detailRes.id);
-            }}
-          />
-        )}
-        {modifyRes && (
-          <ModifyReservationModal
-            reservation={modifyRes}
-            onClose={() => setModifyResId(null)}
-            onSave={(updates) => saveReservationModify(modifyRes.id, updates)}
-          />
-        )}
-        {cancelRes && (
-          <CancelReservationModal
-            reservation={cancelRes}
-            onClose={() => setCancelResId(null)}
-            onConfirm={(reason) => confirmCancelReservation(cancelRes.id, reason)}
-          />
-        )}
-        {receiptRes && (
-          <ReceiptModal
-            reservation={receiptRes}
-            onClose={() => setReceiptResId(null)}
-            onDownload={async () => {
-              await downloadReservationReceiptPdf(receiptRes);
-              setReceiptResId(null);
-              onAction('Recibo descargado en PDF');
-            }}
-          />
-        )}
-        {showLink && (
-          <LinkReservationModal onClose={() => setShowLink(false)} onLink={linkReservation} />
+          <ReservationDetailModal reservation={detailRes} onClose={() => setDetailResId(null)} />
         )}
       </>
     );
@@ -1343,13 +827,7 @@ function GuestContentReady({
           <div className="hk-empty">
             <BedDouble size={22} />
             <p>No tienes una estancia activa en este momento</p>
-            <button
-              className="button primary"
-              style={{ marginTop: 16 }}
-              onClick={() => setShowLink(true)}
-            >
-              Vincular una reserva
-            </button>
+            <small>El portal funciona desde el check-in hasta el check-out.</small>
           </div>
         </div>
       );
@@ -1385,9 +863,7 @@ function GuestContentReady({
                 <p>
                   {fmtDate(currentStay.checkIn)} — {fmtDate(currentStay.checkOut)}
                 </p>
-                <small>
-                  {nights} noches · {currentStay.guestCount} huéspedes
-                </small>
+                <small>{nights} noches</small>
               </div>
             </div>
             <div className="gs-stay-info">
@@ -1403,11 +879,17 @@ function GuestContentReady({
               </div>
               <div>
                 <small>Tarifa/noche</small>
-                <strong>{money(currentStay.rate)}</strong>
+                <strong>
+                  {currentStay.rate > 0 ? money(currentStay.rate) : 'Consulta en recepción'}
+                </strong>
               </div>
               <div>
                 <small>Total estancia</small>
-                <strong>{money(currentStay.rate * nights)}</strong>
+                <strong>
+                  {currentStay.rate > 0
+                    ? money(currentStay.rate * nights)
+                    : 'Consulta en recepción'}
+                </strong>
               </div>
             </div>
             <div className="gs-stay-services">
@@ -1495,47 +977,7 @@ function GuestContentReady({
           />
         )}
         {detailRes && (
-          <ReservationDetailModal
-            reservation={detailRes}
-            onClose={() => setDetailResId(null)}
-            onModify={() => {
-              setDetailResId(null);
-              setModifyResId(detailRes.id);
-            }}
-            onCancel={() => {
-              setDetailResId(null);
-              setCancelResId(detailRes.id);
-            }}
-            onReceipt={() => {
-              setDetailResId(null);
-              setReceiptResId(detailRes.id);
-            }}
-          />
-        )}
-        {modifyRes && (
-          <ModifyReservationModal
-            reservation={modifyRes}
-            onClose={() => setModifyResId(null)}
-            onSave={(updates) => saveReservationModify(modifyRes.id, updates)}
-          />
-        )}
-        {cancelRes && (
-          <CancelReservationModal
-            reservation={cancelRes}
-            onClose={() => setCancelResId(null)}
-            onConfirm={(reason) => confirmCancelReservation(cancelRes.id, reason)}
-          />
-        )}
-        {receiptRes && (
-          <ReceiptModal
-            reservation={receiptRes}
-            onClose={() => setReceiptResId(null)}
-            onDownload={() => {
-              downloadReservationReceiptPdf(receiptRes);
-              setReceiptResId(null);
-              onAction('Recibo descargado en PDF');
-            }}
-          />
+          <ReservationDetailModal reservation={detailRes} onClose={() => setDetailResId(null)} />
         )}
       </>
     );
@@ -1647,7 +1089,7 @@ function GuestContentReady({
                     <span className={`status-pill ${reqStatusClass(req.status)}`}>
                       {req.status}
                     </span>
-                    {req.status === 'Pendiente' && (
+                    {canCancelGuestRequest(req) && (
                       <button
                         className="button small terracotta-btn"
                         onClick={() => cancelServiceRequest(req.id)}
@@ -1832,7 +1274,7 @@ function GuestContentReady({
             ) : (
               orders.map((order) => {
                 const total = order.items.reduce((s, i) => s + i.price * i.quantity, 0);
-                const canCancel = order.status === 'Pendiente' || order.status === 'Aceptado';
+                const canCancel = canCancelGuestOrder(order);
                 return (
                   <div className="gs-order-card" key={order.id}>
                     <div className="gs-order-head">
@@ -1907,7 +1349,7 @@ function GuestContentReady({
                     <span className={`status-pill ${reqStatusClass(req.status)}`}>
                       {req.status}
                     </span>
-                    {req.status === 'Pendiente' && (
+                    {canCancelGuestRequest(req) && (
                       <button
                         className="button small terracotta-btn"
                         onClick={() => cancelServiceRequest(req.id)}
@@ -2010,11 +1452,8 @@ function GuestContentReady({
           <div className="panel-heading">
             <div>
               <h3>Mi perfil</h3>
-              <p>Datos personales registrados</p>
+              <p>Para actualizar tus datos, consulta en recepción.</p>
             </div>
-            <button className="button small secondary" onClick={() => setShowEditProfile(true)}>
-              <Pencil size={14} /> Editar perfil
-            </button>
           </div>
           <div className="hk-profile">
             <div className="hk-profile-avatar cream">MC</div>
@@ -2023,7 +1462,6 @@ function GuestContentReady({
                 {profile.name} {profile.lastName}
               </h4>
               <p>Huésped · Hotel Aurora</p>
-              <small>{profile.email}</small>
             </div>
           </div>
           <div className="gs-profile-detail">
@@ -2037,37 +1475,32 @@ function GuestContentReady({
             </div>
             <div>
               <span>Teléfono</span>
-              <strong>{profile.phone}</strong>
+              <strong>{profile.phone || 'Consulta en recepción'}</strong>
             </div>
             <div>
               <span>Correo electrónico</span>
-              <strong>{profile.email}</strong>
+              <strong>{profile.email || 'Consulta en recepción'}</strong>
             </div>
             <div>
               <span>Tipo de documento</span>
-              <strong>{profile.docType}</strong>
+              <strong>{profile.docType || 'Consulta en recepción'}</strong>
             </div>
             <div>
               <span>Número de documento</span>
-              <strong>{profile.docNumber}</strong>
+              <strong>{profile.docNumber || 'Consulta en recepción'}</strong>
             </div>
             <div>
               <span>Fecha de nacimiento</span>
-              <strong>{fmtDate(profile.birthDate)}</strong>
+              <strong>
+                {profile.birthDate ? fmtDate(profile.birthDate) : 'Consulta en recepción'}
+              </strong>
             </div>
             <div>
               <span>Nacionalidad</span>
-              <strong>{profile.nationality}</strong>
+              <strong>{profile.nationality || 'Consulta en recepción'}</strong>
             </div>
           </div>
         </div>
-        {showEditProfile && (
-          <EditProfileModal
-            profile={profile}
-            onClose={() => setShowEditProfile(false)}
-            onSave={saveProfile}
-          />
-        )}
       </>
     );
   }

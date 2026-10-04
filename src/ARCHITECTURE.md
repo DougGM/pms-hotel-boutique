@@ -196,8 +196,9 @@ esto pasa por una entrada nueva en ese documento.
 
 Actualizacion 2026-09-22 (#73): dentro de la web, el workspace de Limpieza
 tambien puede escribir `housekeepingStatus` a traves de `roomService` para
-persistir iniciar/finalizar/cambiar estado. Recepcion, Ocupacion y
-Administracion siguen leyendo ese campo como estado operativo compartido.
+persistir iniciar/finalizar/cambiar estado. Desde INT-02 esa escritura viaja al
+backend de habitaciones; Recepcion, Ocupacion y Administracion siguen leyendo
+ese campo como estado operativo compartido.
 
 `shared/types/entities/index.ts` es un barrel de **tipos únicamente**:
 `toDomain`/`toDTO` no se reexportan ahí porque las veinticuatro entidades
@@ -266,14 +267,16 @@ esta consolidación). Reemplaza a `services/mockData.ts`,
 `services/authMockData.ts` y `shared/mocks/{lot-b,lot-c,lot-d}.ts`, que
 antes coexistían con IDs de mundos distintos que no se cruzaban entre sí
 (p. ej. `paymentService` leía `mockData.ts` mientras `guestAccountService`
-ya leía el dataset real de pagos del Lote C). `bookingService`,
-`roomService`, `guestService`, `paymentService` y `catalogService` leen de
-ahí (Lote B/C/D); igual `guestAccountService`/`cashService` (Lote C) y
-`personnelService`/`inventoryService`/`auditService` (Lote D).
-`authService.ts` es el único servicio con persistencia (sesión en
-`localStorage`) y cliente HTTP (`services/http-client.ts`) conectado al backend
-Spring desde INT-01: login, Bearer JWT, refresh con retry unico y logout contra
-`/auth/*`. Única excepción documentada a "un solo
+ya leía el dataset real de pagos del Lote C). Los servicios no integrados aun
+leen de ahi (Lote B/C/D) mediante la capa `src/services/`; los servicios
+integrados usan `http-client.ts` y documentan cualquier fallback local de
+lectura en `src/services/README.md`.
+`authService.ts` conecta al backend Spring desde INT-01: login, Bearer JWT,
+refresh con retry unico y logout contra `/auth/*`. Desde INT-02, `roomService`
+tambien usa backend para habitaciones, tipos, caracteristicas y tarifas
+(`/rooms`, `/room-types`, `/room-features`, `/rates`) y deja `src/data/db.ts`
+solo como fallback de lectura cuando no hay backend/harness.
+Única excepción documentada a "un solo
 archivo con datos inventados": el fixture de demo de
 `src/modules/ui-catalog/services/catalog-service.ts`, que no representa
 ninguna entidad del contrato y existe solo para renderizar `/components`.
@@ -284,10 +287,18 @@ login. `getRoles()` y `getPermissions()` siguen leyendo `rolesDB` y
 `permissionsDB`; `usersDB` permanece como directorio operativo historico del
 Lote D.
 
-Nota 2026-09-17: `guestService.createGuest(data)` es la operacion mock para
-crear huespedes desde el flujo publico de reserva. Escribe en `guestsDB` desde
-la capa de servicios, genera IDs `GST-*` y mantiene el contrato DTO -> Mapper
--> Model.
+Nota 2026-10-04 (#101 / INT-03): `guestService` y `bookingService` usan el
+backend para CRUD de huespedes y reservas (`/guests`, `/bookings`) y conservan
+fallback local solo cuando el backend no esta disponible o una ruta no esta
+mockeada en el harness. El backend devuelve camelCase; los servicios lo
+normalizan al DTO snake_case interno y despues devuelven Models. INT-04 integra
+las acciones operativas para reservas UUID: asignacion de habitacion via
+`PUT /bookings/{id}`, check-in via `POST /bookings/{id}/check-in`, check-out via
+`POST /bookings/{id}/check-out` y acompanantes via
+`/bookings/{id}/companions`; los IDs legacy `BKG-*` conservan el flujo mock del
+prototipo.
+`PrivateWorkspace` solo carga reservas y huespedes para `admin`/`reception`,
+que son los roles con permisos `bookings.read`/`guests.read` en este dominio.
 
 Nota 2026-09-21 (#69): `bookingService.createBooking` y
 `bookingService.updateBooking` validan capacidad antes de escribir en
@@ -295,6 +306,8 @@ Nota 2026-09-21 (#69): `bookingService.createBooking` y
 exige `adults + children <= roomType.capacity`; los formularios publicos y de
 ocupacion la reutilizan para mostrar el limite al cambiar habitacion, adultos o
 menores.
+Cuando `roomTypeId` es UUID, INT-03 delega esa validacion al backend porque el
+dataset local `RT-*` no es autoridad sobre catalogos integrados.
 
 Nota 2026-09-21 (#70): `booking-companion` registra acompañantes por
 `booking_id` durante check-in. `bookingCompanionService` valida campos,
@@ -302,6 +315,17 @@ capacidad y composición (`principal + acompañantes` contra
 `booking.adults/children`), `guestService.updateGuest` conserva cambios de
 documento del titular y `bookingService.checkIn` marca la habitación asignada
 como `occupied`.
+
+Nota 2026-10-04 (#102 / INT-04): para reservas UUID,
+`bookingCompanionService` usa las rutas reales de `BookingCompanionController`:
+`GET`/`POST /bookings/{bookingId}/companions` y
+`PUT`/`DELETE /bookings/{bookingId}/companions/{companionId}`. Las validaciones
+de estado, habitacion y composicion quedan en backend; la sincronizacion corre
+en orden `DELETE` -> `PUT` -> `POST` para no depender del orden de red. En
+reservas legacy `BKG-*` conserva las validaciones locales de campos, capacidad y
+composicion para sostener el prototipo. `CheckInScreen` y `CheckOutScreen`
+refrescan reserva, folio y habitaciones despues de check-in/check-out para
+reflejar el estado real devuelto por la API.
 
 Nota 2026-10-03 (#103): en folios financieros integrados, un `bookingId` UUID
 nunca debe caer al recalculo local mock. `guestAccountService` consulta el

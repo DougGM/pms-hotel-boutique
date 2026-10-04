@@ -58,6 +58,18 @@ mock; un cargo UUID debe anularse con `voidCharge(chargeId, reason, bookingId)`.
 y refresca el folio despues de registrar cargos o pagos, sin sumar/restar saldo
 en estado local.
 
+**Actualizacion 2026-10-04 (#102 / INT-04):** recepcion integrada usa backend
+real para acompanantes, asignacion, check-in y check-out en reservas UUID.
+`bookingCompanionService` sincroniza con `GET`/`POST /bookings/{bookingId}/companions`
+y `PUT`/`DELETE /bookings/{bookingId}/companions/{companionId}`;
+`bookingService.assignRoom` envia `roomId` por `PUT /bookings/{id}`;
+`checkIn` y `checkOut` llaman `POST /bookings/{id}/check-in` y
+`POST /bookings/{id}/check-out`. `CheckOutScreen` ya no bloquea el intento por
+saldo local: muestra el aviso de saldo y deja que el backend responda `409`,
+sin forzar cierre local. Los cambios de acompanantes se aplican en orden
+`DELETE` -> `PUT` -> `POST`, y despues de check-in/check-out las pantallas
+refrescan reserva, folio y habitaciones desde servicios.
+
 **Actualizacion 2026-09-22 (#72):** `GuestContent` resuelve al huesped desde la
 sesion, muestra sus reservas reales y ya no usa habitacion 402, fechas 2024 ni
 estancia fija del prototipo. Crear/cancelar pedidos y solicitudes, editar perfil,
@@ -189,6 +201,13 @@ existentes, pero la sesion ya no nace de `sessionAccountsDB`. `authService`
 usa `/auth/login`, `/auth/refresh` y `/auth/logout` del backend Spring, y los
 roles/permisos de navegacion se derivan del JWT (`ROLE_*` y `authorities`).
 No cambia el alcance de pantallas ni el contrato visual Bolt.
+
+Nota 2026-10-04 (#100 / INT-02): la integracion de habitaciones, tipos,
+caracteristicas y tarifas se hizo en `roomService` sin cambiar pantallas ni CSS.
+Las rutas existentes de habitaciones, ocupacion, recepcion, motor publico y
+Administracion conservan su UI, pero ahora consumen `/rooms`, `/room-types`,
+`/room-features` y `/rates` mediante `http-client.ts`. `priceCents` permanece
+en centavos y `status`/`housekeepingStatus` siguen separados.
 
 Nota 2026-09-30 (#95): el workspace de Administracion usa el sidebar como
 navegacion primaria para subsecciones. `PrivateWorkspace` define grupos

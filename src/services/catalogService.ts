@@ -11,6 +11,7 @@ import {
 import { amenitiesDB, productsDB } from '@/data/db';
 import { mockUtils, requireCollection, simulateLatency } from './mockUtils';
 import { httpClient } from './http-client';
+import { guestRequest } from './guestHttp';
 
 type ApiAmenity = {
   id: string;
@@ -196,6 +197,22 @@ export const catalogService = {
       if (!isOfflineError(error)) throw error;
       return requireCollection(amenitiesDB, 'amenitiesDB').map(toAmenity);
     }
+  },
+  // Portal del huésped (INT-12): rutas `/guest/...` con el JWT de huésped, sin mock de respaldo.
+  async getGuestAmenities(): Promise<Amenity[]> {
+    const amenities = await guestRequest(
+      () => httpClient.get<ApiAmenity[]>('/guest/amenities'),
+      'No fue posible cargar las amenidades.',
+    );
+    return amenities.map(mapAmenityFromApi).map(toAmenity);
+  },
+  /** Menú del huésped: solo productos activos (`GET /guest/room-service/products`). */
+  async getGuestProducts(): Promise<Product[]> {
+    const products = await guestRequest(
+      () => httpClient.get<ApiProduct[]>('/guest/room-service/products'),
+      'No fue posible cargar el menú.',
+    );
+    return products.map(mapProductFromApi).map(toProduct);
   },
   async getAdminAmenities(): Promise<Amenity[]> {
     await simulateLatency();
