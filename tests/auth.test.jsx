@@ -119,6 +119,13 @@ function installFetch() {
       return json(authResponse(email));
     }
     if (path === '/api/v1/auth/logout') return new Response(null, { status: 204 });
+    // El workspace de Limpieza carga su cola desde el backend (INT-09).
+    if (
+      path === '/api/v1/housekeeping/rooms' ||
+      path === '/api/v1/housekeeping/rooms/stayover-cleanings'
+    ) {
+      return json([]);
+    }
     if (path === '/api/v1/probe') {
       const payload = decodeAuth(init);
       if (!payload) return json({ message: 'Unauthorized' }, 401, 'Unauthorized');

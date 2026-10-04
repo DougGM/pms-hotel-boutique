@@ -13,6 +13,8 @@ export const toDomain = (dto: ServiceRequestDto): ServiceRequest => ({
   notes: dto.notes,
   chargeId: dto.charge_id,
   requestedAt: toDomainDate(dto.requested_at),
+  startedAt: dto.started_at ? toDomainDate(dto.started_at) : undefined,
+  completedAt: dto.completed_at ? toDomainDate(dto.completed_at) : undefined,
   createdAt: toDomainDate(dto.created_at),
   updatedAt: toDomainDate(dto.updated_at),
 });
@@ -28,6 +30,8 @@ export const toDTO = (model: ServiceRequest): ServiceRequestDto => ({
   notes: model.notes,
   charge_id: model.chargeId,
   requested_at: toDtoDate(model.requestedAt),
+  started_at: model.startedAt ? toDtoDate(model.startedAt) : undefined,
+  completed_at: model.completedAt ? toDtoDate(model.completedAt) : undefined,
   created_at: toDtoDate(model.createdAt),
   updated_at: toDtoDate(model.updatedAt),
 });

@@ -22,6 +22,9 @@ export interface ServiceRequestDTO {
   notes?: string;
   charge_id?: string;
   requested_at: string;
+  /** Trazabilidad de stayover (INT-09): cuándo se inició y completó. */
+  started_at?: string;
+  completed_at?: string;
   created_at: string;
   updated_at: string;
 }

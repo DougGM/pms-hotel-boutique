@@ -18,6 +18,13 @@ export interface Room {
    */
   isAssignable: boolean;
   notes?: string;
+  /** Trazabilidad del turnover (solo desde Housekeeping). Ver room.dto.ts. */
+  cleaningUserEmail?: string;
+  cleaningStartedAt?: Date;
+  cleaningCompletedByUserEmail?: string;
+  cleaningCompletedAt?: Date;
+  inspectorUserEmail?: string;
+  inspectedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
