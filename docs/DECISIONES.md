@@ -839,8 +839,10 @@ caracteristicas.
 - `priceCents`/`price_cents` sigue en centavos. No convertir a quetzales en
   servicios ni DTOs.
 - No fusionar `status` y `housekeepingStatus`; la regla D-002 permanece vigente.
-- No pedir `room-types` ni `room-features` desde roles sin esos permisos. En el
-  workspace, Limpieza no debe depender del catalogo de habitaciones para cargar.
+- No pedir `rooms`, `room-types` ni `room-features` desde roles sin esos
+  permisos. En el workspace, Limpieza usa HousekeepingController y Room Service
+  usa los datos embebidos en sus pedidos; ninguno debe depender del catalogo de
+  habitaciones para cargar.
 
 ## Cómo agregar una nueva decisión
 

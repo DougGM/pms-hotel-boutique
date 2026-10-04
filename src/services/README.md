@@ -243,10 +243,13 @@ y tarifas usan el contrato HTTP real; los errores 400, 401, 403, 404 y 409 se
 propagan como mensajes de operacion para que la UI existente muestre el fallo
 sin mutar estado local.
 
-`PrivateWorkspace` carga `room-types` y `room-features` solo para roles que
-tienen ese catalogo en su dominio (`admin` y `reception`). Limpieza carga sus
-habitaciones desde HousekeepingController y no dispara llamadas que el backend
-rechazaria con 403 por falta de `room-types.read`/`room-features.read`.
+`PrivateWorkspace` carga `rooms` solo para roles con dominio de habitaciones
+(`admin`, `reception`, `housekeeping`), y carga `room-types`/`room-features`
+solo para `admin` y `reception`. Limpieza carga sus habitaciones desde
+HousekeepingController. Room Service usa el `roomNumber`, `guestName` y
+`productName` que entrega su propio backend de pedidos, sin depender de
+`rooms.read`. Asi se evitan llamadas que el backend rechazaria con 403 por falta
+de permisos de catalogo.
 
 ## Integracion con INT-08
 

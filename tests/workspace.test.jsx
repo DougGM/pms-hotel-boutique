@@ -489,6 +489,7 @@ function installRoomServiceBackend() {
     const method = init.method ?? 'GET';
     const body = init.body ? JSON.parse(String(init.body)) : undefined;
     state.requests.push({ call: `${method} ${path}`, body });
+    if (method === 'GET' && path === '/rooms') return json({ status: 403 }, 403);
     if (method === 'GET' && path === '/room-service/products') return json([]);
     if (method === 'GET' && path === '/room-service/orders') return json(state.orders);
     const status = path.match(/^\/room-service\/orders\/([^/]+)\/status$/);
@@ -527,6 +528,11 @@ const statusCalls = () =>
 
 test('room service: los pedidos salen del backend con habitación, huésped y producto', async () => {
   await mountRoomService();
+  assert.deepEqual(
+    rsBackend.requests.filter(({ call }) => call === 'GET /rooms'),
+    [],
+    'Room Service no debe depender de rooms.read para cargar pedidos',
+  );
   const [card] = orderCards();
   assert.ok(card, 'el pedido del backend aparece en Pedidos activos');
   assert.match(text(card), /Habitación 305 · Ana López/);
