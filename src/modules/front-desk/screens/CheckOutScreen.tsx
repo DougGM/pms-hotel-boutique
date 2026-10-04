@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { bookingService } from '@/services/bookingService';
 import { guestAccountService } from '@/services/guestAccountService';
 import { guestService } from '@/services/guestService';
+import { roomService } from '@/services/roomService';
 import { BOOKING_STATUS_TRANSITIONS } from '@/shared/constants/statuses';
 import { DataTable, type DataTableColumn } from '@/shared/components/DataTable';
 import { ErrorState } from '@/shared/components/ErrorState';
@@ -134,14 +135,17 @@ export function CheckOutScreen() {
         refreshedCharges,
         refreshedPayments,
         refreshedDeposits,
+        refreshedRooms,
       ] = await Promise.all([
         bookingService.getBookingById(booking.id),
         guestAccountService.getAccountByBookingId(booking.id),
         guestAccountService.getChargesByBookingId(booking.id),
         guestAccountService.getPaymentsByBookingId(booking.id),
         guestAccountService.getDepositsByBookingId(booking.id),
+        roomService.getRooms(),
       ]);
       const nextBooking = refreshedBooking ?? checkedOutBooking;
+      void refreshedRooms;
       setBooking(nextBooking);
       if (refreshedAccount) setAccount(refreshedAccount);
       setCharges(refreshedCharges);

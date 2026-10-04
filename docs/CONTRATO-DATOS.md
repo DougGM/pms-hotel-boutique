@@ -94,7 +94,9 @@ habitacion usa `PUT /bookings/{id}` con `roomId` y acompanantes usan
 `POST /bookings/{bookingId}/companions`,
 `PUT /bookings/{bookingId}/companions/{companionId}` y
 `DELETE /bookings/{bookingId}/companions/{companionId}`; el backend valida
-estado, habitacion, acompanantes y composicion.
+estado, habitacion, acompanantes y composicion. El frontend aplica esas
+mutaciones en orden `DELETE` -> `PUT` -> `POST` para no crear estados
+temporales invalidos por carreras de red.
 
 `checkOut` se bloquea si `balance_cents !== 0`; solo con saldo exactamente en cero cierra el folio,
 marca la reserva como `checked_out` y deja la habitacion `available` con
@@ -118,7 +120,8 @@ son el unico punto de adaptacion.
 Actualizacion 2026-10-04 (#102 / INT-04): las operaciones de recepcion
 integradas para reservas UUID ya no cambian estados solo en frontend. Check-in,
 check-out, asignacion de habitacion y acompanantes se ejecutan contra backend y
-las pantallas refrescan los datos posteriores desde los servicios.
+las pantallas refrescan los datos posteriores desde los servicios, incluyendo
+habitaciones despues de check-in/check-out.
 
 ## 3. Entidad por entidad
 

@@ -66,8 +66,9 @@ y `PUT`/`DELETE /bookings/{bookingId}/companions/{companionId}`;
 `checkIn` y `checkOut` llaman `POST /bookings/{id}/check-in` y
 `POST /bookings/{id}/check-out`. `CheckOutScreen` ya no bloquea el intento por
 saldo local: muestra el aviso de saldo y deja que el backend responda `409`,
-sin forzar cierre local. Despues de mutaciones, las pantallas refrescan datos
-desde servicios.
+sin forzar cierre local. Los cambios de acompanantes se aplican en orden
+`DELETE` -> `PUT` -> `POST`, y despues de check-in/check-out las pantallas
+refrescan reserva, folio y habitaciones desde servicios.
 
 **Actualizacion 2026-09-22 (#72):** `GuestContent` resuelve al huesped desde la
 sesion, muestra sus reservas reales y ya no usa habitacion 402, fechas 2024 ni

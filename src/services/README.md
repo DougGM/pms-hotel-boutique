@@ -82,7 +82,9 @@ acompanantes consumen las rutas reales de `BookingCompanionController`
 (`GET`/`POST /bookings/{bookingId}/companions`,
 `PUT`/`DELETE /bookings/{bookingId}/companions/{companionId}`) y delegan al
 backend las reglas de estado, habitacion y composicion. Las validaciones locales
-quedan para reservas legacy `BKG-*`.
+quedan para reservas legacy `BKG-*`. La sincronizacion integrada se ejecuta en
+orden (`DELETE`, luego `PUT`, luego `POST`) para evitar carreras contra las
+validaciones de composicion del backend.
 
 `guestAccountService.createCharge(data)` crea un `Charge` real, lo marca como
 `posted`, calcula `amount_cents = quantity * unit_price_cents` y actualiza el
@@ -138,7 +140,7 @@ Actualizacion 2026-10-04 (#102 / INT-04): para reservas UUID,
 recalcula reglas financieras para esas reservas: si el backend responde `409`
 por saldo pendiente, el mensaje se presenta y la reserva permanece sin cerrar.
 Las pantallas de recepcion vuelven a consultar reserva, folio y habitaciones
-despues de las mutaciones.
+despues de check-in/check-out.
 
 La validacion local de capacidad se mantiene para `room_type_id` mock (`RT-*`).
 Cuando el `roomTypeId` es UUID se delega al backend, porque el dataset local no

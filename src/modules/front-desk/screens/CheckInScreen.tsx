@@ -251,10 +251,14 @@ export function CheckInScreen() {
         companions.map(toCompanionDto),
       );
       await bookingService.checkIn(screen.booking.id);
-      const refreshedBooking = await bookingService.getBookingById(screen.booking.id);
+      const [refreshedBooking, refreshedRooms] = await Promise.all([
+        bookingService.getBookingById(screen.booking.id),
+        roomService.getRooms(),
+      ]);
       if (!refreshedBooking) {
         throw new Error('El check-in se completo, pero la reserva ya no esta disponible.');
       }
+      setScreen({ ...screen, booking: refreshedBooking, rooms: refreshedRooms });
       const account = await guestAccountService.getAccountByBookingId(screen.booking.id);
       if (!account) {
         throw new Error('El check-in se completó, pero no se encontró la cuenta del huésped.');

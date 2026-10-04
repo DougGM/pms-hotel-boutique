@@ -1729,16 +1729,42 @@ test('INT-04: recepcion usa backend para acompanantes, asignacion, check-in y ch
     ],
   );
 
-  await assertServiceCall('bookingCompanionService.saveCompanionsForBooking recrea integrado', () =>
-    bookingCompanionService.saveCompanionsForBooking(bookingId, [
-      {
-        first_name: 'Marcos',
-        last_name: 'Rodas',
-        document_type: 'national_id',
-        document_number: '1234 56789 0101',
-        guest_type: 'adult',
-      },
-    ]),
+  const recreatedCompanions = await assertServiceCall(
+    'bookingCompanionService.saveCompanionsForBooking recrea integrado',
+    () =>
+      bookingCompanionService.saveCompanionsForBooking(bookingId, [
+        {
+          first_name: 'Marcos',
+          last_name: 'Rodas',
+          document_type: 'national_id',
+          document_number: '1234 56789 0101',
+          guest_type: 'adult',
+        },
+      ]),
+  );
+  assert.equal(recreatedCompanions.length, 1);
+
+  await assertServiceCall(
+    'bookingCompanionService.saveCompanionsForBooking reemplaza integrado',
+    () =>
+      bookingCompanionService.saveCompanionsForBooking(bookingId, [
+        {
+          first_name: 'Sofia',
+          last_name: 'Rodas',
+          document_type: 'passport',
+          document_number: 'P-123',
+          guest_type: 'adult',
+        },
+      ]),
+  );
+  assert.deepEqual(
+    calls.slice(-4).map(({ call }) => call),
+    [
+      `GET /bookings/${bookingId}/companions`,
+      `DELETE /bookings/${bookingId}/companions/${recreatedCompanions[0].id}`,
+      `POST /bookings/${bookingId}/companions`,
+      `GET /bookings/${bookingId}/companions`,
+    ],
   );
 
   const companions = await assertServiceCall(

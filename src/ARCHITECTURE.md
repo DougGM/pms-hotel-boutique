@@ -320,11 +320,12 @@ Nota 2026-10-04 (#102 / INT-04): para reservas UUID,
 `bookingCompanionService` usa las rutas reales de `BookingCompanionController`:
 `GET`/`POST /bookings/{bookingId}/companions` y
 `PUT`/`DELETE /bookings/{bookingId}/companions/{companionId}`. Las validaciones
-de estado, habitacion y composicion quedan en backend. En reservas legacy
-`BKG-*` conserva las validaciones locales de campos, capacidad y composicion
-para sostener el prototipo. `CheckInScreen` y `CheckOutScreen` refrescan
-reserva, folio y habitaciones despues de mutaciones para reflejar el estado real
-devuelto por la API.
+de estado, habitacion y composicion quedan en backend; la sincronizacion corre
+en orden `DELETE` -> `PUT` -> `POST` para no depender del orden de red. En
+reservas legacy `BKG-*` conserva las validaciones locales de campos, capacidad y
+composicion para sostener el prototipo. `CheckInScreen` y `CheckOutScreen`
+refrescan reserva, folio y habitaciones despues de check-in/check-out para
+reflejar el estado real devuelto por la API.
 
 Nota 2026-10-03 (#103): en folios financieros integrados, un `bookingId` UUID
 nunca debe caer al recalculo local mock. `guestAccountService` consulta el
