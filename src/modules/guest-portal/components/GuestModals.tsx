@@ -36,7 +36,7 @@ export type GuestServiceRequest = {
   type: string;
   description: string;
   time: string;
-  status: 'Pendiente' | 'En proceso' | 'Completada' | 'Cancelada';
+  status: 'Pendiente' | 'Aceptada' | 'En proceso' | 'Completada' | 'Cancelada';
   room: string;
 };
 
@@ -63,7 +63,8 @@ export type GuestOrder = {
   sourceId: string;
   items: { name: string; quantity: number; price: number }[];
   time: string;
-  status: 'Pendiente' | 'Aceptado' | 'En preparación' | 'En camino' | 'Entregado' | 'Cancelado';
+  status:
+    'Pendiente' | 'Aceptado' | 'En preparación' | 'Listo' | 'En camino' | 'Entregado' | 'Cancelado';
   note: string;
   room: string;
 };
@@ -88,7 +89,10 @@ export const resStatusClass = (status: ReservationStatus): string =>
 export const orderStatusClass = (status: string): string =>
   status === 'Pendiente'
     ? 'warning'
-    : status === 'Aceptado' || status === 'En preparación' || status === 'En camino'
+    : status === 'Aceptado' ||
+        status === 'En preparación' ||
+        status === 'Listo' ||
+        status === 'En camino'
       ? 'info'
       : status === 'Entregado'
         ? 'success'

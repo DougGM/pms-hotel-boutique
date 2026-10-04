@@ -524,6 +524,11 @@ responde `403`. Los errores se traducen en `guestHttp.ts`.
 | `serviceRequestService` | `getGuestConciergeRequests` / `createGuestConciergeRequest` / `cancelGuestConciergeRequest`                     | `/guest/concierge/requests`        |
 | `notificationService`   | `getGuestNotifications` / `getGuestUnreadCount` / `markGuestNotificationRead` / `markAllGuestNotificationsRead` | `/guest/notifications`             |
 
+La UI del portal permite cancelar Room Service mientras el backend lo admite
+(`pending`, `accepted`, `preparing`, `ready`) y Conserjeria en `pending`,
+`accepted` e `in_progress`. Housekeeping queda mas restrictivo en el portal:
+solo muestra cancelar en `pending`, porque su flujo de stayover es distinto.
+
 `GET /guest/room-service/products` y `POST /guest/notifications/read-all`
 requieren la rama de backend `feature/int-12-guest-portal-support`.
 

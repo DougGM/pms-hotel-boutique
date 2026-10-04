@@ -106,7 +106,8 @@ const PRODUCT_CATEGORY_LABELS: Record<Product['category'], string> = {
 
 function mapOrderStatus(status: string): GuestOrder['status'] {
   if (status === 'accepted') return 'Aceptado';
-  if (status === 'preparing' || status === 'ready') return 'En preparación';
+  if (status === 'preparing') return 'En preparación';
+  if (status === 'ready') return 'Listo';
   if (status === 'onTheWay') return 'En camino';
   if (status === 'delivered') return 'Entregado';
   if (status === 'cancelled' || status === 'rejected') return 'Cancelado';
@@ -116,8 +117,31 @@ function mapOrderStatus(status: string): GuestOrder['status'] {
 function mapRequestStatus(status: string): GuestServiceRequest['status'] {
   if (status === 'completed') return 'Completada';
   if (status === 'cancelled' || status === 'rejected') return 'Cancelada';
-  if (status === 'accepted' || status === 'inProgress') return 'En proceso';
+  if (status === 'accepted') return 'Aceptada';
+  if (status === 'inProgress') return 'En proceso';
   return 'Pendiente';
+}
+
+const CANCELLABLE_GUEST_ORDER_STATUSES: readonly GuestOrder['status'][] = [
+  'Pendiente',
+  'Aceptado',
+  'En preparación',
+  'Listo',
+];
+
+const CANCELLABLE_CONCIERGE_STATUSES: readonly GuestServiceRequest['status'][] = [
+  'Pendiente',
+  'Aceptada',
+  'En proceso',
+];
+
+function canCancelGuestOrder(order: GuestOrder): boolean {
+  return CANCELLABLE_GUEST_ORDER_STATUSES.includes(order.status);
+}
+
+function canCancelGuestRequest(request: GuestServiceRequest): boolean {
+  if (request.kind === 'housekeeping') return request.status === 'Pendiente';
+  return CANCELLABLE_CONCIERGE_STATUSES.includes(request.status);
 }
 
 type ScreenState =
@@ -1065,7 +1089,7 @@ function GuestContentReady({
                     <span className={`status-pill ${reqStatusClass(req.status)}`}>
                       {req.status}
                     </span>
-                    {req.status === 'Pendiente' && (
+                    {canCancelGuestRequest(req) && (
                       <button
                         className="button small terracotta-btn"
                         onClick={() => cancelServiceRequest(req.id)}
@@ -1250,7 +1274,7 @@ function GuestContentReady({
             ) : (
               orders.map((order) => {
                 const total = order.items.reduce((s, i) => s + i.price * i.quantity, 0);
-                const canCancel = order.status === 'Pendiente' || order.status === 'Aceptado';
+                const canCancel = canCancelGuestOrder(order);
                 return (
                   <div className="gs-order-card" key={order.id}>
                     <div className="gs-order-head">
@@ -1325,7 +1349,7 @@ function GuestContentReady({
                     <span className={`status-pill ${reqStatusClass(req.status)}`}>
                       {req.status}
                     </span>
-                    {req.status === 'Pendiente' && (
+                    {canCancelGuestRequest(req) && (
                       <button
                         className="button small terracotta-btn"
                         onClick={() => cancelServiceRequest(req.id)}
