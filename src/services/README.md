@@ -386,3 +386,44 @@ ready -> on_the_way -> delivered`; se cancela hasta `ready`; `pending`
 - `createOrder`, `cancelOrder` y `getOrdersByGuestId` son del portal del
   huesped, que usa `/guest/room-service/...` con otro token: siguen sobre el
   mock hasta INT-12.
+
+## Integracion con INT-11 (#109)
+
+`serviceRequestService` mezcla cuatro flujos; solo Conserjeria paso al backend
+(`ConciergeRequestController`, via `http-client.ts`):
+
+- `getConciergeRequests({ bookingId?, status? })` → `GET /concierge/requests`.
+- `getConciergeRequestById(id)` → `GET /concierge/requests/{id}` (`undefined` si
+  no existe). El detalle se pide al abrirlo.
+- `createConciergeRequest({ bookingId, description, notes? })` →
+  `POST /concierge/requests`.
+- `updateConciergeRequest(id, { description?, notes? })` →
+  `PUT /concierge/requests/{id}`: notas hasta `in_progress`, descripcion solo en
+  `pending`.
+- `updateConciergeRequestStatus(id, status, { notes?, responsibleUserId? })` →
+  `POST /concierge/requests/{id}/status`.
+
+Siguen en mock: `createRequest`, `cancelRequest` y `getRequestsByGuestId` (portal
+del huesped, INT-12; tambien los usa `notificationService`), `getRequests` (tareas
+y desperfectos del workspace) y `createMaintenanceReport` (sin endpoint de
+mantenimiento). Se eliminaron `updateRequestStatus`, `updateRequestNotes` y
+`updateRequestType`, que solo usaba Conserjeria.
+
+Reglas:
+
+- El backend valida las transiciones (`pending -> accepted | rejected |
+cancelled`, `accepted -> in_progress | cancelled`, `in_progress -> completed |
+cancelled`). Ante `400`/`403`/`404` la pantalla muestra el error y recarga las
+  solicitudes reales.
+- Las notas de un cambio de estado se **agregan** a las existentes. Por eso los
+  avances normales no mandan notas; rechazar y cancelar mandan el motivo.
+- El responsable lo asigna el backend: al aceptar, iniciar o completar una
+  solicitud sin responsable queda el usuario autenticado. La respuesta trae
+  `responsibleUserName`, `roomNumber` y `guestName` (el rol `concierge` no tiene
+  `rooms.read` ni acceso a `/admin/users`).
+- `cancelled` es un estado propio del contrato (`docs/DECISIONES.md`, D-012) y se
+  muestra como "Cancelada".
+- El workspace solo consulta Conserjeria para admin, recepcion y conserjeria
+  (`concierge.read`).
+
+Requiere la rama de backend `feature/concierge-responsible-notes`.

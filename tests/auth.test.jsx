@@ -130,6 +130,8 @@ function installFetch() {
     if (path === '/api/v1/room-service/products' || path === '/api/v1/room-service/orders') {
       return json([]);
     }
+    // El workspace de Conserjería carga sus solicitudes desde el backend (INT-11).
+    if (path === '/api/v1/concierge/requests') return json([]);
     if (path === '/api/v1/probe') {
       const payload = decodeAuth(init);
       if (!payload) return json({ message: 'Unauthorized' }, 401, 'Unauthorized');

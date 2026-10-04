@@ -1,5 +1,5 @@
 export type ServiceRequestStatusDto =
-  'pending' | 'accepted' | 'in_progress' | 'completed' | 'rejected';
+  'pending' | 'accepted' | 'in_progress' | 'completed' | 'rejected' | 'cancelled';
 
 /**
  * Solicitud de limpieza o conservería que el huésped hace desde la app
@@ -15,7 +15,14 @@ export interface ServiceRequestDTO {
   id: string;
   booking_id: string;
   room_id: string;
+  /** Datos que devuelve Conserjería (INT-11): el personal no tiene `rooms.read`. */
+  room_number?: string;
   guest_id?: string;
+  guest_name?: string;
+  /** Responsable asignado (INT-11); el nombre evita depender de /admin/users. */
+  responsible_user_id?: string;
+  responsible_user_name?: string;
+  responsible_user_email?: string;
   type: ServiceRequestTypeDto;
   description: string;
   status: ServiceRequestStatusDto;

@@ -798,6 +798,43 @@ clave legacy `hotel-aurora.auth.v1`.
   desarrollo local con `strictPort`.
 - El resto de servicios mock permanece fuera del alcance de INT-01.
 
+## D-012 · INT-11: `cancelled` entra al contrato de `service_request`
+
+### Contexto
+
+`SERVICE_REQUEST_STATUSES` tenía cinco literales (plan MOV-04) y una
+cancelación del huésped se representaba como `rejected` (ver `services/README.md`,
+#72). El backend real ya distingue `cancelled` en `ServiceRequestStatus` y lo usa
+en Conserjería: `rejected` solo sale de `pending` (el personal no atiende la
+solicitud) y `cancelled` puede salir de `pending`, `accepted` o `in_progress`
+(se deja de atender). INT-11 pide que la cancelación respete esas reglas.
+
+### Decisión
+
+`cancelled` se agrega a `SERVICE_REQUEST_STATUSES` y a `ServiceRequestStatusDto`.
+Conserjería lo muestra como "Cancelada", distinto de "Rechazada".
+`SERVICE_REQUEST_STATUS_TRANSITIONS` se alinea con el flujo de Conserjería del
+backend; es solo referencia, los servicios no lo usan para validar.
+
+### Qué NO hacer
+
+- No volver a mapear `cancelled` a `rejected` en Conserjería: son decisiones
+  distintas para el huésped y para la trazabilidad.
+- No validar transiciones en el frontend: el backend responde `400` y la UI
+  recarga el estado real.
+
+### Alternativas consideradas
+
+- Mantener `cancelled → rejected`: se descartó porque ocultaba si el personal
+  rechazó la solicitud o si se dejó de atender después de aceptarla.
+
+### Pendiente
+
+- Avisar al equipo móvil: la lista acordada en MOV-04 cambió. El backend ya
+  devuelve `cancelled`, así que la app móvil también debe reconocerlo.
+- Housekeeping (INT-09) todavía muestra un `cancelled` de stayover como
+  `rejected`; se puede unificar cuando se revise esa pantalla.
+
 ## Cómo agregar una nueva decisión
 
 Copiar la estructura de D-001: **Contexto** (qué problema había y qué

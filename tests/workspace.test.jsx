@@ -562,3 +562,155 @@ test('room service: si el backend rechaza la transición se recargan los pedidos
   );
   assert.equal(orderCards().length, 0, 'el pedido cancelado sale de Pedidos activos');
 });
+
+// --- Conserjería: backend falso de ConciergeRequestController (INT-11) -----
+//
+// Mismas reglas que ConciergeRequestServiceImpl: transiciones exactas o 400,
+// notas del cambio de estado agregadas y responsable asignado al tomar la solicitud.
+
+const cgRequest = (id, status, extra = {}) => ({
+  id,
+  bookingId: 'booking-cg',
+  roomId: 'room-402',
+  roomNumber: '402',
+  guestId: 'guest-cg',
+  guestName: 'Luis Pérez',
+  responsibleUserId: null,
+  responsibleUserName: null,
+  responsibleUserEmail: null,
+  type: 'concierge',
+  description: 'Reservar cena para dos',
+  status,
+  notes: null,
+  chargeId: null,
+  requestedAt: '2026-10-04T10:00:00Z',
+  createdAt: '2026-10-04T10:00:00Z',
+  updatedAt: '2026-10-04T10:00:00Z',
+  ...extra,
+});
+
+function installConciergeBackend(initialStatus) {
+  const state = { requests: [cgRequest('cg-1', initialStatus)], calls: [] };
+  const allowed = {
+    pending: ['accepted', 'rejected', 'cancelled'],
+    accepted: ['in_progress', 'cancelled'],
+    in_progress: ['completed', 'cancelled'],
+  };
+  const json = (body, status = 200) =>
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { 'content-type': 'application/json' },
+    });
+
+  originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input, init = {}) => {
+    const path = new URL(String(input)).pathname.replace(/^\/api\/v1/, '');
+    const method = init.method ?? 'GET';
+    const body = init.body ? JSON.parse(String(init.body)) : undefined;
+    state.calls.push({ call: `${method} ${path}`, body });
+    if (method === 'GET' && path === '/concierge/requests') return json(state.requests);
+    const match = path.match(/^\/concierge\/requests\/([^/]+)(\/status)?$/);
+    const item = match && state.requests.find((request) => request.id === match[1]);
+    if (method === 'GET' && item && !match[2]) return json(item);
+    if (method === 'POST' && item && match[2]) {
+      if (!(allowed[item.status] ?? []).includes(body.status)) return json({ status: 400 }, 400);
+      item.status = body.status;
+      if (body.notes) item.notes = body.notes;
+      if (!item.responsibleUserId && body.status === 'accepted') {
+        item.responsibleUserId = 'user-1';
+        item.responsibleUserName = 'Douglas Gómez';
+      }
+      return json(item);
+    }
+    return json({ message: `Ruta no mockeada: ${method} ${path}` }, 404);
+  };
+  return state;
+}
+
+let cgBackend;
+async function mountConcierge(initialStatus = 'pending') {
+  cgBackend = installConciergeBackend(initialStatus);
+  await act(async () => {
+    view = create(
+      <MemoryRouter>
+        <PrivateWorkspace role="concierge" sessionName="Conserjería Test" />
+      </MemoryRouter>,
+    );
+  });
+  for (let i = 0; i < 20 && !view.root.findAll((node) => hasClass(node, 'side-nav')).length; i++) {
+    await settle(300);
+  }
+  assert.ok(view.root.findAll((node) => hasClass(node, 'side-nav')).length, 'workspace cargado');
+}
+const requestCards = () =>
+  view.root.findAll((node) => node.type === 'article' && hasClass(node, 'cg-request-card'));
+const requestStatus = (card) => text(card.findAll((node) => hasClass(node, 'status-pill')).at(-1));
+const conciergeStatusCalls = () =>
+  cgBackend.calls.filter(({ call }) => call.endsWith('/status')).map(({ body }) => body);
+const confirmReason = async (actionLabel, reason, confirmLabel) => {
+  await act(async () => buttons(actionLabel, requestCards()[0])[0].props.onClick());
+  const textarea = view.root.find(
+    (node) => node.type === 'textarea' && hasClass(node, 'cg-rejection-textarea'),
+  );
+  await act(async () => textarea.props.onChange({ target: { value: reason } }));
+  await act(async () => buttons(confirmLabel)[0].props.onClick());
+  await settle();
+};
+
+test('conserjería: las solicitudes salen del backend con habitación y huésped', async () => {
+  await mountConcierge();
+  const [card] = requestCards();
+  assert.ok(card, 'la solicitud del backend aparece en Solicitudes');
+  assert.match(text(card), /Habitación 402 · Luis Pérez/);
+  assert.equal(requestStatus(card), 'Pendiente');
+});
+
+test('conserjería: aceptar envía solo el estado y muestra el responsable del backend', async () => {
+  await mountConcierge();
+  await act(async () => buttons('Aceptar solicitud', requestCards()[0])[0].props.onClick());
+  await settle();
+  assert.deepEqual(conciergeStatusCalls(), [{ status: 'accepted' }]);
+  assert.equal(
+    requestStatus(requestCards()[0]),
+    'Aceptada',
+    'accepted ya no se muestra como En proceso',
+  );
+
+  await act(async () => buttons('Ver detalle', requestCards()[0])[0].props.onClick());
+  await settle();
+  assert.ok(
+    cgBackend.calls.some(({ call }) => call === 'GET /concierge/requests/cg-1'),
+    'el detalle se pide al backend',
+  );
+  assert.match(text(view.root.find((node) => hasClass(node, 'cg-detail-modal'))), /Douglas Gómez/);
+});
+
+test('conserjería: rechazar envía el motivo junto con el cambio de estado', async () => {
+  await mountConcierge();
+  await confirmReason('Rechazar', 'Sin disponibilidad', 'Confirmar rechazo');
+  assert.deepEqual(conciergeStatusCalls(), [{ status: 'rejected', notes: 'Sin disponibilidad' }]);
+  assert.equal(cgBackend.requests[0].status, 'rejected');
+});
+
+test('conserjería: cancelar una solicitud aceptada envía el motivo y la cierra', async () => {
+  await mountConcierge('accepted');
+  await confirmReason('Cancelar', 'Ya no lo necesita', 'Confirmar cancelación');
+  assert.deepEqual(conciergeStatusCalls(), [{ status: 'cancelled', notes: 'Ya no lo necesita' }]);
+  assert.equal(cgBackend.requests[0].status, 'cancelled');
+  assert.equal(requestCards().length, 0, 'la solicitud cancelada sale de las activas');
+});
+
+test('conserjería: si el backend rechaza la transición se recargan las solicitudes reales', async () => {
+  await mountConcierge();
+  // El huésped canceló desde su portal; esta pantalla aún no lo sabe.
+  cgBackend.requests[0].status = 'cancelled';
+  await act(async () => buttons('Aceptar solicitud', requestCards()[0])[0].props.onClick());
+  await settle();
+  assert.ok(
+    view.root
+      .findAll((node) => hasClass(node, 'toast'))
+      .some((node) => /rechazó la operación/.test(text(node))),
+    'se informa el rechazo del backend',
+  );
+  assert.equal(requestCards().length, 0, 'la solicitud cancelada sale de las activas');
+});
