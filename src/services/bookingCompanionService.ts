@@ -7,7 +7,81 @@ import {
 import { getBookingGuestTotal, validateBookingCapacity } from '@/shared/utils/bookingCapacity';
 import type { ID } from '@/shared/types/common';
 import { bookingCompanionsDB, bookingsDB, roomTypesDB } from '@/data/db';
+import { HttpError, httpClient } from './http-client';
 import { mockUtils, requireCollection, simulateLatency } from './mockUtils';
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+type ApiBookingCompanion = {
+  id: string;
+  bookingId?: string;
+  booking?: { id: string };
+  firstName: string;
+  lastName: string;
+  documentType: BookingCompanionDto['document_type'];
+  documentNumber: string;
+  guestType: BookingCompanionDto['guest_type'];
+  createdAt?: string | null;
+  updatedAt?: string | null;
+};
+
+function isUuid(value: ID): boolean {
+  return UUID_PATTERN.test(value);
+}
+
+function nowIso(): string {
+  return new Date().toISOString();
+}
+
+function toCompanionDto(api: ApiBookingCompanion, bookingId: ID): BookingCompanionDto {
+  const timestamp = api.updatedAt ?? api.createdAt ?? nowIso();
+  return {
+    id: api.id,
+    booking_id: api.bookingId ?? api.booking?.id ?? bookingId,
+    first_name: api.firstName,
+    last_name: api.lastName,
+    document_type: api.documentType,
+    document_number: api.documentNumber,
+    guest_type: api.guestType,
+    created_at: api.createdAt ?? timestamp,
+    updated_at: timestamp,
+  };
+}
+
+function toCompanionRequest(companion: UpsertBookingCompanionDto) {
+  return {
+    id: companion.id,
+    firstName: companion.first_name.trim(),
+    lastName: companion.last_name.trim(),
+    documentType: companion.document_type,
+    documentNumber: companion.document_number.trim(),
+    guestType: companion.guest_type,
+  };
+}
+
+function getHttpErrorMessage(error: unknown, fallback: string): string {
+  if (!(error instanceof HttpError)) return error instanceof Error ? error.message : fallback;
+  const data = error.data;
+  if (data && typeof data === 'object') {
+    const value = data as { message?: unknown; error?: unknown; detail?: unknown };
+    if (typeof value.message === 'string' && value.message.trim()) return value.message;
+    if (typeof value.error === 'string' && value.error.trim()) return value.error;
+    if (typeof value.detail === 'string' && value.detail.trim()) return value.detail;
+  }
+  if (error.status === 401) return 'Tu sesion expiro. Inicia sesion nuevamente.';
+  if (error.status === 403) return 'No tienes permisos para operar acompanantes.';
+  if (error.status === 404) return `${fallback} La reserva o acompanantes ya no existen.`;
+  if (error.status === 409) return `${fallback} El backend reporto un conflicto.`;
+  return fallback;
+}
+
+async function request<T>(call: () => Promise<T>, fallback: string): Promise<T> {
+  try {
+    return await call();
+  } catch (error) {
+    throw new Error(getHttpErrorMessage(error, fallback));
+  }
+}
 
 function getLastBookingCompanionNumber(): number {
   const max = bookingCompanionsDB.reduce((currentMax, companion) => {
@@ -77,6 +151,15 @@ export const bookingCompanionService = {
   async getCompanionsByBookingId(bookingId: ID): Promise<BookingCompanion[]> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar los acompanantes.');
+
+    if (isUuid(bookingId)) {
+      const companions = await request(
+        () => httpClient.get<ApiBookingCompanion[]>(`/bookings/${bookingId}/companions`),
+        'No fue posible cargar los acompanantes.',
+      );
+      return companions.map((item) => toCompanionDto(item, bookingId)).map(toBookingCompanion);
+    }
+
     return requireCollection(bookingCompanionsDB, 'bookingCompanionsDB')
       .filter((item) => item.booking_id === bookingId)
       .map(toBookingCompanion);
@@ -90,6 +173,19 @@ export const bookingCompanionService = {
     mockUtils.throwIfSimulatingError('No fue posible guardar los acompanantes.');
 
     const companions = data.map(normalizeCompanion);
+
+    if (isUuid(bookingId)) {
+      const saved = await request(
+        () =>
+          httpClient.put<ApiBookingCompanion[]>(
+            `/bookings/${bookingId}/companions`,
+            companions.map(toCompanionRequest),
+          ),
+        'No fue posible guardar los acompanantes.',
+      );
+      return saved.map((item) => toCompanionDto(item, bookingId)).map(toBookingCompanion);
+    }
+
     assertCompanionFields(companions);
     assertBookingComposition(bookingId, companions);
 

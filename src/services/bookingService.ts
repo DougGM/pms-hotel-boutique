@@ -135,6 +135,7 @@ function toBookingDto(api: ApiBooking): BookingDto {
 function toBookingRequest(data: CreateBookingDto | UpdateBookingDto) {
   return {
     guestId: data.guest_id,
+    roomId: data.room_id,
     roomTypeId: data.room_type_id,
     rateId: data.rate_id,
     checkIn: data.check_in,
@@ -158,7 +159,7 @@ function getHttpErrorMessage(error: unknown, fallback: string): string {
   if (error.status === 401) return 'Tu sesion expiro. Inicia sesion nuevamente.';
   if (error.status === 403) return 'No tienes permisos para operar reservas.';
   if (error.status === 404) return `${fallback} La reserva ya no existe.`;
-  if (error.status === 409) return `${fallback} El backend reporto un conflicto.`;
+  if (error.status === 409) return `${fallback} El folio abierto tiene saldo distinto de cero.`;
   return fallback;
 }
 
@@ -260,6 +261,14 @@ export const bookingService = {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible hacer check-in.');
 
+    if (isUuid(bookingId)) {
+      const booking = await request(
+        () => httpClient.post<ApiBooking>(`/bookings/${bookingId}/check-in`),
+        'No fue posible hacer check-in.',
+      );
+      return toBooking(toBookingDto(booking));
+    }
+
     const booking = assertBookingExists(bookingId);
     const currentStatus = toDomainStatus(booking.status);
     if (!BOOKING_STATUS_TRANSITIONS[currentStatus].includes('checkedIn')) {
@@ -279,6 +288,14 @@ export const bookingService = {
   async checkOut(bookingId: ID): Promise<Booking> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible hacer check-out.');
+
+    if (isUuid(bookingId)) {
+      const booking = await request(
+        () => httpClient.post<ApiBooking>(`/bookings/${bookingId}/check-out`),
+        'No fue posible hacer check-out.',
+      );
+      return toBooking(toBookingDto(booking));
+    }
 
     const booking = assertBookingExists(bookingId);
     closeAccountForCheckout(booking);
@@ -351,6 +368,14 @@ export const bookingService = {
   async assignRoom(bookingId: ID, roomId: ID): Promise<Booking> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible asignar la habitacion.');
+
+    if (isUuid(bookingId)) {
+      const booking = await request(
+        () => httpClient.put<ApiBooking>(`/bookings/${bookingId}`, { roomId }),
+        'No fue posible asignar la habitacion.',
+      );
+      return toBooking(toBookingDto(booking));
+    }
 
     const booking = assertBookingExists(bookingId);
     const room = roomsDB.find((item) => item.id === roomId);

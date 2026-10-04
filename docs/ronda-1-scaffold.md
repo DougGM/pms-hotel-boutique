@@ -58,6 +58,16 @@ mock; un cargo UUID debe anularse con `voidCharge(chargeId, reason, bookingId)`.
 y refresca el folio despues de registrar cargos o pagos, sin sumar/restar saldo
 en estado local.
 
+**Actualizacion 2026-10-04 (#102 / INT-04):** recepcion integrada usa backend
+real para acompanantes, asignacion, check-in y check-out en reservas UUID.
+`bookingCompanionService` consume `/bookings/{bookingId}/companions`;
+`bookingService.assignRoom` envia `roomId` por `PUT /bookings/{id}`;
+`checkIn` y `checkOut` llaman `POST /bookings/{id}/check-in` y
+`POST /bookings/{id}/check-out`. `CheckOutScreen` ya no bloquea el intento por
+saldo local: muestra el aviso de saldo y deja que el backend responda `409`,
+sin forzar cierre local. Despues de mutaciones, las pantallas refrescan datos
+desde servicios.
+
 **Actualizacion 2026-09-22 (#72):** `GuestContent` resuelve al huesped desde la
 sesion, muestra sus reservas reales y ya no usa habitacion 402, fechas 2024 ni
 estancia fija del prototipo. Crear/cancelar pedidos y solicitudes, editar perfil,

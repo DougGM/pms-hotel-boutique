@@ -88,9 +88,18 @@ el calculo local como fuente oficial. `createCharge`, `createPayment` y
 persisten por reserva y se validan contra capacidad y composición de adultos/
 niños antes de completar check-in.
 
+En reservas UUID, check-in usa `POST /bookings/{id}/check-in`, asignacion de
+habitacion usa `PUT /bookings/{id}` con `roomId` y acompanantes usan
+`GET`/`PUT /bookings/{bookingId}/companions`; el backend valida estado,
+habitacion, acompanantes y composicion.
+
 `checkOut` se bloquea si `balance_cents !== 0`; solo con saldo exactamente en cero cierra el folio,
 marca la reserva como `checked_out` y deja la habitacion `available` con
 `housekeeping_status: 'dirty'`.
+
+En reservas UUID, ese bloqueo financiero lo decide el backend: el frontend llama
+`POST /bookings/{id}/check-out`, muestra el `409` cuando el folio abierto tiene
+saldo distinto de cero y no fuerza el cambio local de estado.
 
 Actualizacion 2026-10-03 (#103): las funciones legacy de folio mock rechazan
 reservas UUID. `voidCharge(chargeId, reason)` queda reservada para cargos mock;
@@ -101,10 +110,12 @@ Actualizacion 2026-10-04 (#101 / INT-03): `guestService` y `bookingService`
 consumen el backend para huespedes y reservas. El transporte backend usa
 camelCase (`firstName`, `guestId`, `roomTypeId`, `totalAmountCents`), pero la
 web conserva este contrato interno snake_case -> Mapper -> Model. Los servicios
-son el unico punto de adaptacion. INT-03 no integra acciones operativas de
-reservas (`confirm`, `check-in`, `check-out`, `cancel`, `assign-room`); esas
-transiciones siguen en el camino mock/legacy hasta INT-04 o la issue especifica
-que corresponda.
+son el unico punto de adaptacion.
+
+Actualizacion 2026-10-04 (#102 / INT-04): las operaciones de recepcion
+integradas para reservas UUID ya no cambian estados solo en frontend. Check-in,
+check-out, asignacion de habitacion y acompanantes se ejecutan contra backend y
+las pantallas refrescan los datos posteriores desde los servicios.
 
 ## 3. Entidad por entidad
 

@@ -113,15 +113,6 @@ export function CheckOutScreen() {
 
   function openConfirm() {
     if (!canCheckOut || isCheckingOut) return;
-    if (account && account.balanceCents !== 0) {
-      setError(
-        `No se puede hacer check-out: el saldo debe quedar exactamente en ${formatCurrency(
-          0,
-          account.currency,
-        )}. Saldo actual: ${formatCurrency(account.balanceCents, account.currency)}.`,
-      );
-      return;
-    }
     setError(null);
     setIsConfirmOpen(true);
   }
@@ -137,8 +128,26 @@ export function CheckOutScreen() {
     setError(null);
     try {
       const checkedOutBooking = await bookingService.checkOut(booking.id);
-      setBooking(checkedOutBooking);
-      setStatus('completed');
+      const [
+        refreshedBooking,
+        refreshedAccount,
+        refreshedCharges,
+        refreshedPayments,
+        refreshedDeposits,
+      ] = await Promise.all([
+        bookingService.getBookingById(booking.id),
+        guestAccountService.getAccountByBookingId(booking.id),
+        guestAccountService.getChargesByBookingId(booking.id),
+        guestAccountService.getPaymentsByBookingId(booking.id),
+        guestAccountService.getDepositsByBookingId(booking.id),
+      ]);
+      const nextBooking = refreshedBooking ?? checkedOutBooking;
+      setBooking(nextBooking);
+      if (refreshedAccount) setAccount(refreshedAccount);
+      setCharges(refreshedCharges);
+      setPayments(refreshedPayments);
+      setDeposits(refreshedDeposits);
+      setStatus(nextBooking.status === 'checkedOut' ? 'completed' : 'ready');
       setIsConfirmOpen(false);
     } catch (cause: unknown) {
       setError(cause instanceof Error ? cause.message : 'No fue posible confirmar el check-out.');
@@ -151,7 +160,7 @@ export function CheckOutScreen() {
     ? BOOKING_STATUS_TRANSITIONS[booking.status].includes('checkedOut')
     : false;
   const hasNonZeroBalance = account ? account.balanceCents !== 0 : true;
-  const canCheckOut = canTransitionToCheckedOut && !hasNonZeroBalance;
+  const canCheckOut = canTransitionToCheckedOut;
   const chargesTotalCents = charges.reduce((total, charge) => total + charge.amountCents, 0);
   const paymentsTotalCents = payments.reduce((total, payment) => total + payment.amountCents, 0);
   const depositsTotalCents = deposits

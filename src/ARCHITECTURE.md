@@ -291,9 +291,12 @@ Nota 2026-10-04 (#101 / INT-03): `guestService` y `bookingService` usan el
 backend para CRUD de huespedes y reservas (`/guests`, `/bookings`) y conservan
 fallback local solo cuando el backend no esta disponible o una ruta no esta
 mockeada en el harness. El backend devuelve camelCase; los servicios lo
-normalizan al DTO snake_case interno y despues devuelven Models. INT-03 no
-integra acciones operativas: confirmacion, cancelacion, asignacion, check-in y
-check-out quedan en el flujo mock/legacy hasta INT-04 o su issue especifica.
+normalizan al DTO snake_case interno y despues devuelven Models. INT-04 integra
+las acciones operativas para reservas UUID: asignacion de habitacion via
+`PUT /bookings/{id}`, check-in via `POST /bookings/{id}/check-in`, check-out via
+`POST /bookings/{id}/check-out` y acompanantes via
+`/bookings/{id}/companions`; los IDs legacy `BKG-*` conservan el flujo mock del
+prototipo.
 `PrivateWorkspace` solo carga reservas y huespedes para `admin`/`reception`,
 que son los roles con permisos `bookings.read`/`guests.read` en este dominio.
 
@@ -312,6 +315,14 @@ capacidad y composición (`principal + acompañantes` contra
 `booking.adults/children`), `guestService.updateGuest` conserva cambios de
 documento del titular y `bookingService.checkIn` marca la habitación asignada
 como `occupied`.
+
+Nota 2026-10-04 (#102 / INT-04): para reservas UUID,
+`bookingCompanionService` usa `GET`/`PUT /bookings/{bookingId}/companions` y
+delega validaciones de estado, habitacion y composicion al backend. En reservas
+legacy `BKG-*` conserva las validaciones locales de campos, capacidad y
+composicion para sostener el prototipo. `CheckInScreen` y `CheckOutScreen`
+refrescan reserva, folio y habitaciones despues de mutaciones para reflejar el
+estado real devuelto por la API.
 
 Nota 2026-10-03 (#103): en folios financieros integrados, un `bookingId` UUID
 nunca debe caer al recalculo local mock. `guestAccountService` consulta el
