@@ -13,6 +13,9 @@ await build({
   tsconfig: 'tsconfig.app.json',
   jsx: 'automatic',
   loader: { '.css': 'empty' },
+  define: {
+    'import.meta.env': JSON.stringify({ VITE_API_BASE_URL: 'http://localhost:8080/api/v1' }),
+  },
   plugins: [
     {
       name: 'memory-history',

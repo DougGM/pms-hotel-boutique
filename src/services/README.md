@@ -119,19 +119,21 @@ de crear cargos o pagos vuelve a consultar el folio en vez de ajustar
 
 Actualizacion 2026-10-04 (#101 / INT-03): `guestService` y `bookingService`
 integran huespedes y reservas con el backend Spring mediante `http-client.ts`.
-Las lecturas intentan primero `GET /guests` y `GET /bookings`, normalizan las
-respuestas camelCase del backend a los DTO internos y devuelven Models. Si el
-backend no esta disponible o el harness responde 404 a rutas no mockeadas,
-conservan el fallback local `GST-*`/`BKG-*` para el prototipo.
+Las lecturas `GET /guests` y `GET /bookings` normalizan las respuestas
+camelCase del backend a los DTO internos y devuelven Models. Desde INT-13, una
+falla del backend ya no cae automaticamente a `src/data/db.ts`; el error se
+propaga para mostrar el estado real de integracion.
 
 `guestService.createGuest(data)` y `guestService.updateGuest(id, data)` envian
 `POST /guests` y `PUT /guests/{id}` con camelCase (`firstName`,
-`documentNumber`, etc.). En fallback local, `createGuest` genera el siguiente
-ID `GST-*`, agrega timestamps y devuelve `Guest` de dominio.
+`documentNumber`, etc.). El camino local queda limitado a operaciones legacy
+explicitamente invocadas sobre IDs `GST-*`.
 
 `bookingService.createBooking(data)` y `bookingService.updateBooking(id, data)`
-envian `POST /bookings` y `PUT /bookings/{id}` con camelCase (`guestId`,
-`roomTypeId`, `checkIn`, etc.).
+envian `POST /bookings` y `PUT /bookings/{id}` con camelCase cuando la reserva
+usa IDs UUID de backend (`guestId`, `roomTypeId`, `checkIn`, etc.). Las reservas
+legacy `BKG-*` y las creaciones con catalogos mock `RT-*` conservan el prototipo
+local para las pruebas de reglas historicas.
 
 Actualizacion 2026-10-04 (#102 / INT-04): para reservas UUID,
 `bookingService.assignRoom` usa `PUT /bookings/{id}` con `roomId`,
@@ -248,6 +250,27 @@ persistencia local, incluso si la confirmacion remota falla. `clearSession()`
 expone la limpieza local sincrona. La clave legacy `hotel-aurora.auth.v1` se
 elimina al restaurar o limpiar sesion.
 
+## INT-13: validacion E2E y mocks restantes
+
+La integracion frontend-backend usa un unico punto de salida HTTP:
+`src/services/http-client.ts`. No agregar `fetch`, `axios`, `XMLHttpRequest` ni
+clientes paralelos en modulos o componentes; los servicios deben consumir
+`httpClient` y traducir DTOs backend a modelos de dominio.
+
+`src/data/db.ts` sigue existiendo para funcionalidades demo o flujos cuyo
+contrato backend aun no esta disponible en `develop`. Los componentes y
+modulos no deben importarlo directamente: todo acceso mock permitido debe pasar
+por `src/services/`, para que cada mock pueda retirarse cuando exista su API
+real. La suite `npm run test:e2e-integration` falla si aparece un import directo
+desde fuera de servicios o un cliente HTTP alternativo. Tambien falla si
+servicios integrados vuelven a introducir fallbacks silenciosos tipo
+`isOfflineError`; las rutas ya integradas deben propagar el error del backend.
+
+El cliente central propaga `403`, `404` y `409` como `HttpError` con el payload
+del backend para que la UI pueda mostrar errores controlados. Ante un `401`
+protegido, intenta un refresh una sola vez y reintenta la solicitud original con
+el nuevo JWT; si falla, el handler de sesion limpia el estado local.
+
 ## Integracion con INT-02
 
 `roomService` conserva su API de dominio para pantallas publicas, privadas y
@@ -267,8 +290,9 @@ internos snake_case y despues aplica los mappers existentes para devolver
 Models. `status` y `housekeepingStatus` permanecen separados; `priceCents` se
 mantiene en centavos y no se duplica ninguna regla de negocio del backend.
 
-Los listados conservan fallback local solo cuando el backend no esta disponible
-o el harness responde 404 a una ruta no mockeada. Los detalles por ID no ocultan
+Los listados ya no conservan fallback local cuando el backend no esta
+disponible: `getRooms()`, `getRoomTypes()`, `getRoomFeatures()` y `getRates()`
+deben recibir datos reales o propagar el error. Los detalles por ID no ocultan
 un 404 real: `getRoomById()` y `getRoomTypeById()` devuelven `undefined` si el
 backend indica que el recurso no existe. Las escrituras de habitaciones, tipos
 y tarifas usan el contrato HTTP real; los errores 400, 401, 403, 404 y 409 se
@@ -294,6 +318,11 @@ Huespedes y reservas ya no dependen exclusivamente de `src/data/db.ts`:
   El backend habla camelCase; la web conserva su contrato interno DTO
   snake_case -> Mapper -> Model. Las pantallas no reciben DTOs ni importan
   `src/data/db.ts`.
+
+INT-13 elimina el fallback automatico de esos endpoints: `GET/POST/PUT` contra
+UUID/backend debe responder desde la API real o fallar. El acceso a datos mock
+queda solo para IDs legacy explicitos (`GST-*`, `BKG-*`, `RT-*`) que sostienen
+pruebas y prototipo local mientras existan.
 
 `PrivateWorkspace` carga `bookings` y `guests` solo para roles con permisos de
 ese dominio (`admin` y `reception`). Roles como Limpieza, Room Service y

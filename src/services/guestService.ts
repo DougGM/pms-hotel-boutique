@@ -8,8 +8,8 @@ import {
 } from '@/shared/types/entities/guest';
 import type { ID } from '@/shared/types/common';
 import { guestsDB } from '@/data/db';
-import { mockUtils, requireCollection, simulateLatency } from './mockUtils';
-import { hydrateCollection, persistCollection, refreshCollection } from './mockPersistence';
+import { mockUtils, simulateLatency } from './mockUtils';
+import { hydrateCollection, persistCollection } from './mockPersistence';
 import { HttpError, httpClient } from './http-client';
 
 const guestsStorageKey = 'pms.guests';
@@ -30,8 +30,6 @@ type ApiGuest = {
 };
 
 const nowIso = () => new Date().toISOString();
-const isOfflineError = (error: unknown): boolean =>
-  !(error instanceof HttpError) || error.status === 404;
 
 function isUuid(value: ID): boolean {
   return UUID_PATTERN.test(value);
@@ -39,14 +37,6 @@ function isUuid(value: ID): boolean {
 
 function getGuestsCollection() {
   return hydrateCollection(guestsStorageKey, guestsDB);
-}
-
-function nextGuestId(): string {
-  const max = getGuestsCollection().reduce((currentMax, guest) => {
-    const match = /^GST-(\d+)$/.exec(guest.id);
-    return match ? Math.max(currentMax, Number(match[1])) : currentMax;
-  }, 0);
-  return `GST-${String(max + 1).padStart(3, '0')}`;
 }
 
 function toGuestDto(api: ApiGuest): GuestDto {
@@ -101,71 +91,59 @@ function getHttpErrorMessage(error: unknown, fallback: string): string {
   return fallback;
 }
 
-function createLocalGuest(data: CreateGuestDto): Guest {
-  const now = new Date().toISOString();
-  const guest: GuestDto = {
-    id: nextGuestId(),
-    ...data,
-    created_at: now,
-    updated_at: now,
-  };
-  getGuestsCollection().push(guest);
-  persistCollection(guestsStorageKey, getGuestsCollection());
-  return toGuest(guest);
+async function request<T>(call: () => Promise<T>, fallback: string): Promise<T> {
+  try {
+    return await call();
+  } catch (error) {
+    throw new Error(getHttpErrorMessage(error, fallback));
+  }
 }
 
 export const guestService = {
   async getGuests(): Promise<Guest[]> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar los huespedes.');
-    try {
-      const guests = await httpClient.get<ApiGuest[]>('/guests');
-      return guests.map(toGuestDto).map(toGuest);
-    } catch (error) {
-      if (!isOfflineError(error)) throw error;
-    }
-    return requireCollection(
-      refreshCollection(guestsStorageKey, getGuestsCollection()),
-      'guestsDB',
-    ).map(toGuest);
+    const guests = await request(
+      () => httpClient.get<ApiGuest[]>('/guests'),
+      'No fue posible cargar los huespedes.',
+    );
+    return guests.map(toGuestDto).map(toGuest);
   },
   async getGuestById(id: ID): Promise<Guest | undefined> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar el huesped.');
+    if (!isUuid(id)) {
+      const guest = getGuestsCollection().find((item) => item.id === id);
+      return guest ? toGuest(guest) : undefined;
+    }
+
     try {
       const guest = await httpClient.get<ApiGuest>(`/guests/${id}`);
       return toGuest(toGuestDto(guest));
     } catch (error) {
-      if (error instanceof HttpError && error.status === 404 && isUuid(id)) return undefined;
-      if (!isOfflineError(error)) throw error;
+      if (error instanceof HttpError && error.status === 404) return undefined;
+      throw new Error(getHttpErrorMessage(error, 'No fue posible cargar el huesped.'));
     }
-    const guest = getGuestsCollection().find((item) => item.id === id);
-    return guest ? toGuest(guest) : undefined;
   },
   async createGuest(data: CreateGuestDto): Promise<Guest> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible crear el huesped.');
-    try {
-      const guest = await httpClient.post<ApiGuest>('/guests', toGuestRequest(data));
-      return toGuest(toGuestDto(guest));
-    } catch (error) {
-      if (!isOfflineError(error)) {
-        throw new Error(getHttpErrorMessage(error, 'No fue posible crear el huesped.'));
-      }
-      return createLocalGuest(data);
-    }
+    const guest = await request(
+      () => httpClient.post<ApiGuest>('/guests', toGuestRequest(data)),
+      'No fue posible crear el huesped.',
+    );
+    return toGuest(toGuestDto(guest));
   },
   async updateGuest(id: ID, data: UpdateGuestDto): Promise<Guest> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible actualizar el huesped.');
 
-    try {
-      const guest = await httpClient.put<ApiGuest>(`/guests/${id}`, toGuestRequest(data));
+    if (isUuid(id)) {
+      const guest = await request(
+        () => httpClient.put<ApiGuest>(`/guests/${id}`, toGuestRequest(data)),
+        'No fue posible actualizar el huesped.',
+      );
       return toGuest(toGuestDto(guest));
-    } catch (error) {
-      if (!isOfflineError(error)) {
-        throw new Error(getHttpErrorMessage(error, 'No fue posible actualizar el huesped.'));
-      }
     }
 
     const guest = getGuestsCollection().find((item) => item.id === id);

@@ -52,6 +52,12 @@ el repositorio.
 VITE_API_BASE_URL=http://localhost:8080/api/v1
 ```
 
+Para la validacion E2E local, levantar el backend Spring en `develop` con
+PostgreSQL real antes de abrir el frontend. El frontend usa un unico cliente
+HTTP (`src/services/http-client.ts`) y lee esta URL como prefijo para todos los
+endpoints integrados; si la variable no existe, el valor por defecto es
+`http://localhost:8080/api/v1`.
+
 ## Estructura
 
 `src/public/` contiene las vistas sin sesión y `src/private/` el layout con
@@ -91,10 +97,13 @@ npm run format
 ```
 
 `npm run check` ejecuta formato, TypeScript, ESLint, compilación de
-producción y `npm run test` (once suites, 238 pruebas — ver
+producción y `npm run test` (incluye la suite INT-13 de validacion estatica
+E2E contra imports accidentales a `src/data/db`, clientes HTTP alternativos y
+manejo de `401/403/404/409` — ver
 [src/ARCHITECTURE.md](src/ARCHITECTURE.md)). Cada suite también se puede
 correr por separado: `npm run test:auth`, `test:currency`, `test:date`,
-`test:money-contract`, `test:contract`, `test:services`, `test:presentation`.
+`test:money-contract`, `test:contract`, `test:services`,
+`test:e2e-integration`, `test:presentation`.
 
 ## Autenticacion con backend (INT-01)
 

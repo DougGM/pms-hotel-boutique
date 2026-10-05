@@ -269,13 +269,13 @@ antes coexistían con IDs de mundos distintos que no se cruzaban entre sí
 (p. ej. `paymentService` leía `mockData.ts` mientras `guestAccountService`
 ya leía el dataset real de pagos del Lote C). Los servicios no integrados aun
 leen de ahi (Lote B/C/D) mediante la capa `src/services/`; los servicios
-integrados usan `http-client.ts` y documentan cualquier fallback local de
-lectura en `src/services/README.md`.
+integrados usan `http-client.ts` y no deben ocultar errores del backend con
+fallbacks locales automaticos.
 `authService.ts` conecta al backend Spring desde INT-01: login, Bearer JWT,
 refresh con retry unico y logout contra `/auth/*`. Desde INT-02, `roomService`
 tambien usa backend para habitaciones, tipos, caracteristicas y tarifas
-(`/rooms`, `/room-types`, `/room-features`, `/rates`) y deja `src/data/db.ts`
-solo como fallback de lectura cuando no hay backend/harness.
+(`/rooms`, `/room-types`, `/room-features`, `/rates`) y desde INT-13 ya no
+importa `src/data/db.ts` para esas entidades.
 Única excepción documentada a "un solo
 archivo con datos inventados": el fixture de demo de
 `src/modules/ui-catalog/services/catalog-service.ts`, que no representa
@@ -288,9 +288,10 @@ login. `getRoles()` y `getPermissions()` siguen leyendo `rolesDB` y
 Lote D.
 
 Nota 2026-10-04 (#101 / INT-03): `guestService` y `bookingService` usan el
-backend para CRUD de huespedes y reservas (`/guests`, `/bookings`) y conservan
-fallback local solo cuando el backend no esta disponible o una ruta no esta
-mockeada en el harness. El backend devuelve camelCase; los servicios lo
+backend para CRUD de huespedes y reservas (`/guests`, `/bookings`). Desde
+INT-13, las llamadas contra backend/UUID propagan errores en vez de volver a
+`src/data/db.ts`; el camino local queda reservado para IDs legacy explicitos
+(`GST-*`, `BKG-*`, `RT-*`). El backend devuelve camelCase; los servicios lo
 normalizan al DTO snake_case interno y despues devuelven Models. INT-04 integra
 las acciones operativas para reservas UUID: asignacion de habitacion via
 `PUT /bookings/{id}`, check-in via `POST /bookings/{id}/check-in`, check-out via

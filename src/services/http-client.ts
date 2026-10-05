@@ -1,5 +1,10 @@
 const DEFAULT_API_BASE_URL = 'http://localhost:8080/api/v1';
 
+function getApiBaseUrl(): string {
+  const env = (import.meta as ImportMeta & { env?: { VITE_API_BASE_URL?: string } }).env;
+  return env?.VITE_API_BASE_URL || DEFAULT_API_BASE_URL;
+}
+
 type RefreshHandler = () => Promise<string | null>;
 type UnauthorizedHandler = () => void;
 type HttpClientInit = RequestInit & {
@@ -90,8 +95,7 @@ export class HttpClient {
     body?: unknown,
     init?: HttpClientInit,
   ): Promise<Response> {
-    const env = (import.meta as ImportMeta & { env?: { VITE_API_BASE_URL?: string } }).env;
-    const baseUrl = env?.VITE_API_BASE_URL || DEFAULT_API_BASE_URL;
+    const baseUrl = getApiBaseUrl();
     const url = new URL(path.replace(/^\/+/, ''), `${baseUrl.replace(/\/+$/, '')}/`);
     const headers = new Headers(init?.headers);
     headers.set('Accept', 'application/json');

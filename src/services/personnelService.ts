@@ -3,8 +3,7 @@ import { toDomain as toUser, type UserDto } from '@/shared/types/entities/user';
 import { toDomain as toRole, type Role } from '@/shared/types/entities/role';
 import { toDomain as toPermission, type Permission } from '@/shared/types/entities/permission';
 import type { ID } from '@/shared/types/common';
-import { permissionsDB, rolesDB, sessionAccountsDB } from '@/data/db';
-import { mockUtils, requireCollection, simulateLatency } from './mockUtils';
+import { simulateLatency } from './mockUtils';
 import { httpClient } from './http-client';
 
 type ApiUser = {
@@ -52,10 +51,6 @@ const apiRoleToUserRole: Record<string, User['role']> = {
 };
 
 const normalizeRoleCode = (code: string): string => code.trim().toUpperCase();
-const isOfflineError = (error: unknown): boolean =>
-  !(typeof error === 'object' && error !== null && 'status' in error) ||
-  (typeof error === 'object' && error !== null && 'status' in error && error.status === 404);
-
 const toUserRoleDto = (code: string): UserDto['role'] => {
   const role = apiRoleToUserRole[normalizeRoleCode(code)] ?? 'reception';
   return role === 'roomService' ? 'room_service' : role;
@@ -88,22 +83,6 @@ const toUpdateUserRequest = (data: UpdateUserData) => ({
   status: data.status,
 });
 
-const toSessionUser = ({ user }: (typeof sessionAccountsDB)[number]): User => {
-  const [firstName, ...lastNameParts] = user.name.split(' ');
-  const createdAt = new Date(user.createdAt);
-
-  return {
-    id: user.id,
-    firstName,
-    lastName: lastNameParts.join(' '),
-    email: user.email,
-    role: apiRoleToUserRole[user.role] ?? 'reception',
-    status: 'active',
-    createdAt,
-    updatedAt: createdAt,
-  };
-};
-
 const toRoleDto = (api: ApiRole) => {
   const timestamp = new Date().toISOString();
   return {
@@ -117,33 +96,49 @@ const toRoleDto = (api: ApiRole) => {
   };
 };
 
+const formatPermissionName = (permission: string): string =>
+  permission
+    .split(/[.:_-]/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+
+const toPermissionDto = (permission: string) => {
+  const timestamp = new Date().toISOString();
+  return {
+    id: permission,
+    key: permission,
+    name: formatPermissionName(permission),
+    created_at: timestamp,
+    updated_at: timestamp,
+  };
+};
+
 export const personnelService = {
   async getUsers(): Promise<User[]> {
     await simulateLatency();
-    mockUtils.throwIfSimulatingError('No fue posible cargar el personal.');
-    try {
-      const users = await httpClient.get<ApiUser[]>('/admin/users');
-      return users.map(toUserDto).map(toUser);
-    } catch (error) {
-      if (!isOfflineError(error)) throw error;
-      return requireCollection(sessionAccountsDB, 'sessionAccountsDB').map(toSessionUser);
-    }
+    const users = await httpClient.get<ApiUser[]>('/admin/users');
+    return users.map(toUserDto).map(toUser);
   },
   async getUserById(id: ID): Promise<User | undefined> {
     await simulateLatency();
-    mockUtils.throwIfSimulatingError('No fue posible cargar el usuario.');
     try {
       const user = await httpClient.get<ApiUser>(`/admin/users/${id}`);
       return toUser(toUserDto(user));
     } catch (error) {
-      if (!isOfflineError(error)) throw error;
-      const account = sessionAccountsDB.find((item) => item.user.id === id);
-      return account ? toSessionUser(account) : undefined;
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'status' in error &&
+        error.status === 404
+      ) {
+        return undefined;
+      }
+      throw error;
     }
   },
   async createUser(data: CreateUserData): Promise<User> {
     await simulateLatency();
-    mockUtils.throwIfSimulatingError('No fue posible crear el usuario.');
     if (!data.firstName.trim()) throw new Error('El usuario requiere nombre.');
     if (!data.lastName.trim()) throw new Error('El usuario requiere apellido.');
     if (!data.email.trim()) throw new Error('El usuario requiere correo.');
@@ -155,7 +150,6 @@ export const personnelService = {
   },
   async updateUser(id: ID, data: Partial<UpdateUserData>): Promise<User> {
     await simulateLatency();
-    mockUtils.throwIfSimulatingError('No fue posible actualizar el usuario.');
 
     const current = await this.getUserById(id);
     if (!current) throw new Error(`No existe el usuario ${id}.`);
@@ -172,19 +166,14 @@ export const personnelService = {
   },
   async getRoles(): Promise<Role[]> {
     await simulateLatency();
-    mockUtils.throwIfSimulatingError('No fue posible cargar los roles.');
-    try {
-      const roles = await httpClient.get<ApiRole[]>('/admin/roles');
-      return roles.map(toRoleDto).map(toRole);
-    } catch (error) {
-      if (!isOfflineError(error)) throw error;
-      return requireCollection(rolesDB, 'rolesDB').map(toRole);
-    }
+    const roles = await httpClient.get<ApiRole[]>('/admin/roles');
+    return roles.map(toRoleDto).map(toRole);
   },
   async getPermissions(): Promise<Permission[]> {
     await simulateLatency();
-    mockUtils.throwIfSimulatingError('No fue posible cargar los permisos.');
-    return requireCollection(permissionsDB, 'permissionsDB').map(toPermission);
+    const roles = await httpClient.get<ApiRole[]>('/admin/roles');
+    const permissions = [...new Set(roles.flatMap((role) => role.permissions))].sort();
+    return permissions.map(toPermissionDto).map(toPermission);
   },
 };
 export default personnelService;

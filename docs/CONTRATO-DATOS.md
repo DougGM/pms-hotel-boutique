@@ -117,6 +117,12 @@ camelCase (`firstName`, `guestId`, `roomTypeId`, `totalAmountCents`), pero la
 web conserva este contrato interno snake_case -> Mapper -> Model. Los servicios
 son el unico punto de adaptacion.
 
+Actualizacion 2026-10-04 (#111 / INT-13): las entidades ya integradas no caen
+automaticamente a mocks cuando falla el backend. Habitaciones/tipos/tarifas no
+importan `src/data/db.ts`; huespedes y reservas solo conservan el camino local
+para IDs legacy explicitos (`GST-*`, `BKG-*`, `RT-*`) usados por prototipo y
+pruebas historicas.
+
 Actualizacion 2026-10-04 (#102 / INT-04): las operaciones de recepcion
 integradas para reservas UUID ya no cambian estados solo en frontend. Check-in,
 check-out, asignacion de habitacion y acompanantes se ejecutan contra backend y

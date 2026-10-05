@@ -19,14 +19,8 @@ import {
   type UpdateRoomTypeDto,
 } from '@/shared/types/entities/room-type';
 import type { ID } from '@/shared/types/common';
-import { ratesDB, roomFeaturesDB, roomTypesDB, roomsDB } from '@/data/db';
-import { mockUtils, requireCollection, simulateLatency } from './mockUtils';
-import { hydrateCollection, refreshCollection } from './mockPersistence';
+import { mockUtils, simulateLatency } from './mockUtils';
 import { HttpError, httpClient } from './http-client';
-
-const roomsStorageKey = 'PMS_ROOMS_DB';
-const roomTypesStorageKey = 'PMS_ROOM_TYPES_DB';
-const ratesStorageKey = 'PMS_RATES_DB';
 
 type SaveRateDto = {
   room_type_id: ID;
@@ -98,23 +92,8 @@ type ApiRate = {
 };
 
 const nowIso = () => new Date().toISOString();
-const isOfflineError = (error: unknown): boolean =>
-  !(typeof error === 'object' && error !== null && 'status' in error) ||
-  (typeof error === 'object' && error !== null && 'status' in error && error.status === 404);
 const isHttpNotFound = (error: unknown): boolean =>
   error instanceof HttpError && error.status === 404;
-
-function getRoomsDB(): RoomDto[] {
-  return hydrateCollection(roomsStorageKey, roomsDB);
-}
-
-function getRoomTypesDB(): RoomTypeDto[] {
-  return hydrateCollection(roomTypesStorageKey, roomTypesDB);
-}
-
-function getRatesDB(): RateDto[] {
-  return hydrateCollection(ratesStorageKey, ratesDB);
-}
 
 function normalizeRoomStatus(status: ApiRoom['status']): RoomDto['status'] {
   return status === 'outOfService' ? 'out_of_service' : status;
@@ -250,24 +229,20 @@ export const roomService = {
   async getRoomFeatures(): Promise<RoomFeature[]> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar las caracteristicas.');
-    try {
-      const features = await httpClient.get<ApiRoomFeature[]>('/room-features');
-      return features.map(toRoomFeatureDto).map(toRoomFeature);
-    } catch (error) {
-      if (!isOfflineError(error)) throw error;
-      return requireCollection(roomFeaturesDB, 'roomFeaturesDB').map(toRoomFeature);
-    }
+    const features = await request(
+      () => httpClient.get<ApiRoomFeature[]>('/room-features'),
+      'No fue posible cargar las caracteristicas.',
+    );
+    return features.map(toRoomFeatureDto).map(toRoomFeature);
   },
   async getRates(): Promise<Rate[]> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar las tarifas.');
-    try {
-      const rates = await httpClient.get<ApiRate[]>('/rates');
-      return rates.map(toRateDto).map(toRate);
-    } catch (error) {
-      if (!isOfflineError(error)) throw error;
-      return requireCollection(getRatesDB(), 'ratesDB').map(toRate);
-    }
+    const rates = await request(
+      () => httpClient.get<ApiRate[]>('/rates'),
+      'No fue posible cargar las tarifas.',
+    );
+    return rates.map(toRateDto).map(toRate);
   },
   async createRate(data: SaveRateDto): Promise<Rate> {
     await simulateLatency();
@@ -290,15 +265,11 @@ export const roomService = {
   async getRooms(): Promise<Room[]> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar las habitaciones.');
-    try {
-      const rooms = await httpClient.get<ApiRoom[]>('/rooms');
-      return rooms.map(toRoomDto).map(toRoom);
-    } catch (error) {
-      if (!isOfflineError(error)) throw error;
-      return requireCollection(refreshCollection(roomsStorageKey, getRoomsDB()), 'roomsDB').map(
-        toRoom,
-      );
-    }
+    const rooms = await request(
+      () => httpClient.get<ApiRoom[]>('/rooms'),
+      'No fue posible cargar las habitaciones.',
+    );
+    return rooms.map(toRoomDto).map(toRoom);
   },
   async getRoomById(id: ID): Promise<Room | undefined> {
     await simulateLatency();
@@ -308,9 +279,7 @@ export const roomService = {
       return toRoom(toRoomDto(room));
     } catch (error) {
       if (isHttpNotFound(error)) return undefined;
-      if (!isOfflineError(error)) throw error;
-      const room = getRoomsDB().find((item) => item.id === id);
-      return room ? toRoom(room) : undefined;
+      throw new Error(getHttpErrorMessage(error, 'No fue posible cargar la habitacion.'));
     }
   },
   async createRoom(data: CreateRoomDto): Promise<Room> {
@@ -334,13 +303,11 @@ export const roomService = {
   async getRoomTypes(): Promise<RoomType[]> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar los tipos de habitacion.');
-    try {
-      const roomTypes = await httpClient.get<ApiRoomType[]>('/room-types');
-      return roomTypes.map(toRoomTypeDto).map(toRoomType);
-    } catch (error) {
-      if (!isOfflineError(error)) throw error;
-      return requireCollection(getRoomTypesDB(), 'roomTypesDB').map(toRoomType);
-    }
+    const roomTypes = await request(
+      () => httpClient.get<ApiRoomType[]>('/room-types'),
+      'No fue posible cargar los tipos de habitacion.',
+    );
+    return roomTypes.map(toRoomTypeDto).map(toRoomType);
   },
   async getRoomTypeById(id: ID): Promise<RoomType | undefined> {
     await simulateLatency();
@@ -350,9 +317,7 @@ export const roomService = {
       return toRoomType(toRoomTypeDto(roomType));
     } catch (error) {
       if (isHttpNotFound(error)) return undefined;
-      if (!isOfflineError(error)) throw error;
-      const roomType = getRoomTypesDB().find((item) => item.id === id);
-      return roomType ? toRoomType(roomType) : undefined;
+      throw new Error(getHttpErrorMessage(error, 'No fue posible cargar el tipo de habitacion.'));
     }
   },
   async createRoomType(data: CreateRoomTypeDto): Promise<RoomType> {

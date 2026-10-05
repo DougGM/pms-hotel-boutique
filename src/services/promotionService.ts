@@ -3,8 +3,7 @@ import {
   type Promotion,
   type PromotionDto,
 } from '@/shared/types/entities/promotion';
-import { promotionsDB } from '@/data/db';
-import { mockUtils, requireCollection, simulateLatency } from './mockUtils';
+import { simulateLatency } from './mockUtils';
 import { httpClient } from './http-client';
 
 type ApiPromotion = {
@@ -29,10 +28,6 @@ type SavePromotionData = {
   valid_to: string;
   active?: boolean;
 };
-
-const isOfflineError = (error: unknown): boolean =>
-  !(typeof error === 'object' && error !== null && 'status' in error) ||
-  (typeof error === 'object' && error !== null && 'status' in error && error.status === 404);
 
 function toPromotionDto(api: ApiPromotion): PromotionDto {
   return {
@@ -80,18 +75,11 @@ async function getPromotionRequest(id: string, data: Partial<SavePromotionData>)
 export const promotionService = {
   async getPromotions(): Promise<Promotion[]> {
     await simulateLatency();
-    mockUtils.throwIfSimulatingError('No fue posible cargar las promociones.');
-    try {
-      const promotions = await httpClient.get<ApiPromotion[]>('/admin/promotions');
-      return promotions.map(toPromotionDto).map(toPromotion);
-    } catch (error) {
-      if (!isOfflineError(error)) throw error;
-      return requireCollection(promotionsDB, 'promotionsDB').map(toPromotion);
-    }
+    const promotions = await httpClient.get<ApiPromotion[]>('/admin/promotions');
+    return promotions.map(toPromotionDto).map(toPromotion);
   },
   async createPromotion(data: SavePromotionData): Promise<Promotion> {
     await simulateLatency();
-    mockUtils.throwIfSimulatingError('No fue posible crear la promocion.');
     if (!data.name.trim()) throw new Error('La promocion requiere nombre.');
     if (!data.code.trim()) throw new Error('La promocion requiere codigo.');
     if (!Number.isInteger(data.discount_percent) || data.discount_percent <= 0) {
@@ -103,7 +91,6 @@ export const promotionService = {
   },
   async updatePromotion(id: string, data: Partial<SavePromotionData>): Promise<Promotion> {
     await simulateLatency();
-    mockUtils.throwIfSimulatingError('No fue posible actualizar la promocion.');
     if (data.discount_percent !== undefined) {
       if (!Number.isInteger(data.discount_percent) || data.discount_percent <= 0) {
         throw new Error('El descuento debe ser un entero mayor a 0.');
