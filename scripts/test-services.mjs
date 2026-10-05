@@ -2211,12 +2211,42 @@ function installHousekeepingFetchMock() {
   };
   const checklists = [
     {
+      id: 'cccccccc-0000-4000-8000-000000000001',
+      serviceRequestId: 'f1e2d3c4-0000-4000-8000-000000000001',
       roomId: HK_ROOM_ID,
-      items: [
-        { label: 'Cama preparada', done: false },
-        { label: 'Baño revisado', done: false },
-      ],
+      roomNumber: '204',
+      status: 'in_progress',
+      observations: 'Cambio de toallas',
+      responsibleUserEmail: 'hk@aurora.test',
+      completedByUserEmail: null,
+      startedAt: '2026-10-03T09:15:00Z',
+      completedAt: null,
+      createdAt: '2026-10-03T09:30:00Z',
       updatedAt: '2026-10-03T09:30:00Z',
+      items: [
+        {
+          id: 'item-1',
+          label: 'Cama preparada',
+          checked: false,
+          position: 0,
+          notes: null,
+          checkedByUserEmail: null,
+          checkedAt: null,
+          createdAt: '2026-10-03T09:30:00Z',
+          updatedAt: '2026-10-03T09:30:00Z',
+        },
+        {
+          id: 'item-2',
+          label: 'Baño revisado',
+          checked: false,
+          position: 1,
+          notes: null,
+          checkedByUserEmail: null,
+          checkedAt: null,
+          createdAt: '2026-10-03T09:30:00Z',
+          updatedAt: '2026-10-03T09:30:00Z',
+        },
+      ],
     },
   ];
 
@@ -2233,13 +2263,25 @@ function installHousekeepingFetchMock() {
 
     if (method === 'GET' && path === '/housekeeping/rooms') return json([room]);
 
-    if (method === 'GET' && path === '/housekeeping/rooms/checklists') return json(checklists);
+    if (method === 'GET' && path === '/housekeeping/checklists') return json(checklists);
 
-    if (method === 'PUT' && path === `/housekeeping/rooms/${HK_ROOM_ID}/checklist`) {
+    if (method === 'PUT' && path === `/housekeeping/checklists/${checklists[0].id}`) {
       const request = JSON.parse(String(init.body ?? '{}'));
       checklists[0] = {
+        ...checklists[0],
         roomId: HK_ROOM_ID,
-        items: request.items,
+        observations: request.observations ?? checklists[0].observations,
+        items: request.items.map((item, index) => ({
+          id: item.id ?? `item-${index + 1}`,
+          label: item.label,
+          checked: item.checked,
+          position: item.position ?? index,
+          notes: item.notes ?? null,
+          checkedByUserEmail: item.checked ? 'hk@aurora.test' : null,
+          checkedAt: item.checked ? '2026-10-03T10:10:00Z' : null,
+          createdAt: '2026-10-03T09:30:00Z',
+          updatedAt: '2026-10-03T10:10:00Z',
+        })),
         updatedAt: '2026-10-03T10:10:00Z',
       };
       return json(checklists[0]);
@@ -2322,14 +2364,16 @@ test('housekeepingService: turnover contra backend, sin transiciones locales', a
   assert.equal(initialChecklists[0].roomId, HK_ROOM_ID);
   assert.equal(initialChecklists[0].items[0].done, false);
 
-  const savedChecklist = await housekeepingService.saveChecklist(HK_ROOM_ID, [
-    { label: 'Cama preparada', done: true },
-    { label: 'Baño revisado', done: false },
-  ]);
+  const savedChecklist = await housekeepingService.saveChecklist(initialChecklists[0].id, {
+    items: [
+      { id: 'item-1', label: 'Cama preparada', done: true },
+      { id: 'item-2', label: 'Baño revisado', done: false },
+    ],
+  });
   assert.equal(savedChecklist.items[0].done, true);
   assert.deepEqual(calls.slice(-2), [
-    'GET /housekeeping/rooms/checklists',
-    `PUT /housekeeping/rooms/${HK_ROOM_ID}/checklist`,
+    'GET /housekeeping/checklists',
+    `PUT /housekeeping/checklists/${initialChecklists[0].id}`,
   ]);
 
   const cleaning = await housekeepingService.startCleaning(HK_ROOM_ID);

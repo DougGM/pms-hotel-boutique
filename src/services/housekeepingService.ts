@@ -52,21 +52,62 @@ type StayoverCleaningResponse = {
 };
 
 export type HousekeepingChecklistItem = {
+  id?: ID;
   label: string;
   done: boolean;
+  position?: number;
+  notes?: string;
+  checkedByUserEmail?: string;
+  checkedAt?: Date;
+  createdAt?: Date;
+  updatedAt?: Date;
 };
 
-/** Checklist de apoyo del personal: no tiene contrato backend, vive solo en este navegador. */
 export type HousekeepingChecklist = {
-  roomId: ID;
+  id: ID;
+  serviceRequestId: ID;
+  roomId?: ID;
+  roomNumber?: string;
+  status: string;
+  observations?: string;
+  responsibleUserEmail?: string;
+  completedByUserEmail?: string;
+  startedAt?: Date;
+  completedAt?: Date;
+  createdAt: Date;
+  updatedAt: Date;
   items: HousekeepingChecklistItem[];
-  updatedAt: string;
 };
 
 type HousekeepingChecklistResponse = {
+  id: string;
+  serviceRequestId: string;
   roomId: string;
-  items: HousekeepingChecklistItem[];
+  roomNumber?: string | null;
+  status: string;
+  observations?: string | null;
+  responsibleUserEmail?: string | null;
+  completedByUserEmail?: string | null;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  createdAt: string;
   updatedAt: string;
+  items: {
+    id?: string | null;
+    label: string;
+    checked: boolean;
+    position?: number | null;
+    notes?: string | null;
+    checkedByUserEmail?: string | null;
+    checkedAt?: string | null;
+    createdAt?: string | null;
+    updatedAt?: string | null;
+  }[];
+};
+
+type SaveChecklistPayload = {
+  observations?: string;
+  items: HousekeepingChecklistItem[];
 };
 
 function toRoomDto(response: HousekeepingRoomResponse): RoomDto {
@@ -163,14 +204,48 @@ function removeChecklist(roomId: ID): void {
   void roomId;
 }
 
+function toDate(value?: string | null): Date | undefined {
+  return value ? new Date(value) : undefined;
+}
+
 function toChecklist(response: HousekeepingChecklistResponse): HousekeepingChecklist {
   return {
+    id: response.id,
+    serviceRequestId: response.serviceRequestId,
     roomId: response.roomId,
+    roomNumber: response.roomNumber ?? undefined,
+    status: response.status,
+    observations: response.observations ?? undefined,
+    responsibleUserEmail: response.responsibleUserEmail ?? undefined,
+    completedByUserEmail: response.completedByUserEmail ?? undefined,
+    startedAt: toDate(response.startedAt),
+    completedAt: toDate(response.completedAt),
+    createdAt: new Date(response.createdAt),
+    updatedAt: new Date(response.updatedAt),
     items: response.items.map((item) => ({
+      id: item.id ?? undefined,
       label: item.label,
-      done: item.done,
+      done: item.checked,
+      position: item.position ?? undefined,
+      notes: item.notes ?? undefined,
+      checkedByUserEmail: item.checkedByUserEmail ?? undefined,
+      checkedAt: toDate(item.checkedAt),
+      createdAt: toDate(item.createdAt),
+      updatedAt: toDate(item.updatedAt),
     })),
-    updatedAt: response.updatedAt,
+  };
+}
+
+function toChecklistRequest(data: SaveChecklistPayload) {
+  return {
+    observations: data.observations?.trim() || undefined,
+    items: data.items.map((item) => ({
+      id: item.id,
+      label: item.label.trim(),
+      checked: item.done,
+      position: item.position,
+      notes: item.notes?.trim() || undefined,
+    })),
   };
 }
 
@@ -280,23 +355,29 @@ export const housekeepingService = {
   },
   async getChecklists(): Promise<HousekeepingChecklist[]> {
     const response = await request(
-      () => httpClient.get<HousekeepingChecklistResponse[]>('/housekeeping/rooms/checklists'),
+      () => httpClient.get<HousekeepingChecklistResponse[]>('/housekeeping/checklists'),
       'No fue posible cargar los checklists de limpieza.',
     );
     return response.map(toChecklist);
   },
-  async saveChecklist(
-    roomId: ID,
-    items: HousekeepingChecklistItem[],
-  ): Promise<HousekeepingChecklist> {
+  async createChecklist(data: SaveChecklistPayload & { serviceRequestId: ID }) {
     const response = await request(
       () =>
-        httpClient.put<HousekeepingChecklistResponse>(`/housekeeping/rooms/${roomId}/checklist`, {
-          items: items.map((item) => ({
-            label: item.label.trim(),
-            done: item.done,
-          })),
+        httpClient.post<HousekeepingChecklistResponse>('/housekeeping/checklists', {
+          serviceRequestId: data.serviceRequestId,
+          ...toChecklistRequest(data),
         }),
+      'No fue posible crear el checklist de limpieza.',
+    );
+    return toChecklist(response);
+  },
+  async saveChecklist(checklistId: ID, data: SaveChecklistPayload): Promise<HousekeepingChecklist> {
+    const response = await request(
+      () =>
+        httpClient.put<HousekeepingChecklistResponse>(
+          `/housekeeping/checklists/${checklistId}`,
+          toChecklistRequest(data),
+        ),
       'No fue posible guardar el checklist de limpieza.',
     );
     return toChecklist(response);

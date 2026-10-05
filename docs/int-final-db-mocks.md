@@ -24,13 +24,18 @@ servicios. La dependencia viva estaba en scripts de prueba y documentación:
 datos de dominio desde archivos locales. Las pruebas que necesitan datos de
 contrato usan fixtures bajo `scripts/fixtures/`, fuera del bundle productivo.
 
-Los checklists de Limpieza se conectan a backend real:
+Los checklists de Limpieza se conectan al contrato backend real asociado a
+`ServiceRequest` de tipo housekeeping:
 
-- `GET /housekeeping/rooms/checklists`.
-- `PUT /housekeeping/rooms/{roomId}/checklist`.
+- `GET /housekeeping/checklists`.
+- `POST /housekeeping/checklists`.
+- `PUT /housekeeping/checklists/{id}`.
 
-El payload usa `items: [{ label, done }]`; el backend devuelve `roomId`,
-`items` y `updatedAt`.
+Para crear, el payload incluye `serviceRequestId`, `observations?` e
+`items: [{ label, checked }]`. El frontend mapea `checked` a `done` dentro de
+`housekeepingService` para conservar la UI existente. No existe endpoint para
+guardar checklists de turnover por `roomId`; esos controles quedan como apoyo
+visual si no hay checklist backend asociado.
 
 ## Almacenamiento local
 

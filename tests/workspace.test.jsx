@@ -196,6 +196,7 @@ function installHousekeepingBackend() {
       hkStayover('stay-3', 'room-101', 'completed', 'Tendido de cama'),
       hkStayover('stay-4', 'room-102', 'cancelled', 'Cancelada por el huésped'),
     ],
+    checklists: [],
     requests: [],
   };
   const turnover = {
@@ -226,6 +227,64 @@ function installHousekeepingBackend() {
     if (method === 'GET' && path === '/housekeeping/rooms') return json(state.rooms);
     if (method === 'GET' && path === '/housekeeping/rooms/stayover-cleanings') {
       return json(state.stayovers);
+    }
+    if (method === 'GET' && path === '/housekeeping/checklists') return json(state.checklists);
+    if (method === 'POST' && path === '/housekeeping/checklists') {
+      const body = JSON.parse(String(init.body ?? '{}'));
+      const stayover = state.stayovers.find((item) => item.id === body.serviceRequestId);
+      if (['completed', 'cancelled', 'rejected'].includes(stayover?.status)) {
+        return json({ message: 'Cannot create checklist for terminal service request' }, 409);
+      }
+      const checklist = {
+        id: `check-${state.checklists.length + 1}`,
+        serviceRequestId: body.serviceRequestId,
+        roomId: stayover?.roomId ?? 'room-101',
+        roomNumber: stayover?.roomNumber ?? '101',
+        status: 'completed',
+        observations: body.observations ?? null,
+        responsibleUserEmail: 'limpieza@hotelboutique.test',
+        completedByUserEmail: 'limpieza@hotelboutique.test',
+        startedAt: '2026-10-03T09:00:00Z',
+        completedAt: '2026-10-03T10:00:00Z',
+        createdAt: '2026-10-03T10:00:00Z',
+        updatedAt: '2026-10-03T10:00:00Z',
+        items: body.items.map((item, index) => ({
+          id: `check-item-${index + 1}`,
+          label: item.label,
+          checked: item.checked,
+          position: item.position ?? index,
+          notes: item.notes ?? null,
+          checkedByUserEmail: item.checked ? 'limpieza@hotelboutique.test' : null,
+          checkedAt: item.checked ? '2026-10-03T10:00:00Z' : null,
+          createdAt: '2026-10-03T10:00:00Z',
+          updatedAt: '2026-10-03T10:00:00Z',
+        })),
+      };
+      state.checklists.push(checklist);
+      return json(checklist, 201);
+    }
+    const checklist = path.match(/^\/housekeeping\/checklists\/([^/]+)$/);
+    if (method === 'PUT' && checklist) {
+      const index = state.checklists.findIndex((item) => item.id === checklist[1]);
+      if (index < 0) return json({ status: 404 }, 404);
+      const body = JSON.parse(String(init.body ?? '{}'));
+      state.checklists[index] = {
+        ...state.checklists[index],
+        observations: body.observations ?? state.checklists[index].observations,
+        items: body.items.map((item, itemIndex) => ({
+          id: item.id ?? `check-item-${itemIndex + 1}`,
+          label: item.label,
+          checked: item.checked,
+          position: item.position ?? itemIndex,
+          notes: item.notes ?? null,
+          checkedByUserEmail: item.checked ? 'limpieza@hotelboutique.test' : null,
+          checkedAt: item.checked ? '2026-10-03T10:00:00Z' : null,
+          createdAt: '2026-10-03T10:00:00Z',
+          updatedAt: '2026-10-03T10:05:00Z',
+        })),
+        updatedAt: '2026-10-03T10:05:00Z',
+      };
+      return json(state.checklists[index]);
     }
     const stayover = path.match(/^\/housekeeping\/rooms\/stayover-cleanings\/([^/]+)\/(\w+)$/);
     if (method === 'POST' && stayover) {

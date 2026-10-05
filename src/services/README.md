@@ -461,9 +461,12 @@ Reglas:
   mas las tareas stayover completadas.
 - Un `cancelled` de stayover se representa como `rejected`, igual que el resto
   del contrato `service_request` del frontend.
-- `getChecklists` consume `GET /housekeeping/rooms/checklists` y
-  `saveChecklist` consume `PUT /housekeeping/rooms/{roomId}/checklist`; los
-  checklists ya no se guardan en `localStorage`.
+- `getChecklists` consume `GET /housekeeping/checklists`,
+  `createChecklist` consume `POST /housekeeping/checklists` y `saveChecklist`
+  consume `PUT /housekeeping/checklists/{id}`. El checklist pertenece a una
+  `ServiceRequest` de housekeeping (`serviceRequestId`), no al turnover normal
+  de una habitación; el servicio mapea `items[].checked` del backend a
+  `items[].done` para la UI. Los checklists ya no se guardan en `localStorage`.
 - El workspace solo consulta Limpieza para el rol `housekeeping`; los demas
   roles no tienen `housekeeping.read` y recibirian `403`.
 

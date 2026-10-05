@@ -135,7 +135,9 @@ type CleaningRoom = {
   startTime: string | null;
   endTime: string | null;
   duration: string | null;
-  checklist: { label: string; done: boolean }[];
+  checklistId?: string;
+  checklistServiceRequestId?: string;
+  checklist: HousekeepingChecklistItem[];
 };
 
 export type GuestRequest = {
@@ -146,6 +148,7 @@ export type GuestRequest = {
   time: string;
   priority: string;
   status: 'Pendiente' | 'En proceso' | 'Completada' | 'Rechazada';
+  checklistId?: string;
 };
 
 export type HistoryEntry = {
@@ -539,7 +542,12 @@ const toCleaningHistoryEntry = (
   status: 'Completada',
 });
 
-const toStayoverRequest = (request: ServiceRequest, id: number, room: string): GuestRequest => ({
+const toStayoverRequest = (
+  request: ServiceRequest,
+  id: number,
+  room: string,
+  checklist?: HousekeepingChecklist,
+): GuestRequest => ({
   id,
   requestId: request.id,
   room,
@@ -547,6 +555,7 @@ const toStayoverRequest = (request: ServiceRequest, id: number, room: string): G
   time: formatDbTime(request.requestedAt),
   priority: 'Media',
   status: mapServiceStatus(request.status),
+  checklistId: checklist?.id,
 });
 
 type HousekeepingData = {
@@ -574,18 +583,27 @@ function buildHousekeepingState(
 ): Pick<WorkspaceState, 'cleaningRooms' | 'guestRequests' | 'history'> {
   const roomNumberById = new Map(rooms.map((room) => [room.id, room.roomNumber]));
   const roomLabel = (roomId: string) => roomNumberById.get(roomId) ?? 'Sin habitación';
-
-  const cleaningRooms = rooms.map((room, index) =>
-    toCleaningRoom(
-      room,
-      index + 1,
-      getRoomType(room),
-      checklists.find((item) => item.roomId === room.id)?.items,
-    ),
+  const checklistByRoomId = new Map(checklists.map((checklist) => [checklist.roomId, checklist]));
+  const checklistByRequestId = new Map(
+    checklists.map((checklist) => [checklist.serviceRequestId, checklist]),
   );
 
+  const cleaningRooms = rooms.map((room, index) => {
+    const checklist = checklistByRoomId.get(room.id);
+    return {
+      ...toCleaningRoom(room, index + 1, getRoomType(room), checklist?.items),
+      checklistId: checklist?.id,
+      checklistServiceRequestId: checklist?.serviceRequestId,
+    };
+  });
+
   const guestRequests = stayovers.map((request, index) =>
-    toStayoverRequest(request, index + 1, roomLabel(request.roomId)),
+    toStayoverRequest(
+      request,
+      index + 1,
+      roomLabel(request.roomId),
+      checklistByRequestId.get(request.id),
+    ),
   );
 
   const completions = [
@@ -2069,6 +2087,22 @@ function PrivateWorkspaceReady({
     }
   };
 
+  const saveStayoverChecklist = async (request: GuestRequest, done = false) => {
+    const items = DEFAULT_CLEANING_CHECKLIST.map((label, position) => ({
+      label,
+      done,
+      position,
+    }));
+    if (request.checklistId) {
+      return housekeepingService.saveChecklist(request.checklistId, { items });
+    }
+    return housekeepingService.createChecklist({
+      serviceRequestId: request.requestId,
+      observations: request.request,
+      items,
+    });
+  };
+
   const replaceCleaningRoom = (next: CleaningRoom) => {
     setHkRooms((current) => current.map((item) => (item.id === next.id ? next : item)));
   };
@@ -2093,7 +2127,6 @@ function PrivateWorkspaceReady({
     try {
       const updated = await housekeepingService.completeCleaning(room.roomId);
       const checklist = room.checklist.map((item) => ({ ...item, done: true }));
-      await housekeepingService.saveChecklist(room.roomId, checklist);
       replaceCleaningRoom(toCleaningRoom(updated, room.id, room.type, checklist));
       if (updated.cleaningCompletedAt) {
         const entry = toCleaningHistoryEntry(
@@ -2155,10 +2188,13 @@ function PrivateWorkspaceReady({
     if (!req) return;
 
     try {
+      const checklist = await saveStayoverChecklist(req, true);
       const updated = await housekeepingService.completeStayoverCleaning(req.requestId);
       setHkRequests((current) =>
         current.map((item) =>
-          item.id === reqId ? { ...item, status: mapServiceStatus(updated.status) } : item,
+          item.id === reqId
+            ? { ...item, status: mapServiceStatus(updated.status), checklistId: checklist.id }
+            : item,
         ),
       );
       if (updated.completedAt) {
@@ -2186,10 +2222,15 @@ function PrivateWorkspaceReady({
     );
 
     try {
-      await housekeepingService.saveChecklist(room.roomId, checklist);
+      if (room.checklistId) {
+        await housekeepingService.saveChecklist(room.checklistId, { items: checklist });
+      }
       setHkRooms((current) =>
         current.map((item) => (item.id === roomId ? { ...item, checklist } : item)),
       );
+      if (!room.checklistId) {
+        notify('Checklist visual actualizado; el backend solo persiste checklists de stayover.');
+      }
     } catch (cause) {
       notifyError(cause);
     }
