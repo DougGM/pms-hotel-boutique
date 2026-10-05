@@ -230,6 +230,14 @@ const apiRoles = [
     permissions: ['admin.dashboard.view'],
   },
 ];
+const apiPermissions = [
+  {
+    key: 'admin.dashboard.view',
+    name: 'Dashboard',
+    module: 'Administracion',
+    description: 'Acceso al tablero administrativo',
+  },
+];
 const apiPromotions = [
   {
     id: '55555555-5555-4555-8555-555555555555',
@@ -785,6 +793,7 @@ const adminFetchMock = async (input, init = {}) => {
     return jsonResponse(user);
   }
   if (method === 'GET' && path === '/admin/roles') return jsonResponse(apiRoles);
+  if (method === 'GET' && path === '/admin/permissions') return jsonResponse(apiPermissions);
   if (method === 'GET' && path === '/admin/promotions') return jsonResponse(apiPromotions);
   if (method === 'POST' && path === '/admin/promotions') {
     const promotion = {

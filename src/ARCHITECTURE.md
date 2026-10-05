@@ -104,9 +104,9 @@ ven solo el grupo/vistas que tienen marcados. En las tarjetas del panel se
 renderizan solo permisos seleccionados; el modal de edicion muestra todos los
 permisos disponibles para poder habilitarlos, con acciones por grupo para
 seleccionar o deseleccionar sus permisos y toggles individuales para ajustes
-puntuales. Para la demo, los cambios hechos en el editor se persisten en
-`localStorage` bajo `pms.demo.rolePermissions`; esa capa no reemplaza al backend,
-solo sobreescribe los permisos de navegacion del navegador actual.
+puntuales. Desde INT-13, los cambios hechos en el editor se persisten en el
+backend de roles/permisos y el workspace solo refleja en memoria la
+actualizacion de la sesion actual.
 Cuando un rol operativo tiene permisos de un solo modulo, el sidebar conserva
 la lista plana original; si recibe permisos cruzados de dos o mas modulos,
 agrupa automaticamente por modulo para evitar opciones duplicadas sin contexto.
@@ -281,11 +281,9 @@ archivo con datos inventados": el fixture de demo de
 `src/modules/ui-catalog/services/catalog-service.ts`, que no representa
 ninguna entidad del contrato y existe solo para renderizar `/components`.
 
-Nota frontend beta: `personnelService.getUsers()` toma sus usuarios visibles
-de `sessionAccountsDB` para que Gestion de usuarios coincida con las cuentas de
-login. `getRoles()` y `getPermissions()` siguen leyendo `rolesDB` y
-`permissionsDB`; `usersDB` permanece como directorio operativo historico del
-Lote D.
+Nota INT-13: `personnelService` toma usuarios, roles y permisos desde el
+backend real (`/admin/users`, `/admin/roles`, `/admin/permissions`) y persiste
+ediciones de roles con `/admin/roles/{id}` y `/admin/roles/{id}/permissions`.
 
 Nota 2026-10-04 (#101 / INT-03): `guestService` y `bookingService` usan el
 backend para CRUD de huespedes y reservas (`/guests`, `/bookings`). Desde

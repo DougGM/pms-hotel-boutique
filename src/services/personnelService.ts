@@ -25,12 +25,31 @@ type ApiRole = {
   permissions: string[];
 };
 
+type ApiPermission = {
+  id: string;
+  key: string;
+  name: string;
+  description?: string;
+};
+
 type CreateUserData = {
   firstName: string;
   lastName: string;
   email: string;
   password: string;
   roleId: string;
+};
+
+type CreateRoleData = {
+  code: string;
+  name: string;
+  active?: boolean;
+  permissions: string[];
+};
+
+type UpdateRoleData = {
+  name?: string;
+  active?: boolean;
 };
 
 type UpdateUserData = {
@@ -83,6 +102,18 @@ const toUpdateUserRequest = (data: UpdateUserData) => ({
   status: data.status,
 });
 
+const toCreateRoleRequest = (data: CreateRoleData) => ({
+  code: data.code.trim(),
+  name: data.name.trim(),
+  active: data.active ?? true,
+  permissions: [...new Set(data.permissions)].sort(),
+});
+
+const toUpdateRoleRequest = (data: UpdateRoleData) => ({
+  ...(data.name !== undefined ? { name: data.name.trim() } : {}),
+  ...(data.active !== undefined ? { active: data.active } : {}),
+});
+
 const toRoleDto = (api: ApiRole) => {
   const timestamp = new Date().toISOString();
   return {
@@ -96,19 +127,13 @@ const toRoleDto = (api: ApiRole) => {
   };
 };
 
-const formatPermissionName = (permission: string): string =>
-  permission
-    .split(/[.:_-]/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
-
-const toPermissionDto = (permission: string) => {
+const toPermissionDto = (permission: ApiPermission) => {
   const timestamp = new Date().toISOString();
   return {
-    id: permission,
-    key: permission,
-    name: formatPermissionName(permission),
+    id: permission.id,
+    key: permission.key,
+    name: permission.name,
+    description: permission.description,
     created_at: timestamp,
     updated_at: timestamp,
   };
@@ -169,10 +194,28 @@ export const personnelService = {
     const roles = await httpClient.get<ApiRole[]>('/admin/roles');
     return roles.map(toRoleDto).map(toRole);
   },
+  async createRole(data: CreateRoleData): Promise<Role> {
+    await simulateLatency();
+    if (!data.code.trim()) throw new Error('El rol requiere codigo.');
+    if (!data.name.trim()) throw new Error('El rol requiere nombre.');
+    const role = await httpClient.post<ApiRole>('/admin/roles', toCreateRoleRequest(data));
+    return toRole(toRoleDto(role));
+  },
+  async updateRole(id: ID, data: UpdateRoleData): Promise<Role> {
+    await simulateLatency();
+    const role = await httpClient.put<ApiRole>(`/admin/roles/${id}`, toUpdateRoleRequest(data));
+    return toRole(toRoleDto(role));
+  },
+  async updateRolePermissions(id: ID, permissions: string[]): Promise<Role> {
+    await simulateLatency();
+    const role = await httpClient.put<ApiRole>(`/admin/roles/${id}/permissions`, {
+      permissions: [...new Set(permissions)].sort(),
+    });
+    return toRole(toRoleDto(role));
+  },
   async getPermissions(): Promise<Permission[]> {
     await simulateLatency();
-    const roles = await httpClient.get<ApiRole[]>('/admin/roles');
-    const permissions = [...new Set(roles.flatMap((role) => role.permissions))].sort();
+    const permissions = await httpClient.get<ApiPermission[]>('/admin/permissions');
     return permissions.map(toPermissionDto).map(toPermission);
   },
 };
