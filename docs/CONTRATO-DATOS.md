@@ -1,6 +1,7 @@
 # Contrato de datos — PMS Hotel Boutique
 
-**Última actualización:** 2026-10-04 · issue `#101` / INT-03.
+**Última actualización:** 2026-10-04 · issue `#129` / limites Guatemala
+pagos/FEL frontend.
 
 ## 1. Propósito y regla de gobierno
 
@@ -35,6 +36,13 @@ código de la web.
   en `_cents` y es un **entero** (nunca decimal). `currency` es el literal
   `'GTQ'` (`shared/types/common.ts`), nunca una unión de monedas ni un
   `string` suelto.
+- **Pagos locales y FEL/SAT:** el contrato de datos no modela proveedores de
+  pasarela ni documentos fiscales certificados. `payment.method` describe el
+  metodo operativo abstracto; FEL/SAT y proveedores locales deben entrar por un
+  contrato backend futuro. Hasta entonces, recibos/PDF son comprobantes
+  operativos, no DTE/FEL. Ver
+  [`docs/guatemala-pagos-fel-frontend.md`](guatemala-pagos-fel-frontend.md) y
+  [`docs/DECISIONES.md`, D-015](DECISIONES.md).
 - **Fechas — transporte vs. presentación:**
   - _Timestamp_ (`created_at`, `updated_at`, `charged_at`, `paid_at`,
     `requested_at`): ISO 8601 completo con hora y zona,

@@ -915,6 +915,66 @@ del personal con rol `GUEST`. Las rutas `/my-account/...` existen reservadas en
 - Pedir a JEPG321 la ruta dedicada `/my-account/link-reservation` (y las demás
   `/my-account/...`) para que el acceso de huésped no dependa de `/auth/register`.
 
+## D-015 · #129: Pagos locales y FEL/SAT son integraciones de backend
+
+**Fecha:** 2026-10-04 · **Estado:** aceptada como limite de arquitectura.
+
+### Contexto
+
+El proyecto opera para Guatemala: `GTQ`, fechas locales, folios de estancia,
+caja y pagos. La issue #129 pide documentar el limite antes de que una tarea de
+frontend convierta esos conceptos en una implementacion directa de pasarelas
+locales o FEL/SAT.
+
+Hoy el motor publico conserva un pago demo sin cobro real, y los folios
+integrados registran cargos, pagos y depositos contra endpoints del backend. No
+existe contrato backend de pasarela local ni de emision FEL.
+
+### Decision
+
+Pagos locales y FEL/SAT se consideran integraciones de backend. El frontend
+solo muestra estados, instrucciones, referencias, redirecciones o documentos
+que el backend entregue mediante un contrato explicito.
+
+Los metodos de pago del contrato actual siguen siendo abstractos:
+`cash`, `credit_card`, `debit_card`, `bank_transfer`, `online`. No se agregan
+proveedores como literales de dominio desde el frontend.
+Stripe no se asume proveedor productivo del PMS en Guatemala ni opcion de
+liquidacion directa local desde frontend. Proveedores locales como VisaNet,
+NeoNet o QPayPro quedan como alternativas a evaluar por producto/backend, no
+como seleccion de este PR.
+
+FEL/SAT no se implementa en React: el frontend no construye XML DTE, no firma,
+no certifica, no anula, no calcula frases/regimenes ni conecta directo con SAT
+o certificadores. Infile, GFACE y Megaprint quedan como ejemplos de
+certificadores a evaluar en una decision futura. Un recibo operativo del PMS no
+debe presentarse como factura FEL ni DTE certificado.
+
+El detalle operativo queda en
+[`docs/guatemala-pagos-fel-frontend.md`](guatemala-pagos-fel-frontend.md).
+
+### Qué NO hacer
+
+- No capturar ni almacenar PAN/CVV, tokens de pasarela o credenciales de PSP en
+  componentes, servicios o `localStorage`.
+- No crear un cliente HTTP directo a pasarelas, SAT o certificadores; todas esas
+  llamadas deben salir del backend.
+- No decidir proveedor local desde UI ni congelar nombres de proveedor como
+  `PaymentMethodDto` sin contrato de backend/producto.
+- No renderizar el recibo actual como "Factura FEL", "DTE" o "SAT autorizado".
+- No calcular impuestos fiscales definitivos en frontend. Los totales visibles
+  pueden mostrarse, pero la autoridad fiscal/contable la define backend.
+
+### Alternativas consideradas
+
+1. **Agregar proveedores locales al contrato de pagos desde el frontend** —
+   descartado: mezclar metodo operativo con proveedor concreto obliga a React a
+   conocer reglas de conciliacion, webhooks y seguridad que pertenecen al
+   backend.
+2. **Preparar pantallas FEL antes del contrato backend** — descartado: sin
+   estados y metadatos oficiales, la UI solo podria simular una factura y
+   arriesga confundir recibos operativos con documentos fiscales certificados.
+
 ## Cómo agregar una nueva decisión
 
 Copiar la estructura de D-001: **Contexto** (qué problema había y qué
