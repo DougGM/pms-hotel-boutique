@@ -15,8 +15,7 @@ import {
   Wifi,
 } from 'lucide-react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
-import { bookingService } from '@/services/bookingService';
-import { roomService } from '@/services/roomService';
+import { publicBookingCatalogService } from '@/services/publicBookingCatalogService';
 import { EmptyState } from '@/shared/components/EmptyState';
 import { ErrorState } from '@/shared/components/ErrorState';
 import { LoadingState } from '@/shared/components/LoadingState';
@@ -263,8 +262,8 @@ export function SearchScreen() {
     setShowcaseError(null);
     try {
       const [nextRoomTypes, nextRates] = await Promise.all([
-        roomService.getRoomTypes(),
-        roomService.getRates(),
+        publicBookingCatalogService.getRoomTypes(),
+        publicBookingCatalogService.getRates(),
       ]);
       setRoomTypes(nextRoomTypes.filter((roomType) => roomType.active));
       setRates(nextRates);
@@ -294,9 +293,9 @@ export function SearchScreen() {
 
     try {
       const [roomTypes, rooms, bookings] = await Promise.all([
-        roomService.getRoomTypes(),
-        roomService.getRooms(),
-        bookingService.getBookings(),
+        publicBookingCatalogService.getRoomTypes(),
+        publicBookingCatalogService.getRooms(),
+        publicBookingCatalogService.getBookings(),
       ]);
 
       const availableRoomTypes = buildAvailableRoomTypes({
