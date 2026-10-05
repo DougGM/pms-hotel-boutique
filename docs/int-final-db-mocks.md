@@ -31,12 +31,14 @@ Los checklists de Limpieza se conectan al contrato backend real asociado a
 - `POST /housekeeping/checklists`.
 - `PUT /housekeeping/checklists/{id}`.
 
-Para crear, el payload incluye `serviceRequestId`, `observations?`, `status?` e
+Para crear, el payload incluye `serviceRequestId`, `observations?` e
 `items: [{ label, checked }]`. El frontend mapea `checked` a `done` dentro de
-`housekeepingService` para conservar la UI existente. No existe endpoint para
-guardar checklists de turnover por `roomId`; esos controles quedan como apoyo
-visual y no se asocian a checklists reales aunque compartan habitación con un
-stayover.
+`housekeepingService` para conservar la UI existente. Cuando una solicitud
+stayover se completa, la UI crea o actualiza los items, completa la solicitud
+real y luego envía `status: "completed"` por `PUT /housekeeping/checklists/{id}`.
+No existe endpoint para guardar checklists de turnover por `roomId`; esos
+controles quedan como apoyo visual y no se asocian a checklists reales aunque
+compartan habitación con un stayover.
 
 ## Almacenamiento local
 

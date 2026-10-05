@@ -2087,12 +2087,11 @@ function PrivateWorkspaceReady({
       position,
     }));
     if (request.checklistId) {
-      return housekeepingService.saveChecklist(request.checklistId, { status: 'completed', items });
+      return housekeepingService.saveChecklist(request.checklistId, { items });
     }
     return housekeepingService.createChecklist({
       serviceRequestId: request.requestId,
       observations: request.request,
-      status: 'completed',
       items,
     });
   };
@@ -2184,10 +2183,18 @@ function PrivateWorkspaceReady({
     try {
       const checklist = await saveStayoverChecklist(req, true);
       const updated = await housekeepingService.completeStayoverCleaning(req.requestId);
+      const completedChecklist = await housekeepingService.saveChecklist(checklist.id, {
+        status: 'completed',
+        items: checklist.items,
+      });
       setHkRequests((current) =>
         current.map((item) =>
           item.id === reqId
-            ? { ...item, status: mapServiceStatus(updated.status), checklistId: checklist.id }
+            ? {
+                ...item,
+                status: mapServiceStatus(updated.status),
+                checklistId: completedChecklist.id,
+              }
             : item,
         ),
       );

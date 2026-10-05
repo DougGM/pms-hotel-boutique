@@ -268,12 +268,12 @@ function installHousekeepingBackend() {
         serviceRequestId: body.serviceRequestId,
         roomId: stayover?.roomId ?? 'room-101',
         roomNumber: stayover?.roomNumber ?? '101',
-        status: body.status ?? 'pending',
+        status: 'pending',
         observations: body.observations ?? null,
         responsibleUserEmail: 'limpieza@hotelboutique.test',
-        completedByUserEmail: 'limpieza@hotelboutique.test',
+        completedByUserEmail: null,
         startedAt: '2026-10-03T09:00:00Z',
-        completedAt: '2026-10-03T10:00:00Z',
+        completedAt: null,
         createdAt: '2026-10-03T10:00:00Z',
         updatedAt: '2026-10-03T10:00:00Z',
         items: body.items.map((item, index) => ({
@@ -470,6 +470,15 @@ test('limpieza: atender y completar una solicitud avanza sin transición inváli
   await settle();
   assert.equal(rowFor().status, 'Completada');
   assert.ok(!toasts().some((toast) => /rechaz/i.test(toast)), toasts().join());
+  assert.deepEqual(
+    hkBackend.requests.filter((request) => request.includes('/housekeeping/checklists')),
+    [
+      'GET /housekeeping/checklists',
+      'POST /housekeeping/checklists',
+      'PUT /housekeeping/checklists/check-2',
+    ],
+    'el checklist se crea antes de cerrar la solicitud y se marca completed después',
+  );
   const openAfter = expectedOpenRequests();
   assert.equal(openAfter, openBefore - 1);
   assert.equal(navBadge('Solicitudes'), openAfter ? String(openAfter) : undefined);
