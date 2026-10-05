@@ -242,12 +242,16 @@ electronica FEL. Los pagos del folio siguen pasando por `guestAccountService` y
 `debit_card`, `bank_transfer`, `online`) y cualquier proveedor local debe
 integrarse primero en backend. El frontend no captura datos sensibles de tarjeta,
 no tokeniza, no confirma webhooks y no decide conciliacion contable.
+Stripe no se asume proveedor productivo para Guatemala ni opcion de liquidacion
+directa local desde frontend; proveedores como VisaNet, NeoNet o QPayPro deben
+evaluarse por producto/backend antes de aparecer como integracion real.
 
 FEL/SAT queda fuera del frontend hasta que exista contrato backend: React no
 construye XML DTE, no firma, no certifica, no calcula frases/impuestos fiscales
 definitivos, no anula documentos y no se conecta directo al SAT o a un
 certificador. El recibo/PDF actual es comprobante operativo del PMS, no factura
-FEL ni DTE certificado. Ver
+FEL ni DTE certificado. Certificadores como Infile, GFACE o Megaprint deben
+seleccionarse por contrato backend antes de reflejarse en UI. Ver
 [`docs/guatemala-pagos-fel-frontend.md`](../docs/guatemala-pagos-fel-frontend.md).
 
 ## Servicios y regla de oro

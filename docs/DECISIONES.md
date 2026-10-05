@@ -939,11 +939,16 @@ que el backend entregue mediante un contrato explicito.
 Los metodos de pago del contrato actual siguen siendo abstractos:
 `cash`, `credit_card`, `debit_card`, `bank_transfer`, `online`. No se agregan
 proveedores como literales de dominio desde el frontend.
+Stripe no se asume proveedor productivo del PMS en Guatemala ni opcion de
+liquidacion directa local desde frontend. Proveedores locales como VisaNet,
+NeoNet o QPayPro quedan como alternativas a evaluar por producto/backend, no
+como seleccion de este PR.
 
 FEL/SAT no se implementa en React: el frontend no construye XML DTE, no firma,
 no certifica, no anula, no calcula frases/regimenes ni conecta directo con SAT
-o certificadores. Un recibo operativo del PMS no debe presentarse como factura
-FEL ni DTE certificado.
+o certificadores. Infile, GFACE y Megaprint quedan como ejemplos de
+certificadores a evaluar en una decision futura. Un recibo operativo del PMS no
+debe presentarse como factura FEL ni DTE certificado.
 
 El detalle operativo queda en
 [`docs/guatemala-pagos-fel-frontend.md`](guatemala-pagos-fel-frontend.md).

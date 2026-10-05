@@ -53,7 +53,9 @@ Nota 2026-10-04 (#129): pagos locales de Guatemala y FEL/SAT no se integran
 directo desde servicios frontend. `paymentService` y `guestAccountService`
 mantienen metodos de pago abstractos y folio operativo; cualquier PSP,
 redireccion, webhook, tokenizacion, emision FEL, anulacion o certificacion debe
-exponerse primero desde backend. Ver
+exponerse primero desde backend. Stripe no se asume proveedor productivo local
+para Guatemala; VisaNet, NeoNet, QPayPro, Infile, GFACE, Megaprint u otros
+proveedores deben llegar por contrato backend. Ver
 [`docs/guatemala-pagos-fel-frontend.md`](../../docs/guatemala-pagos-fel-frontend.md).
 
 Nota INT-13: `personnelService` usa el backend real para usuarios, roles y

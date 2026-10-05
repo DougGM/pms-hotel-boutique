@@ -24,6 +24,9 @@ nuevas en esta issue.
 
 - SAT Guatemala publica la documentacion tecnica del regimen FEL en su portal:
   `https://portal.sat.gob.gt/portal/documentacion-tecnica-del-regimen-fel/`.
+- Stripe publica su disponibilidad global en:
+  `https://stripe.com/global`. Al 2026-10-05, Guatemala no aparece en la lista
+  de paises/regiones donde Stripe permite abrir una cuenta productiva directa.
 - Las pasarelas de pago documentan metodos y restricciones por proveedor. Como
   ejemplo de mercado, dLocal lista Guatemala con moneda `GTQ`, tarjetas y
   metodos alternativos como PayCash/SoyFRI:
@@ -62,6 +65,36 @@ Si se integra un proveedor local, el frontend solo debe consumir endpoints del
 backend, por ejemplo para crear una intencion de pago, redirigir a una URL,
 mostrar instrucciones o refrescar el estado confirmado por webhook/backend.
 
+### Stripe en Guatemala
+
+Stripe no debe asumirse como proveedor productivo del PMS para Guatemala. La
+decision actual del proyecto es no integrar Stripe desde frontend ni presentarlo
+como opcion real de cobro local.
+
+La restriccion que motiva esta decision es operativa: Guatemala no figura en la
+lista oficial de paises/regiones soportados por Stripe para abrir una cuenta
+productiva directa. Por eso, el frontend no debe modelar Stripe como metodo de
+liquidacion directa a cuenta bancaria guatemalteca ni exponerlo como alternativa
+disponible para el hotel.
+
+Si producto/backend decide usar Stripe mediante una entidad extranjera, Stripe
+Atlas, stablecoins, un adquirente intermedio u otra estructura, esa decision debe
+registrarse antes como arquitectura/backend. El frontend solo consumiria el
+contrato resultante; no debe inferirlo desde UI.
+
+### Proveedores locales a evaluar
+
+Ejemplos de proveedores o adquirentes que podrian evaluarse en una issue futura:
+
+- VisaNet.
+- NeoNet.
+- QPayPro.
+- Otro proveedor definido por producto/backend.
+
+La inclusion en esta lista no constituye seleccion, recomendacion ni
+integracion. Cualquier proveedor requiere decision de producto/backend,
+contrato HTTP, estados, errores, webhooks, conciliacion y reglas de seguridad.
+
 ## Limite para FEL/SAT
 
 FEL/SAT es responsabilidad de backend y de operacion fiscal, no de React.
@@ -91,6 +124,19 @@ El frontend no debe:
 Mientras no exista contrato backend de FEL, el recibo de estancia del frontend
 es solo comprobante operativo del PMS. Debe evitar texto como "Factura FEL",
 "DTE certificado" o "SAT autorizado".
+
+### Certificadores FEL a evaluar
+
+Ejemplos de certificadores o proveedores FEL que podrian evaluarse en una issue
+futura:
+
+- Infile.
+- GFACE.
+- Megaprint.
+- Otro certificador autorizado que se seleccione posteriormente.
+
+La inclusion en esta lista no constituye seleccion ni integracion. El frontend
+solo mostrara metadatos FEL cuando backend entregue un contrato fiscal explicito.
 
 ## Contrato vigente
 
