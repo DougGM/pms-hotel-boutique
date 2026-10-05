@@ -1153,45 +1153,6 @@ const defaultRolePermissions = Object.fromEntries(
   ]),
 ) as Record<string, Record<string, boolean>>;
 
-const rolePermissionsStorageKey = 'pms.demo.rolePermissions';
-
-const mergeRolePermissions = (
-  overrides: Record<string, Record<string, boolean>>,
-): Record<string, Record<string, boolean>> => ({
-  ...defaultRolePermissions,
-  ...Object.fromEntries(
-    Object.entries(overrides).map(([roleCode, permissions]) => [
-      roleCode,
-      {
-        ...(defaultRolePermissions[roleCode] ?? {}),
-        ...permissions,
-      },
-    ]),
-  ),
-});
-
-const loadDemoRolePermissions = () => {
-  try {
-    const raw = window.localStorage.getItem(rolePermissionsStorageKey);
-    if (!raw) return defaultRolePermissions;
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      return defaultRolePermissions;
-    }
-    return mergeRolePermissions(parsed as Record<string, Record<string, boolean>>);
-  } catch {
-    return defaultRolePermissions;
-  }
-};
-
-const saveDemoRolePermissions = (permissions: Record<string, Record<string, boolean>>) => {
-  try {
-    window.localStorage.setItem(rolePermissionsStorageKey, JSON.stringify(permissions));
-  } catch {
-    // Demo-only persistence: if the browser blocks storage, keep the in-memory update.
-  }
-};
-
 const filterNavByPermissions = (nav: NavItem[], permissions: Record<string, boolean>) => {
   if (Object.keys(permissions).length === 0) return nav;
   return nav
@@ -1517,7 +1478,7 @@ function PrivateWorkspaceReady({
   const [search, setSearch] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [headerScrolled, setHeaderScrolled] = useState(false);
-  const [rolePermissions, setRolePermissions] = useState(loadDemoRolePermissions);
+  const [rolePermissions, setRolePermissions] = useState(defaultRolePermissions);
   const [hkRooms, setHkRooms] = useState(initialData.cleaningRooms);
   const [hkRequests, setHkRequests] = useState(initialData.guestRequests);
   const [hkHistory, setHkHistory] = useState(initialData.history);
@@ -3201,7 +3162,6 @@ function PrivateWorkspaceReady({
               onRolePermissionsChange={(roleCode, permissions) =>
                 setRolePermissions((current) => {
                   const next = { ...current, [roleCode]: permissions };
-                  saveDemoRolePermissions(next);
                   return next;
                 })
               }

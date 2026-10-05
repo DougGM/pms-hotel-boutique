@@ -81,6 +81,7 @@ type AdminRole = {
   name: string;
   description: string;
   permissions: Record<string, boolean>;
+  permissionKeys: string[];
   userCount: number;
 };
 type AdminRoom = {
@@ -273,20 +274,77 @@ const ALL_PERMISSIONS = ROLE_ACCESS_GROUPS.flatMap((group) =>
   group.items.map((item) => roleAccessKey(group.name, item)),
 );
 
-const demoRolePermissionsStorageKey = 'pms.demo.rolePermissions';
-
-const loadDemoRolePermissionOverrides = () => {
-  try {
-    const raw = window.localStorage.getItem(demoRolePermissionsStorageKey);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-      ? (parsed as Record<string, Record<string, boolean>>)
-      : {};
-  } catch {
-    return {};
-  }
+const backendPermissionsByAccessKey: Record<string, string[]> = {
+  [roleAccessKey('ADMINISTRACIÓN', 'Dashboard')]: ['bookings.read', 'rooms.read', 'cash.read'],
+  [roleAccessKey('ADMINISTRACIÓN', 'Usuarios y roles')]: [],
+  [roleAccessKey('ADMINISTRACIÓN', 'Habitaciones')]: [
+    'rooms.read',
+    'rooms.write',
+    'room-types.read',
+    'room-types.write',
+    'room-features.read',
+  ],
+  [roleAccessKey('ADMINISTRACIÓN', 'Tarifas')]: ['rates.read', 'rates.write'],
+  [roleAccessKey('ADMINISTRACIÓN', 'Promociones')]: ['rates.read', 'rates.write'],
+  [roleAccessKey('ADMINISTRACIÓN', 'Servicios')]: [
+    'room-service.read',
+    'room-service.write',
+    'concierge.read',
+    'concierge.write',
+    'housekeeping.read',
+  ],
+  [roleAccessKey('ADMINISTRACIÓN', 'Reportes')]: [
+    'bookings.read',
+    'cash.read',
+    'payments.read',
+    'deposits.read',
+    'charges.read',
+  ],
+  [roleAccessKey('ADMINISTRACIÓN', 'Inventario')]: ['inventory.read', 'inventory.write'],
+  [roleAccessKey('ADMINISTRACIÓN', 'Caja')]: ['cash.read', 'cash.write'],
+  [roleAccessKey('ADMINISTRACIÓN', 'Auditoría')]: [],
+  [roleAccessKey('RECEPCIÓN', 'Resumen')]: ['bookings.read', 'guests.read', 'rooms.read'],
+  [roleAccessKey('RECEPCIÓN', 'Calendario')]: ['bookings.read', 'rooms.read'],
+  [roleAccessKey('RECEPCIÓN', 'Reservas')]: ['bookings.read', 'bookings.write'],
+  [roleAccessKey('RECEPCIÓN', 'Huéspedes')]: ['guests.read', 'guests.write'],
+  [roleAccessKey('RECEPCIÓN', 'Disponibilidad')]: ['rooms.read', 'rates.read'],
+  [roleAccessKey('RECEPCIÓN', 'Habitaciones')]: ['rooms.read'],
+  [roleAccessKey('RECEPCIÓN', 'Caja')]: ['cash.read', 'cash.write'],
+  [roleAccessKey('LIMPIEZA', 'Inicio')]: ['housekeeping.read'],
+  [roleAccessKey('LIMPIEZA', 'Habitaciones')]: ['housekeeping.read', 'rooms.read'],
+  [roleAccessKey('LIMPIEZA', 'Solicitudes')]: ['housekeeping.read', 'housekeeping.write'],
+  [roleAccessKey('LIMPIEZA', 'Historial')]: ['housekeeping.read'],
+  [roleAccessKey('ROOM SERVICE', 'Pedidos activos')]: ['room-service.read', 'room-service.write'],
+  [roleAccessKey('ROOM SERVICE', 'Menú')]: ['room-service.read'],
+  [roleAccessKey('ROOM SERVICE', 'Historial')]: ['room-service.read'],
+  [roleAccessKey('ROOM SERVICE', 'Inventario')]: ['inventory.read'],
+  [roleAccessKey('CONSERJERÍA', 'Solicitudes')]: ['concierge.read', 'concierge.write'],
+  [roleAccessKey('CONSERJERÍA', 'Por habitación')]: ['concierge.read', 'bookings.read'],
+  [roleAccessKey('CONSERJERÍA', 'Historial')]: ['concierge.read'],
 };
+
+const uiPermissionsFromBackend = (role: Role): Record<string, boolean> => {
+  if (role.permissionIds.length === 0) return getRoleDashboardPermissions(role.code);
+  const granted = new Set(role.permissionIds);
+  return Object.fromEntries(
+    ALL_PERMISSIONS.map((key) => {
+      const backendKeys = backendPermissionsByAccessKey[key] ?? [];
+      return [
+        key,
+        backendKeys.length === 0 ? false : backendKeys.some((item) => granted.has(item)),
+      ];
+    }),
+  ) as Record<string, boolean>;
+};
+
+const backendPermissionsFromUi = (permissions: Record<string, boolean>): string[] =>
+  [
+    ...new Set(
+      Object.entries(permissions)
+        .filter(([, enabled]) => enabled)
+        .flatMap(([key]) => backendPermissionsByAccessKey[key] ?? []),
+    ),
+  ].sort();
 
 /**
  * Tarifas dinámicas (ajuste automático por ocupación/anticipación): no
@@ -480,6 +538,20 @@ const adminUserFromAdminRoles = (user: User, roles: AdminRole[], index: number):
     role: role?.name ?? user.role,
     status: user.status === 'active' ? 'Activo' : 'Inactivo',
     lastAccess: toDtoCalendarDate(user.updatedAt),
+  };
+};
+
+const adminRoleFromDomain = (role: Role, users: User[], index: number): AdminRole => {
+  const roleCode = normalizeRoleCode(role.code);
+  return {
+    id: parseDbId(role.id, index + 1),
+    dbId: role.id,
+    code: roleCode,
+    name: roleDisplayName(role),
+    description: `Rol ${role.code}`,
+    userCount: users.filter((user) => user.role === roleCode).length,
+    permissions: uiPermissionsFromBackend(role),
+    permissionKeys: [...role.permissionIds],
   };
 };
 
@@ -1128,22 +1200,9 @@ export function AdminContent({
           adminUserFromDomain(user, roles, index),
         );
 
-        const demoRolePermissionOverrides = loadDemoRolePermissionOverrides();
-        const adminRoles: AdminRole[] = roles.map((role, index) => {
-          const roleCode = normalizeRoleCode(role.code);
-          return {
-            id: parseDbId(role.id, index + 1),
-            dbId: role.id,
-            code: roleCode,
-            name: roleDisplayName(role),
-            description: `Rol ${role.code}`,
-            userCount: users.filter((user) => user.role === roleCode).length,
-            permissions: {
-              ...getRoleDashboardPermissions(role.code),
-              ...(demoRolePermissionOverrides[roleCode] ?? {}),
-            },
-          };
-        });
+        const adminRoles: AdminRole[] = roles.map((role, index) =>
+          adminRoleFromDomain(role, users, index),
+        );
 
         const adminRooms: AdminRoom[] = rooms.map((room, index) => {
           const roomType = roomTypes.find((type) => type.id === room.roomTypeId);
@@ -2128,22 +2187,41 @@ function AdminContentReady({
           <RoleModal
             role={editRole}
             onClose={() => setShowRoleModal(false)}
-            onSave={(r) => {
-              const savedRole: AdminRole = {
-                ...r,
-                id: editRole?.id ?? Date.now(),
-                code: editRole?.code ?? r.code,
-                userCount: editRole?.userCount ?? r.userCount,
-              };
-              setRoles((current) =>
-                editRole
-                  ? current.map((item) => (item.id === editRole.id ? savedRole : item))
-                  : [...current, savedRole],
-              );
-              onRolePermissionsChange?.(savedRole.code, savedRole.permissions);
-              onAction('Permisos del rol actualizados en esta sesion.');
-              setShowRoleModal(false);
-              setEditRole(null);
+            onSave={async (r) => {
+              try {
+                const nextPermissionKeys = backendPermissionsFromUi(r.permissions);
+                let saved = editRole
+                  ? await personnelService.updateRole(editRole.dbId, { name: r.name })
+                  : await personnelService.createRole({
+                      code: r.code,
+                      name: r.name,
+                      active: true,
+                      permissions: nextPermissionKeys,
+                    });
+
+                if (editRole && editRole.code !== 'admin') {
+                  saved = await personnelService.updateRolePermissions(
+                    editRole.dbId,
+                    nextPermissionKeys,
+                  );
+                }
+
+                const savedRole = {
+                  ...adminRoleFromDomain(saved, [], roles.length),
+                  userCount: editRole?.userCount ?? 0,
+                };
+                setRoles((current) =>
+                  editRole
+                    ? current.map((item) => (item.dbId === editRole.dbId ? savedRole : item))
+                    : [...current, savedRole],
+                );
+                onRolePermissionsChange?.(savedRole.code, savedRole.permissions);
+                onAction(editRole ? 'Rol actualizado correctamente' : 'Rol creado correctamente');
+                setShowRoleModal(false);
+                setEditRole(null);
+              } catch (error) {
+                onAction(serviceErrorMessage(error));
+              }
             }}
           />
         )}
@@ -3934,7 +4012,7 @@ function RoleModal({
 }: {
   role: AdminRole | null;
   onClose: () => void;
-  onSave: (r: AdminRole) => void;
+  onSave: (r: AdminRole) => void | Promise<void>;
 }) {
   const [name, setName] = useState(role?.name ?? '');
   const [description, setDescription] = useState(role?.description ?? '');
@@ -3960,6 +4038,7 @@ function RoleModal({
           name,
           description,
           permissions,
+          permissionKeys: backendPermissionsFromUi(permissions),
           userCount: role?.userCount ?? 0,
         })
       }

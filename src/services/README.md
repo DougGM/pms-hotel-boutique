@@ -49,10 +49,10 @@ la unica "base de datos" simulada del proyecto — ver `src/ARCHITECTURE.md`.
 Desde INT-01, `authService` usa el backend Spring configurado con
 `VITE_API_BASE_URL`; las integraciones posteriores se documentan abajo.
 
-Nota frontend beta: `personnelService.getPermissions()` sigue leyendo
-`permissionsDB` porque el backend expone permisos como claves dentro de cada
-rol, no como recurso independiente. `usersDB` queda como directorio operativo
-historico del Lote D.
+Nota INT-13: `personnelService` usa el backend real para usuarios, roles y
+permisos. El catalogo de permisos sale de `GET /admin/permissions`; las
+escrituras de roles usan `POST /admin/roles`, `PUT /admin/roles/{id}` y
+`PUT /admin/roles/{id}/permissions`.
 
 ## WEB-14: servicios faltantes de la vertical Ronda 1
 
@@ -368,14 +368,15 @@ sobre `GET /admin/amenities` para ver activas e inactivas, y las escrituras
 `POST /admin/amenities` / `PUT /admin/amenities/{id}` para crear, editar y
 cambiar estado.
 
-`personnelService.getUsers()`, `getUserById()` y `getRoles()` consumen
-`GET /admin/users`, `GET /admin/users/{id}` y `GET /admin/roles`; `roleCode`
-se normaliza al literal de rol usado por el frontend solo en respuestas.
+`personnelService.getUsers()`, `getUserById()`, `getRoles()` y
+`getPermissions()` consumen `GET /admin/users`, `GET /admin/users/{id}`,
+`GET /admin/roles` y `GET /admin/permissions`; `roleCode` se normaliza al
+literal de rol usado por el frontend solo en respuestas.
 `createUser()` usa el DTO real del backend con `firstName`, `lastName`,
 `email`, `password` y `roleId`; no envia `roleCode` ni `status`.
 `updateUser()` usa `firstName`, `lastName`, `email`, `roleId` y `status` para
-edicion y activacion/desactivacion. `getPermissions()` conserva el catalogo
-local por compatibilidad hasta que exista un endpoint dedicado.
+edicion y activacion/desactivacion. `createRole()`, `updateRole()` y
+`updateRolePermissions()` persisten roles y permisos en el backend.
 
 `promotionService` usa `GET/POST/PUT /admin/promotions`. Como el backend no
 expone `GET /admin/promotions/{id}`, las actualizaciones obtienen primero la
