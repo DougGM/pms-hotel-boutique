@@ -2269,6 +2269,7 @@ function installHousekeepingFetchMock() {
       const request = JSON.parse(String(init.body ?? '{}'));
       checklists[0] = {
         ...checklists[0],
+        status: request.status ?? checklists[0].status,
         roomId: HK_ROOM_ID,
         observations: request.observations ?? checklists[0].observations,
         items: request.items.map((item, index) => ({
@@ -2365,12 +2366,14 @@ test('housekeepingService: turnover contra backend, sin transiciones locales', a
   assert.equal(initialChecklists[0].items[0].done, false);
 
   const savedChecklist = await housekeepingService.saveChecklist(initialChecklists[0].id, {
+    status: 'completed',
     items: [
       { id: 'item-1', label: 'Cama preparada', done: true },
       { id: 'item-2', label: 'Baño revisado', done: false },
     ],
   });
   assert.equal(savedChecklist.items[0].done, true);
+  assert.equal(savedChecklist.status, 'completed');
   assert.deepEqual(calls.slice(-2), [
     'GET /housekeeping/checklists',
     `PUT /housekeeping/checklists/${initialChecklists[0].id}`,

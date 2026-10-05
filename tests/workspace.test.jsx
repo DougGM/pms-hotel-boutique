@@ -196,7 +196,35 @@ function installHousekeepingBackend() {
       hkStayover('stay-3', 'room-101', 'completed', 'Tendido de cama'),
       hkStayover('stay-4', 'room-102', 'cancelled', 'Cancelada por el huésped'),
     ],
-    checklists: [],
+    checklists: [
+      {
+        id: 'check-stay-2',
+        serviceRequestId: 'stay-2',
+        roomId: 'room-202',
+        roomNumber: '202',
+        status: 'in_progress',
+        observations: 'Checklist real de stayover',
+        responsibleUserEmail: 'limpieza@hotelboutique.test',
+        completedByUserEmail: null,
+        startedAt: '2026-10-03T09:00:00Z',
+        completedAt: null,
+        createdAt: '2026-10-03T09:00:00Z',
+        updatedAt: '2026-10-03T09:00:00Z',
+        items: [
+          {
+            id: 'stayover-item-1',
+            label: 'Checklist stayover: no usar en turnover',
+            checked: false,
+            position: 0,
+            notes: null,
+            checkedByUserEmail: null,
+            checkedAt: null,
+            createdAt: '2026-10-03T09:00:00Z',
+            updatedAt: '2026-10-03T09:00:00Z',
+          },
+        ],
+      },
+    ],
     requests: [],
   };
   const turnover = {
@@ -240,7 +268,7 @@ function installHousekeepingBackend() {
         serviceRequestId: body.serviceRequestId,
         roomId: stayover?.roomId ?? 'room-101',
         roomNumber: stayover?.roomNumber ?? '101',
-        status: 'completed',
+        status: body.status ?? 'pending',
         observations: body.observations ?? null,
         responsibleUserEmail: 'limpieza@hotelboutique.test',
         completedByUserEmail: 'limpieza@hotelboutique.test',
@@ -270,6 +298,7 @@ function installHousekeepingBackend() {
       const body = JSON.parse(String(init.body ?? '{}'));
       state.checklists[index] = {
         ...state.checklists[index],
+        status: body.status ?? state.checklists[index].status,
         observations: body.observations ?? state.checklists[index].observations,
         items: body.items.map((item, itemIndex) => ({
           id: item.id ?? `check-item-${itemIndex + 1}`,
@@ -464,6 +493,33 @@ test('limpieza: el badge de Habitaciones cuenta las pendientes y baja al iniciar
   assert.equal(pendingRooms(), before - 1);
   assert.equal(navBadge('Habitaciones'), before - 1 ? String(before - 1) : undefined);
   assert.equal(hkBackend.rooms[0].housekeepingStatus, 'cleaning', 'la transición pasó por la API');
+});
+
+test('limpieza: el turnover no reutiliza ni modifica checklists stayover por roomId', async () => {
+  await mountHousekeeping();
+  await goTo('Habitaciones');
+
+  const room202 = cardFor('202');
+  assert.ok(room202, 'la habitación 202 existe');
+  await act(async () => buttons('Ver detalle', room202.card)[0].props.onClick());
+  await settle();
+
+  const checklistItems = view.root.findAll((node) => hasClass(node, 'hk-check-item'));
+  assert.match(text(checklistItems[0]), /Cama preparada/);
+  assert.equal(
+    checklistItems.some((item) => /Checklist stayover/.test(text(item))),
+    false,
+    'el checklist real de stayover no aparece como checklist de turnover',
+  );
+
+  await act(async () => checklistItems[0].props.onClick());
+  await settle();
+
+  assert.equal(
+    hkBackend.requests.some((request) => request === 'PUT /housekeeping/checklists/check-stay-2'),
+    false,
+    'marcar un item visual de turnover no modifica el checklist real del stayover',
+  );
 });
 
 test('limpieza: una habitación limpia se inspecciona contra el backend', async () => {

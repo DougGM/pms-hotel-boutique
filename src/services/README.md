@@ -466,7 +466,8 @@ Reglas:
   consume `PUT /housekeeping/checklists/{id}`. El checklist pertenece a una
   `ServiceRequest` de housekeeping (`serviceRequestId`), no al turnover normal
   de una habitación; el servicio mapea `items[].checked` del backend a
-  `items[].done` para la UI. Los checklists ya no se guardan en `localStorage`.
+  `items[].done` para la UI y puede enviar `status` cuando la acción debe cerrar
+  el checklist real. Los checklists ya no se guardan en `localStorage`.
 - El workspace solo consulta Limpieza para el rol `housekeeping`; los demas
   roles no tienen `housekeeping.read` y recibirian `403`.
 

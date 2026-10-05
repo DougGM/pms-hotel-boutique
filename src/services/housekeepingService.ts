@@ -68,7 +68,7 @@ export type HousekeepingChecklist = {
   serviceRequestId: ID;
   roomId?: ID;
   roomNumber?: string;
-  status: string;
+  status: HousekeepingChecklistStatus;
   observations?: string;
   responsibleUserEmail?: string;
   completedByUserEmail?: string;
@@ -84,7 +84,7 @@ type HousekeepingChecklistResponse = {
   serviceRequestId: string;
   roomId: string;
   roomNumber?: string | null;
-  status: string;
+  status: HousekeepingChecklistStatus;
   observations?: string | null;
   responsibleUserEmail?: string | null;
   completedByUserEmail?: string | null;
@@ -107,8 +107,11 @@ type HousekeepingChecklistResponse = {
 
 type SaveChecklistPayload = {
   observations?: string;
+  status?: HousekeepingChecklistStatus;
   items: HousekeepingChecklistItem[];
 };
+
+type HousekeepingChecklistStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled';
 
 function toRoomDto(response: HousekeepingRoomResponse): RoomDto {
   return {
@@ -239,6 +242,7 @@ function toChecklist(response: HousekeepingChecklistResponse): HousekeepingCheck
 function toChecklistRequest(data: SaveChecklistPayload) {
   return {
     observations: data.observations?.trim() || undefined,
+    status: data.status,
     items: data.items.map((item) => ({
       id: item.id,
       label: item.label.trim(),

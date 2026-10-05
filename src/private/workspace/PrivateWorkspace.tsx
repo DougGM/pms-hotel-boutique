@@ -136,7 +136,6 @@ type CleaningRoom = {
   endTime: string | null;
   duration: string | null;
   checklistId?: string;
-  checklistServiceRequestId?: string;
   checklist: HousekeepingChecklistItem[];
 };
 
@@ -583,19 +582,13 @@ function buildHousekeepingState(
 ): Pick<WorkspaceState, 'cleaningRooms' | 'guestRequests' | 'history'> {
   const roomNumberById = new Map(rooms.map((room) => [room.id, room.roomNumber]));
   const roomLabel = (roomId: string) => roomNumberById.get(roomId) ?? 'Sin habitación';
-  const checklistByRoomId = new Map(checklists.map((checklist) => [checklist.roomId, checklist]));
   const checklistByRequestId = new Map(
     checklists.map((checklist) => [checklist.serviceRequestId, checklist]),
   );
 
-  const cleaningRooms = rooms.map((room, index) => {
-    const checklist = checklistByRoomId.get(room.id);
-    return {
-      ...toCleaningRoom(room, index + 1, getRoomType(room), checklist?.items),
-      checklistId: checklist?.id,
-      checklistServiceRequestId: checklist?.serviceRequestId,
-    };
-  });
+  const cleaningRooms = rooms.map((room, index) =>
+    toCleaningRoom(room, index + 1, getRoomType(room)),
+  );
 
   const guestRequests = stayovers.map((request, index) =>
     toStayoverRequest(
@@ -2094,11 +2087,12 @@ function PrivateWorkspaceReady({
       position,
     }));
     if (request.checklistId) {
-      return housekeepingService.saveChecklist(request.checklistId, { items });
+      return housekeepingService.saveChecklist(request.checklistId, { status: 'completed', items });
     }
     return housekeepingService.createChecklist({
       serviceRequestId: request.requestId,
       observations: request.request,
+      status: 'completed',
       items,
     });
   };
