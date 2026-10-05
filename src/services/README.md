@@ -49,6 +49,13 @@ la unica "base de datos" simulada del proyecto — ver `src/ARCHITECTURE.md`.
 Desde INT-01, `authService` usa el backend Spring configurado con
 `VITE_API_BASE_URL`; las integraciones posteriores se documentan abajo.
 
+Nota 2026-10-04 (#129): pagos locales de Guatemala y FEL/SAT no se integran
+directo desde servicios frontend. `paymentService` y `guestAccountService`
+mantienen metodos de pago abstractos y folio operativo; cualquier PSP,
+redireccion, webhook, tokenizacion, emision FEL, anulacion o certificacion debe
+exponerse primero desde backend. Ver
+[`docs/guatemala-pagos-fel-frontend.md`](../../docs/guatemala-pagos-fel-frontend.md).
+
 Nota INT-13: `personnelService` usa el backend real para usuarios, roles y
 permisos. El catalogo de permisos sale de `GET /admin/permissions`; las
 escrituras de roles usan `POST /admin/roles`, `PUT /admin/roles/{id}` y

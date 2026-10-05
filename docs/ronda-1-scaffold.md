@@ -169,6 +169,11 @@ avanza dentro de la misma pantalla por `Datos y habitacion`, `Confirmacion` y
 y ofrece metodos frecuentes para hotel: tarjeta, transferencia, pago en hotel y
 billetera digital, sin procesar cobros reales.
 
+Nota 2026-10-04 (#129): ese pago publico sigue siendo demo. No representa
+pasarela local, no captura datos sensibles, no confirma cobros ni emite FEL. La
+frontera de Guatemala para pagos locales y SAT/FEL queda documentada en
+[`docs/guatemala-pagos-fel-frontend.md`](guatemala-pagos-fel-frontend.md).
+
 Nota 2026-09-21 (#69): la creacion publica, la reserva manual y la edicion de
 reservas validan capacidad con la misma regla compartida:
 `adults + children <= roomType.capacity`. La UI revalida al cambiar tipo de
