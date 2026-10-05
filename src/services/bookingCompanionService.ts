@@ -4,11 +4,9 @@ import {
   type BookingCompanionDto,
   type UpsertBookingCompanionDto,
 } from '@/shared/types/entities/booking-companion';
-import { getBookingGuestTotal, validateBookingCapacity } from '@/shared/utils/bookingCapacity';
 import type { ID } from '@/shared/types/common';
-import { bookingCompanionsDB, bookingsDB, roomTypesDB } from '@/data/db';
 import { HttpError, httpClient } from './http-client';
-import { mockUtils, requireCollection, simulateLatency } from './mockUtils';
+import { mockUtils, simulateLatency } from './mockUtils';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -27,6 +25,12 @@ type ApiBookingCompanion = {
 
 function isUuid(value: ID): boolean {
   return UUID_PATTERN.test(value);
+}
+
+function assertBackendId(id: ID, operation: string): void {
+  if (!isUuid(id)) {
+    throw new Error(`${operation} requiere una reserva integrada con backend real.`);
+  }
 }
 
 function nowIso(): string {
@@ -89,18 +93,6 @@ async function getBackendCompanions(bookingId: ID): Promise<ApiBookingCompanion[
   );
 }
 
-function getLastBookingCompanionNumber(): number {
-  const max = bookingCompanionsDB.reduce((currentMax, companion) => {
-    const match = /^BCMP-(\d+)$/.exec(companion.id);
-    return match ? Math.max(currentMax, Number(match[1])) : currentMax;
-  }, 0);
-  return max;
-}
-
-function formatBookingCompanionId(value: number): ID {
-  return `BCMP-${String(value).padStart(3, '0')}`;
-}
-
 function normalizeCompanion(data: UpsertBookingCompanionDto): UpsertBookingCompanionDto {
   return {
     ...data,
@@ -123,49 +115,14 @@ function assertCompanionFields(companions: UpsertBookingCompanionDto[]) {
   });
 }
 
-function assertBookingComposition(bookingId: ID, companions: UpsertBookingCompanionDto[]) {
-  const booking = bookingsDB.find((item) => item.id === bookingId);
-  if (!booking) throw new Error(`No existe la reserva ${bookingId}.`);
-
-  const roomType = roomTypesDB.find((item) => item.id === booking.room_type_id);
-  if (!roomType) throw new Error(`No existe el tipo de habitacion ${booking.room_type_id}.`);
-
-  const companionAdults = companions.filter((item) => item.guest_type === 'adult').length;
-  const companionChildren = companions.filter((item) => item.guest_type === 'child').length;
-  const totalGuests = getBookingGuestTotal(1, companions.length);
-  const capacityError = validateBookingCapacity({
-    adults: 1,
-    children: companions.length,
-    capacity: roomType.capacity,
-    roomTypeName: roomType.name,
-  });
-
-  if (capacityError) throw new Error(capacityError);
-  if (totalGuests !== booking.adults + booking.children) {
-    throw new Error(
-      `La reserva espera ${booking.adults + booking.children} huesped(es): ${booking.adults} adulto(s) y ${booking.children} menor(es).`,
-    );
-  }
-  if (companionAdults !== booking.adults - 1 || companionChildren !== booking.children) {
-    throw new Error(
-      `La composicion debe ser ${Math.max(booking.adults - 1, 0)} acompanante(s) adulto(s) y ${booking.children} menor(es).`,
-    );
-  }
-}
-
 export const bookingCompanionService = {
   async getCompanionsByBookingId(bookingId: ID): Promise<BookingCompanion[]> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar los acompanantes.');
+    assertBackendId(bookingId, 'La consulta de acompanantes');
 
-    if (isUuid(bookingId)) {
-      const companions = await getBackendCompanions(bookingId);
-      return companions.map((item) => toCompanionDto(item, bookingId)).map(toBookingCompanion);
-    }
-
-    return requireCollection(bookingCompanionsDB, 'bookingCompanionsDB')
-      .filter((item) => item.booking_id === bookingId)
-      .map(toBookingCompanion);
+    const companions = await getBackendCompanions(bookingId);
+    return companions.map((item) => toCompanionDto(item, bookingId)).map(toBookingCompanion);
   },
 
   async saveCompanionsForBooking(
@@ -174,77 +131,45 @@ export const bookingCompanionService = {
   ): Promise<BookingCompanion[]> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible guardar los acompanantes.');
+    assertBackendId(bookingId, 'La sincronizacion de acompanantes');
 
     const companions = data.map(normalizeCompanion);
-
-    if (isUuid(bookingId)) {
-      const existing = await getBackendCompanions(bookingId);
-      const nextIds = new Set(companions.map((item) => item.id).filter(Boolean));
-
-      for (const companion of existing.filter((item) => !nextIds.has(item.id))) {
-        await request(
-          () => httpClient.delete<void>(`/bookings/${bookingId}/companions/${companion.id}`),
-          'No fue posible eliminar un acompanante.',
-        );
-      }
-
-      for (const companion of companions.filter((item) => item.id)) {
-        await request(
-          () =>
-            httpClient.put<ApiBookingCompanion>(
-              `/bookings/${bookingId}/companions/${companion.id}`,
-              toCompanionRequest(companion),
-            ),
-          'No fue posible actualizar un acompanante.',
-        );
-      }
-
-      for (const companion of companions.filter((item) => !item.id)) {
-        await request(
-          () =>
-            httpClient.post<ApiBookingCompanion>(
-              `/bookings/${bookingId}/companions`,
-              toCompanionRequest(companion),
-            ),
-          'No fue posible crear un acompanante.',
-        );
-      }
-
-      const saved = await getBackendCompanions(bookingId);
-      return saved.map((item) => toCompanionDto(item, bookingId)).map(toBookingCompanion);
-    }
-
     assertCompanionFields(companions);
-    assertBookingComposition(bookingId, companions);
 
-    const now = new Date().toISOString();
-    let nextIdNumber = getLastBookingCompanionNumber() + 1;
-    const existingById = new Map(
-      bookingCompanionsDB
-        .filter((item) => item.booking_id === bookingId)
-        .map((item) => [item.id, item] as const),
-    );
-    const nextCompanions: BookingCompanionDto[] = companions.map((companion) => {
-      const existing = companion.id ? existingById.get(companion.id) : undefined;
-      const id = existing?.id ?? formatBookingCompanionId(nextIdNumber++);
-      return {
-        id,
-        booking_id: bookingId,
-        first_name: companion.first_name,
-        last_name: companion.last_name,
-        document_type: companion.document_type,
-        document_number: companion.document_number,
-        guest_type: companion.guest_type,
-        created_at: existing?.created_at ?? now,
-        updated_at: now,
-      };
-    });
+    const existing = await getBackendCompanions(bookingId);
+    const nextIds = new Set(companions.map((item) => item.id).filter(Boolean));
 
-    for (let index = bookingCompanionsDB.length - 1; index >= 0; index--) {
-      if (bookingCompanionsDB[index].booking_id === bookingId) bookingCompanionsDB.splice(index, 1);
+    for (const companion of existing.filter((item) => !nextIds.has(item.id))) {
+      await request(
+        () => httpClient.delete<void>(`/bookings/${bookingId}/companions/${companion.id}`),
+        'No fue posible eliminar un acompanante.',
+      );
     }
-    bookingCompanionsDB.push(...nextCompanions);
-    return nextCompanions.map(toBookingCompanion);
+
+    for (const companion of companions.filter((item) => item.id)) {
+      await request(
+        () =>
+          httpClient.put<ApiBookingCompanion>(
+            `/bookings/${bookingId}/companions/${companion.id}`,
+            toCompanionRequest(companion),
+          ),
+        'No fue posible actualizar un acompanante.',
+      );
+    }
+
+    for (const companion of companions.filter((item) => !item.id)) {
+      await request(
+        () =>
+          httpClient.post<ApiBookingCompanion>(
+            `/bookings/${bookingId}/companions`,
+            toCompanionRequest(companion),
+          ),
+        'No fue posible crear un acompanante.',
+      );
+    }
+
+    const saved = await getBackendCompanions(bookingId);
+    return saved.map((item) => toCompanionDto(item, bookingId)).map(toBookingCompanion);
   },
 };
 

@@ -1,11 +1,6 @@
-import { bookingsDB, ratesDB, roomsDB, roomTypesDB } from '@/data/db';
-import {
-  toDomain as toBooking,
-  type Booking,
-  type BookingDto,
-} from '@/shared/types/entities/booking';
+import type { Booking } from '@/shared/types/entities/booking';
 import { toDomain as toRate, type Rate, type RateDto } from '@/shared/types/entities/rate';
-import { toDomain as toRoom, type Room, type RoomDto } from '@/shared/types/entities/room';
+import type { Room } from '@/shared/types/entities/room';
 import {
   toDomain as toRoomType,
   type RoomType,
@@ -13,19 +8,6 @@ import {
 } from '@/shared/types/entities/room-type';
 import { HttpError, httpClient } from './http-client';
 import { mockUtils, simulateLatency } from './mockUtils';
-
-type ApiRoom = {
-  id: string;
-  roomNumber: string;
-  roomTypeId?: string;
-  roomType?: { id: string };
-  floor: number;
-  status: RoomDto['status'] | Room['status'];
-  housekeepingStatus: RoomDto['housekeeping_status'];
-  notes?: string | null;
-  createdAt?: string | null;
-  updatedAt?: string | null;
-};
 
 type ApiRoomType = {
   id: string;
@@ -36,7 +18,8 @@ type ApiRoomType = {
   bedConfiguration: string;
   roomFeatureIds?: string[];
   roomFeatures?: { id: string }[];
-  active: boolean;
+  features?: { id: string }[];
+  active?: boolean;
   createdAt?: string | null;
   updatedAt?: string | null;
 };
@@ -52,58 +35,44 @@ type ApiRate = {
   currency?: RateDto['currency'];
   minimumNights?: number;
   refundable?: boolean;
-  active: boolean;
+  active?: boolean;
   createdAt?: string | null;
   updatedAt?: string | null;
 };
 
-type ApiBooking = {
-  id: string;
-  confirmationCode: string;
-  guestLinkCode?: string | null;
-  guestId?: string;
-  guest?: { id: string };
-  roomId?: string | null;
-  room?: { id: string } | null;
-  roomTypeId?: string;
-  roomType?: { id: string };
-  rateId?: string | null;
-  rate?: { id: string } | null;
+type PublicAvailabilityResult = {
+  roomTypeId: string;
+  code: string;
+  name: string;
+  capacity: number;
+  bedConfiguration: string;
+  availableRooms: number;
+  rate: ApiRate;
+  totalAmountCents: number;
+  currency: string;
+};
+
+type PublicAvailabilityResponse = {
   checkIn: string;
   checkOut: string;
-  status: BookingDto['status'] | Booking['status'];
+  nights: number;
   adults: number;
   children: number;
+  results: PublicAvailabilityResult[];
+};
+
+export type PublicAvailableRoomType = {
+  roomType: RoomType;
+  availableRooms: number;
+  rate: Rate;
   totalAmountCents: number;
-  currency?: BookingDto['currency'];
-  notes?: string | null;
-  createdAt?: string | null;
-  updatedAt?: string | null;
 };
 
 const nowIso = () => new Date().toISOString();
-const isProtectedOrMissingPublicEndpoint = (error: unknown): boolean =>
-  error instanceof HttpError &&
-  (error.status === 401 || error.status === 403 || error.status === 404);
 
 function requiredId(id: string | undefined | null, label: string): string {
   if (!id) throw new Error(`La respuesta del backend no incluye ${label}.`);
   return id;
-}
-
-function toRoomDto(api: ApiRoom): RoomDto {
-  const timestamp = api.updatedAt ?? api.createdAt ?? nowIso();
-  return {
-    id: api.id,
-    room_number: api.roomNumber,
-    room_type_id: requiredId(api.roomTypeId ?? api.roomType?.id, 'roomTypeId'),
-    floor: api.floor,
-    status: api.status === 'outOfService' ? 'out_of_service' : api.status,
-    housekeeping_status: api.housekeepingStatus,
-    notes: api.notes ?? undefined,
-    created_at: api.createdAt ?? timestamp,
-    updated_at: timestamp,
-  };
 }
 
 function toRoomTypeDto(api: ApiRoomType): RoomTypeDto {
@@ -115,8 +84,12 @@ function toRoomTypeDto(api: ApiRoomType): RoomTypeDto {
     description: api.description ?? undefined,
     capacity: api.capacity,
     bed_configuration: api.bedConfiguration,
-    room_feature_ids: api.roomFeatureIds ?? api.roomFeatures?.map((feature) => feature.id) ?? [],
-    active: api.active,
+    room_feature_ids:
+      api.roomFeatureIds ??
+      api.roomFeatures?.map((feature) => feature.id) ??
+      api.features?.map((feature) => feature.id) ??
+      [],
+    active: api.active ?? true,
     created_at: api.createdAt ?? timestamp,
     updated_at: timestamp,
   };
@@ -134,93 +107,110 @@ function toRateDto(api: ApiRate): RateDto {
     currency: api.currency ?? 'GTQ',
     minimum_nights: api.minimumNights ?? 1,
     refundable: api.refundable ?? true,
-    active: api.active,
+    active: api.active ?? true,
     created_at: api.createdAt ?? timestamp,
     updated_at: timestamp,
   };
 }
 
-function toBookingDto(api: ApiBooking): BookingDto {
-  const timestamp = api.updatedAt ?? api.createdAt ?? nowIso();
-  return {
-    id: api.id,
-    confirmation_code: api.confirmationCode,
-    guest_link_code: api.guestLinkCode ?? api.confirmationCode,
-    guest_id: requiredId(api.guestId ?? api.guest?.id, 'guestId'),
-    room_id: api.roomId ?? api.room?.id ?? undefined,
-    room_type_id: requiredId(api.roomTypeId ?? api.roomType?.id, 'roomTypeId'),
-    rate_id: api.rateId ?? api.rate?.id ?? undefined,
-    check_in: api.checkIn,
-    check_out: api.checkOut,
-    status:
-      api.status === 'checkedIn'
-        ? 'checked_in'
-        : api.status === 'checkedOut'
-          ? 'checked_out'
-          : api.status === 'noShow'
-            ? 'no_show'
-            : api.status,
-    adults: api.adults,
-    children: api.children,
-    total_amount_cents: api.totalAmountCents,
-    currency: api.currency ?? 'GTQ',
-    notes: api.notes ?? undefined,
-    created_at: api.createdAt ?? timestamp,
-    updated_at: timestamp,
-  };
+function toUnavailableError(operation: string): Error {
+  return new Error(`${operation} debe usar contrato backend publico; no hay fallback mock.`);
+}
+
+function getHttpErrorMessage(error: unknown, fallback: string): string {
+  if (!(error instanceof HttpError)) return error instanceof Error ? error.message : fallback;
+  const data = error.data;
+  if (data && typeof data === 'object') {
+    const value = data as { message?: unknown; error?: unknown; detail?: unknown };
+    if (typeof value.message === 'string' && value.message.trim()) return value.message;
+    if (typeof value.error === 'string' && value.error.trim()) return value.error;
+    if (typeof value.detail === 'string' && value.detail.trim()) return value.detail;
+  }
+  if (error.status === 400) return `${fallback} Revisa las fechas y huespedes.`;
+  if (error.status === 404) return `${fallback} El contrato publico no esta disponible.`;
+  return fallback;
+}
+
+async function publicRequest<T>(call: () => Promise<T>, fallback: string): Promise<T> {
+  try {
+    return await call();
+  } catch (error) {
+    throw new Error(getHttpErrorMessage(error, fallback));
+  }
+}
+
+function buildRoomTypeFromAvailability(result: PublicAvailabilityResult): RoomType {
+  return toRoomType(
+    toRoomTypeDto({
+      id: result.roomTypeId,
+      code: result.code,
+      name: result.name,
+      capacity: result.capacity,
+      bedConfiguration: result.bedConfiguration,
+      active: true,
+    }),
+  );
 }
 
 export const publicBookingCatalogService = {
   async getRoomTypes(): Promise<RoomType[]> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar los tipos de habitacion.');
-    try {
-      const roomTypes = await httpClient.get<ApiRoomType[]>('/room-types', {
-        auth: { skipAuthorization: true, skipRefresh: true },
-      });
-      return roomTypes.map(toRoomTypeDto).map(toRoomType);
-    } catch (error) {
-      if (isProtectedOrMissingPublicEndpoint(error)) return roomTypesDB.map(toRoomType);
-      throw error;
-    }
+    const roomTypes = await publicRequest(
+      () =>
+        httpClient.get<ApiRoomType[]>('/public/room-types', {
+          auth: { skipAuthorization: true, skipRefresh: true },
+        }),
+      'No fue posible cargar los tipos de habitacion.',
+    );
+    return roomTypes.map(toRoomTypeDto).map(toRoomType);
   },
   async getRates(): Promise<Rate[]> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar las tarifas.');
-    try {
-      const rates = await httpClient.get<ApiRate[]>('/rates', {
-        auth: { skipAuthorization: true, skipRefresh: true },
-      });
-      return rates.map(toRateDto).map(toRate);
-    } catch (error) {
-      if (isProtectedOrMissingPublicEndpoint(error)) return ratesDB.map(toRate);
-      throw error;
-    }
+    const rates = await publicRequest(
+      () =>
+        httpClient.get<ApiRate[]>('/public/rates', {
+          auth: { skipAuthorization: true, skipRefresh: true },
+        }),
+      'No fue posible cargar las tarifas.',
+    );
+    return rates.map(toRateDto).map(toRate);
+  },
+  async getAvailability(filters: {
+    checkIn: string;
+    checkOut: string;
+    adults: number;
+    children?: number;
+    roomTypeId?: string;
+  }): Promise<PublicAvailableRoomType[]> {
+    await simulateLatency();
+    mockUtils.throwIfSimulatingError('No fue posible buscar disponibilidad.');
+    const query = new URLSearchParams({
+      checkIn: filters.checkIn,
+      checkOut: filters.checkOut,
+      adults: String(filters.adults),
+      children: String(filters.children ?? 0),
+    });
+    if (filters.roomTypeId) query.set('roomTypeId', filters.roomTypeId);
+    const response = await publicRequest(
+      () =>
+        httpClient.get<PublicAvailabilityResponse>(`/public/availability?${query.toString()}`, {
+          auth: { skipAuthorization: true, skipRefresh: true },
+        }),
+      'No fue posible buscar disponibilidad.',
+    );
+    return response.results.map((result) => ({
+      roomType: buildRoomTypeFromAvailability(result),
+      availableRooms: result.availableRooms,
+      rate: toRate(toRateDto(result.rate)),
+      totalAmountCents: result.totalAmountCents,
+    }));
   },
   async getRooms(): Promise<Room[]> {
-    await simulateLatency();
-    mockUtils.throwIfSimulatingError('No fue posible cargar las habitaciones.');
-    try {
-      const rooms = await httpClient.get<ApiRoom[]>('/rooms', {
-        auth: { skipAuthorization: true, skipRefresh: true },
-      });
-      return rooms.map(toRoomDto).map(toRoom);
-    } catch (error) {
-      if (isProtectedOrMissingPublicEndpoint(error)) return roomsDB.map(toRoom);
-      throw error;
-    }
+    throw toUnavailableError('La disponibilidad publica por habitaciones');
   },
   async getBookings(): Promise<Booking[]> {
-    await simulateLatency();
-    mockUtils.throwIfSimulatingError('No fue posible cargar las reservas.');
-    try {
-      const bookings = await httpClient.get<ApiBooking[]>('/bookings', {
-        auth: { skipAuthorization: true, skipRefresh: true },
-      });
-      return bookings.map(toBookingDto).map(toBooking);
-    } catch (error) {
-      if (isProtectedOrMissingPublicEndpoint(error)) return bookingsDB.map(toBooking);
-      throw error;
-    }
+    throw toUnavailableError('La disponibilidad publica por reservas');
   },
 };

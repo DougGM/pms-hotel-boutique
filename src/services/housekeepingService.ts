@@ -8,7 +8,6 @@ import type { ID } from '@/shared/types/common';
 import type { RoomHousekeepingStatus, ServiceRequestStatus } from '@/shared/constants/statuses';
 import { HttpError, httpClient } from './http-client';
 import { guestRequest } from './guestHttp';
-import { hydrateCollection, persistCollection } from './mockPersistence';
 
 // INT-09: el turnover (`dirty -> cleaning -> clean -> inspected`) y las tareas
 // stayover viven en `HousekeepingController` del backend. El backend decide si
@@ -64,8 +63,8 @@ export type HousekeepingChecklist = {
   updatedAt: string;
 };
 
-const checklistStorageKey = 'PMS_HOUSEKEEPING_CHECKLISTS';
-const checklists = hydrateCollection<HousekeepingChecklist>(checklistStorageKey, []);
+const checklistUnavailableMessage =
+  'Los checklists de limpieza no tienen contrato backend en develop; no se guardan datos locales.';
 
 function toRoomDto(response: HousekeepingRoomResponse): RoomDto {
   return {
@@ -158,10 +157,7 @@ async function stayoverAction(requestId: ID, action: string, fallback: string) {
 }
 
 function removeChecklist(roomId: ID): void {
-  const index = checklists.findIndex((item) => item.roomId === roomId);
-  if (index < 0) return;
-  checklists.splice(index, 1);
-  persistCollection(checklistStorageKey, checklists);
+  void roomId;
 }
 
 export const housekeepingService = {
@@ -269,25 +265,15 @@ export const housekeepingService = {
     return toServiceRequest(toServiceRequestDto(response));
   },
   async getChecklists(): Promise<HousekeepingChecklist[]> {
-    return checklists.map((item) => ({
-      ...item,
-      items: item.items.map((task) => ({ ...task })),
-    }));
+    throw new Error(checklistUnavailableMessage);
   },
   async saveChecklist(
     roomId: ID,
     items: HousekeepingChecklistItem[],
   ): Promise<HousekeepingChecklist> {
-    const next: HousekeepingChecklist = {
-      roomId,
-      items: items.map((item) => ({ ...item })),
-      updatedAt: new Date().toISOString(),
-    };
-    const index = checklists.findIndex((item) => item.roomId === roomId);
-    if (index >= 0) checklists[index] = next;
-    else checklists.push(next);
-    persistCollection(checklistStorageKey, checklists);
-    return { ...next, items: next.items.map((item) => ({ ...item })) };
+    void roomId;
+    void items;
+    throw new Error(checklistUnavailableMessage);
   },
 };
 

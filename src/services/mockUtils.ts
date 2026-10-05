@@ -14,12 +14,6 @@ function hasUrlErrorFlag(): boolean {
   );
 }
 
-function hasStorageErrorFlag(): boolean {
-  return (
-    typeof localStorage !== 'undefined' && localStorage.getItem('PMS_FORCE_MOCK_ERROR') === 'true'
-  );
-}
-
 /**
  * Una colección ausente en data/db.ts (undefined/null) es un hueco en los
  * datos de prueba, no "no hay datos" — nombra la colección en consola y
@@ -40,7 +34,7 @@ export const mockUtils = {
     forceError = value;
   },
   throwIfSimulatingError(message = 'Error simulado por la capa de servicios'): void {
-    if (forceError || hasUrlErrorFlag() || hasStorageErrorFlag()) throw new Error(message);
+    if (forceError || hasUrlErrorFlag()) throw new Error(message);
   },
 };
 

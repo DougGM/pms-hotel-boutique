@@ -277,8 +277,8 @@ Ningún componente ni pantalla importa `src/data/db.ts` directamente — todo
 pasa por un servicio en `services/`. Cada servicio es `async`, devuelve
 Models (nunca DTOs), simula una latencia de 300 a 600 ms
 (`services/mockUtils.ts`) y puede forzarse a fallar
-(`mockUtils.setForceError(true)`, o `?mockError=true`/`PMS_FORCE_MOCK_ERROR`
-en `localStorage`) para probar el manejo de errores.
+(`mockUtils.setForceError(true)` o `?mockError=true`) para probar el manejo de
+errores sin persistir flags de prueba en el navegador.
 
 `src/data/db.ts` es la única "base de datos" simulada del proyecto: un
 array exportado por entidad (`bookingsDB`, `roomsDB`, `usersDB`, etc.),
@@ -307,16 +307,15 @@ backend real (`/admin/users`, `/admin/roles`, `/admin/permissions`) y persiste
 ediciones de roles con `/admin/roles/{id}` y `/admin/roles/{id}/permissions`.
 
 Nota 2026-10-04 (#101 / INT-03): `guestService` y `bookingService` usan el
-backend para CRUD de huespedes y reservas (`/guests`, `/bookings`). Desde
-INT-13, las llamadas contra backend/UUID propagan errores en vez de volver a
-`src/data/db.ts`; el camino local queda reservado para IDs legacy explicitos
-(`GST-*`, `BKG-*`, `RT-*`). El backend devuelve camelCase; los servicios lo
+backend para CRUD de huespedes y reservas (`/guests`, `/bookings`). Desde el
+corte final INT-13, esos servicios no aceptan IDs legacy (`GST-*`, `BKG-*`,
+`RT-*`) para simular exito local: si el recurso no es UUID de backend, lanzan
+un error controlado. El backend devuelve camelCase; los servicios lo
 normalizan al DTO snake_case interno y despues devuelven Models. INT-04 integra
 las acciones operativas para reservas UUID: asignacion de habitacion via
 `PUT /bookings/{id}`, check-in via `POST /bookings/{id}/check-in`, check-out via
 `POST /bookings/{id}/check-out` y acompanantes via
-`/bookings/{id}/companions`; los IDs legacy `BKG-*` conservan el flujo mock del
-prototipo.
+`/bookings/{id}/companions`.
 `PrivateWorkspace` solo carga reservas y huespedes para `admin`/`reception`,
 que son los roles con permisos `bookings.read`/`guests.read` en este dominio.
 
@@ -343,15 +342,17 @@ Nota 2026-10-04 (#102 / INT-04): para reservas UUID,
 de estado, habitacion y composicion quedan en backend; la sincronizacion corre
 en orden `DELETE` -> `PUT` -> `POST` para no depender del orden de red. En
 reservas legacy `BKG-*` conserva las validaciones locales de campos, capacidad y
-composicion para sostener el prototipo. `CheckInScreen` y `CheckOutScreen`
+composicion para sostener el prototipo. **Obsoleto por #131:** el frontend ya
+no ejecuta ese camino productivo; las pruebas legacy quedaron marcadas como
+historia del corte. `CheckInScreen` y `CheckOutScreen`
 refrescan reserva, folio y habitaciones despues de check-in/check-out para
 reflejar el estado real devuelto por la API.
 
 Nota 2026-10-03 (#103): en folios financieros integrados, un `bookingId` UUID
 nunca debe caer al recalculo local mock. `guestAccountService` consulta el
 saldo oficial desde `GET /bookings/{bookingId}/folio`; las utilidades legacy
-de apertura/cierre/calculo local rechazan UUID y `voidCharge` exige `bookingId`
-cuando el `chargeId` pertenece al backend. Las pantallas de folio deben
+de apertura/cierre/calculo local ahora rechazan cualquier uso productivo y
+`voidCharge` exige `bookingId`. Las pantallas de folio deben
 refrescar ese endpoint despues de una mutacion financiera y no modificar
 `balanceCents` manualmente.
 

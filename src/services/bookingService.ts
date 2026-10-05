@@ -5,17 +5,10 @@ import {
   type CreateBookingDto,
   type UpdateBookingDto,
 } from '@/shared/types/entities/booking';
-import { BOOKING_STATUS_TRANSITIONS, isRoomAssignable } from '@/shared/constants/statuses';
-import { toDomainCalendarDate, type ID } from '@/shared/types/common';
-import { calculateNights } from '@/shared/utils/date';
-import { validateBookingCapacity } from '@/shared/utils/bookingCapacity';
-import { bookingsDB, ratesDB, roomsDB, roomTypesDB } from '@/data/db';
-import { closeAccountForCheckout, openOrSyncAccountForBooking } from './guestAccountService';
+import type { ID } from '@/shared/types/common';
 import { mockUtils, simulateLatency } from './mockUtils';
-import { hydrateCollection, persistCollection } from './mockPersistence';
 import { HttpError, httpClient } from './http-client';
 
-const bookingsStorageKey = 'pms.bookings';
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 type ApiBooking = {
@@ -62,40 +55,6 @@ type ApiCheckInResponse = {
 const nowIso = () => new Date().toISOString();
 const isHttpNotFound = (error: unknown): boolean =>
   error instanceof HttpError && error.status === 404;
-
-function getBookingsCollection() {
-  return hydrateCollection(bookingsStorageKey, bookingsDB);
-}
-
-function assertBookingExists(id: ID): BookingDto {
-  const booking = getBookingsCollection().find((item) => item.id === id);
-  if (!booking) throw new Error(`No existe la reserva ${id}.`);
-  return booking;
-}
-
-function assertBookingCapacity(data: Pick<BookingDto, 'room_type_id' | 'adults' | 'children'>) {
-  const roomType = roomTypesDB.find((item) => item.id === data.room_type_id);
-  if (!roomType && isUuid(data.room_type_id)) return;
-  if (!roomType) throw new Error(`No existe el tipo de habitacion ${data.room_type_id}.`);
-
-  const message = validateBookingCapacity({
-    adults: data.adults,
-    children: data.children,
-    capacity: roomType.capacity,
-    roomTypeName: roomType.name,
-  });
-  if (message) throw new Error(message);
-}
-
-function toDomainStatus(status: BookingDto['status']): Booking['status'] {
-  return status === 'checked_in'
-    ? 'checkedIn'
-    : status === 'checked_out'
-      ? 'checkedOut'
-      : status === 'no_show'
-        ? 'noShow'
-        : status;
-}
 
 function toDtoStatus(status: Booking['status']): BookingDto['status'] {
   return status === 'checkedIn'
@@ -190,43 +149,10 @@ function isUuid(value: ID): boolean {
   return UUID_PATTERN.test(value);
 }
 
-function transitionBooking(booking: BookingDto, nextStatus: Booking['status']): Booking {
-  const currentStatus = toDomainStatus(booking.status);
-  if (!BOOKING_STATUS_TRANSITIONS[currentStatus].includes(nextStatus)) {
-    throw new Error(`Transicion invalida de reserva: ${currentStatus} -> ${nextStatus}.`);
+function assertBackendId(id: ID, operation: string): void {
+  if (!isUuid(id)) {
+    throw new Error(`${operation} requiere una reserva integrada con backend real.`);
   }
-
-  booking.status = toDtoStatus(nextStatus);
-  booking.updated_at = new Date().toISOString();
-  persistCollection(bookingsStorageKey, getBookingsCollection());
-  return toBooking(booking);
-}
-
-function createLocalBooking(data: CreateBookingDto): Booking {
-  assertBookingCapacity(data);
-
-  const collection = getBookingsCollection();
-  const now = new Date().toISOString();
-  const rate = data.rate_id ? ratesDB.find((item) => item.id === data.rate_id) : undefined;
-  const sequence = collection.length + 1;
-  const totalAmountCents = rate
-    ? rate.price_cents *
-      calculateNights(toDomainCalendarDate(data.check_in), toDomainCalendarDate(data.check_out))
-    : 0;
-  const booking = {
-    ...data,
-    id: `booking-${sequence}`,
-    confirmation_code: `PMS-${String(sequence).padStart(4, '0')}`,
-    guest_link_code: `LNK-${String(sequence).padStart(4, '0')}`,
-    status: 'pending' as const,
-    total_amount_cents: totalAmountCents,
-    currency: 'GTQ' as const,
-    created_at: now,
-    updated_at: now,
-  };
-  collection.push(booking);
-  persistCollection(bookingsStorageKey, collection);
-  return toBooking(booking);
 }
 
 export const bookingService = {
@@ -242,10 +168,7 @@ export const bookingService = {
   async getBookingById(id: ID): Promise<Booking | undefined> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar la reserva.');
-    if (!isUuid(id)) {
-      const booking = getBookingsCollection().find((item) => item.id === id);
-      return booking ? toBooking(booking) : undefined;
-    }
+    assertBackendId(id, 'La consulta de reserva');
 
     try {
       const booking = await httpClient.get<ApiBooking>(`/bookings/${id}`);
@@ -258,10 +181,8 @@ export const bookingService = {
   async createBooking(data: CreateBookingDto): Promise<Booking> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible crear la reserva.');
-    assertBookingCapacity(data);
-
     if (!isUuid(data.guest_id) || !isUuid(data.room_type_id)) {
-      return createLocalBooking(data);
+      throw new Error('Crear reservas requiere huesped y tipo de habitacion del backend real.');
     }
 
     const booking = await request(
@@ -273,140 +194,74 @@ export const bookingService = {
   async checkIn(bookingId: ID): Promise<Booking> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible hacer check-in.');
+    assertBackendId(bookingId, 'El check-in');
 
-    if (isUuid(bookingId)) {
-      await request(
-        () => httpClient.post<ApiCheckInResponse>(`/bookings/${bookingId}/check-in`),
-        'No fue posible hacer check-in.',
-      );
-      const booking = await request(
-        () => httpClient.get<ApiBooking>(`/bookings/${bookingId}`),
-        'No fue posible cargar la reserva actualizada despues del check-in.',
-      );
-      return toBooking(toBookingDto(booking));
-    }
-
-    const booking = assertBookingExists(bookingId);
-    const currentStatus = toDomainStatus(booking.status);
-    if (!BOOKING_STATUS_TRANSITIONS[currentStatus].includes('checkedIn')) {
-      throw new Error(`Transicion invalida de reserva: ${currentStatus} -> checkedIn.`);
-    }
-
-    openOrSyncAccountForBooking(booking);
-    if (booking.room_id) {
-      const room = roomsDB.find((item) => item.id === booking.room_id);
-      if (room) {
-        room.status = 'occupied';
-        room.updated_at = new Date().toISOString();
-      }
-    }
-    return transitionBooking(booking, 'checkedIn');
+    await request(
+      () => httpClient.post<ApiCheckInResponse>(`/bookings/${bookingId}/check-in`),
+      'No fue posible hacer check-in.',
+    );
+    const booking = await request(
+      () => httpClient.get<ApiBooking>(`/bookings/${bookingId}`),
+      'No fue posible cargar la reserva actualizada despues del check-in.',
+    );
+    return toBooking(toBookingDto(booking));
   },
   async checkOut(bookingId: ID): Promise<Booking> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible hacer check-out.');
+    assertBackendId(bookingId, 'El check-out');
 
-    if (isUuid(bookingId)) {
-      const booking = await request(
-        () => httpClient.post<ApiBooking>(`/bookings/${bookingId}/check-out`),
-        'No fue posible hacer check-out.',
-      );
-      return toBooking(toBookingDto(booking));
-    }
-
-    const booking = assertBookingExists(bookingId);
-    closeAccountForCheckout(booking);
-    const checkedOut = transitionBooking(booking, 'checkedOut');
-
-    if (booking.room_id) {
-      const room = roomsDB.find((item) => item.id === booking.room_id);
-      if (room) {
-        room.status = 'available';
-        room.housekeeping_status = 'dirty';
-        room.updated_at = new Date().toISOString();
-      }
-    }
-
-    return checkedOut;
+    const booking = await request(
+      () => httpClient.post<ApiBooking>(`/bookings/${bookingId}/check-out`),
+      'No fue posible hacer check-out.',
+    );
+    return toBooking(toBookingDto(booking));
   },
   async updateBooking(id: ID, data: UpdateBookingDto): Promise<Booking> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible actualizar la reserva.');
+    assertBackendId(id, 'La actualizacion de reserva');
 
-    if (isUuid(id)) {
-      const booking = await request(
-        () => httpClient.put<ApiBooking>(`/bookings/${id}`, toBookingRequest(data)),
-        'No fue posible actualizar la reserva.',
-      );
-      return toBooking(toBookingDto(booking));
-    }
-
-    const booking = assertBookingExists(id);
-    const nextBooking = { ...booking, ...data };
-    assertBookingCapacity(nextBooking);
-    Object.assign(booking, data);
-
-    if (data.rate_id !== undefined || data.check_in !== undefined || data.check_out !== undefined) {
-      const rate = booking.rate_id
-        ? ratesDB.find((item) => item.id === booking.rate_id)
-        : undefined;
-      booking.total_amount_cents = rate
-        ? rate.price_cents *
-          calculateNights(
-            toDomainCalendarDate(booking.check_in),
-            toDomainCalendarDate(booking.check_out),
-          )
-        : booking.total_amount_cents;
-    }
-
-    booking.updated_at = new Date().toISOString();
-    persistCollection(bookingsStorageKey, getBookingsCollection());
-    return toBooking(booking);
+    const booking = await request(
+      () => httpClient.put<ApiBooking>(`/bookings/${id}`, toBookingRequest(data)),
+      'No fue posible actualizar la reserva.',
+    );
+    return toBooking(toBookingDto(booking));
   },
   async confirmBooking(bookingId: ID): Promise<Booking> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible confirmar la reserva.');
-    return transitionBooking(assertBookingExists(bookingId), 'confirmed');
+    assertBackendId(bookingId, 'La confirmacion de reserva');
+
+    const booking = await request(
+      () => httpClient.post<ApiBooking>(`/bookings/${bookingId}/confirm`),
+      'No fue posible confirmar la reserva.',
+    );
+    return toBooking(toBookingDto(booking));
   },
   async cancelBooking(bookingId: ID, reason: string): Promise<Booking> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cancelar la reserva.');
-
+    assertBackendId(bookingId, 'La cancelacion de reserva');
     if (!reason.trim()) throw new Error('Se requiere un motivo para cancelar la reserva.');
 
-    const booking = assertBookingExists(bookingId);
-    transitionBooking(booking, 'cancelled');
-    booking.notes = booking.notes
-      ? `${booking.notes}\nCancelada: ${reason.trim()}`
-      : `Cancelada: ${reason.trim()}`;
-    persistCollection(bookingsStorageKey, getBookingsCollection());
-    return toBooking(booking);
+    const booking = await request(
+      () => httpClient.post<ApiBooking>(`/bookings/${bookingId}/cancel`, { reason: reason.trim() }),
+      'No fue posible cancelar la reserva.',
+    );
+    return toBooking(toBookingDto(booking));
   },
   async assignRoom(bookingId: ID, roomId: ID): Promise<Booking> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible asignar la habitacion.');
+    assertBackendId(bookingId, 'La asignacion de habitacion');
+    if (!isUuid(roomId)) throw new Error('La asignacion requiere una habitacion del backend real.');
 
-    if (isUuid(bookingId)) {
-      const booking = await request(
-        () => httpClient.put<ApiBooking>(`/bookings/${bookingId}`, { roomId }),
-        'No fue posible asignar la habitacion.',
-      );
-      return toBooking(toBookingDto(booking));
-    }
-
-    const booking = assertBookingExists(bookingId);
-    const room = roomsDB.find((item) => item.id === roomId);
-    if (!room) throw new Error(`No existe la habitacion ${roomId}.`);
-
-    const status = room.status === 'out_of_service' ? 'outOfService' : room.status;
-    if (!isRoomAssignable({ status, housekeepingStatus: room.housekeeping_status })) {
-      throw new Error(`La habitacion ${roomId} no esta disponible para asignacion.`);
-    }
-
-    booking.room_id = roomId;
-    booking.updated_at = new Date().toISOString();
-    persistCollection(bookingsStorageKey, getBookingsCollection());
-    return toBooking(booking);
+    const booking = await request(
+      () => httpClient.put<ApiBooking>(`/bookings/${bookingId}`, { roomId }),
+      'No fue posible asignar la habitacion.',
+    );
+    return toBooking(toBookingDto(booking));
   },
 };
 export default bookingService;
