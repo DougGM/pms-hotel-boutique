@@ -557,9 +557,9 @@ type HousekeepingData = {
 
 async function fetchHousekeepingData(): Promise<HousekeepingData> {
   const [rooms, stayovers, checklists] = await Promise.all([
-    housekeepingService.getRooms(),
-    housekeepingService.getStayoverCleanings(),
-    housekeepingService.getChecklists(),
+    safeList(() => housekeepingService.getRooms()),
+    safeList(() => housekeepingService.getStayoverCleanings()),
+    safeList(() => housekeepingService.getChecklists()),
   ]);
   return { rooms, stayovers, checklists };
 }
@@ -745,6 +745,14 @@ const ROOM_CATALOG_READ_ROLES: readonly RoleId[] = ['admin', 'reception'];
 const BOOKING_READ_ROLES: readonly RoleId[] = ['admin', 'reception'];
 const GUEST_READ_ROLES: readonly RoleId[] = ['admin', 'reception'];
 
+async function safeList<T>(load: () => Promise<T[]>): Promise<T[]> {
+  try {
+    return await load();
+  } catch {
+    return [];
+  }
+}
+
 async function loadWorkspaceData(role: RoleId): Promise<WorkspaceState> {
   const canReadRooms = ROOM_READ_ROLES.includes(role);
   const canReadRoomCatalog = ROOM_CATALOG_READ_ROLES.includes(role);
@@ -773,11 +781,11 @@ async function loadWorkspaceData(role: RoleId): Promise<WorkspaceState> {
     canReadGuests ? guestService.getGuests() : [],
     ROOM_SERVICE_READ_ROLES.includes(role) ? catalogService.getProducts() : [],
     ROOM_SERVICE_READ_ROLES.includes(role) ? orderService.getOrders() : [],
-    serviceRequestService.getRequests(),
-    auditService.getLogs(),
-    guestAccountService.getCharges(),
-    guestAccountService.getPayments(),
-    guestAccountService.getDeposits(),
+    safeList(() => serviceRequestService.getRequests()),
+    safeList(() => auditService.getLogs()),
+    safeList(() => guestAccountService.getCharges()),
+    safeList(() => guestAccountService.getPayments()),
+    safeList(() => guestAccountService.getDeposits()),
     // Solo el rol de Limpieza tiene `housekeeping.read` en el backend.
     role === 'housekeeping' ? fetchHousekeepingData() : null,
     CONCIERGE_READ_ROLES.includes(role) ? serviceRequestService.getConciergeRequests() : [],

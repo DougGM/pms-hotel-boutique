@@ -7,12 +7,9 @@ import {
   type UpdateGuestDto,
 } from '@/shared/types/entities/guest';
 import type { ID } from '@/shared/types/common';
-import { guestsDB } from '@/data/db';
 import { mockUtils, simulateLatency } from './mockUtils';
-import { hydrateCollection, persistCollection } from './mockPersistence';
 import { HttpError, httpClient } from './http-client';
 
-const guestsStorageKey = 'pms.guests';
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 type ApiGuest = {
@@ -35,8 +32,10 @@ function isUuid(value: ID): boolean {
   return UUID_PATTERN.test(value);
 }
 
-function getGuestsCollection() {
-  return hydrateCollection(guestsStorageKey, guestsDB);
+function assertBackendId(id: ID, operation: string): void {
+  if (!isUuid(id)) {
+    throw new Error(`${operation} requiere un huesped integrado con backend real.`);
+  }
 }
 
 function toGuestDto(api: ApiGuest): GuestDto {
@@ -112,10 +111,7 @@ export const guestService = {
   async getGuestById(id: ID): Promise<Guest | undefined> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar el huesped.');
-    if (!isUuid(id)) {
-      const guest = getGuestsCollection().find((item) => item.id === id);
-      return guest ? toGuest(guest) : undefined;
-    }
+    assertBackendId(id, 'La consulta de huesped');
 
     try {
       const guest = await httpClient.get<ApiGuest>(`/guests/${id}`);
@@ -137,21 +133,13 @@ export const guestService = {
   async updateGuest(id: ID, data: UpdateGuestDto): Promise<Guest> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible actualizar el huesped.');
+    assertBackendId(id, 'La actualizacion de huesped');
 
-    if (isUuid(id)) {
-      const guest = await request(
-        () => httpClient.put<ApiGuest>(`/guests/${id}`, toGuestRequest(data)),
-        'No fue posible actualizar el huesped.',
-      );
-      return toGuest(toGuestDto(guest));
-    }
-
-    const guest = getGuestsCollection().find((item) => item.id === id);
-    if (!guest) throw new Error(`No existe el huesped ${id}.`);
-
-    Object.assign(guest, data, { updated_at: new Date().toISOString() });
-    persistCollection(guestsStorageKey, getGuestsCollection());
-    return toGuest(guest);
+    const guest = await request(
+      () => httpClient.put<ApiGuest>(`/guests/${id}`, toGuestRequest(data)),
+      'No fue posible actualizar el huesped.',
+    );
+    return toGuest(toGuestDto(guest));
   },
 };
 export default guestService;

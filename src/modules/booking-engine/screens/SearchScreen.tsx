@@ -19,10 +19,7 @@ import { publicBookingCatalogService } from '@/services/publicBookingCatalogServ
 import { EmptyState } from '@/shared/components/EmptyState';
 import { ErrorState } from '@/shared/components/ErrorState';
 import { LoadingState } from '@/shared/components/LoadingState';
-import { BOOKING_STATUS_TRANSITIONS } from '@/shared/constants/statuses';
-import type { Booking } from '@/shared/types/entities/booking';
 import type { Rate } from '@/shared/types/entities/rate';
-import type { Room } from '@/shared/types/entities/room';
 import type { RoomType } from '@/shared/types/entities/room-type';
 import { formatCurrency } from '@/shared/utils/currency';
 import { calculateNights, formatDateGT } from '@/shared/utils/date';
@@ -35,6 +32,7 @@ type ShowcaseStatus = 'loading' | 'success' | 'error';
 type AvailableRoomType = {
   roomType: RoomType;
   availableRooms: number;
+  rate?: Rate;
 };
 
 const amenities = [
@@ -153,16 +151,6 @@ function parseDateKey(value: string | null): Date | null {
   return date;
 }
 
-function staysOverlap(
-  left: { checkIn: Date; checkOut: Date },
-  right: { checkIn: Date; checkOut: Date },
-): boolean {
-  return (
-    dateKey(left.checkIn) < dateKey(right.checkOut) &&
-    dateKey(left.checkOut) > dateKey(right.checkIn)
-  );
-}
-
 function isCompleteStayRange(range: DateRangeValue): range is { start: Date; end: Date } {
   if (!range.start || !range.end) return false;
   try {
@@ -172,62 +160,17 @@ function isCompleteStayRange(range: DateRangeValue): range is { start: Date; end
   }
 }
 
-function countAvailableRooms({
-  roomTypeId,
-  rooms,
-  bookings,
-  range,
-}: {
-  roomTypeId: string;
-  rooms: Room[];
-  bookings: Booking[];
-  range: { start: Date; end: Date };
-}): number {
-  const assignableRooms = rooms.filter(
-    (room) => room.roomTypeId === roomTypeId && room.isAssignable,
-  );
-  const blockingBookings = bookings.filter(
-    (booking) =>
-      booking.roomTypeId === roomTypeId &&
-      BOOKING_STATUS_TRANSITIONS[booking.status].length > 0 &&
-      staysOverlap(
-        { checkIn: range.start, checkOut: range.end },
-        { checkIn: booking.checkIn, checkOut: booking.checkOut },
-      ),
-  );
-
-  return Math.max(0, assignableRooms.length - blockingBookings.length);
-}
-
-function buildAvailableRoomTypes({
-  roomTypes,
-  rooms,
-  bookings,
-  range,
-}: {
-  roomTypes: RoomType[];
-  rooms: Room[];
-  bookings: Booking[];
-  range: { start: Date; end: Date };
-}): AvailableRoomType[] {
-  return roomTypes
-    .filter((roomType) => roomType.active)
-    .map((roomType) => ({
-      roomType,
-      availableRooms: countAvailableRooms({
-        roomTypeId: roomType.id,
-        rooms,
-        bookings,
-        range,
-      }),
-    }))
-    .filter((result) => result.availableRooms > 0);
-}
-
 function findLowestRate(rates: Rate[], roomTypeId: string): Rate | undefined {
   return rates
     .filter((rate) => rate.active && rate.roomTypeId === roomTypeId)
     .sort((left, right) => left.priceCents - right.priceCents)[0];
+}
+
+function parseGuests(value: string): { adults: number; children: number } {
+  if (value === '1 adulto') return { adults: 1, children: 0 };
+  if (value === '2 adultos - 1 niño') return { adults: 2, children: 1 };
+  if (value === '4 huéspedes') return { adults: 2, children: 2 };
+  return { adults: 2, children: 0 };
 }
 
 export function SearchScreen() {
@@ -292,17 +235,12 @@ export function SearchScreen() {
     setHasSearched(true);
 
     try {
-      const [roomTypes, rooms, bookings] = await Promise.all([
-        publicBookingCatalogService.getRoomTypes(),
-        publicBookingCatalogService.getRooms(),
-        publicBookingCatalogService.getBookings(),
-      ]);
-
-      const availableRoomTypes = buildAvailableRoomTypes({
-        roomTypes,
-        rooms,
-        bookings,
-        range,
+      const guestCounts = parseGuests(guests);
+      const availableRoomTypes = await publicBookingCatalogService.getAvailability({
+        checkIn: dateKey(range.start),
+        checkOut: dateKey(range.end),
+        adults: guestCounts.adults,
+        children: guestCounts.children,
       });
 
       setResults(availableRoomTypes);
@@ -312,12 +250,12 @@ export function SearchScreen() {
       setError(cause instanceof Error ? cause.message : 'No fue posible buscar disponibilidad.');
       setStatus('error');
     }
-  }, [range, setSearchParams]);
+  }, [guests, range, setSearchParams]);
 
   const nights = isCompleteStayRange(range) ? calculateNights(range.start, range.end) : 0;
   const roomCards = hasSearched
-    ? results.map(({ roomType, availableRooms }) => ({ roomType, availableRooms }))
-    : roomTypes.map((roomType) => ({ roomType, availableRooms: undefined }));
+    ? results
+    : roomTypes.map((roomType) => ({ roomType, availableRooms: undefined, rate: undefined }));
   const publicTab = ['amenidades', 'promociones', 'politicas'].includes(
     location.hash.replace('#', ''),
   )
@@ -486,8 +424,8 @@ export function SearchScreen() {
 
             {showcaseStatus === 'success' && roomCards.length > 0 ? (
               <div className="room-cards">
-                {roomCards.map(({ roomType, availableRooms }, index) => {
-                  const rate = findLowestRate(rates, roomType.id);
+                {roomCards.map(({ roomType, availableRooms, rate }, index) => {
+                  const displayRate = rate ?? findLowestRate(rates, roomType.id);
                   const detailUrl = isCompleteStayRange(range)
                     ? `/rooms/${roomType.id}?checkIn=${dateKey(range.start)}&checkOut=${dateKey(range.end)}`
                     : `/rooms/${roomType.id}`;
@@ -520,7 +458,9 @@ export function SearchScreen() {
                         <div className="room-price">
                           <small>Desde</small>
                           <strong>
-                            {rate ? formatCurrency(rate.priceCents, rate.currency) : 'Consultar'}
+                            {displayRate
+                              ? formatCurrency(displayRate.priceCents, displayRate.currency)
+                              : 'Consultar'}
                           </strong>
                           <span>por noche</span>
                         </div>

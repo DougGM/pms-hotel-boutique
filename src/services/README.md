@@ -90,8 +90,8 @@ Desde INT-04, cuando el `bookingId` es UUID, esos mismos metodos de
 acompanantes consumen las rutas reales de `BookingCompanionController`
 (`GET`/`POST /bookings/{bookingId}/companions`,
 `PUT`/`DELETE /bookings/{bookingId}/companions/{companionId}`) y delegan al
-backend las reglas de estado, habitacion y composicion. Las validaciones locales
-quedan para reservas legacy `BKG-*`. La sincronizacion integrada se ejecuta en
+backend las reglas de estado, habitacion y composicion. Desde #131, las reservas
+legacy `BKG-*` ya no simulan guardado productivo. La sincronizacion integrada se ejecuta en
 orden (`DELETE`, luego `PUT`, luego `POST`) para evitar carreras contra las
 validaciones de composicion del backend.
 
@@ -112,8 +112,9 @@ Actualizacion 2026-10-02 (#103): cuando el `bookingId` pertenece al backend
 real (UUID), `guestAccountService` usa `GuestFolioController`,
 `PaymentController` y `DepositController` mediante `http-client.ts` para folio,
 cargos, anulaciones, pagos, depositos, aplicacion y reembolso. Los IDs mock
-legacy (`BKG-*`) siguen usando la persistencia simulada y no son fuente oficial
-para flujos backend.
+legacy (`BKG-*`) ya no usan persistencia simulada productiva; el servicio
+responde con error controlado si una pantalla intenta operar folios sin UUID de
+backend.
 Actualizacion 2026-10-03 (#103): las utilidades legacy
 `openOrSyncAccountForBooking`, `closeAccountForCheckout` y
 `calculateAccountBalanceCents` rechazan reservas UUID para evitar que un flujo
@@ -135,14 +136,13 @@ propaga para mostrar el estado real de integracion.
 
 `guestService.createGuest(data)` y `guestService.updateGuest(id, data)` envian
 `POST /guests` y `PUT /guests/{id}` con camelCase (`firstName`,
-`documentNumber`, etc.). El camino local queda limitado a operaciones legacy
-explicitamente invocadas sobre IDs `GST-*`.
+`documentNumber`, etc.). IDs legacy `GST-*` se rechazan con error controlado.
 
 `bookingService.createBooking(data)` y `bookingService.updateBooking(id, data)`
 envian `POST /bookings` y `PUT /bookings/{id}` con camelCase cuando la reserva
 usa IDs UUID de backend (`guestId`, `roomTypeId`, `checkIn`, etc.). Las reservas
-legacy `BKG-*` y las creaciones con catalogos mock `RT-*` conservan el prototipo
-local para las pruebas de reglas historicas.
+legacy `BKG-*` y las creaciones con catalogos mock `RT-*` ya no conservan el
+prototipo local productivo.
 
 Actualizacion 2026-10-04 (#102 / INT-04): para reservas UUID,
 `bookingService.assignRoom` usa `PUT /bookings/{id}` con `roomId`,
@@ -173,14 +173,13 @@ Actualizacion 2026-09-22 (#73): las operaciones de Limpieza que antes vivian
 solo en estado React pasaron a servicios persistibles. Desde INT-02,
 `roomService.updateRoom()` envia cambios de `housekeeping_status` al backend de
 habitaciones; `serviceRequestService` crea reportes de desperfectos
-(`maintenance`) y cambia estados de solicitudes en
-`PMS_SERVICE_REQUESTS_DB`. Los handlers del workspace esperan estos metodos
+(`maintenance`) y solicitudes generales en `/service-requests`. Los handlers del workspace esperan estos metodos
 antes de mostrar mensajes de exito, por lo que un error conserva el estado
 anterior visible. Desde INT-09 el turnover, las tareas stayover y el historial
 de Limpieza salen del backend — ver "Integracion con INT-09".
-Los reportes de desperfectos se asocian solo a una reserva real confirmada o
-en check-in para la habitacion; si no existe, el servicio rechaza la operacion
-en vez de crear un `booking_id` ficticio.
+Los reportes de desperfectos ya no buscan reservas en `src/data/db.ts`; envian
+`roomId`, `type: maintenance`, descripcion y notas al backend, que decide
+permisos y estado.
 
 Actualizacion 2026-09-22 (#74): Room Service y Conserjeria ya no dependen de
 `setState` para aceptar, rechazar, cancelar, observar o completar. Los pedidos
@@ -190,9 +189,9 @@ el folio abierto con `guestAccountService.createCharge()` y guardan su
 `charge_id`. Si el caller envia un `createdByUserId` operativo real, el cargo
 lo conserva; si no, queda como cargo automatico sin inventar usuario creador.
 Reintentar `delivered` conserva el mismo cargo; `rejected` y `cancelled` no
-crean cargos. Conserjeria usa
-`serviceRequestService.updateRequestStatus()` y `updateRequestNotes()` sobre
-`PMS_SERVICE_REQUESTS_DB` para conservar estados, motivos y observaciones.
+crean cargos. Conserjeria usa los endpoints reales de
+`ConciergeRequestController`; la persistencia mock local quedo fuera del flujo
+productivo.
 
 Actualizacion 2026-09-29 (#87): los botones `Actualizar` de Menu/Historial de
 Room Service y de Historial de Conserjeria recargan datos desde los servicios
@@ -226,9 +225,6 @@ responsable operativo lo define el backend desde la sesion autenticada.
 1. En código: `mockUtils.setForceError(true)` y, al terminar la prueba,
    `mockUtils.setForceError(false)`.
 2. En la URL: agrega `?mockError=true` a la ruta actual.
-3. En el navegador: ejecuta
-   `localStorage.setItem('PMS_FORCE_MOCK_ERROR', 'true')` y elimínalo con
-   `localStorage.removeItem('PMS_FORCE_MOCK_ERROR')`.
 
 Todas las operaciones esperan entre 300 y 600 ms por defecto. Para pruebas
 unitarias se puede usar `simulateLatency(0, 0)` directamente.
@@ -330,8 +326,8 @@ Huespedes y reservas ya no dependen exclusivamente de `src/data/db.ts`:
 
 INT-13 elimina el fallback automatico de esos endpoints: `GET/POST/PUT` contra
 UUID/backend debe responder desde la API real o fallar. El acceso a datos mock
-queda solo para IDs legacy explicitos (`GST-*`, `BKG-*`, `RT-*`) que sostienen
-pruebas y prototipo local mientras existan.
+queda cerrado para servicios integrados: IDs legacy (`GST-*`, `BKG-*`, `RT-*`)
+producen errores controlados en lugar de persistencia mock.
 
 `PrivateWorkspace` carga `bookings` y `guests` solo para roles con permisos de
 ese dominio (`admin` y `reception`). Roles como Limpieza, Room Service y
@@ -467,9 +463,8 @@ Reglas:
   mas las tareas stayover completadas.
 - Un `cancelled` de stayover se representa como `rejected`, igual que el resto
   del contrato `service_request` del frontend.
-- El checklist es una ayuda visual sin contrato backend: vive en
-  `PMS_HOUSEKEEPING_CHECKLISTS` de este navegador y se descarta al iniciar un
-  turnover nuevo.
+- El checklist no tiene contrato backend en `develop`; `getChecklists` y
+  `saveChecklist` devuelven error controlado y no escriben en `localStorage`.
 - El workspace solo consulta Limpieza para el rol `housekeeping`; los demas
   roles no tienen `housekeeping.read` y recibirian `403`.
 
@@ -526,8 +521,9 @@ ready -> on_the_way -> delivered`; se cancela hasta `ready`; `pending`
 - `updateConciergeRequestStatus(id, status, { notes?, responsibleUserId? })` →
   `POST /concierge/requests/{id}/status`.
 
-Siguen en mock: `getRequests` (tareas y desperfectos del workspace) y
-`createMaintenanceReport` (via `createRequest`; sin endpoint de mantenimiento).
+`getRequests`, `getRequestById`, `createRequest` y `createMaintenanceReport`
+usan `ServiceRequestController` (`/service-requests`). `createMaintenanceReport`
+envia `type: maintenance`; no usa `src/data/db.ts`.
 Desde INT-12 el portal del huesped usa los metodos `*Guest*` y se eliminaron
 `cancelRequest` y `getRequestsByGuestId`. Se eliminaron `updateRequestStatus`, `updateRequestNotes` y
 `updateRequestType`, que solo usaba Conserjeria.
