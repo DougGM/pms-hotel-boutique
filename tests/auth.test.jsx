@@ -150,6 +150,99 @@ const apiBookings = [
   },
 ];
 
+const apiRoles = [
+  {
+    id: '60000000-0000-4000-8000-000000000001',
+    code: 'ADMIN',
+    name: 'Administrador',
+    active: true,
+    permissions: ['bookings.read', 'rooms.write', 'cash.read'],
+  },
+  {
+    id: '60000000-0000-4000-8000-000000000002',
+    code: 'HOUSEKEEPING',
+    name: 'Limpieza',
+    active: true,
+    permissions: ['housekeeping.read'],
+  },
+];
+
+const apiUsers = Object.keys(accounts)
+  .filter((email) => email !== 'huesped@hotelboutique.test')
+  .map((email, index) => ({
+    id: `70000000-0000-4000-8000-00000000000${index + 1}`,
+    firstName: email.split('@')[0],
+    lastName: 'Prueba',
+    email,
+    roleCode: accounts[email][0].replace('ROLE_', ''),
+    status: 'active',
+    createdAt: API_NOW,
+    updatedAt: API_NOW,
+  }));
+
+const apiProducts = [
+  {
+    id: '80000000-0000-4000-8000-000000000001',
+    sku: 'CAFE',
+    name: 'Café',
+    description: 'Café de cortesía',
+    category: 'food_and_beverage',
+    priceCents: 2500,
+    currency: 'GTQ',
+    active: true,
+    createdAt: API_NOW,
+    updatedAt: API_NOW,
+  },
+];
+
+const apiAmenities = [
+  {
+    id: '90000000-0000-4000-8000-000000000001',
+    name: 'Spa',
+    description: 'Spa del hotel',
+    category: 'wellness',
+    location: 'Nivel 1',
+    opensAt: '09:00',
+    closesAt: '18:00',
+    active: true,
+    createdAt: API_NOW,
+    updatedAt: API_NOW,
+  },
+];
+
+const apiInventoryItems = [
+  {
+    id: 'a0000000-0000-4000-8000-000000000001',
+    sku: 'INV-CAFE',
+    name: 'Café',
+    description: 'Inventario de café',
+    category: 'room_service',
+    unit: 'unit',
+    currentQuantity: 12,
+    minimumQuantity: 4,
+    lowStock: false,
+    productId: apiProducts[0].id,
+    active: true,
+    createdAt: API_NOW,
+    updatedAt: API_NOW,
+  },
+];
+
+const apiPromotions = [
+  {
+    id: 'b0000000-0000-4000-8000-000000000001',
+    code: 'AUTH10',
+    name: 'Auth 10',
+    description: 'Promoción de prueba',
+    discountPercent: 10,
+    validFrom: '2026-10-01',
+    validTo: '2026-10-31',
+    active: true,
+    createdAt: API_NOW,
+    updatedAt: API_NOW,
+  },
+];
+
 function guestJwt(expiresIn) {
   const now = Math.floor(Date.now() / 1000);
   return [
@@ -283,7 +376,18 @@ function installFetch() {
       return json(path === '/api/v1/housekeeping/rooms' ? apiRooms : []);
     }
     // El workspace de Room Service carga catálogo y pedidos desde el backend (INT-10).
-    if (path === '/api/v1/room-service/products' || path === '/api/v1/room-service/orders') {
+    if (path === '/api/v1/room-service/products') return json(apiProducts);
+    if (path === '/api/v1/room-service/orders') {
+      return json([]);
+    }
+    if (path === '/api/v1/admin/audit-logs') return json([]);
+    if (path === '/api/v1/admin/users') return json(apiUsers);
+    if (path === '/api/v1/admin/roles') return json(apiRoles);
+    if (path === '/api/v1/admin/promotions') return json(apiPromotions);
+    if (path === '/api/v1/admin/amenities') return json(apiAmenities);
+    if (path === '/api/v1/admin/room-service/products') return json(apiProducts);
+    if (path === '/api/v1/inventory/items') return json(apiInventoryItems);
+    if (path.startsWith('/api/v1/inventory/items/') && path.endsWith('/movements')) {
       return json([]);
     }
     // El workspace de Conserjería carga sus solicitudes desde el backend (INT-11).

@@ -218,6 +218,7 @@ function installHousekeepingBackend() {
     const path = new URL(String(input)).pathname.replace(/^\/api\/v1/, '');
     const method = init.method ?? 'GET';
     state.requests.push(`${method} ${path}`);
+    if (method === 'GET' && path === '/admin/audit-logs') return json([]);
     if (method === 'GET' && path === '/rooms') return json(state.rooms);
     if (path === '/room-types' || path === '/room-features') return json({ status: 403 }, 403);
     // El rol housekeeping no tiene `room-service.read`: el backend real responde 403.
@@ -489,6 +490,7 @@ function installRoomServiceBackend() {
     const method = init.method ?? 'GET';
     const body = init.body ? JSON.parse(String(init.body)) : undefined;
     state.requests.push({ call: `${method} ${path}`, body });
+    if (method === 'GET' && path === '/admin/audit-logs') return json([]);
     if (method === 'GET' && path === '/rooms') return json({ status: 403 }, 403);
     if (method === 'GET' && path === '/room-service/products') return json([]);
     if (method === 'GET' && path === '/room-service/orders') return json(state.orders);
@@ -623,6 +625,7 @@ function installConciergeBackend(initialStatus) {
     const method = init.method ?? 'GET';
     const body = init.body ? JSON.parse(String(init.body)) : undefined;
     state.calls.push({ call: `${method} ${path}`, body });
+    if (method === 'GET' && path === '/admin/audit-logs') return json([]);
     if (method === 'GET' && path === '/concierge/requests') return json(state.requests);
     const match = path.match(/^\/concierge\/requests\/([^/]+)(\/status)?$/);
     const item = match && state.requests.find((request) => request.id === match[1]);

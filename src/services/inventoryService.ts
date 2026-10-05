@@ -11,8 +11,7 @@ import {
   type InventoryMovementTypeDto,
 } from '@/shared/types/entities/inventory-movement';
 import type { ID } from '@/shared/types/common';
-import { inventoryItemsDB, inventoryMovementsDB } from '@/data/db';
-import { mockUtils, requireCollection, simulateLatency } from './mockUtils';
+import { simulateLatency } from './mockUtils';
 import { httpClient } from './http-client';
 
 type ApiInventoryItem = {
@@ -48,9 +47,6 @@ type UpdateInventoryItemData = Partial<
 >;
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const isOfflineError = (error: unknown): boolean =>
-  !(typeof error === 'object' && error !== null && 'status' in error) ||
-  (typeof error === 'object' && error !== null && 'status' in error && error.status === 404);
 
 function ensureBackendUserId(responsibleUserId?: ID): void {
   if (responsibleUserId && !uuidPattern.test(responsibleUserId)) {
@@ -119,76 +115,50 @@ function toUpdateRequest(item: InventoryItem, data: UpdateInventoryItemData) {
 export const inventoryService = {
   async getItems(): Promise<InventoryItem[]> {
     await simulateLatency();
-    mockUtils.throwIfSimulatingError('No fue posible cargar el inventario.');
-    try {
-      const items = await httpClient.get<ApiInventoryItem[]>('/inventory/items');
-      return items.map(toInventoryItemDto).map(toInventoryItem);
-    } catch (error) {
-      if (!isOfflineError(error)) throw error;
-      return requireCollection(inventoryItemsDB, 'inventoryItemsDB').map(toInventoryItem);
-    }
+    const items = await httpClient.get<ApiInventoryItem[]>('/inventory/items');
+    return items.map(toInventoryItemDto).map(toInventoryItem);
   },
   async getItemById(id: ID): Promise<InventoryItem | undefined> {
     await simulateLatency();
-    mockUtils.throwIfSimulatingError('No fue posible cargar el articulo.');
     try {
       const item = await httpClient.get<ApiInventoryItem>(`/inventory/items/${id}`);
       return toInventoryItem(toInventoryItemDto(item));
     } catch (error) {
-      if (!isOfflineError(error)) throw error;
-      const item = inventoryItemsDB.find((entry) => entry.id === id);
-      return item ? toInventoryItem(item) : undefined;
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'status' in error &&
+        error.status === 404
+      ) {
+        return undefined;
+      }
+      throw error;
     }
   },
   async getItemsBelowMinimum(): Promise<InventoryItem[]> {
     await simulateLatency();
-    mockUtils.throwIfSimulatingError('No fue posible cargar la alerta de stock bajo.');
-    try {
-      const items = await httpClient.get<ApiInventoryItem[]>('/inventory/items?lowStock=true');
-      return items.map(toInventoryItemDto).map(toInventoryItem);
-    } catch (error) {
-      if (!isOfflineError(error)) throw error;
-      return requireCollection(inventoryItemsDB, 'inventoryItemsDB')
-        .map(toInventoryItem)
-        .filter((item) => item.isBelowMinimum);
-    }
+    const items = await httpClient.get<ApiInventoryItem[]>('/inventory/items?lowStock=true');
+    return items.map(toInventoryItemDto).map(toInventoryItem);
   },
   async getMovementsByItemId(itemId: ID): Promise<InventoryMovement[]> {
     await simulateLatency();
-    mockUtils.throwIfSimulatingError('No fue posible cargar los movimientos.');
-    try {
-      const movements = await httpClient.get<ApiInventoryMovement[]>(
-        `/inventory/items/${itemId}/movements`,
-      );
-      return movements.map(toInventoryMovementDto).map(toInventoryMovement);
-    } catch (error) {
-      if (!isOfflineError(error)) throw error;
-      return requireCollection(inventoryMovementsDB, 'inventoryMovementsDB')
-        .filter((item) => item.inventory_item_id === itemId)
-        .map(toInventoryMovement);
-    }
+    const movements = await httpClient.get<ApiInventoryMovement[]>(
+      `/inventory/items/${itemId}/movements`,
+    );
+    return movements.map(toInventoryMovementDto).map(toInventoryMovement);
   },
   async getMovements(): Promise<InventoryMovement[]> {
     await simulateLatency();
-    mockUtils.throwIfSimulatingError('No fue posible cargar los movimientos.');
-    try {
-      const items = await httpClient.get<ApiInventoryItem[]>('/inventory/items');
-      const movements = await Promise.all(
-        items.map((item) =>
-          httpClient.get<ApiInventoryMovement[]>(`/inventory/items/${item.id}/movements`),
-        ),
-      );
-      return movements.flat().map(toInventoryMovementDto).map(toInventoryMovement);
-    } catch (error) {
-      if (!isOfflineError(error)) throw error;
-      return requireCollection(inventoryMovementsDB, 'inventoryMovementsDB').map(
-        toInventoryMovement,
-      );
-    }
+    const items = await httpClient.get<ApiInventoryItem[]>('/inventory/items');
+    const movements = await Promise.all(
+      items.map((item) =>
+        httpClient.get<ApiInventoryMovement[]>(`/inventory/items/${item.id}/movements`),
+      ),
+    );
+    return movements.flat().map(toInventoryMovementDto).map(toInventoryMovement);
   },
   async updateItem(id: ID, data: UpdateInventoryItemData): Promise<InventoryItem> {
     await simulateLatency();
-    mockUtils.throwIfSimulatingError('No fue posible actualizar el inventario.');
 
     const current = await this.getItemById(id);
     if (!current) throw new Error(`No existe el articulo de inventario ${id}.`);
@@ -220,7 +190,6 @@ export const inventoryService = {
     notes?: string;
   }): Promise<InventoryMovement> {
     await simulateLatency();
-    mockUtils.throwIfSimulatingError('No fue posible registrar el movimiento de inventario.');
     if (!Number.isInteger(data.quantity) || data.quantity <= 0) {
       throw new Error('La cantidad debe ser un entero mayor a 0.');
     }

@@ -8,8 +8,7 @@ import {
   type Product,
   type ProductDto,
 } from '@/shared/types/entities/product';
-import { amenitiesDB, productsDB } from '@/data/db';
-import { mockUtils, requireCollection, simulateLatency } from './mockUtils';
+import { simulateLatency } from './mockUtils';
 import { httpClient } from './http-client';
 import { guestRequest } from './guestHttp';
 
@@ -60,9 +59,6 @@ type SaveProductData = {
 };
 
 const nowIso = () => new Date().toISOString();
-const isOfflineError = (error: unknown): boolean =>
-  !(typeof error === 'object' && error !== null && 'status' in error) ||
-  (typeof error === 'object' && error !== null && 'status' in error && error.status === 404);
 
 function mapAmenityFromApi(api: ApiAmenity): AmenityDto {
   const createdAt = api.createdAt ?? nowIso();
@@ -125,29 +121,16 @@ function toProductRequest(data: SaveProductData) {
 export const catalogService = {
   async getProducts(): Promise<Product[]> {
     await simulateLatency();
-    mockUtils.throwIfSimulatingError('No fue posible cargar los productos.');
-    try {
-      const products = await httpClient.get<ApiProduct[]>('/room-service/products');
-      return products.map(mapProductFromApi).map(toProduct);
-    } catch (error) {
-      if (!isOfflineError(error)) throw error;
-      return requireCollection(productsDB, 'productsDB').map(toProduct);
-    }
+    const products = await httpClient.get<ApiProduct[]>('/room-service/products');
+    return products.map(mapProductFromApi).map(toProduct);
   },
   async getAdminProducts(): Promise<Product[]> {
     await simulateLatency();
-    mockUtils.throwIfSimulatingError('No fue posible cargar el catalogo administrativo.');
-    try {
-      const products = await httpClient.get<ApiProduct[]>('/admin/room-service/products');
-      return products.map(mapProductFromApi).map(toProduct);
-    } catch (error) {
-      if (!isOfflineError(error)) throw error;
-      return requireCollection(productsDB, 'productsDB').map(toProduct);
-    }
+    const products = await httpClient.get<ApiProduct[]>('/admin/room-service/products');
+    return products.map(mapProductFromApi).map(toProduct);
   },
   async createAdminProduct(data: SaveProductData): Promise<Product> {
     await simulateLatency();
-    mockUtils.throwIfSimulatingError('No fue posible crear el producto.');
     if (!data.name.trim()) throw new Error('El producto requiere nombre.');
     if (!data.sku.trim()) throw new Error('El producto requiere SKU.');
     if (!Number.isInteger(data.priceCents) || data.priceCents < 1) {
@@ -162,7 +145,6 @@ export const catalogService = {
   },
   async updateAdminProduct(id: string, data: Partial<SaveProductData>): Promise<Product> {
     await simulateLatency();
-    mockUtils.throwIfSimulatingError('No fue posible actualizar el producto.');
     if (
       data.priceCents !== undefined &&
       (!Number.isInteger(data.priceCents) || data.priceCents < 1)
@@ -189,14 +171,8 @@ export const catalogService = {
   },
   async getAmenities(): Promise<Amenity[]> {
     await simulateLatency();
-    mockUtils.throwIfSimulatingError('No fue posible cargar las amenidades.');
-    try {
-      const amenities = await httpClient.get<ApiAmenity[]>('/admin/amenities?active=true');
-      return amenities.map(mapAmenityFromApi).map(toAmenity);
-    } catch (error) {
-      if (!isOfflineError(error)) throw error;
-      return requireCollection(amenitiesDB, 'amenitiesDB').map(toAmenity);
-    }
+    const amenities = await httpClient.get<ApiAmenity[]>('/admin/amenities?active=true');
+    return amenities.map(mapAmenityFromApi).map(toAmenity);
   },
   // Portal del huésped (INT-12): rutas `/guest/...` con el JWT de huésped, sin mock de respaldo.
   async getGuestAmenities(): Promise<Amenity[]> {
@@ -216,18 +192,11 @@ export const catalogService = {
   },
   async getAdminAmenities(): Promise<Amenity[]> {
     await simulateLatency();
-    mockUtils.throwIfSimulatingError('No fue posible cargar las amenidades.');
-    try {
-      const amenities = await httpClient.get<ApiAmenity[]>('/admin/amenities');
-      return amenities.map(mapAmenityFromApi).map(toAmenity);
-    } catch (error) {
-      if (!isOfflineError(error)) throw error;
-      return requireCollection(amenitiesDB, 'amenitiesDB').map(toAmenity);
-    }
+    const amenities = await httpClient.get<ApiAmenity[]>('/admin/amenities');
+    return amenities.map(mapAmenityFromApi).map(toAmenity);
   },
   async createAmenity(data: SaveAmenityData): Promise<Amenity> {
     await simulateLatency();
-    mockUtils.throwIfSimulatingError('No fue posible crear la amenidad.');
     if (!data.name.trim()) throw new Error('La amenidad requiere nombre.');
 
     const amenity = await httpClient.post<ApiAmenity>('/admin/amenities', toAmenityRequest(data));
@@ -235,7 +204,6 @@ export const catalogService = {
   },
   async updateAmenity(id: string, data: Partial<SaveAmenityData>): Promise<Amenity> {
     await simulateLatency();
-    mockUtils.throwIfSimulatingError('No fue posible actualizar la amenidad.');
     const current = (await this.getAdminAmenities()).find((amenity) => amenity.id === id);
     if (!current) throw new Error(`No existe la amenidad ${id}.`);
     const amenity = await httpClient.put<ApiAmenity>(
