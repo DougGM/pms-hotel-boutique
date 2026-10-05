@@ -71,7 +71,84 @@ function jwt(email, authorities, expiresIn = 60) {
 // INT-12: el huésped canjea el código de su reserva por un JWT `type: guest`.
 const GUEST_CODE = 'GL-2026-0001';
 const GUEST_BOOKING_ID = '9f8e7d6c-0000-4000-8000-000000000001';
+const API_NOW = '2026-10-04T12:00:00.000Z';
 let guestTokenSeconds = 60;
+
+const apiRoomFeatures = [
+  {
+    id: '10000000-0000-4000-8000-000000000001',
+    name: 'Wi-Fi',
+    description: 'Internet de alta velocidad',
+    active: true,
+    createdAt: API_NOW,
+    updatedAt: API_NOW,
+  },
+];
+
+const apiRoomTypes = [
+  {
+    id: '20000000-0000-4000-8000-000000000001',
+    code: 'STD',
+    name: 'Estándar',
+    description: 'Habitación estándar',
+    capacity: 2,
+    bedConfiguration: '1 cama queen',
+    roomFeatureIds: [apiRoomFeatures[0].id],
+    active: true,
+    createdAt: API_NOW,
+    updatedAt: API_NOW,
+  },
+];
+
+const apiRooms = [
+  {
+    id: '30000000-0000-4000-8000-000000000001',
+    roomNumber: '101',
+    roomTypeId: apiRoomTypes[0].id,
+    floor: 1,
+    status: 'available',
+    housekeepingStatus: 'clean',
+    notes: 'Lista para pruebas de auth',
+    updatedAt: API_NOW,
+    createdAt: API_NOW,
+  },
+];
+
+const apiGuests = [
+  {
+    id: '40000000-0000-4000-8000-000000000001',
+    firstName: 'Elena',
+    lastName: 'Castro',
+    email: 'elena@example.com',
+    phone: '+502 5555-1010',
+    nationality: 'Guatemalteca',
+    documentType: 'national_id',
+    documentNumber: '1000 20000 0101',
+    createdAt: API_NOW,
+    updatedAt: API_NOW,
+  },
+];
+
+const apiBookings = [
+  {
+    id: '50000000-0000-4000-8000-000000000001',
+    confirmationCode: 'PMS-AUTH-0001',
+    guestLinkCode: 'GL-AUTH-0001',
+    guestId: apiGuests[0].id,
+    roomId: apiRooms[0].id,
+    roomTypeId: apiRoomTypes[0].id,
+    checkIn: '2026-10-04',
+    checkOut: '2026-10-05',
+    status: 'confirmed',
+    adults: 1,
+    children: 0,
+    totalAmountCents: 90000,
+    currency: 'GTQ',
+    notes: 'Reserva mínima para workspace de auth',
+    createdAt: API_NOW,
+    updatedAt: API_NOW,
+  },
+];
 
 function guestJwt(expiresIn) {
   const now = Math.floor(Date.now() / 1000);
@@ -174,11 +251,36 @@ function installFetch() {
       return json([]);
     }
     // El workspace de Limpieza carga su cola desde el backend (INT-09).
+    if (path === '/api/v1/rooms') return json(apiRooms);
+    if (path.startsWith('/api/v1/rooms/')) {
+      const id = path.split('/').at(-1);
+      const room = apiRooms.find((item) => item.id === id);
+      return room ? json(room) : json({ message: 'No encontrado.' }, 404, 'Not Found');
+    }
+    if (path === '/api/v1/room-types') return json(apiRoomTypes);
+    if (path.startsWith('/api/v1/room-types/')) {
+      const id = path.split('/').at(-1);
+      const roomType = apiRoomTypes.find((item) => item.id === id);
+      return roomType ? json(roomType) : json({ message: 'No encontrado.' }, 404, 'Not Found');
+    }
+    if (path === '/api/v1/room-features') return json(apiRoomFeatures);
+    if (path === '/api/v1/bookings') return json(apiBookings);
+    if (path.startsWith('/api/v1/bookings/')) {
+      const id = path.split('/').at(-1);
+      const booking = apiBookings.find((item) => item.id === id);
+      return booking ? json(booking) : json({ message: 'No encontrado.' }, 404, 'Not Found');
+    }
+    if (path === '/api/v1/guests') return json(apiGuests);
+    if (path.startsWith('/api/v1/guests/')) {
+      const id = path.split('/').at(-1);
+      const guest = apiGuests.find((item) => item.id === id);
+      return guest ? json(guest) : json({ message: 'No encontrado.' }, 404, 'Not Found');
+    }
     if (
       path === '/api/v1/housekeeping/rooms' ||
       path === '/api/v1/housekeeping/rooms/stayover-cleanings'
     ) {
-      return json([]);
+      return json(path === '/api/v1/housekeeping/rooms' ? apiRooms : []);
     }
     // El workspace de Room Service carga catálogo y pedidos desde el backend (INT-10).
     if (path === '/api/v1/room-service/products' || path === '/api/v1/room-service/orders') {
