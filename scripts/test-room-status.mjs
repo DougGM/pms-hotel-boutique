@@ -5,6 +5,7 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { rooms } from './fixtures/domain-fixtures.mjs';
 
 // Verifica la separación de room.status (ocupación, dueña la web) y
 // room.housekeeping_status (limpieza, dueña la app móvil) — decisión D-002
@@ -14,11 +15,7 @@ import assert from 'node:assert/strict';
 
 await mkdir('.cache', { recursive: true });
 await build({
-  entryPoints: [
-    'src/data/db.ts',
-    'src/shared/constants/statuses.ts',
-    'src/shared/types/entities/room/index.ts',
-  ],
+  entryPoints: ['src/shared/constants/statuses.ts', 'src/shared/types/entities/room/index.ts'],
   outdir: '.cache',
   outbase: 'src',
   outExtension: { '.js': '.cjs' },
@@ -36,7 +33,6 @@ const load = (relativePath) => {
   return require(p);
 };
 
-const { roomsDB } = load('data/db');
 const {
   ROOM_STATUSES,
   ROOM_STATUS_TRANSITIONS,
@@ -46,7 +42,7 @@ const {
 } = load('shared/constants/statuses');
 const roomMapper = load('shared/types/entities/room/index');
 
-const ALL_ROOMS = roomsDB;
+const ALL_ROOMS = rooms;
 
 // --- A. Todo registro tiene ambos campos, sin estados sueltos -------------
 
@@ -224,8 +220,8 @@ test('mapper room: toDTO(toDomain(dto)) conserva status y housekeeping_status', 
 // (`status === 'available'`) que además mencione la limpieza en el mismo
 // archivo — no la mera presencia de los literales, que aparece
 // legítimamente en los tipos (`room.dto.ts`/`room.model.ts`) y en los
-// dataset (`src/data/db.ts`). Si alguien reescribe la regla con un
-// condicional suelto en vez de importar `isRoomAssignable`, esa comparación
+// fixtures de contrato. Si alguien reescribe la regla con un condicional
+// suelto en vez de importar `isRoomAssignable`, esa comparación
 // aparecerá fuera de `statuses.ts` y esta prueba la atrapa.
 
 async function collectSourceFiles(dir) {

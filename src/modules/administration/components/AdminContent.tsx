@@ -348,11 +348,9 @@ const backendPermissionsFromUi = (permissions: Record<string, boolean>): string[
 
 /**
  * Tarifas dinámicas (ajuste automático por ocupación/anticipación): no
- * existe colección en data/db.ts ni contrato de entidad para esto — es un
- * concepto del prototipo Bolt que nadie llegó a conectar. Fuera de alcance
- * hasta que se defina el contrato — ver HU-22. No se le agrega respaldo con
- * warning porque no hay nada "ausente" que avisar: simplemente no existe
- * todavía como entidad.
+ * existe endpoint backend ni contrato de entidad para esto — es un concepto
+ * del prototipo Bolt que nadie llegó a conectar. Fuera de alcance hasta que se
+ * defina el contrato — ver HU-22.
  */
 const defaultDynamicRates: DynamicRate[] = [];
 const reportTabsByGroup: Record<ReportGroup, AdminReportTab[]> = {

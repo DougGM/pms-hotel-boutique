@@ -25,10 +25,6 @@ src/
     constants/
       statuses.ts          Literales y transiciones de estado compartidos con la app móvil
                            (room, booking, order, service_request) — ver "Contrato de datos" abajo
-    mocks/                 lot-b.ts (habitaciones, huéspedes, reservas, tarifas, promociones),
-                           lot-c.ts (cuentas, cargos, pagos, depósitos, caja — WEB-11),
-                           lot-d.ts (personal, roles/permisos, amenidades, productos,
-                           inventario, auditoría — WEB-12)
     types/
       common.ts            ID, ISODateString, Currency ('GTQ' literal), UserRole
       entities/<entidad>/  Un DTO + Model + Mapper por entidad (ver "Contrato de datos" abajo)
@@ -256,12 +252,12 @@ seleccionarse por contrato backend antes de reflejarse en UI. Ver
 
 ## Servicios y regla de oro
 
-Nota 2026-09-16: la migracion privada Bolt (`src/private/workspace/PrivateWorkspace.tsx`,
+Nota 2026-10-05 (#135): `src/data/db.ts` fue eliminado. La migracion privada
+Bolt (`src/private/workspace/PrivateWorkspace.tsx`,
 `src/modules/guest-portal/components/GuestContent.tsx` y
-`src/modules/administration/components/AdminContent.tsx`) usa adaptadores
-locales que leen `src/data/db.ts` para poblar el workspace beta mientras se
-estabilizan sus servicios finales. No agregar nuevas excepciones sin
-documentarlas aqui.
+`src/modules/administration/components/AdminContent.tsx`) debe consumir datos
+de dominio mediante servicios HTTP reales. No agregar nuevas bases locales ni
+fallbacks mock productivos.
 
 Nota 2026-09-22 (#72): el portal de huesped conserva la UI Bolt pero sus
 operaciones soportadas escriben mediante servicios (`orderService`,
@@ -273,30 +269,16 @@ Nota 2026-09-27: el boton de recibo del portal de huesped descarga un PDF
 generado en navegador con `Blob` y enlace `download`; no debe volver a depender
 de `window.print()` ni prometer descarga si solo abre el dialogo de impresion.
 
-Ningún componente ni pantalla importa `src/data/db.ts` directamente — todo
-pasa por un servicio en `services/`. Cada servicio es `async`, devuelve
-Models (nunca DTOs), simula una latencia de 300 a 600 ms
-(`services/mockUtils.ts`) y puede forzarse a fallar
-(`mockUtils.setForceError(true)` o `?mockError=true`) para probar el manejo de
-errores sin persistir flags de prueba en el navegador.
-
-`src/data/db.ts` es la única "base de datos" simulada del proyecto: un
-array exportado por entidad (`bookingsDB`, `roomsDB`, `usersDB`, etc.),
-organizado por secciones (sesión de autenticación, Lote B, Lote C, Lote D,
-y `order`/`service_request`, que WEB-09 definía sin dataset propio hasta
-esta consolidación). Reemplaza a `services/mockData.ts`,
-`services/authMockData.ts` y `shared/mocks/{lot-b,lot-c,lot-d}.ts`, que
-antes coexistían con IDs de mundos distintos que no se cruzaban entre sí
-(p. ej. `paymentService` leía `mockData.ts` mientras `guestAccountService`
-ya leía el dataset real de pagos del Lote C). Los servicios no integrados aun
-leen de ahi (Lote B/C/D) mediante la capa `src/services/`; los servicios
-integrados usan `http-client.ts` y no deben ocultar errores del backend con
-fallbacks locales automaticos.
+Ningún componente, pantalla ni servicio importa `src/data/db.ts`: el archivo
+no existe desde INT-FINAL (#135). Cada servicio productivo es `async`, devuelve
+Models (nunca DTOs), usa `http-client.ts` para hablar con backend y no debe
+ocultar errores reales con fallbacks locales automaticos. Las pruebas que
+necesitan datos de contrato usan fixtures bajo `scripts/fixtures/`, fuera del
+bundle productivo; ver [`docs/int-final-db-mocks.md`](../docs/int-final-db-mocks.md).
 `authService.ts` conecta al backend Spring desde INT-01: login, Bearer JWT,
 refresh con retry unico y logout contra `/auth/*`. Desde INT-02, `roomService`
 tambien usa backend para habitaciones, tipos, caracteristicas y tarifas
-(`/rooms`, `/room-types`, `/room-features`, `/rates`) y desde INT-13 ya no
-importa `src/data/db.ts` para esas entidades.
+(`/rooms`, `/room-types`, `/room-features`, `/rates`).
 Única excepción documentada a "un solo
 archivo con datos inventados": el fixture de demo de
 `src/modules/ui-catalog/services/catalog-service.ts`, que no representa
@@ -319,12 +301,12 @@ las acciones operativas para reservas UUID: asignacion de habitacion via
 `PrivateWorkspace` solo carga reservas y huespedes para `admin`/`reception`,
 que son los roles con permisos `bookings.read`/`guests.read` en este dominio.
 
-Nota 2026-09-21 (#69): `bookingService.createBooking` y
-`bookingService.updateBooking` validan capacidad antes de escribir en
-`bookingsDB`. La regla reusable vive en `shared/utils/bookingCapacity.ts` y
-exige `adults + children <= roomType.capacity`; los formularios publicos y de
+Nota 2026-09-21 (#69): la regla reusable de capacidad vive en
+`shared/utils/bookingCapacity.ts` y exige
+`adults + children <= roomType.capacity`; los formularios publicos y de
 ocupacion la reutilizan para mostrar el limite al cambiar habitacion, adultos o
-menores.
+menores cuando trabajan con catalogos locales de prueba. En flujo productivo,
+el backend valida la reserva.
 Cuando `roomTypeId` es UUID, INT-03 delega esa validacion al backend porque el
 dataset local `RT-*` no es autoridad sobre catalogos integrados.
 
@@ -367,12 +349,12 @@ patrón: esbuild empaqueta el módulo a probar a CommonJS y se ejecuta con
 | `test-auth.mjs`                  | Sesión, roles, guardas de ruta, 404 por área (14 pruebas)                                                                                    |
 | `test-currency.mjs`              | `formatCurrency` (11 pruebas)                                                                                                                |
 | `test-date.mjs`                  | `formatDateGT`/`formatTimeGT`/`calculateNights`/mappers de fecha civil (44 pruebas)                                                          |
-| `test-money-contract.mjs`        | `mockData.ts`: montos enteros, `currency: 'GTQ'`, sufijo `_cents` (13 pruebas)                                                               |
+| `test-money-contract.mjs`        | Fixtures de contrato: montos enteros, `currency: 'GTQ'`, sufijo `_cents`                                                                     |
 | `test-contract.mjs`              | Una sola definición por entidad, incluidas las nueve de los Lotes C/D (30 pruebas)                                                           |
 | `test-shared-contract.mjs`       | Fechas ISO, `_cents`, estados dentro de `statuses.ts`, `guest_link_code` único, mappers sin pérdida (35 pruebas)                             |
-| `test-referential-integrity.mjs` | Ninguna referencia queda colgada entre lotes (bookings, guests, users, cuentas, caja, inventario) (58 pruebas)                               |
+| `test-referential-integrity.mjs` | Ninguna referencia queda colgada entre fixtures de contrato (bookings, guests, users, cuentas, caja, inventario)                             |
 | `test-room-status.mjs`           | Separación `status`/`housekeepingStatus` de `room`, `isRoomAssignable()` (9 pruebas)                                                         |
-| `test-lot-c-d.mjs`               | Aritmética de cuentas/caja/inventario, horario de amenidades, cobertura de casos (WEB-11/WEB-12) (15 pruebas)                                |
+| `test-lot-c-d.mjs`               | Aritmética de cuentas/caja/inventario y horario de amenidades sobre fixtures de contrato                                                     |
 | `test-services.mjs`              | Servicios async con latencia, Models, forzado de error, regla de oro, metodos WEB-14, capacidad, check-in y check-out con folio (20 pruebas) |
 | `test-presentation.mjs`          | Primitivos de `shared/components/` y el catálogo `/components` (6 pruebas)                                                                   |
 | `test-router.mjs`                | Duplicados y resolucion de rutas principales (4 pruebas)                                                                                     |

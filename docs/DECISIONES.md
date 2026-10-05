@@ -342,12 +342,8 @@ mismo procedimiento, mismo dueño.
   merge en el ruteo ni en el contrato de permisos de sesión.
 - **Cuesta**: coexisten dos vocabularios de permisos sin sincronizar — la
   unión `Permission` de `session.ts` (la que aplica `RequirePermission`,
-  WEB-06) y `permissionsDB`/`rolesDB` de `db.ts` (catálogo WEB-12, D-003).
-  Ninguno de los tres permisos nuevos tiene equivalente en `permissionsDB`
-  (9 registros: `manage_users`, `view_reports`, `manage_bookings`,
-  `manage_cash`, `manage_housekeeping_tasks`,
-  `manage_room_service_orders`, `manage_concierge_requests`,
-  `manage_inventory`, `view_own_tasks`) — no se tocó ese catálogo.
+  WEB-06) y el catálogo operativo de roles/permisos del backend (D-003).
+  Esta decisión no resolvió esa equivalencia.
 - **A quién afecta**: al Lote D cuando construya la pantalla de "roles y
   permisos" — necesita decidir si unifica los dos vocabularios, los
   mapea explícitamente, o los documenta como capas deliberadamente
@@ -359,9 +355,9 @@ mismo procedimiento, mismo dueño.
 
 - **No agregar rutas ni permisos ad hoc** desde la rama de un lote — se
   piden por PR a JEPG321.
-- **No inferir el permiso de una ruta nueva desde `permissionsDB`** — ese
-  catálogo no está conectado al guarda de rutas (`RequirePermission` solo
-  conoce `Permission` de `session.ts`).
+- **No inferir el permiso de una ruta nueva desde el catálogo operativo de
+  permisos** — ese catálogo no está conectado directamente al guarda de rutas
+  (`RequirePermission` solo conoce `Permission` de `session.ts`).
 
 ### Alternativas consideradas
 
@@ -430,17 +426,17 @@ sesion. `usersDB` queda como directorio operativo historico del Lote D.
   operativo.
 - No mezclar `HOUSEKEEPING` con `CONCIERGE`: limpieza y conserjeria son flujos
   distintos.
-- No tratar el portal `GUEST` como backend real de produccion: existe como
-  portal funcional sobre servicios mock, con reservas/pedidos/solicitudes/
-  perfil/notificaciones persistiendo en `src/data/db.ts` durante la sesion.
+- No tratar el portal `GUEST` como login de personal: el portal integrado usa
+  Guest Access y endpoints `/guest/...`; no debe persistir datos operativos en
+  almacenamiento local.
 - No cambiar roles sin actualizar permisos, mocks, navegacion, tests y docs en
   el mismo cambio.
 
 ### Seguimiento
 
 Si se agrega un rol nuevo, debe entrar en `common.ts`, `session.ts`,
-`UserRoleDto`, `rolesDB`, tests de contrato/integridad y documentacion del
-mismo PR.
+`UserRoleDto`, contrato backend, tests de contrato/integridad y documentacion
+del mismo PR.
 
 ## D-008 · Limpieza, Room Service y Conserjería se sacan del menú web: viven en pms-hotel-mobile
 
@@ -829,9 +825,8 @@ caracteristicas.
 
 ### Consecuencias
 
-- `src/data/db.ts` deja de ser fuente oficial para esas entidades en flujos
-  integrados. Actualizacion INT-13: tampoco queda como fallback de listados;
-  si el backend no esta disponible, el servicio propaga el error.
+- `src/data/db.ts` fue eliminado en INT-FINAL (#135); si el backend no esta
+  disponible, el servicio propaga el error.
 - Las escrituras de habitaciones, tipos y tarifas no simulan exito local:
   pasan por API y propagan errores 400, 401, 403, 404 y 409 como mensajes de
   operacion.

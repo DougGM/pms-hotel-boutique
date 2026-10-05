@@ -125,11 +125,10 @@ camelCase (`firstName`, `guestId`, `roomTypeId`, `totalAmountCents`), pero la
 web conserva este contrato interno snake_case -> Mapper -> Model. Los servicios
 son el unico punto de adaptacion.
 
-Actualizacion 2026-10-04 (#111 / INT-13): las entidades ya integradas no caen
-automaticamente a mocks cuando falla el backend. Habitaciones/tipos/tarifas no
-importan `src/data/db.ts`; huespedes y reservas solo conservan el camino local
-para IDs legacy explicitos (`GST-*`, `BKG-*`, `RT-*`) usados por prototipo y
-pruebas historicas.
+Actualizacion 2026-10-05 (#135 / INT-FINAL): `src/data/db.ts` fue eliminado.
+Las entidades integradas no caen automaticamente a mocks cuando falla el
+backend. Si una prueba necesita datos de contrato, usa fixtures bajo
+`scripts/fixtures/`, no datos productivos locales.
 
 Actualizacion 2026-10-04 (#102 / INT-04): las operaciones de recepcion
 integradas para reservas UUID ya no cambian estados solo en frontend. Check-in,
@@ -550,12 +549,10 @@ No las necesita móvil. Se listan solo por completitud del inventario:
   `order.charge_id`/`service_request.charge_id`. Ya tiene dataset real y
   servicio propio (`guestAccountService.ts`, sección 3.13).
 - **`payment`**: pago aplicado a una reserva (`booking_id`, `amount_cents`,
-  `method`, `status`). Dataset único en `src/data/db.ts` (`paymentsDB`),
-  servido tanto por `guestAccountService.ts` como por `paymentService.ts`.
-  **Resuelto:** hasta la consolidación en `src/data/db.ts`, `paymentService`
-  leía un dataset pequeño distinto (`services/mockData.ts`) del que servía
-  `guestAccountService.ts` (`shared/mocks/lot-c.ts`) — dos fuentes de la
-  misma entidad, con IDs que no se cruzaban. Ya no existen esos dos mundos.
+  `method`, `status`). La fuente productiva es el backend consumido por
+  `guestAccountService.ts` y `paymentService.ts`. **Resuelto:** ya no existen
+  dos datasets frontend para la misma entidad; los fixtures de prueba viven
+  fuera del bundle productivo.
 - **`promotion`**: código de descuento para el motor de reservas
   (`code`, `discount_percent`, `valid_from`/`valid_to`).
 
@@ -987,13 +984,11 @@ Documentadas con recomendación, **no implementadas** en este PR.
 
 ### 6.1 Formato de SKU de inventario — **provisional en uso, sigue sin decidirse formalmente** (D-004)
 
-**Estado:** el Lote C/D (este PR) ya tuvo que elegir algo para poblar
-`product.sku` (25 registros) e `inventory_item.sku` (10 registros, catálogo
-**separado** del de producto) — se usó la opción **B** de abajo,
-explícitamente marcada como provisional en el código
-(`src/data/db.ts`) y en `docs/DECISIONES.md` D-004. **Esto no es una
-decisión tomada** — es el valor que había que escribir para no bloquear el
-resto del trabajo; el equipo puede cambiarlo.
+**Estado:** el Lote C/D eligió un formato provisional para poblar `product.sku`
+e `inventory_item.sku` (catálogos separados) y esa decisión sigue documentada
+en `docs/DECISIONES.md` D-004. **Esto no es una decisión formal tomada** — fue
+el valor provisional para no bloquear el resto del trabajo; el equipo puede
+cambiarlo desde backend/contrato.
 
 **Problema:** los SKU actuales (`AGUA-600ML`, `SERV-EXPRESS`) son
 inventados para el mock, sin esquema formal. El Lote D va a construir el

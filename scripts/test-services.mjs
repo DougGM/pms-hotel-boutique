@@ -70,7 +70,6 @@ await build({
       export { serviceRequestService } from './src/services/serviceRequestService';
       export { notificationService } from './src/services/notificationService';
       export { guestPortalService } from './src/services/guestPortalService';
-      export { roomsDB } from './src/data/db';
       export { mockUtils } from './src/services/mockUtils';
     `,
     resolveDir: '.',
@@ -124,7 +123,6 @@ const {
   serviceRequestService,
   notificationService,
   guestPortalService,
-  roomsDB,
   mockUtils,
 } = require(require.resolve('../.cache/services-harness.cjs'));
 
@@ -2128,7 +2126,7 @@ test.skip('legacy mock: check-in local persistia acompanantes y ocupacion', asyn
   );
   assert.equal(checkedIn.status, 'checkedIn');
 
-  const room = roomsDB.find((item) => item.id === 'RM-203');
+  const room = apiRooms.find((item) => item.id === 'RM-203');
   assert.equal(room.status, 'occupied', 'el check-in debe marcar la habitacion como ocupada');
 
   const persisted = await bookingCompanionService.getCompanionsByBookingId('BKG-007');
@@ -2211,6 +2209,46 @@ function installHousekeepingFetchMock() {
     start: ['pending', 'in_progress', 'startedAt'],
     complete: ['in_progress', 'completed', 'completedAt'],
   };
+  const checklists = [
+    {
+      id: 'cccccccc-0000-4000-8000-000000000001',
+      serviceRequestId: 'f1e2d3c4-0000-4000-8000-000000000001',
+      roomId: HK_ROOM_ID,
+      roomNumber: '204',
+      status: 'in_progress',
+      observations: 'Cambio de toallas',
+      responsibleUserEmail: 'hk@aurora.test',
+      completedByUserEmail: null,
+      startedAt: '2026-10-03T09:15:00Z',
+      completedAt: null,
+      createdAt: '2026-10-03T09:30:00Z',
+      updatedAt: '2026-10-03T09:30:00Z',
+      items: [
+        {
+          id: 'item-1',
+          label: 'Cama preparada',
+          checked: false,
+          position: 0,
+          notes: null,
+          checkedByUserEmail: null,
+          checkedAt: null,
+          createdAt: '2026-10-03T09:30:00Z',
+          updatedAt: '2026-10-03T09:30:00Z',
+        },
+        {
+          id: 'item-2',
+          label: 'Baño revisado',
+          checked: false,
+          position: 1,
+          notes: null,
+          checkedByUserEmail: null,
+          checkedAt: null,
+          createdAt: '2026-10-03T09:30:00Z',
+          updatedAt: '2026-10-03T09:30:00Z',
+        },
+      ],
+    },
+  ];
 
   globalThis.fetch = async (input, init = {}) => {
     const url = new URL(String(input));
@@ -2224,6 +2262,31 @@ function installHousekeepingFetchMock() {
       });
 
     if (method === 'GET' && path === '/housekeeping/rooms') return json([room]);
+
+    if (method === 'GET' && path === '/housekeeping/checklists') return json(checklists);
+
+    if (method === 'PUT' && path === `/housekeeping/checklists/${checklists[0].id}`) {
+      const request = JSON.parse(String(init.body ?? '{}'));
+      checklists[0] = {
+        ...checklists[0],
+        status: request.status ?? checklists[0].status,
+        roomId: HK_ROOM_ID,
+        observations: request.observations ?? checklists[0].observations,
+        items: request.items.map((item, index) => ({
+          id: item.id ?? `item-${index + 1}`,
+          label: item.label,
+          checked: item.checked,
+          position: item.position ?? index,
+          notes: item.notes ?? null,
+          checkedByUserEmail: item.checked ? 'hk@aurora.test' : null,
+          checkedAt: item.checked ? '2026-10-03T10:10:00Z' : null,
+          createdAt: '2026-10-03T09:30:00Z',
+          updatedAt: '2026-10-03T10:10:00Z',
+        })),
+        updatedAt: '2026-10-03T10:10:00Z',
+      };
+      return json(checklists[0]);
+    }
 
     const roomAction = path.match(/^\/housekeeping\/rooms\/([^/]+)\/(start|complete|inspect)$/);
     if (method === 'POST' && roomAction && roomAction[1] === HK_ROOM_ID) {
@@ -2298,22 +2361,30 @@ test('housekeepingService: turnover contra backend, sin transiciones locales', a
   assert.equal(room.status, 'occupied');
   assert.ok(!('housekeeping_status' in room), 'un Model no debe traer campos snake_case del DTO');
 
-  await assert.rejects(
-    () => housekeepingService.saveChecklist(HK_ROOM_ID, [{ label: 'Cama preparada', done: true }]),
-    /no tienen contrato backend/,
-    'los checklists ya no se guardan en localStorage',
-  );
+  const initialChecklists = await housekeepingService.getChecklists();
+  assert.equal(initialChecklists[0].roomId, HK_ROOM_ID);
+  assert.equal(initialChecklists[0].items[0].done, false);
+
+  const savedChecklist = await housekeepingService.saveChecklist(initialChecklists[0].id, {
+    status: 'completed',
+    items: [
+      { id: 'item-1', label: 'Cama preparada', done: true },
+      { id: 'item-2', label: 'Baño revisado', done: false },
+    ],
+  });
+  assert.equal(savedChecklist.items[0].done, true);
+  assert.equal(savedChecklist.status, 'completed');
+  assert.deepEqual(calls.slice(-2), [
+    'GET /housekeeping/checklists',
+    `PUT /housekeeping/checklists/${initialChecklists[0].id}`,
+  ]);
 
   const cleaning = await housekeepingService.startCleaning(HK_ROOM_ID);
   assert.equal(cleaning.housekeepingStatus, 'cleaning');
   assert.equal(cleaning.status, 'occupied', 'el turnover no toca el estado operativo');
   assert.ok(cleaning.cleaningStartedAt instanceof Date);
   assert.equal(cleaning.cleaningUserEmail, 'hk@aurora.test');
-  await assert.rejects(
-    () => housekeepingService.getChecklists(),
-    /no tienen contrato backend/,
-    'leer checklists tambien debe mostrar contrato faltante',
-  );
+  assert.equal((await housekeepingService.getChecklists())[0].items[0].done, true);
 
   await assert.rejects(
     () => housekeepingService.inspectRoom(HK_ROOM_ID),
@@ -2624,9 +2695,9 @@ test.skip('legacy mock: check-out local cerraba folio y ensuciaba habitacion', a
   assert.equal(closed.status, 'closed');
   assert.equal(closed.balanceCents, 0);
 
-  const room = roomsDB.find((item) => item.id === 'RM-301');
+  const room = apiRooms.find((item) => item.id === 'RM-301');
   assert.equal(room.status, 'available');
-  assert.equal(room.housekeeping_status, 'dirty');
+  assert.equal(room.housekeepingStatus, 'dirty');
 
   await assert.rejects(
     () => bookingService.checkOut('BKG-003'),

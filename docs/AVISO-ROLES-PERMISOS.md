@@ -35,7 +35,7 @@ Se actualizaron los roles de sesion/login a roles funcionales finales:
 - `CONCIERGE`
 - `ROOM_SERVICE`
 
-Tambien se alineo el catalogo operativo compartido (`user.role`/`rolesDB`) a
+Tambien se alineo el catalogo operativo compartido (`user.role`/roles backend) a
 los mismos roles, en formato de datos:
 
 - `admin`
@@ -45,7 +45,7 @@ los mismos roles, en formato de datos:
 - `concierge`
 - `room_service`
 
-`permissionsDB` conserva sus llaves actuales porque representan acciones, no
+El catalogo de permisos conserva sus llaves actuales porque representan acciones, no
 roles. Para la pantalla administrativa de usuarios, `personnelService.getUsers`
 usa `sessionAccountsDB` como fuente base: esos son los usuarios/roles que se
 usan para login y para gestionar accesos visibles en el frontend beta.

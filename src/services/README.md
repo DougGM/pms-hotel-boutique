@@ -44,8 +44,9 @@ Servicios disponibles: `authService`, `roomService`, `bookingService`,
 `auditService`, `orderService`, `serviceRequestService` y `notificationService`. Las
 operaciones de creación reciben los DTOs de entrada definidos en
 `src/shared/types/entities`; sus respuestas siempre son modelos de dominio.
-Los servicios que aun no tienen integracion backend leen de `src/data/db.ts`,
-la unica "base de datos" simulada del proyecto — ver `src/ARCHITECTURE.md`.
+Desde INT-FINAL (#135), `src/data/db.ts` no existe: las pantallas productivas
+consumen backend real mediante `http-client.ts` y las pruebas usan fixtures
+bajo `scripts/fixtures/`.
 Desde INT-01, `authService` usa el backend Spring configurado con
 `VITE_API_BASE_URL`; las integraciones posteriores se documentan abajo.
 
@@ -131,8 +132,7 @@ Actualizacion 2026-10-04 (#101 / INT-03): `guestService` y `bookingService`
 integran huespedes y reservas con el backend Spring mediante `http-client.ts`.
 Las lecturas `GET /guests` y `GET /bookings` normalizan las respuestas
 camelCase del backend a los DTO internos y devuelven Models. Desde INT-13, una
-falla del backend ya no cae automaticamente a `src/data/db.ts`; el error se
-propaga para mostrar el estado real de integracion.
+falla del backend se propaga para mostrar el estado real de integracion.
 
 `guestService.createGuest(data)` y `guestService.updateGuest(id, data)` envian
 `POST /guests` y `PUT /guests/{id}` con camelCase (`firstName`,
@@ -164,10 +164,9 @@ Service contra `booking_id`/`room_id`/`guest_id`, valida productos activos y
 huesped. `serviceRequestService.createRequest()` y `cancelRequest()` hacen lo
 mismo para solicitudes de habitacion; la cancelacion de solicitudes se
 representa con el estado contractual `rejected` en `service_request`.
-`notificationService.markNotificationRead()` y `markAllRead()` conservan las
-marcas de lectura en `notificationReadsDB`, dentro de `src/data/db.ts`, sin
-crear una entidad `notification` propia. **Reemplazado por INT-12:** el portal
-ya no usa esos mocks — ver "Integracion con INT-12".
+**Reemplazado por INT-12:** el portal ya no guarda marcas de lectura locales;
+las notificaciones y su estado salen del backend — ver "Integracion con
+INT-12".
 
 Actualizacion 2026-09-22 (#73): las operaciones de Limpieza que antes vivian
 solo en estado React pasaron a servicios persistibles. Desde INT-02,
@@ -177,9 +176,8 @@ habitaciones; `serviceRequestService` crea reportes de desperfectos
 antes de mostrar mensajes de exito, por lo que un error conserva el estado
 anterior visible. Desde INT-09 el turnover, las tareas stayover y el historial
 de Limpieza salen del backend — ver "Integracion con INT-09".
-Los reportes de desperfectos ya no buscan reservas en `src/data/db.ts`; envian
-`roomId`, `type: maintenance`, descripcion y notas al backend, que decide
-permisos y estado.
+Los reportes de desperfectos envian `roomId`, `type: maintenance`,
+descripcion y notas al backend, que decide permisos y estado.
 
 Actualizacion 2026-09-22 (#74): Room Service y Conserjeria ya no dependen de
 `setState` para aceptar, rechazar, cancelar, observar o completar. Los pedidos
@@ -262,14 +260,14 @@ La integracion frontend-backend usa un unico punto de salida HTTP:
 clientes paralelos en modulos o componentes; los servicios deben consumir
 `httpClient` y traducir DTOs backend a modelos de dominio.
 
-`src/data/db.ts` sigue existiendo para funcionalidades demo o flujos cuyo
-contrato backend aun no esta disponible en `develop`. Los componentes y
-modulos no deben importarlo directamente: todo acceso mock permitido debe pasar
-por `src/services/`, para que cada mock pueda retirarse cuando exista su API
-real. La suite `npm run test:e2e-integration` falla si aparece un import directo
-desde fuera de servicios o un cliente HTTP alternativo. Tambien falla si
-servicios integrados vuelven a introducir fallbacks silenciosos tipo
-`isOfflineError`; las rutas ya integradas deben propagar el error del backend.
+`src/data/db.ts` fue retirado en INT-FINAL (#135). Los componentes, modulos y
+servicios no deben importarlo ni recrear bases locales de dominio. Si una
+prueba necesita datos de contrato, debe usar fixtures en `scripts/fixtures/`,
+fuera del bundle productivo. La suite `npm run test:e2e-integration` falla si
+reaparece el archivo, si aparece un import a `src/data/db`, si se agrega un
+cliente HTTP alternativo o si servicios integrados vuelven a introducir
+fallbacks silenciosos tipo `isOfflineError`; las rutas integradas deben
+propagar el error del backend.
 
 El cliente central propaga `403`, `404` y `409` como `HttpError` con el payload
 del backend para que la UI pueda mostrar errores controlados. Ante un `401`
@@ -314,7 +312,7 @@ de permisos de catalogo.
 
 ## Integracion con INT-03 (#101)
 
-Huespedes y reservas ya no dependen exclusivamente de `src/data/db.ts`:
+Huespedes y reservas dependen del backend real:
 
 - `guestService`: `GET /guests`, `GET /guests/{id}`, `POST /guests`,
   `PUT /guests/{id}`.
@@ -322,7 +320,7 @@ Huespedes y reservas ya no dependen exclusivamente de `src/data/db.ts`:
   `PUT /bookings/{id}`.
   El backend habla camelCase; la web conserva su contrato interno DTO
   snake_case -> Mapper -> Model. Las pantallas no reciben DTOs ni importan
-  `src/data/db.ts`.
+  datos locales.
 
 INT-13 elimina el fallback automatico de esos endpoints: `GET/POST/PUT` contra
 UUID/backend debe responder desde la API real o fallar. El acceso a datos mock
@@ -463,8 +461,13 @@ Reglas:
   mas las tareas stayover completadas.
 - Un `cancelled` de stayover se representa como `rejected`, igual que el resto
   del contrato `service_request` del frontend.
-- El checklist no tiene contrato backend en `develop`; `getChecklists` y
-  `saveChecklist` devuelven error controlado y no escriben en `localStorage`.
+- `getChecklists` consume `GET /housekeeping/checklists`,
+  `createChecklist` consume `POST /housekeeping/checklists` y `saveChecklist`
+  consume `PUT /housekeeping/checklists/{id}`. El checklist pertenece a una
+  `ServiceRequest` de housekeeping (`serviceRequestId`), no al turnover normal
+  de una habitación; el servicio mapea `items[].checked` del backend a
+  `items[].done` para la UI y puede enviar `status` cuando la acción debe cerrar
+  el checklist real. Los checklists ya no se guardan en `localStorage`.
 - El workspace solo consulta Limpieza para el rol `housekeeping`; los demas
   roles no tienen `housekeeping.read` y recibirian `403`.
 

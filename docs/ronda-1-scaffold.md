@@ -24,6 +24,10 @@ administracion y portal de huesped solo con arrays locales. `PrivateWorkspace.ts
 inventario, caja, auditoria y amenidades desde `src/data/db.ts`, manteniendo
 los arrays antiguos solo como fallback visual.
 
+**Reemplazado 2026-10-05 (#135 / INT-FINAL):** `src/data/db.ts` fue eliminado.
+El workspace operativo debe consumir backend real mediante `src/services/`; las
+pruebas de contrato usan fixtures bajo `scripts/fixtures/`.
+
 **Actualización posterior (#50/#51/#52, rama `web-50-51-52-occupancy-manual`):**
 el módulo `occupancy` ya dejó de ser stub. `#51` (`OccupancyScreen`) carga
 habitaciones, reservas y tipos de habitación para mostrar disponibilidad por
@@ -245,18 +249,11 @@ el mismo nombre.
 
 El guarda `RequirePermission` (WEB-06) valida contra la unión cerrada
 `Permission` de `src/modules/auth/models/session.ts` — **no** contra
-`permissionsDB`/`rolesDB` de `src/data/db.ts` (catálogo WEB-12). Los dos no
+el catálogo operativo de roles/permisos del backend. Los dos no
 están conectados (por diseño, ver D-003 en `docs/DECISIONES.md`): el primero
 es el contrato de sesion de acceso/login (`UserRole`: ADMIN/GUEST/RECEPTION/HOUSEKEEPING/CONCIERGE/ROOM_SERVICE); el segundo es el catalogo configurable de puesto/permiso
-(`role.code`/`user.role`). Antes de tocar `session.ts` se revisó
-`permissionsDB` (9 registros: `manage_users`, `view_reports`,
-`manage_bookings`, `manage_cash`, `manage_housekeeping_tasks`,
-`manage_room_service_orders`, `manage_concierge_requests`,
-`manage_inventory`, `view_own_tasks`) — ninguno coincide en nombre con los
-tres que se agregan aquí, y su convención (`verb_noun`, snake_case) difiere
-de la que ya usa `Permission` (`domain:action`). Se siguió la convención de
-`session.ts` por ser la que de verdad consume el guarda; la de
-`permissionsDB` queda sin tocar.
+(`role.code`/`user.role`). Se siguió la convención de `session.ts` por ser la
+que de verdad consume el guarda.
 
 Se agregaron tres permisos de Ronda 1 sobre la matriz vigente de roles de sesion:
 
@@ -267,9 +264,9 @@ Se agregaron tres permisos de Ronda 1 sobre la matriz vigente de roles de sesion
 | `front-desk:operate` | si | - | si | - | - | - |
 **Deuda registrada, sin resolver en este PR**: coexisten dos vocabularios de
 permisos — la unión `Permission` de `session.ts` (la que aplica el guarda de
-rutas) y `permissionsDB` de `db.ts` (el catálogo WEB-12 que edita el Lote D).
-No hay nada que los mantenga sincronizados; si divergen, solo lo detecta
-lectura manual, no una prueba. Antes de que el Lote D construya la pantalla
+rutas) y el catálogo operativo de roles/permisos del backend. No hay nada que
+los mantenga sincronizados; si divergen, solo lo detecta lectura manual, no una
+prueba. Antes de que el Lote D construya la pantalla
 de "roles y permisos" hace falta un ticket propio que decida si se
 unifican, se mapean explícitamente, o se documentan como capas
 deliberadamente separadas (en la línea de D-003).

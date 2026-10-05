@@ -97,10 +97,11 @@ npm run format
 ```
 
 `npm run check` ejecuta formato, TypeScript, ESLint, compilación de
-producción y `npm run test` (incluye la suite INT-13 de validacion estatica
-E2E contra imports accidentales a `src/data/db`, clientes HTTP alternativos y
-manejo de `401/403/404/409` — ver
-[src/ARCHITECTURE.md](src/ARCHITECTURE.md)). Cada suite también se puede
+producción y `npm run test` (incluye la suite INT-FINAL/INT-13 de validacion
+estatica E2E: `src/data/db.ts` debe seguir eliminado, no puede haber imports a
+`src/data/db`, no se aceptan clientes HTTP alternativos y se verifica el manejo
+de `401/403/404/409` — ver [src/ARCHITECTURE.md](src/ARCHITECTURE.md) y
+[docs/int-final-db-mocks.md](docs/int-final-db-mocks.md)). Cada suite también se puede
 correr por separado: `npm run test:auth`, `test:currency`, `test:date`,
 `test:money-contract`, `test:contract`, `test:services`,
 `test:e2e-integration`, `test:presentation`.

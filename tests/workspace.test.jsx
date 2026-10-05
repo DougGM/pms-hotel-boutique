@@ -196,6 +196,35 @@ function installHousekeepingBackend() {
       hkStayover('stay-3', 'room-101', 'completed', 'Tendido de cama'),
       hkStayover('stay-4', 'room-102', 'cancelled', 'Cancelada por el huésped'),
     ],
+    checklists: [
+      {
+        id: 'check-stay-2',
+        serviceRequestId: 'stay-2',
+        roomId: 'room-202',
+        roomNumber: '202',
+        status: 'in_progress',
+        observations: 'Checklist real de stayover',
+        responsibleUserEmail: 'limpieza@hotelboutique.test',
+        completedByUserEmail: null,
+        startedAt: '2026-10-03T09:00:00Z',
+        completedAt: null,
+        createdAt: '2026-10-03T09:00:00Z',
+        updatedAt: '2026-10-03T09:00:00Z',
+        items: [
+          {
+            id: 'stayover-item-1',
+            label: 'Checklist stayover: no usar en turnover',
+            checked: false,
+            position: 0,
+            notes: null,
+            checkedByUserEmail: null,
+            checkedAt: null,
+            createdAt: '2026-10-03T09:00:00Z',
+            updatedAt: '2026-10-03T09:00:00Z',
+          },
+        ],
+      },
+    ],
     requests: [],
   };
   const turnover = {
@@ -226,6 +255,65 @@ function installHousekeepingBackend() {
     if (method === 'GET' && path === '/housekeeping/rooms') return json(state.rooms);
     if (method === 'GET' && path === '/housekeeping/rooms/stayover-cleanings') {
       return json(state.stayovers);
+    }
+    if (method === 'GET' && path === '/housekeeping/checklists') return json(state.checklists);
+    if (method === 'POST' && path === '/housekeeping/checklists') {
+      const body = JSON.parse(String(init.body ?? '{}'));
+      const stayover = state.stayovers.find((item) => item.id === body.serviceRequestId);
+      if (['completed', 'cancelled', 'rejected'].includes(stayover?.status)) {
+        return json({ message: 'Cannot create checklist for terminal service request' }, 409);
+      }
+      const checklist = {
+        id: `check-${state.checklists.length + 1}`,
+        serviceRequestId: body.serviceRequestId,
+        roomId: stayover?.roomId ?? 'room-101',
+        roomNumber: stayover?.roomNumber ?? '101',
+        status: 'pending',
+        observations: body.observations ?? null,
+        responsibleUserEmail: 'limpieza@hotelboutique.test',
+        completedByUserEmail: null,
+        startedAt: '2026-10-03T09:00:00Z',
+        completedAt: null,
+        createdAt: '2026-10-03T10:00:00Z',
+        updatedAt: '2026-10-03T10:00:00Z',
+        items: body.items.map((item, index) => ({
+          id: `check-item-${index + 1}`,
+          label: item.label,
+          checked: item.checked,
+          position: item.position ?? index,
+          notes: item.notes ?? null,
+          checkedByUserEmail: item.checked ? 'limpieza@hotelboutique.test' : null,
+          checkedAt: item.checked ? '2026-10-03T10:00:00Z' : null,
+          createdAt: '2026-10-03T10:00:00Z',
+          updatedAt: '2026-10-03T10:00:00Z',
+        })),
+      };
+      state.checklists.push(checklist);
+      return json(checklist, 201);
+    }
+    const checklist = path.match(/^\/housekeeping\/checklists\/([^/]+)$/);
+    if (method === 'PUT' && checklist) {
+      const index = state.checklists.findIndex((item) => item.id === checklist[1]);
+      if (index < 0) return json({ status: 404 }, 404);
+      const body = JSON.parse(String(init.body ?? '{}'));
+      state.checklists[index] = {
+        ...state.checklists[index],
+        status: body.status ?? state.checklists[index].status,
+        observations: body.observations ?? state.checklists[index].observations,
+        items: body.items.map((item, itemIndex) => ({
+          id: item.id ?? `check-item-${itemIndex + 1}`,
+          label: item.label,
+          checked: item.checked,
+          position: item.position ?? itemIndex,
+          notes: item.notes ?? null,
+          checkedByUserEmail: item.checked ? 'limpieza@hotelboutique.test' : null,
+          checkedAt: item.checked ? '2026-10-03T10:00:00Z' : null,
+          createdAt: '2026-10-03T10:00:00Z',
+          updatedAt: '2026-10-03T10:05:00Z',
+        })),
+        updatedAt: '2026-10-03T10:05:00Z',
+      };
+      return json(state.checklists[index]);
     }
     const stayover = path.match(/^\/housekeeping\/rooms\/stayover-cleanings\/([^/]+)\/(\w+)$/);
     if (method === 'POST' && stayover) {
@@ -382,6 +470,15 @@ test('limpieza: atender y completar una solicitud avanza sin transición inváli
   await settle();
   assert.equal(rowFor().status, 'Completada');
   assert.ok(!toasts().some((toast) => /rechaz/i.test(toast)), toasts().join());
+  assert.deepEqual(
+    hkBackend.requests.filter((request) => request.includes('/housekeeping/checklists')),
+    [
+      'GET /housekeeping/checklists',
+      'POST /housekeeping/checklists',
+      'PUT /housekeeping/checklists/check-2',
+    ],
+    'el checklist se crea antes de cerrar la solicitud y se marca completed después',
+  );
   const openAfter = expectedOpenRequests();
   assert.equal(openAfter, openBefore - 1);
   assert.equal(navBadge('Solicitudes'), openAfter ? String(openAfter) : undefined);
@@ -405,6 +502,33 @@ test('limpieza: el badge de Habitaciones cuenta las pendientes y baja al iniciar
   assert.equal(pendingRooms(), before - 1);
   assert.equal(navBadge('Habitaciones'), before - 1 ? String(before - 1) : undefined);
   assert.equal(hkBackend.rooms[0].housekeepingStatus, 'cleaning', 'la transición pasó por la API');
+});
+
+test('limpieza: el turnover no reutiliza ni modifica checklists stayover por roomId', async () => {
+  await mountHousekeeping();
+  await goTo('Habitaciones');
+
+  const room202 = cardFor('202');
+  assert.ok(room202, 'la habitación 202 existe');
+  await act(async () => buttons('Ver detalle', room202.card)[0].props.onClick());
+  await settle();
+
+  const checklistItems = view.root.findAll((node) => hasClass(node, 'hk-check-item'));
+  assert.match(text(checklistItems[0]), /Cama preparada/);
+  assert.equal(
+    checklistItems.some((item) => /Checklist stayover/.test(text(item))),
+    false,
+    'el checklist real de stayover no aparece como checklist de turnover',
+  );
+
+  await act(async () => checklistItems[0].props.onClick());
+  await settle();
+
+  assert.equal(
+    hkBackend.requests.some((request) => request === 'PUT /housekeeping/checklists/check-stay-2'),
+    false,
+    'marcar un item visual de turnover no modifica el checklist real del stayover',
+  );
 });
 
 test('limpieza: una habitación limpia se inspecciona contra el backend', async () => {
