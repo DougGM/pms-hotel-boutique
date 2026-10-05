@@ -1637,6 +1637,8 @@ function PrivateWorkspaceReady({
   const contentRole = activeWorkspace.role;
   const contentNav = activeWorkspace.nav;
   const contentLabel = activeWorkspace.label;
+  const workspaceDataRole =
+    activeRole === 'admin' && contentRole !== 'housekeeping' ? activeRole : contentRole;
   const role = roles.find((item) => item.id === activeRole) ?? roles[0];
   const contentRoleInfo = roles.find((item) => item.id === contentRole) ?? role;
   const accountName = sessionName ?? role.person;
@@ -1827,9 +1829,63 @@ function PrivateWorkspaceReady({
     notify(getErrorMessage(cause));
   };
 
+  useEffect(() => {
+    if (activeRole !== 'admin') return;
+    if (!['reception', 'housekeeping', 'room-service', 'concierge'].includes(contentRole)) return;
+    let active = true;
+
+    async function loadAdminScopedWorkspace() {
+      try {
+        const data = await loadWorkspaceData(workspaceDataRole);
+        if (!active) return;
+
+        if (contentRole === 'reception') {
+          setRecReservationList(data.recReservations);
+          setRecRoomList(data.recRooms);
+          setRecBlockList(data.recRoomBlocks);
+        }
+
+        if (contentRole === 'housekeeping') {
+          setHkRooms(data.cleaningRooms);
+          setHkRequests(data.guestRequests);
+          setHkHistory(data.history);
+          setHkDefects(data.defects);
+        }
+
+        if (contentRole === 'room-service') {
+          setRsOrders(data.roomServiceOrders);
+          setRsSelectedOrderId((currentId) =>
+            currentId !== null && data.roomServiceOrders.some((order) => order.id === currentId)
+              ? currentId
+              : null,
+          );
+        }
+
+        if (contentRole === 'concierge') {
+          setCgRequests(data.conciergeRequests);
+          setCgSelectedRequestId((currentId) =>
+            currentId !== null && data.conciergeRequests.some((request) => request.id === currentId)
+              ? currentId
+              : null,
+          );
+        }
+      } catch (cause) {
+        if (active) {
+          setToast(getErrorMessage(cause));
+          window.setTimeout(() => setToast(''), 2800);
+        }
+      }
+    }
+
+    void loadAdminScopedWorkspace();
+    return () => {
+      active = false;
+    };
+  }, [activeRole, contentRole, workspaceDataRole]);
+
   const refreshRoomServiceOrders = async () => {
     try {
-      const data = await loadWorkspaceData(activeRole);
+      const data = await loadWorkspaceData(workspaceDataRole);
       setRsOrders(data.roomServiceOrders);
       setRsSelectedOrderId((currentId) =>
         currentId !== null && data.roomServiceOrders.some((order) => order.id === currentId)
@@ -1844,7 +1900,7 @@ function PrivateWorkspaceReady({
 
   const refreshConciergeRequests = async () => {
     try {
-      const data = await loadWorkspaceData(activeRole);
+      const data = await loadWorkspaceData(workspaceDataRole);
       setCgRequests(data.conciergeRequests);
       setCgSelectedRequestId((currentId) =>
         currentId !== null && data.conciergeRequests.some((request) => request.id === currentId)
@@ -1859,7 +1915,7 @@ function PrivateWorkspaceReady({
 
   const refreshReception = async () => {
     try {
-      const data = await loadWorkspaceData(activeRole);
+      const data = await loadWorkspaceData(workspaceDataRole);
       setRecReservationList(data.recReservations);
       setRecRoomList(data.recRooms);
       setRecBlockList(data.recRoomBlocks);
