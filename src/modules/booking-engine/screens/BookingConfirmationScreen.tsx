@@ -41,14 +41,17 @@ export function BookingConfirmationScreen() {
   const checkOut = parseDate(booking.checkOut);
   const nights = booking.nights || calculateNights(checkIn, checkOut);
   const guestName = `${booking.guestFirstName} ${booking.guestLastName}`;
+  // El backend crea toda reserva pública como pending; confirmarla le toca al hotel.
+  const statusLabel =
+    booking.status === 'pending' ? 'Pendiente de confirmación por el hotel' : 'Reserva registrada';
 
   return (
     <section className="content booking-confirmation-page">
       <div className="booking-confirmation-heading">
         <div>
-          <p className="eyebrow">Reserva registrada</p>
-          <h1>Reserva confirmada</h1>
-          <p>Tu reservación quedó registrada correctamente.</p>
+          <p className="eyebrow">{statusLabel}</p>
+          <h1>Reserva registrada</h1>
+          <p>Tu reservación quedó registrada. El hotel la revisará y la confirmará.</p>
         </div>
         <Link className="ui-action" to="/">
           Nueva búsqueda
@@ -93,6 +96,10 @@ export function BookingConfirmationScreen() {
               <strong>{booking.rateName}</strong>
             </div>
             <div>
+              <span>Estado</span>
+              <strong>{statusLabel}</strong>
+            </div>
+            <div>
               <span>Monto</span>
               <strong>{formatCurrency(booking.totalAmountCents, booking.currency)}</strong>
             </div>
@@ -102,7 +109,8 @@ export function BookingConfirmationScreen() {
         <aside className="booking-confirmation-card">
           <h2>Siguiente paso</h2>
           <p className="booking-muted">
-            Esta ronda confirma la reserva en pantalla. El envio por correo queda fuera de alcance.
+            Conserva tu código de confirmación. El hotel confirmará la reserva; el envío por correo
+            queda fuera de alcance.
           </p>
           <div className="booking-form-actions">
             <Link className="ui-action" to={`/rooms/${booking.roomTypeId}`}>

@@ -119,6 +119,15 @@ recien al final llama a `guestService.createGuest` para usar el ID generado en
 hotel (tarjeta, transferencia, pago en hotel y billetera digital), pero no
 procesa cobros reales en esta fase.
 
+Nota 2026-10-05 (#127): lo anterior sobre `guestService`/`bookingService` ya no
+aplica. Todo el motor publico (`modules/booking-engine/`) pasa solo por
+`publicBookingCatalogService`, que usa los contratos publicos reales del backend
+sin JWT de personal: `GET /public/room-types`, `GET /public/rates`,
+`GET /public/availability` y `POST /public/bookings`. La tarifa, el total y la
+disponibilidad de una estadia siempre salen de `/public/availability`; ninguna
+pantalla los calcula. La reserva se crea `pending` y la confirmacion muestra la
+respuesta del POST. Ver `docs/DECISIONES.md`, D-016.
+
 Nota 2026-09-26 (#76): en pantallas orientadas a personas, el nombre completo
 del huesped es la etiqueta primaria cuando puede resolverse por `guestService`;
 `GST-*` se mantiene solo como referencia secundaria. La galeria publica de

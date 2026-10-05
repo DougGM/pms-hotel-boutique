@@ -970,6 +970,63 @@ El detalle operativo queda en
    estados y metadatos oficiales, la UI solo podria simular una factura y
    arriesga confundir recibos operativos con documentos fiscales certificados.
 
+## D-016 · #127: la web pública usa los contratos `/public` del backend
+
+**Fecha:** 2026-10-05 · **Estado:** aceptada.
+
+### Contexto
+
+El backend expone (ticket backend #62) cuatro contratos sin JWT de personal:
+`GET /public/room-types`, `GET /public/rates`, `GET /public/availability` y
+`POST /public/bookings`. Antes, la web pública dependía de un servicio de
+compatibilidad con datos locales y calculaba disponibilidad, tarifa y total en
+el navegador.
+
+### Decisión
+
+- `publicBookingCatalogService` es la única puerta del motor público
+  (`modules/booking-engine/`) y solo llama esas cuatro rutas, siempre con
+  `skipAuthorization` y `skipRefresh`: nunca envía el JWT del personal ni
+  dispara un refresh o un redireccionamiento al login.
+- **Disponibilidad:** `GET /public/availability` con `checkIn`, `checkOut`,
+  `adults`, `children` y, opcionalmente, `roomTypeId`. El buscador, el detalle
+  de habitación (cuando la URL trae fechas y huéspedes) y el formulario de
+  reserva muestran la tarifa, el total y `availableRooms` que devuelve el
+  backend. Ninguna pantalla calcula tarifa ni disponibilidad. Sin resultados, el
+  formulario no deja continuar.
+- **Reserva:** `POST /public/bookings` con `roomTypeId`, fechas, ocupantes,
+  `notes` y los datos del huésped. El body se arma por lista blanca: `rateId`,
+  `roomId`, `status`, importes y `guestId` nunca salen del navegador. La
+  reserva se crea `pending`; la confirmación muestra la respuesta del POST
+  ("Reserva registrada", pendiente de confirmación por el hotel) y no consulta
+  endpoints privados.
+- **Errores:** el servicio los traduce a `PublicBookingError` con un mensaje en
+  español y un `kind`; nunca se muestra el texto interno del backend.
+  `400` → datos/fechas inválidos según el caso, `401`/`403` y `5xx`/red →
+  servicio no disponible, `404` → servicio público no disponible, `409` → sin
+  disponibilidad (el formulario vuelve a consultar) o conflicto genérico de
+  datos del huésped (sin indicar qué dato).
+- **Tarifas sin fecha de fin:** el backend devuelve `validTo: null`. El
+  contrato compartido de `Rate` todavía exige la fecha, así que el servicio
+  público la adapta internamente para el mapper; sigue significando "sin fecha
+  de fin" (`isOpenEndedRate`) y no se muestra al usuario.
+
+### Qué NO hacer
+
+- No usar `bookingService`, `guestService` ni `roomService` desde el motor
+  público, ni rutas privadas como `/guests` o `/bookings`
+  (`test-e2e-integration.mjs` lo verifica).
+- No volver a calcular tarifa, total o disponibilidad en una pantalla pública.
+- No mostrar mensajes del backend tal cual ni revelar si un email o documento
+  ya existe.
+
+### Pendiente fuera de #127
+
+- El contrato compartido de `Rate` (`valid_to`) y `roomService` siguen sin
+  aceptar `validTo: null`: requiere un issue separado.
+- Confirmar reservas (`pending` → `confirmed`) y el rate limiting/CAPTCHA del
+  POST anónimo son tickets del backend.
+
 ## Cómo agregar una nueva decisión
 
 Copiar la estructura de D-001: **Contexto** (qué problema había y qué

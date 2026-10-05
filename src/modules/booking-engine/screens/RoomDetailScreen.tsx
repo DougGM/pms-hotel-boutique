@@ -1,6 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { publicBookingCatalogService } from '@/services/publicBookingCatalogService';
+import {
+  publicBookingCatalogService,
+  type PublicAvailableRoomType,
+} from '@/services/publicBookingCatalogService';
 import { Badge } from '@/shared/components/Badge';
 import { Button } from '@/shared/components/Button';
 import { EmptyState } from '@/shared/components/EmptyState';
@@ -15,6 +18,14 @@ import { getRoomTypeGallery } from './room-media';
 import './booking-engine.css';
 
 type DetailStatus = 'loading' | 'success' | 'error';
+
+/** Disponibilidad y precio de la estadía: siempre de GET /public/availability. */
+type QuoteState =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'available'; result: PublicAvailableRoomType }
+  | { status: 'unavailable' }
+  | { status: 'error'; message: string };
 
 type DetailState = {
   roomType?: RoomType;
@@ -55,26 +66,13 @@ function isValidStay(checkIn: Date | null, checkOut: Date | null): checkIn is Da
   }
 }
 
-function findRateForStay(
-  rates: Rate[],
-  roomTypeId: string,
-  checkIn: Date,
-  checkOut: Date,
-): Rate | undefined {
-  const nights = calculateNights(checkIn, checkOut);
-
-  return rates
-    .filter(
-      (rate) =>
-        rate.active &&
-        rate.roomTypeId === roomTypeId &&
-        dateKey(rate.validFrom) <= dateKey(checkIn) &&
-        dateKey(rate.validTo) >= dateKey(checkOut) &&
-        rate.minimumNights <= nights,
-    )
-    .sort((left, right) => dateKey(right.validFrom).localeCompare(dateKey(left.validFrom)))[0];
+function parseCount(value: string | null, minimum: number): number | null {
+  if (value === null) return null;
+  const count = Number(value);
+  return Number.isInteger(count) && count >= minimum ? count : null;
 }
 
+/** Tarifa vigente más baja, solo como referencia "por noche" sin fechas. */
 function findFallbackRate(rates: Rate[], roomTypeId: string): Rate | undefined {
   return rates
     .filter((rate) => rate.active && rate.roomTypeId === roomTypeId)
@@ -87,10 +85,20 @@ export function RoomDetailScreen() {
   const [searchParams] = useSearchParams();
   const checkIn = parseDateKey(searchParams.get('checkIn'));
   const checkOut = parseDateKey(searchParams.get('checkOut'));
+  const adults = parseCount(searchParams.get('adults'), 1);
+  const children = parseCount(searchParams.get('children'), 0) ?? 0;
+  const hasValidDates = isValidStay(checkIn, checkOut);
+  const checkInKey = hasValidDates ? dateKey(checkIn) : '';
+  const checkOutKey = hasValidDates && checkOut ? dateKey(checkOut) : '';
+  // Sin fechas válidas y adultos no se consulta disponibilidad ni se inventa.
+  const canQuote = hasValidDates && adults !== null;
 
   const [status, setStatus] = useState<DetailStatus>('loading');
   const [error, setError] = useState<string | null>(null);
   const [detail, setDetail] = useState<DetailState>({ features: [], rates: [] });
+  const [quote, setQuote] = useState<QuoteState>({ status: 'idle' });
+  // Solo la consulta más reciente puede escribir el estado.
+  const quoteRequestRef = useRef(0);
 
   const loadDetail = useCallback(async () => {
     if (!roomTypeId) return;
@@ -121,6 +129,39 @@ export function RoomDetailScreen() {
   useEffect(() => {
     void loadDetail();
   }, [loadDetail]);
+
+  const loadQuote = useCallback(async () => {
+    const requestId = ++quoteRequestRef.current;
+    if (!roomTypeId || !canQuote || adults === null) {
+      setQuote({ status: 'idle' });
+      return;
+    }
+
+    setQuote({ status: 'loading' });
+    try {
+      const results = await publicBookingCatalogService.getAvailability({
+        checkIn: checkInKey,
+        checkOut: checkOutKey,
+        adults,
+        children,
+        roomTypeId,
+      });
+      if (requestId !== quoteRequestRef.current) return;
+      const result = results.find((item) => item.roomType.id === roomTypeId);
+      setQuote(result ? { status: 'available', result } : { status: 'unavailable' });
+    } catch (cause) {
+      if (requestId !== quoteRequestRef.current) return;
+      setQuote({
+        status: 'error',
+        message:
+          cause instanceof Error ? cause.message : 'No fue posible consultar la disponibilidad.',
+      });
+    }
+  }, [adults, canQuote, checkInKey, checkOutKey, children, roomTypeId]);
+
+  useEffect(() => {
+    void loadQuote();
+  }, [loadQuote]);
 
   const featureNames = useMemo(() => {
     if (!detail.roomType) return [];
@@ -163,15 +204,35 @@ export function RoomDetailScreen() {
     );
   }
 
-  const hasValidDates = isValidStay(checkIn, checkOut);
-  const rate = hasValidDates
-    ? findRateForStay(detail.rates, detail.roomType.id, checkIn, checkOut!)
+  const rate = canQuote
+    ? quote.status === 'available'
+      ? quote.result.rate
+      : undefined
     : findFallbackRate(detail.rates, detail.roomType.id);
   const nights = hasValidDates ? calculateNights(checkIn, checkOut!) : 0;
-  const totalAmount = rate && hasValidDates ? rate.priceCents * nights : undefined;
-  const bookingUrl = hasValidDates
-    ? `/booking/new?roomTypeId=${detail.roomType.id}&checkIn=${dateKey(checkIn)}&checkOut=${dateKey(checkOut!)}`
-    : `/booking/new?roomTypeId=${detail.roomType.id}`;
+  const totalAmount = quote.status === 'available' ? quote.result.totalAmountCents : undefined;
+  const bookingParams = new URLSearchParams({ roomTypeId: detail.roomType.id });
+  if (hasValidDates) {
+    bookingParams.set('checkIn', checkInKey);
+    bookingParams.set('checkOut', checkOutKey);
+  }
+  if (adults !== null) {
+    bookingParams.set('adults', String(adults));
+    bookingParams.set('children', String(children));
+  }
+  const bookingUrl = `/booking/new?${bookingParams.toString()}`;
+  const canBook = canQuote ? quote.status === 'available' : !!rate;
+  const availabilityMessage = !canQuote
+    ? undefined
+    : quote.status === 'loading'
+      ? 'Consultando disponibilidad...'
+      : quote.status === 'available'
+        ? `${quote.result.availableRooms} ${quote.result.availableRooms === 1 ? 'disponible' : 'disponibles'} para tus fechas`
+        : quote.status === 'unavailable'
+          ? 'No hay disponibilidad para estas fechas y huéspedes.'
+          : quote.status === 'error'
+            ? quote.message
+            : undefined;
   const galleryImages = getRoomTypeGallery(detail.roomType);
 
   return (
@@ -228,9 +289,14 @@ export function RoomDetailScreen() {
               <p className="booking-rate-price">{formatCurrency(rate.priceCents, rate.currency)}</p>
               <p className="booking-muted">por noche</p>
             </>
-          ) : (
+          ) : canQuote ? null : (
             <p className="booking-muted">No hay tarifa activa para este tipo de habitación.</p>
           )}
+          {availabilityMessage ? (
+            <p className="booking-muted" role="status">
+              {availabilityMessage}
+            </p>
+          ) : null}
 
           <div className="booking-rate-summary">
             <div>
@@ -256,7 +322,7 @@ export function RoomDetailScreen() {
           </div>
 
           <Button
-            disabled={!rate}
+            disabled={!canBook}
             onClick={() => {
               navigate(bookingUrl);
             }}

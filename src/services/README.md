@@ -590,3 +590,20 @@ Sin endpoint de huesped (se muestra "Consulta en recepcion" en lugar de
 consumir servicios del personal): editar perfil, otras reservas, modificar o
 cancelar la reserva, detalle del folio, tarifa y recibo. Las notificaciones mock
 (`notificationReadsDB`) ya no son fuente: solo se muestran las del backend.
+
+## Integracion web publica (#127)
+
+`publicBookingCatalogService` usa solo los contratos publicos del backend, sin
+JWT de personal (`skipAuthorization` y `skipRefresh`):
+
+- `GET /public/room-types` → `getRoomTypes()` / `getRoomTypeCatalog()`.
+- `GET /public/rates` → `getRates()` (tarifas vigentes, referencia "desde").
+- `GET /public/availability` → `getAvailability({ checkIn, checkOut, adults,
+children?, roomTypeId? })`: tarifa, total y `availableRooms` de la estadia.
+- `POST /public/bookings` → `createBooking()`: body por lista blanca, sin
+  `rateId`, `roomId`, `status`, importes ni `guestId`; responde la confirmacion
+  `pending`.
+
+Los errores salen como `PublicBookingError` (`kind` + mensaje en espanol); el
+texto del backend nunca llega a la UI. No hay fallback local. Detalle en
+`docs/DECISIONES.md`, D-016.

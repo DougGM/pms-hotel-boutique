@@ -1,4 +1,4 @@
-import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Banknote,
   BedDouble,
@@ -11,14 +11,17 @@ import {
   UsersRound,
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { publicBookingCatalogService } from '@/services/publicBookingCatalogService';
+import {
+  PublicBookingError,
+  publicBookingCatalogService,
+  type PublicAvailableRoomType,
+} from '@/services/publicBookingCatalogService';
 import { Button } from '@/shared/components/Button';
 import { EmptyState } from '@/shared/components/EmptyState';
 import { ErrorState } from '@/shared/components/ErrorState';
 import { Input } from '@/shared/components/Input';
 import { LoadingState } from '@/shared/components/LoadingState';
 import { Select } from '@/shared/components/Select';
-import type { Rate } from '@/shared/types/entities/rate';
 import type { RoomType } from '@/shared/types/entities/room-type';
 import { formatCurrency } from '@/shared/utils/currency';
 import { calculateNights, formatDateGT } from '@/shared/utils/date';
@@ -28,6 +31,17 @@ import './booking-engine.css';
 type FormStatus = 'loading' | 'success' | 'error';
 type BookingStep = 'details' | 'confirmation' | 'payment';
 type PaymentMethod = 'card' | 'transfer' | 'hotel' | 'wallet';
+
+/** Tarifa, total y disponibilidad: siempre los decide GET /public/availability. */
+type QuoteState =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'available'; result: PublicAvailableRoomType }
+  | { status: 'unavailable' }
+  | { status: 'error'; message: string };
+
+const NO_AVAILABILITY_MESSAGE =
+  'No hay disponibilidad para ese tipo de habitacion en esas fechas. Elige otras fechas u otra habitacion.';
 
 type DateRangeValue = {
   start: Date | null;
@@ -83,24 +97,9 @@ function isValidStay(range: DateRangeValue): range is { start: Date; end: Date }
   }
 }
 
-function findRateForStay(
-  rates: Rate[],
-  roomTypeId: string,
-  checkIn: Date,
-  checkOut: Date,
-): Rate | undefined {
-  const nights = calculateNights(checkIn, checkOut);
-
-  return rates
-    .filter(
-      (rate) =>
-        rate.active &&
-        rate.roomTypeId === roomTypeId &&
-        dateKey(rate.validFrom) <= dateKey(checkIn) &&
-        dateKey(rate.validTo) >= dateKey(checkOut) &&
-        rate.minimumNights <= nights,
-    )
-    .sort((left, right) => dateKey(right.validFrom).localeCompare(dateKey(left.validFrom)))[0];
+function parseCount(value: string | null, fallback: string, minimum: number): string {
+  const count = Number(value);
+  return value !== null && Number.isInteger(count) && count >= minimum ? String(count) : fallback;
 }
 
 export function BookingFormScreen() {
@@ -118,7 +117,6 @@ export function BookingFormScreen() {
   const [status, setStatus] = useState<FormStatus>('loading');
   const [loadError, setLoadError] = useState<string | null>(null);
   const [roomTypes, setRoomTypes] = useState<RoomType[]>([]);
-  const [rates, setRates] = useState<Rate[]>([]);
   const [roomTypeId, setRoomTypeId] = useState(initialRoomTypeId);
   const [range, setRange] = useState<DateRangeValue>(initialRange);
   const [guestFirstName, setGuestFirstName] = useState('');
@@ -127,8 +125,8 @@ export function BookingFormScreen() {
   const [guestPhone, setGuestPhone] = useState('');
   const [guestDocumentType, setGuestDocumentType] = useState('national_id');
   const [guestDocumentNumber, setGuestDocumentNumber] = useState('');
-  const [adults, setAdults] = useState('1');
-  const [children, setChildren] = useState('0');
+  const [adults, setAdults] = useState(() => parseCount(searchParams.get('adults'), '1', 1));
+  const [children, setChildren] = useState(() => parseCount(searchParams.get('children'), '0', 0));
   const [notes, setNotes] = useState('');
   const [errors, setErrors] = useState<FormErrors>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -139,20 +137,19 @@ export function BookingFormScreen() {
   const [cardNumber, setCardNumber] = useState('');
   const [cardExpiry, setCardExpiry] = useState('');
   const [cardCvc, setCardCvc] = useState('');
+  const [quote, setQuote] = useState<QuoteState>({ status: 'idle' });
+  // Cada consulta lleva un número; solo la más reciente puede escribir el estado.
+  const quoteRequestRef = useRef(0);
 
   const loadFormData = useCallback(async () => {
     setStatus('loading');
     setLoadError(null);
 
     try {
-      const [nextRoomTypes, nextRates] = await Promise.all([
-        publicBookingCatalogService.getRoomTypes(),
-        publicBookingCatalogService.getRates(),
-      ]);
+      const nextRoomTypes = await publicBookingCatalogService.getRoomTypes();
       const activeRoomTypes = nextRoomTypes.filter((roomType) => roomType.active);
 
       setRoomTypes(activeRoomTypes);
-      setRates(nextRates);
       setRoomTypeId((current) => current || activeRoomTypes[0]?.id || '');
       setStatus('success');
     } catch (cause) {
@@ -166,13 +163,7 @@ export function BookingFormScreen() {
   }, [loadFormData]);
 
   const selectedRoomType = roomTypes.find((roomType) => roomType.id === roomTypeId);
-  const selectedRate =
-    selectedRoomType && isValidStay(range)
-      ? findRateForStay(rates, selectedRoomType.id, range.start, range.end)
-      : undefined;
   const nights = isValidStay(range) ? calculateNights(range.start, range.end) : 0;
-  const totalAmount =
-    selectedRate && isValidStay(range) ? selectedRate.priceCents * nights : undefined;
   const guestFullName = [guestFirstName, guestLastName].filter(Boolean).join(' ');
   const capacityError = selectedRoomType
     ? validateBookingCapacity({
@@ -182,6 +173,65 @@ export function BookingFormScreen() {
         roomTypeName: selectedRoomType.name,
       })
     : undefined;
+
+  const adultsCount = Number(adults);
+  const childrenCount = Number(children);
+  const checkInKey = range.start ? dateKey(range.start) : '';
+  const checkOutKey = range.end ? dateKey(range.end) : '';
+  const canQuote =
+    !!selectedRoomType &&
+    isValidStay(range) &&
+    Number.isInteger(adultsCount) &&
+    adultsCount >= 1 &&
+    Number.isInteger(childrenCount) &&
+    childrenCount >= 0 &&
+    !capacityError;
+
+  const loadQuote = useCallback(async () => {
+    const requestId = ++quoteRequestRef.current;
+    if (!canQuote) {
+      setQuote({ status: 'idle' });
+      return;
+    }
+
+    setQuote({ status: 'loading' });
+    try {
+      const results = await publicBookingCatalogService.getAvailability({
+        checkIn: checkInKey,
+        checkOut: checkOutKey,
+        adults: adultsCount,
+        children: childrenCount,
+        roomTypeId,
+      });
+      if (requestId !== quoteRequestRef.current) return;
+      const result = results.find((item) => item.roomType.id === roomTypeId);
+      setQuote(result ? { status: 'available', result } : { status: 'unavailable' });
+    } catch (cause) {
+      if (requestId !== quoteRequestRef.current) return;
+      setQuote({
+        status: 'error',
+        message:
+          cause instanceof Error ? cause.message : 'No fue posible consultar la disponibilidad.',
+      });
+    }
+  }, [adultsCount, canQuote, checkInKey, checkOutKey, childrenCount, roomTypeId]);
+
+  useEffect(() => {
+    void loadQuote();
+  }, [loadQuote]);
+
+  const quotedRate = quote.status === 'available' ? quote.result.rate : undefined;
+  const totalAmount = quote.status === 'available' ? quote.result.totalAmountCents : undefined;
+  const quoteMessage =
+    quote.status === 'loading'
+      ? 'Consultando disponibilidad...'
+      : quote.status === 'available'
+        ? `${quote.result.availableRooms} ${quote.result.availableRooms === 1 ? 'disponible' : 'disponibles'}`
+        : quote.status === 'unavailable'
+          ? NO_AVAILABILITY_MESSAGE
+          : quote.status === 'error'
+            ? quote.message
+            : undefined;
 
   function stepClassName(targetStep: BookingStep): string {
     const order: BookingStep[] = ['details', 'confirmation', 'payment'];
@@ -235,12 +285,22 @@ export function BookingFormScreen() {
 
     if (step === 'details') {
       if (!validateForm() || !isValidStay(range)) return;
+      if (quote.status !== 'available') {
+        setSubmitError(quoteMessage ?? NO_AVAILABILITY_MESSAGE);
+        return;
+      }
       setStep('confirmation');
       return;
     }
 
     if (step === 'confirmation') {
       setStep('payment');
+      return;
+    }
+
+    if (quote.status !== 'available') {
+      setStep('details');
+      setSubmitError(quoteMessage ?? NO_AVAILABILITY_MESSAGE);
       return;
     }
 
@@ -276,6 +336,12 @@ export function BookingFormScreen() {
       });
     } catch (cause) {
       setSubmitError(cause instanceof Error ? cause.message : 'No fue posible crear la reserva.');
+      if (cause instanceof PublicBookingError && cause.kind === 'no_availability') {
+        // Otra reserva tomó la última habitación: volver a detalles con la
+        // disponibilidad real actualizada.
+        setStep('details');
+        void loadQuote();
+      }
     } finally {
       setSubmitting(false);
     }
@@ -543,7 +609,9 @@ export function BookingFormScreen() {
                 </strong>
                 <span>Total estimado</span>
                 <strong>
-                  {totalAmount !== undefined ? formatCurrency(totalAmount) : 'Por definir'}
+                  {totalAmount !== undefined
+                    ? formatCurrency(totalAmount, quotedRate?.currency)
+                    : 'Por definir'}
                 </strong>
               </div>
             </div>
@@ -720,7 +788,9 @@ export function BookingFormScreen() {
                 <div className="booking-payment-total">
                   <span>Total estimado</span>
                   <strong>
-                    {totalAmount !== undefined ? formatCurrency(totalAmount) : 'Por definir'}
+                    {totalAmount !== undefined
+                      ? formatCurrency(totalAmount, quotedRate?.currency)
+                      : 'Por definir'}
                   </strong>
                   <small>Tarifa sujeta a confirmacion final del hotel.</small>
                 </div>
@@ -759,9 +829,16 @@ export function BookingFormScreen() {
           <div className="booking-form-room-chip">
             <span>{selectedRoomType?.name ?? 'Habitacion por definir'}</span>
             <strong>
-              {selectedRate ? formatCurrency(selectedRate.priceCents) : 'Tarifa pendiente'}
+              {quotedRate
+                ? formatCurrency(quotedRate.priceCents, quotedRate.currency)
+                : 'Tarifa pendiente'}
             </strong>
           </div>
+          {quoteMessage ? (
+            <p className="booking-muted" role="status">
+              {quoteMessage}
+            </p>
+          ) : null}
           <div className="booking-rate-summary">
             <div>
               <span>Huesped</span>
@@ -788,13 +865,17 @@ export function BookingFormScreen() {
             <div>
               <span>Tarifa</span>
               <strong>
-                {selectedRate ? formatCurrency(selectedRate.priceCents) : 'Por definir'}
+                {quotedRate
+                  ? formatCurrency(quotedRate.priceCents, quotedRate.currency)
+                  : 'Por definir'}
               </strong>
             </div>
             <div>
               <span>Total estimado</span>
               <strong>
-                {totalAmount !== undefined ? formatCurrency(totalAmount) : 'Por definir'}
+                {totalAmount !== undefined
+                  ? formatCurrency(totalAmount, quotedRate?.currency)
+                  : 'Por definir'}
               </strong>
             </div>
           </div>
