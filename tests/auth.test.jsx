@@ -3,6 +3,7 @@ import { test, beforeEach, afterEach } from 'node:test';
 import { create, act } from 'react-test-renderer';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { router as configuredRouter } from '@/app/router';
+import { rolePermissionsFromBackendRoles } from '@/modules/administration/utils/rolePermissions';
 import { AuthProvider } from '@/modules/auth/components/AuthProvider';
 import { authService, sessionStorageKey } from '@/modules/auth/services/auth-service';
 import { getLoginDestination } from '@/private/routes/navigation';
@@ -526,6 +527,74 @@ test('each staff role only sees its menu and direct unauthorized URLs are blocke
     assert.equal(router.state.location.pathname, '/auth/login');
     assert.equal(values.size, 0);
   }
+});
+
+test('ADMIN keeps full UI access regardless of its backend permission list; other roles do not', () => {
+  // Permisos operativos reales de ADMIN en el backend (migraciones 008 y 010).
+  const realBackendAdminPermissions = [
+    'rooms.read',
+    'rooms.write',
+    'room-types.read',
+    'room-types.write',
+    'room-features.read',
+    'rates.read',
+    'rates.write',
+    'guests.read',
+    'guests.write',
+    'bookings.read',
+    'bookings.write',
+    'bookings.check-in',
+    'bookings.check-out',
+    'booking-companions.read',
+    'booking-companions.write',
+    'housekeeping.read',
+    'housekeeping.write',
+    'room-service.read',
+    'room-service.write',
+    'payments.read',
+    'payments.write',
+    'deposits.read',
+    'deposits.write',
+    'folios.read',
+    'folios.write',
+    'charges.read',
+    'charges.write',
+    'inventory.read',
+    'inventory.write',
+    'cash.read',
+    'cash.write',
+    'concierge.read',
+    'concierge.write',
+  ];
+  const role = (code, permissionIds) => ({ code, permissionIds });
+  // Sin lista de permisos, ADMIN recibe el conjunto completo de referencia.
+  const full = rolePermissionsFromBackendRoles([role('admin', [])]).admin;
+  const fullKeys = Object.keys(full);
+  assert.ok(fullKeys.length > 0);
+  assert.ok(Object.values(full).every(Boolean));
+  assert.equal(full['HUÉSPED::Notificaciones'], true, 'incluye la vista previa del portal');
+
+  for (const permissionIds of [
+    ['bookings.read', 'rooms.write', 'cash.read'],
+    realBackendAdminPermissions,
+  ]) {
+    const admin = rolePermissionsFromBackendRoles([role('admin', permissionIds)]).admin;
+    assert.deepEqual(
+      admin,
+      full,
+      `ADMIN con ${permissionIds.length} permisos debe tener acceso completo`,
+    );
+  }
+
+  const reception = rolePermissionsFromBackendRoles([
+    role('reception', ['bookings.read']),
+  ]).reception;
+  assert.deepEqual(Object.keys(reception).sort(), [...fullKeys].sort());
+  assert.equal(reception['RECEPCIÓN::Reservas'], true);
+  assert.equal(reception['RECEPCIÓN::Huéspedes'], false);
+  assert.equal(reception['RECEPCIÓN::Caja'], false);
+  assert.equal(reception['ADMINISTRACIÓN::Usuarios y roles'], false);
+  assert.equal(reception['HUÉSPED::Inicio'], false);
 });
 
 test('session survives remount; logout in another tab clears access', async () => {
