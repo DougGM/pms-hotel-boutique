@@ -73,11 +73,9 @@ export function isRoomAssignable(room: RoomAssignabilityInput): boolean {
 
 // --- booking -------------------------------------------------------------
 //
-// Literales tal cual los usa hoy el dataset (src/data/db.ts, bookingsDB)
-// y BookingStatus en shared/types/entities/booking/. Ninguna capa de código
-// impone hoy estas transiciones (no había máquina de estado explícita antes
-// de este archivo); se documentan como la interpretación de dominio más
-// directa para que ambos equipos converjan en la misma.
+// Literales alineados con BookingStatus en shared/types/entities/booking/.
+// El backend decide las transiciones productivas; esta tabla documenta la
+// interpretación compartida para que web y móvil converjan en la misma.
 export const BOOKING_STATUSES = [
   'pending',
   'confirmed',

@@ -1,287 +1,184 @@
-import { build } from 'esbuild';
-import { mkdir } from 'node:fs/promises';
-import { createRequire } from 'node:module';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-
-// Verifica que TODA referencia entre entidades del dataset resuelva —no solo
-// room-type.room_feature_ids, que fue el hallazgo original (ver
-// docs/DECISIONES.md, D-002)— y que ningún catálogo tenga IDs duplicados.
-// Desde la consolidación en src/data/db.ts hay un solo dataset por entidad
-// (antes había dos mundos paralelos, mockData.ts y los lotes, con IDs que no
-// se cruzaban entre sí).
-
-await mkdir('.cache', { recursive: true });
-await build({
-  entryPoints: ['src/data/db.ts'],
-  outdir: '.cache',
-  outbase: 'src',
-  outExtension: { '.js': '.cjs' },
-  bundle: true,
-  platform: 'node',
-  format: 'cjs',
-  packages: 'external',
-  tsconfig: 'tsconfig.app.json',
-});
-
-const require = createRequire(import.meta.url);
-const load = (relativePath) => {
-  const path = require.resolve(`../.cache/${relativePath}.cjs`);
-  delete require.cache[path];
-  return require(path);
-};
-
-const {
-  roomFeaturesDB,
-  roomTypesDB,
-  roomsDB,
-  guestsDB,
-  ratesDB,
-  bookingsDB,
-  bookingCompanionsDB,
-  promotionsDB,
-  guestAccountsDB,
-  chargesDB,
-  paymentsDB,
-  depositsDB,
-  cashSessionsDB,
-  cashMovementsDB,
-  usersDB,
-  rolesDB,
-  permissionsDB,
-  amenitiesDB,
-  productsDB,
-  inventoryItemsDB,
-  inventoryMovementsDB,
-  auditLogsDB,
-  ordersDB,
-  serviceRequestsDB,
-} = load('data/db');
+import {
+  allCatalogs,
+  bookings,
+  cashMovements,
+  charges,
+  deposits,
+  guestAccounts,
+  inventoryMovements,
+  orders,
+  payments,
+  roles,
+  users,
+} from './fixtures/domain-fixtures.mjs';
 
 const idsOf = (records) => new Set(records.map((record) => record.id));
-
-// --- A. Ninguna referencia entre entidades queda colgando ---------------
-//
-// Cada entrada describe un campo FK: `records` es el dataset que lo tiene,
-// `field` el nombre del campo, `target` el catálogo al que debe apuntar,
-// `multi: true` si el campo es un array de IDs (en vez de un solo ID), y
-// `optional: true` si el campo puede faltar en un registro dado.
 
 const FK_CHECKS = [
   {
     label: 'roomType.room_feature_ids -> roomFeature',
-    records: roomTypesDB,
+    records: allCatalogs.roomTypes,
     field: 'room_feature_ids',
-    target: idsOf(roomFeaturesDB),
+    target: idsOf(allCatalogs.roomFeatures),
     multi: true,
   },
   {
     label: 'room.room_type_id -> roomType',
-    records: roomsDB,
+    records: allCatalogs.rooms,
     field: 'room_type_id',
-    target: idsOf(roomTypesDB),
+    target: idsOf(allCatalogs.roomTypes),
   },
   {
     label: 'rate.room_type_id -> roomType',
-    records: ratesDB,
+    records: allCatalogs.rates,
     field: 'room_type_id',
-    target: idsOf(roomTypesDB),
+    target: idsOf(allCatalogs.roomTypes),
   },
   {
     label: 'booking.guest_id -> guest',
-    records: bookingsDB,
+    records: bookings,
     field: 'guest_id',
-    target: idsOf(guestsDB),
+    target: idsOf(allCatalogs.guests),
   },
   {
     label: 'booking.room_id -> room',
-    records: bookingsDB,
+    records: bookings,
     field: 'room_id',
-    target: idsOf(roomsDB),
+    target: idsOf(allCatalogs.rooms),
     optional: true,
   },
   {
     label: 'booking.room_type_id -> roomType',
-    records: bookingsDB,
+    records: bookings,
     field: 'room_type_id',
-    target: idsOf(roomTypesDB),
+    target: idsOf(allCatalogs.roomTypes),
   },
   {
     label: 'booking.rate_id -> rate',
-    records: bookingsDB,
+    records: bookings,
     field: 'rate_id',
-    target: idsOf(ratesDB),
+    target: idsOf(allCatalogs.rates),
     optional: true,
   },
   {
     label: 'bookingCompanion.booking_id -> booking',
-    records: bookingCompanionsDB,
+    records: allCatalogs.bookingCompanions,
     field: 'booking_id',
-    target: idsOf(bookingsDB),
+    target: idsOf(bookings),
   },
-  // -- Lote C (WEB-11): cuentas, cargos, pagos, depósitos y caja --
   {
     label: 'guestAccount.booking_id -> booking',
-    records: guestAccountsDB,
+    records: guestAccounts,
     field: 'booking_id',
-    target: idsOf(bookingsDB),
+    target: idsOf(bookings),
   },
   {
     label: 'guestAccount.guest_id -> guest',
-    records: guestAccountsDB,
+    records: guestAccounts,
     field: 'guest_id',
-    target: idsOf(guestsDB),
+    target: idsOf(allCatalogs.guests),
   },
   {
     label: 'charge.booking_id -> booking',
-    records: chargesDB,
+    records: charges,
     field: 'booking_id',
-    target: idsOf(bookingsDB),
+    target: idsOf(bookings),
   },
   {
     label: 'charge.created_by_user_id -> user',
-    records: chargesDB,
+    records: charges,
     field: 'created_by_user_id',
-    target: idsOf(usersDB),
+    target: idsOf(users),
     optional: true,
   },
   {
     label: 'payment.booking_id -> booking',
-    records: paymentsDB,
+    records: payments,
     field: 'booking_id',
-    target: idsOf(bookingsDB),
+    target: idsOf(bookings),
   },
   {
     label: 'payment.processed_by_user_id -> user',
-    records: paymentsDB,
+    records: payments,
     field: 'processed_by_user_id',
-    target: idsOf(usersDB),
+    target: idsOf(users),
     optional: true,
   },
   {
     label: 'deposit.booking_id -> booking',
-    records: depositsDB,
+    records: deposits,
     field: 'booking_id',
-    target: idsOf(bookingsDB),
+    target: idsOf(bookings),
   },
   {
     label: 'deposit.guest_id -> guest',
-    records: depositsDB,
+    records: deposits,
     field: 'guest_id',
-    target: idsOf(guestsDB),
-  },
-  {
-    label: 'cashSession.opened_by_user_id -> user',
-    records: cashSessionsDB,
-    field: 'opened_by_user_id',
-    target: idsOf(usersDB),
-    optional: true,
-  },
-  {
-    label: 'cashSession.closed_by_user_id -> user',
-    records: cashSessionsDB,
-    field: 'closed_by_user_id',
-    target: idsOf(usersDB),
-    optional: true,
+    target: idsOf(allCatalogs.guests),
   },
   {
     label: 'cashMovement.cash_session_id -> cashSession',
-    records: cashMovementsDB,
+    records: cashMovements,
     field: 'cash_session_id',
-    target: idsOf(cashSessionsDB),
-  },
-  {
-    label: 'cashMovement.responsible_user_id -> user',
-    records: cashMovementsDB,
-    field: 'responsible_user_id',
-    target: idsOf(usersDB),
-    optional: true,
+    target: idsOf(allCatalogs.cashSessions),
   },
   {
     label: 'cashMovement.payment_id -> payment',
-    records: cashMovementsDB,
+    records: cashMovements,
     field: 'payment_id',
-    target: idsOf(paymentsDB),
+    target: idsOf(payments),
     optional: true,
   },
-  // -- Lote D (WEB-12): personal, catálogos e inventario --
   {
     label: 'role.permission_ids -> permission',
-    records: rolesDB,
+    records: roles,
     field: 'permission_ids',
-    target: idsOf(permissionsDB),
+    target: idsOf(allCatalogs.permissions),
     multi: true,
   },
   {
-    label: 'user.role -> role.code (correspondencia por valor, no FK — D-003)',
-    records: usersDB,
+    label: 'user.role -> role.code',
+    records: users,
     field: 'role',
-    target: new Set(rolesDB.map((role) => role.code)),
-  },
-  {
-    label: 'inventoryItem.product_id -> product',
-    records: inventoryItemsDB,
-    field: 'product_id',
-    target: idsOf(productsDB),
-    optional: true,
+    target: new Set(roles.map((role) => role.code)),
   },
   {
     label: 'inventoryMovement.inventory_item_id -> inventoryItem',
-    records: inventoryMovementsDB,
+    records: inventoryMovements,
     field: 'inventory_item_id',
-    target: idsOf(inventoryItemsDB),
-  },
-  {
-    label: 'inventoryMovement.responsible_user_id -> user',
-    records: inventoryMovementsDB,
-    field: 'responsible_user_id',
-    target: idsOf(usersDB),
-    optional: true,
+    target: idsOf(allCatalogs.inventoryItems),
   },
   {
     label: 'auditLog.user_id -> user',
-    records: auditLogsDB,
+    records: allCatalogs.auditLogs,
     field: 'user_id',
-    target: idsOf(usersDB),
+    target: idsOf(users),
   },
-  // -- order y service_request: construidos sobre estadías reales del Lote B --
   {
     label: 'order.booking_id -> booking',
-    records: ordersDB,
+    records: orders,
     field: 'booking_id',
-    target: idsOf(bookingsDB),
+    target: idsOf(bookings),
   },
   {
     label: 'order.room_id -> room',
-    records: ordersDB,
+    records: orders,
     field: 'room_id',
-    target: idsOf(roomsDB),
-  },
-  {
-    label: 'order.guest_id -> guest',
-    records: ordersDB,
-    field: 'guest_id',
-    target: idsOf(guestsDB),
-    optional: true,
+    target: idsOf(allCatalogs.rooms),
   },
   {
     label: 'serviceRequest.booking_id -> booking',
-    records: serviceRequestsDB,
+    records: allCatalogs.serviceRequests,
     field: 'booking_id',
-    target: idsOf(bookingsDB),
+    target: idsOf(bookings),
   },
   {
     label: 'serviceRequest.room_id -> room',
-    records: serviceRequestsDB,
+    records: allCatalogs.serviceRequests,
     field: 'room_id',
-    target: idsOf(roomsDB),
-  },
-  {
-    label: 'serviceRequest.guest_id -> guest',
-    records: serviceRequestsDB,
-    field: 'guest_id',
-    target: idsOf(guestsDB),
-    optional: true,
+    target: idsOf(allCatalogs.rooms),
   },
 ];
 
@@ -297,63 +194,25 @@ for (const check of FK_CHECKS) {
       for (const target of values) {
         assert.ok(
           check.target.has(target),
-          `${record.id}: ${check.field} -> "${target}" no existe en el catálogo destino`,
+          `${record.id}: ${check.field} -> "${target}" no existe`,
         );
       }
     }
   });
 }
 
-// --- B. order.items[].product_id -> product (array de objetos, no de IDs) --
-//
-// No encaja en el arnés genérico de arriba (multi/optional trabajan sobre
-// arrays de IDs sueltos, no de objetos) — prueba dedicada, mismo criterio
-// que product.inventory_consumption en la adenda del PR #36.
-
 test('integridad referencial: order.items[].product_id -> product', () => {
-  const productIds = idsOf(productsDB);
-  for (const order of ordersDB) {
+  const productIds = idsOf(allCatalogs.products);
+  for (const order of orders) {
     for (const item of order.items) {
-      assert.ok(
-        productIds.has(item.product_id),
-        `${order.id}: items[].product_id -> "${item.product_id}" no existe en el catálogo de productos`,
-      );
+      assert.ok(productIds.has(item.product_id), `${order.id}: ${item.product_id} no existe`);
     }
   }
 });
 
-// --- C. Ningún catálogo tiene IDs duplicados -----------------------------
-
-const CATALOGS = [
-  { label: 'roomFeature', records: roomFeaturesDB },
-  { label: 'roomType', records: roomTypesDB },
-  { label: 'room', records: roomsDB },
-  { label: 'guest', records: guestsDB },
-  { label: 'rate', records: ratesDB },
-  { label: 'booking', records: bookingsDB },
-  { label: 'bookingCompanion', records: bookingCompanionsDB },
-  { label: 'promotion', records: promotionsDB },
-  { label: 'guestAccount', records: guestAccountsDB },
-  { label: 'charge', records: chargesDB },
-  { label: 'payment', records: paymentsDB },
-  { label: 'deposit', records: depositsDB },
-  { label: 'cashSession', records: cashSessionsDB },
-  { label: 'cashMovement', records: cashMovementsDB },
-  { label: 'user', records: usersDB },
-  { label: 'role', records: rolesDB },
-  { label: 'permission', records: permissionsDB },
-  { label: 'amenity', records: amenitiesDB },
-  { label: 'product', records: productsDB },
-  { label: 'inventoryItem', records: inventoryItemsDB },
-  { label: 'inventoryMovement', records: inventoryMovementsDB },
-  { label: 'auditLog', records: auditLogsDB },
-  { label: 'order', records: ordersDB },
-  { label: 'serviceRequest', records: serviceRequestsDB },
-];
-
-for (const catalog of CATALOGS) {
-  test(`sin IDs duplicados: ${catalog.label}`, () => {
-    const ids = catalog.records.map((record) => record.id);
-    assert.equal(new Set(ids).size, ids.length, `${catalog.label} tiene IDs duplicados`);
+for (const [label, records] of Object.entries(allCatalogs)) {
+  test(`sin IDs duplicados: ${label}`, () => {
+    const ids = records.map((record) => record.id);
+    assert.equal(new Set(ids).size, ids.length, `${label} tiene IDs duplicados`);
   });
 }

@@ -63,8 +63,11 @@ export type HousekeepingChecklist = {
   updatedAt: string;
 };
 
-const checklistUnavailableMessage =
-  'Los checklists de limpieza no tienen contrato backend en develop; no se guardan datos locales.';
+type HousekeepingChecklistResponse = {
+  roomId: string;
+  items: HousekeepingChecklistItem[];
+  updatedAt: string;
+};
 
 function toRoomDto(response: HousekeepingRoomResponse): RoomDto {
   return {
@@ -158,6 +161,17 @@ async function stayoverAction(requestId: ID, action: string, fallback: string) {
 
 function removeChecklist(roomId: ID): void {
   void roomId;
+}
+
+function toChecklist(response: HousekeepingChecklistResponse): HousekeepingChecklist {
+  return {
+    roomId: response.roomId,
+    items: response.items.map((item) => ({
+      label: item.label,
+      done: item.done,
+    })),
+    updatedAt: response.updatedAt,
+  };
 }
 
 export const housekeepingService = {
@@ -265,15 +279,27 @@ export const housekeepingService = {
     return toServiceRequest(toServiceRequestDto(response));
   },
   async getChecklists(): Promise<HousekeepingChecklist[]> {
-    throw new Error(checklistUnavailableMessage);
+    const response = await request(
+      () => httpClient.get<HousekeepingChecklistResponse[]>('/housekeeping/rooms/checklists'),
+      'No fue posible cargar los checklists de limpieza.',
+    );
+    return response.map(toChecklist);
   },
   async saveChecklist(
     roomId: ID,
     items: HousekeepingChecklistItem[],
   ): Promise<HousekeepingChecklist> {
-    void roomId;
-    void items;
-    throw new Error(checklistUnavailableMessage);
+    const response = await request(
+      () =>
+        httpClient.put<HousekeepingChecklistResponse>(`/housekeeping/rooms/${roomId}/checklist`, {
+          items: items.map((item) => ({
+            label: item.label.trim(),
+            done: item.done,
+          })),
+        }),
+      'No fue posible guardar el checklist de limpieza.',
+    );
+    return toChecklist(response);
   },
 };
 

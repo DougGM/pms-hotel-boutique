@@ -1,5 +1,6 @@
 import { build } from 'esbuild';
 import { mkdir, readdir, readFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -50,17 +51,16 @@ async function collectSourceImports() {
   return imports;
 }
 
-test('INT-13: solo services puede depender de src/data/db', async () => {
+test('INT-FINAL: nadie depende de src/data/db y el archivo productivo ya no existe', async () => {
+  assert.equal(existsSync('src/data/db.ts'), false, 'src/data/db.ts debe estar eliminado');
   const offenders = (await collectSourceImports())
-    .filter(
-      ({ file, target }) => target.startsWith('src/data/db') && !file.startsWith('src/services/'),
-    )
+    .filter(({ target }) => target.startsWith('src/data/db'))
     .map(({ file }) => file);
 
   assert.deepEqual(
     offenders,
     [],
-    `Flujos fuera de src/services dependen accidentalmente de src/data/db: ${offenders.join(', ')}`,
+    `Flujos que dependen accidentalmente de src/data/db: ${offenders.join(', ')}`,
   );
 });
 
@@ -75,11 +75,6 @@ test('INT-13: servicios integrados no hacen fallback silencioso a mocks', async 
   for (const file of integratedFiles) {
     const content = await readFile(file, 'utf8');
     if (/\bisOfflineError\b/.test(content)) offenders.push(`${file}: isOfflineError`);
-  }
-
-  const roomService = await readFile('src/services/roomService.ts', 'utf8');
-  if (/['"]@\/data\/db['"]/.test(roomService)) {
-    offenders.push('src/services/roomService.ts: importa src/data/db');
   }
 
   assert.deepEqual(
