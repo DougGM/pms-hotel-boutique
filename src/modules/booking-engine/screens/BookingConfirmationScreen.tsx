@@ -1,110 +1,31 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { bookingService } from '@/services/bookingService';
-import { guestService } from '@/services/guestService';
-import { roomService } from '@/services/roomService';
+import { Link, useLocation, useParams } from 'react-router-dom';
+import type { PublicBookingConfirmation } from '@/services/publicBookingCatalogService';
 import { EmptyState } from '@/shared/components/EmptyState';
-import { ErrorState } from '@/shared/components/ErrorState';
-import { LoadingState } from '@/shared/components/LoadingState';
-import type { Booking } from '@/shared/types/entities/booking';
-import type { Guest } from '@/shared/types/entities/guest';
-import type { Rate } from '@/shared/types/entities/rate';
-import type { RoomType } from '@/shared/types/entities/room-type';
 import { formatCurrency } from '@/shared/utils/currency';
 import { calculateNights, formatDateGT } from '@/shared/utils/date';
 import './booking-engine.css';
 
-type ConfirmationStatus = 'loading' | 'success' | 'error';
-
-type ConfirmationState = {
-  booking?: Booking;
-  guest?: Guest;
-  roomType?: RoomType;
-  rate?: Rate;
+type BookingConfirmationLocationState = {
+  publicBookingConfirmation?: PublicBookingConfirmation;
 };
 
-function dateKey(date: Date): string {
-  const year = String(date.getFullYear()).padStart(4, '0');
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
-function findRateForBooking(rates: Rate[], booking: Booking): Rate | undefined {
-  if (booking.rateId) {
-    const rateById = rates.find((rate) => rate.id === booking.rateId);
-    if (rateById) return rateById;
-  }
-
-  return rates
-    .filter(
-      (rate) =>
-        rate.active &&
-        rate.roomTypeId === booking.roomTypeId &&
-        dateKey(rate.validFrom) <= dateKey(booking.checkIn) &&
-        dateKey(rate.validTo) >= dateKey(booking.checkOut),
-    )
-    .sort((left, right) => dateKey(right.validFrom).localeCompare(dateKey(left.validFrom)))[0];
+function parseDate(value: string): Date {
+  const [year, month, day] = value.split('-').map(Number);
+  return new Date(year, month - 1, day);
 }
 
 export function BookingConfirmationScreen() {
   const { bookingId } = useParams<'bookingId'>();
-  const [status, setStatus] = useState<ConfirmationStatus>('loading');
-  const [error, setError] = useState<string | null>(null);
-  const [confirmation, setConfirmation] = useState<ConfirmationState>({});
+  const location = useLocation();
+  const { publicBookingConfirmation } =
+    (location.state as BookingConfirmationLocationState | null) ?? {};
 
-  const loadConfirmation = useCallback(async () => {
-    if (!bookingId) return;
-
-    setStatus('loading');
-    setError(null);
-
-    try {
-      const [booking, roomTypes, rates] = await Promise.all([
-        bookingService.getBookingById(bookingId),
-        roomService.getRoomTypes(),
-        roomService.getRates(),
-      ]);
-      const roomType = booking
-        ? roomTypes.find((item) => item.id === booking.roomTypeId)
-        : undefined;
-      const rate = booking ? findRateForBooking(rates, booking) : undefined;
-      const guest = booking ? await guestService.getGuestById(booking.guestId) : undefined;
-
-      setConfirmation({ booking, guest, roomType, rate });
-      setStatus('success');
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'No fue posible cargar la reserva.');
-      setStatus('error');
-    }
-  }, [bookingId]);
-
-  useEffect(() => {
-    void loadConfirmation();
-  }, [loadConfirmation]);
-
-  if (status === 'loading') {
-    return (
-      <section className="content booking-confirmation-page">
-        <LoadingState label="Cargando confirmacion de reserva..." />
-      </section>
-    );
-  }
-
-  if (status === 'error') {
-    return (
-      <section className="content booking-confirmation-page">
-        <ErrorState description={error ?? 'Intenta nuevamente.'} onRetry={loadConfirmation} />
-      </section>
-    );
-  }
-
-  if (!confirmation.booking) {
+  if (!publicBookingConfirmation || publicBookingConfirmation.confirmationCode !== bookingId) {
     return (
       <section className="content booking-confirmation-page">
         <EmptyState
-          title="Reserva no encontrada"
-          description="No encontramos una reserva con ese identificador."
+          title="Confirmacion no disponible"
+          description="La reserva fue creada desde el flujo publico. Por seguridad, abre esta pantalla al finalizar una reserva nueva."
           action={
             <Link className="ui-action" to="/">
               Buscar disponibilidad
@@ -115,13 +36,11 @@ export function BookingConfirmationScreen() {
     );
   }
 
-  const { booking } = confirmation;
-  const guestName = confirmation.guest
-    ? `${confirmation.guest.firstName} ${confirmation.guest.lastName}`
-    : booking.guestId;
-  const nights = calculateNights(booking.checkIn, booking.checkOut);
-  const computedAmount = confirmation.rate ? confirmation.rate.priceCents * nights : 0;
-  const amountToShow = booking.totalAmountCents > 0 ? booking.totalAmountCents : computedAmount;
+  const booking = publicBookingConfirmation;
+  const checkIn = parseDate(booking.checkIn);
+  const checkOut = parseDate(booking.checkOut);
+  const nights = booking.nights || calculateNights(checkIn, checkOut);
+  const guestName = `${booking.guestFirstName} ${booking.guestLastName}`;
 
   return (
     <section className="content booking-confirmation-page">
@@ -147,11 +66,11 @@ export function BookingConfirmationScreen() {
           <div className="booking-rate-summary">
             <div>
               <span>Entrada</span>
-              <strong>{formatDateGT(booking.checkIn)}</strong>
+              <strong>{formatDateGT(checkIn)}</strong>
             </div>
             <div>
               <span>Salida</span>
-              <strong>{formatDateGT(booking.checkOut)}</strong>
+              <strong>{formatDateGT(checkOut)}</strong>
             </div>
             <div>
               <span>Noches</span>
@@ -159,21 +78,23 @@ export function BookingConfirmationScreen() {
             </div>
             <div>
               <span>Habitacion</span>
-              <strong>{confirmation.roomType?.name ?? booking.roomTypeId}</strong>
+              <strong>{booking.roomTypeName}</strong>
             </div>
             <div>
               <span>Huésped</span>
               <strong>{guestName}</strong>
             </div>
-            {confirmation.guest && (
-              <div>
-                <span>Referencia</span>
-                <strong>{booking.guestId}</strong>
-              </div>
-            )}
+            <div>
+              <span>Correo</span>
+              <strong>{booking.guestEmail}</strong>
+            </div>
+            <div>
+              <span>Tarifa</span>
+              <strong>{booking.rateName}</strong>
+            </div>
             <div>
               <span>Monto</span>
-              <strong>{formatCurrency(amountToShow, booking.currency)}</strong>
+              <strong>{formatCurrency(booking.totalAmountCents, booking.currency)}</strong>
             </div>
           </div>
         </article>

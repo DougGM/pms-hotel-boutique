@@ -1,6 +1,12 @@
 import type { Booking } from '@/shared/types/entities/booking';
+import type { Currency } from '@/shared/types/common';
 import { toDomain as toRate, type Rate, type RateDto } from '@/shared/types/entities/rate';
 import type { Room } from '@/shared/types/entities/room';
+import {
+  toDomain as toRoomFeature,
+  type RoomFeature,
+  type RoomFeatureDto,
+} from '@/shared/types/entities/room-feature';
 import {
   toDomain as toRoomType,
   type RoomType,
@@ -17,9 +23,17 @@ type ApiRoomType = {
   capacity: number;
   bedConfiguration: string;
   roomFeatureIds?: string[];
-  roomFeatures?: { id: string }[];
-  features?: { id: string }[];
+  roomFeatures?: ApiRoomFeature[];
+  features?: ApiRoomFeature[];
   active?: boolean;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+};
+
+type ApiRoomFeature = {
+  id: string;
+  name?: string | null;
+  description?: string | null;
   createdAt?: string | null;
   updatedAt?: string | null;
 };
@@ -68,6 +82,48 @@ export type PublicAvailableRoomType = {
   totalAmountCents: number;
 };
 
+export type PublicRoomTypeCatalog = {
+  roomTypes: RoomType[];
+  features: RoomFeature[];
+};
+
+export type PublicBookingRequest = {
+  roomTypeId: string;
+  checkIn: string;
+  checkOut: string;
+  adults: number;
+  children: number;
+  notes?: string;
+  guest: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone?: string;
+    nationality?: string;
+    documentType?: 'national_id' | 'passport' | 'driver_license';
+    documentNumber?: string;
+  };
+};
+
+export type PublicBookingConfirmation = {
+  confirmationCode: string;
+  status: 'pending' | 'confirmed' | 'checked_in' | 'checked_out' | 'cancelled' | 'no_show';
+  roomTypeId: string;
+  roomTypeName: string;
+  checkIn: string;
+  checkOut: string;
+  nights: number;
+  adults: number;
+  children: number;
+  rateName: string;
+  totalAmountCents: number;
+  currency: Currency;
+  guestFirstName: string;
+  guestLastName: string;
+  guestEmail: string;
+  createdAt: string;
+};
+
 const nowIso = () => new Date().toISOString();
 
 function requiredId(id: string | undefined | null, label: string): string {
@@ -90,6 +146,17 @@ function toRoomTypeDto(api: ApiRoomType): RoomTypeDto {
       api.features?.map((feature) => feature.id) ??
       [],
     active: api.active ?? true,
+    created_at: api.createdAt ?? timestamp,
+    updated_at: timestamp,
+  };
+}
+
+function toRoomFeatureDto(api: ApiRoomFeature): RoomFeatureDto {
+  const timestamp = api.updatedAt ?? api.createdAt ?? nowIso();
+  return {
+    id: api.id,
+    name: api.name ?? api.id,
+    description: api.description ?? undefined,
     created_at: api.createdAt ?? timestamp,
     updated_at: timestamp,
   };
@@ -139,6 +206,31 @@ async function publicRequest<T>(call: () => Promise<T>, fallback: string): Promi
   }
 }
 
+async function fetchPublicRoomTypes(): Promise<ApiRoomType[]> {
+  return publicRequest(
+    () =>
+      httpClient.get<ApiRoomType[]>('/public/room-types', {
+        auth: { skipAuthorization: true, skipRefresh: true },
+      }),
+    'No fue posible cargar los tipos de habitacion.',
+  );
+}
+
+function buildRoomTypeCatalog(roomTypes: ApiRoomType[]): PublicRoomTypeCatalog {
+  const featuresById = new Map<string, RoomFeature>();
+
+  roomTypes.forEach((roomType) => {
+    (roomType.features ?? roomType.roomFeatures ?? []).forEach((feature) => {
+      featuresById.set(feature.id, toRoomFeature(toRoomFeatureDto(feature)));
+    });
+  });
+
+  return {
+    roomTypes: roomTypes.map(toRoomTypeDto).map(toRoomType),
+    features: [...featuresById.values()],
+  };
+}
+
 function buildRoomTypeFromAvailability(result: PublicAvailabilityResult): RoomType {
   return toRoomType(
     toRoomTypeDto({
@@ -156,14 +248,13 @@ export const publicBookingCatalogService = {
   async getRoomTypes(): Promise<RoomType[]> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar los tipos de habitacion.');
-    const roomTypes = await publicRequest(
-      () =>
-        httpClient.get<ApiRoomType[]>('/public/room-types', {
-          auth: { skipAuthorization: true, skipRefresh: true },
-        }),
-      'No fue posible cargar los tipos de habitacion.',
-    );
+    const roomTypes = await fetchPublicRoomTypes();
     return roomTypes.map(toRoomTypeDto).map(toRoomType);
+  },
+  async getRoomTypeCatalog(): Promise<PublicRoomTypeCatalog> {
+    await simulateLatency();
+    mockUtils.throwIfSimulatingError('No fue posible cargar los tipos de habitacion.');
+    return buildRoomTypeCatalog(await fetchPublicRoomTypes());
   },
   async getRates(): Promise<Rate[]> {
     await simulateLatency();
@@ -206,6 +297,17 @@ export const publicBookingCatalogService = {
       rate: toRate(toRateDto(result.rate)),
       totalAmountCents: result.totalAmountCents,
     }));
+  },
+  async createBooking(data: PublicBookingRequest): Promise<PublicBookingConfirmation> {
+    await simulateLatency();
+    mockUtils.throwIfSimulatingError('No fue posible crear la reserva.');
+    return publicRequest(
+      () =>
+        httpClient.post<PublicBookingConfirmation>('/public/bookings', data, {
+          auth: { skipAuthorization: true, skipRefresh: true },
+        }),
+      'No fue posible crear la reserva.',
+    );
   },
   async getRooms(): Promise<Room[]> {
     throw toUnavailableError('La disponibilidad publica por habitaciones');

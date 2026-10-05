@@ -7856,6 +7856,47 @@ button {
 .adm-table td strong {
   color: var(--color-text-primary);
 }
+.adm-table-empty {
+  min-height: 88px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  color: var(--color-legacy-9b8f87);
+  text-align: center;
+}
+.adm-table-main {
+  display: grid;
+  gap: var(--size-legacy-4);
+  min-width: 220px;
+}
+.adm-table-main span {
+  color: var(--color-legacy-8a7c72);
+  font-size: var(--font-size-legacy-13);
+  line-height: 1.4;
+}
+.adm-table-identity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.adm-table-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-md);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-legacy-f5efe8);
+  color: var(--color-accent);
+  flex: 0 0 auto;
+}
+.adm-inline-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--size-legacy-5);
+  max-width: 420px;
+}
 .adm-actions {
   display: flex;
   gap: var(--space-2);
@@ -8025,6 +8066,10 @@ button {
   background: var(--color-legacy-eef3ef);
   color: var(--color-text-primary);
 }
+.adm-perm-toggle:disabled {
+  cursor: not-allowed;
+  opacity: 0.78;
+}
 .adm-perm-toggle .adm-perm-check {
   width: var(--size-legacy-18);
   height: var(--size-legacy-18);
@@ -8089,38 +8134,6 @@ button {
 .adm-roomtype-price strong {
   color: var(--color-text-primary);
   font-size: var(--font-size-legacy-16);
-}
-
-.adm-dynrate-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(var(--size-legacy-260), 1fr));
-  gap: var(--space-6);
-  margin-top: var(--space-7);
-}
-.adm-dynrate-card {
-  background: var(--color-surface);
-  border: var(--size-legacy-1) solid var(--color-border);
-  border-radius: var(--radius-xl);
-  padding: var(--space-7);
-  box-shadow: 0 var(--size-legacy-3) var(--size-legacy-9) var(--color-legacy-3b2a1a05);
-}
-.adm-dynrate-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: var(--space-4);
-}
-.adm-dynrate-head strong {
-  font-size: var(--font-size-lg);
-  color: var(--color-text-primary);
-  display: block;
-}
-.adm-dynrate-head span {
-  font-size: var(--font-size-md);
-  color: var(--color-legacy-93867d);
-}
-.adm-dynrate-body {
-  margin-bottom: var(--space-5);
 }
 
 .adm-promo-grid {

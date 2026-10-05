@@ -504,8 +504,8 @@ test('each staff role only sees its menu and direct unauthorized URLs are blocke
     ['limpieza', '/pms/housekeeping', 'Habitaciones', '/pms/cash', 4],
     ['conserjeria', '/pms/concierge', 'Solicitudes', '/pms/cash', 3],
     ['roomservice', '/pms/room-service', 'Pedidos activos', '/pms/users', 4],
-    // 49: el grupo Huésped suma 'Notificaciones' (INT-12).
-    ['admin', '/pms/dashboard', 'Administración', null, 49],
+    // 47: se omiten módulos sin contrato backend visible.
+    ['admin', '/pms/dashboard', 'Administración', null, 47],
   ];
   for (const [account, expectedPath, section, forbidden, count] of roles) {
     await login(`${account}@hotelboutique.test`);

@@ -39,6 +39,7 @@ import { personnelService } from '@/services/personnelService';
 import { promotionService } from '@/services/promotionService';
 import { reportingService, type OperationalReport } from '@/services/reportingService';
 import { roomService } from '@/services/roomService';
+import { HttpError } from '@/services/http-client';
 import { ErrorState } from '@/shared/components/ErrorState';
 import { LoadingState } from '@/shared/components/LoadingState';
 import { toDtoCalendarDate } from '@/shared/types/common';
@@ -118,15 +119,6 @@ type SeasonRate = {
   seasonalRate: number;
   status: 'Activa' | 'Inactiva';
 };
-type DynamicRate = {
-  id: number;
-  condition: string;
-  operator: string;
-  threshold: number;
-  adjustment: string;
-  value: number;
-  status: 'Activa' | 'Inactiva';
-};
 type Promo = {
   id: number;
   dbId: string;
@@ -197,15 +189,14 @@ type AuditEntry = {
   description: string;
 };
 type ReportPeriod = 'Día' | 'Semana' | 'Mes' | 'Año' | 'Temporada';
-type AdminReportTab =
-  'Ocupación' | 'Ingresos' | 'Reservas' | 'Cancelaciones' | 'Canales' | 'Servicios' | 'Temporadas';
+type AdminReportTab = 'Ocupación' | 'Ingresos' | 'Reservas' | 'Cancelaciones';
 type DashboardPeriod = 'Hoy' | '7 días' | '30 días' | '90 días';
 type UsersSection = 'Gestión de usuarios' | 'Roles y permisos';
 type RoomsSection = 'Gestión de habitaciones' | 'Tipos de habitación';
 type InventorySection = 'Gestión de inventario' | 'Movimientos de inventario';
-type RatesSection = 'Tarifas por temporada' | 'Tarifas dinámicas';
+type RatesSection = 'Tarifas por temporada';
 type ServicesSection = 'Amenidades' | 'Catálogo de Room Service';
-type ReportGroup = 'Resumen operativo' | 'Reportes financieros' | 'Análisis comercial';
+type ReportGroup = 'Resumen operativo' | 'Reportes financieros';
 
 const ROLE_ACCESS_GROUPS = [
   {
@@ -273,6 +264,16 @@ const roleAccessKey = (groupName: string, item: string) => `${groupName}::${item
 const ALL_PERMISSIONS = ROLE_ACCESS_GROUPS.flatMap((group) =>
   group.items.map((item) => roleAccessKey(group.name, item)),
 );
+const ADMIN_ACCESS_GROUP_NAME = 'ADMINISTRACIÓN';
+const ADMIN_PANEL_PERMISSION_KEYS =
+  ROLE_ACCESS_GROUPS.find((group) => group.name === ADMIN_ACCESS_GROUP_NAME)?.items.map((item) =>
+    roleAccessKey(ADMIN_ACCESS_GROUP_NAME, item),
+  ) ?? [];
+
+const withProtectedAdminPanelPermissions = (permissions: Record<string, boolean>) => ({
+  ...permissions,
+  ...Object.fromEntries(ADMIN_PANEL_PERMISSION_KEYS.map((key) => [key, true])),
+});
 
 const backendPermissionsByAccessKey: Record<string, string[]> = {
   [roleAccessKey('ADMINISTRACIÓN', 'Dashboard')]: ['bookings.read', 'rooms.read', 'cash.read'],
@@ -321,12 +322,25 @@ const backendPermissionsByAccessKey: Record<string, string[]> = {
   [roleAccessKey('CONSERJERÍA', 'Solicitudes')]: ['concierge.read', 'concierge.write'],
   [roleAccessKey('CONSERJERÍA', 'Por habitación')]: ['concierge.read', 'bookings.read'],
   [roleAccessKey('CONSERJERÍA', 'Historial')]: ['concierge.read'],
+  [roleAccessKey('HUÉSPED', 'Inicio')]: ['guest-portal.home'],
+  [roleAccessKey('HUÉSPED', 'Mis reservas')]: ['guest-portal.reservations'],
+  [roleAccessKey('HUÉSPED', 'Mi estancia')]: ['guest-portal.stay'],
+  [roleAccessKey('HUÉSPED', 'Amenidades')]: ['guest-portal.amenities'],
+  [roleAccessKey('HUÉSPED', 'Servicios de habitación')]: ['guest-portal.services'],
+  [roleAccessKey('HUÉSPED', 'Room service')]: ['guest-portal.room-service'],
+  [roleAccessKey('HUÉSPED', 'Mis solicitudes y pedidos')]: ['guest-portal.requests'],
+  [roleAccessKey('HUÉSPED', 'Notificaciones')]: ['guest-portal.notifications'],
 };
 
 const uiPermissionsFromBackend = (role: Role): Record<string, boolean> => {
-  if (role.permissionIds.length === 0) return getRoleDashboardPermissions(role.code);
+  if (role.permissionIds.length === 0) {
+    const fallbackPermissions = getRoleDashboardPermissions(role.code);
+    return normalizeRoleCode(role.code) === 'admin'
+      ? withProtectedAdminPanelPermissions(fallbackPermissions)
+      : fallbackPermissions;
+  }
   const granted = new Set(role.permissionIds);
-  return Object.fromEntries(
+  const permissions = Object.fromEntries(
     ALL_PERMISSIONS.map((key) => {
       const backendKeys = backendPermissionsByAccessKey[key] ?? [];
       return [
@@ -335,6 +349,9 @@ const uiPermissionsFromBackend = (role: Role): Record<string, boolean> => {
       ];
     }),
   ) as Record<string, boolean>;
+  return normalizeRoleCode(role.code) === 'admin'
+    ? withProtectedAdminPanelPermissions(permissions)
+    : permissions;
 };
 
 const backendPermissionsFromUi = (permissions: Record<string, boolean>): string[] =>
@@ -346,17 +363,9 @@ const backendPermissionsFromUi = (permissions: Record<string, boolean>): string[
     ),
   ].sort();
 
-/**
- * Tarifas dinámicas (ajuste automático por ocupación/anticipación): no
- * existe endpoint backend ni contrato de entidad para esto — es un concepto
- * del prototipo Bolt que nadie llegó a conectar. Fuera de alcance hasta que se
- * defina el contrato — ver HU-22.
- */
-const defaultDynamicRates: DynamicRate[] = [];
 const reportTabsByGroup: Record<ReportGroup, AdminReportTab[]> = {
   'Resumen operativo': ['Ocupación', 'Reservas', 'Cancelaciones'],
   'Reportes financieros': ['Ingresos'],
-  'Análisis comercial': ['Canales', 'Servicios', 'Temporadas'],
 };
 /*
   {
@@ -606,8 +615,15 @@ const productSkuFromName = (name: string) => {
   return `RS-${slug || Date.now()}`;
 };
 
-const serviceErrorMessage = (error: unknown) =>
-  error instanceof Error ? error.message : 'No fue posible completar la operacion.';
+const serviceErrorMessage = (error: unknown) => {
+  if (error instanceof HttpError && error.data && typeof error.data === 'object') {
+    const data = error.data as { message?: unknown; error?: unknown; detail?: unknown };
+    if (typeof data.message === 'string' && data.message.trim()) return data.message;
+    if (typeof data.detail === 'string' && data.detail.trim()) return data.detail;
+    if (typeof data.error === 'string' && data.error.trim()) return data.error;
+  }
+  return error instanceof Error ? error.message : 'No fue posible completar la operacion.';
+};
 
 /**
  * Los módulos/acciones de auditoría reales (AuditModule/AuditAction) no
@@ -1430,7 +1446,6 @@ function AdminContentReady({
   const [rooms, setRooms] = useState(initialAdminRooms);
   const [roomTypes, setRoomTypes] = useState(initialAdminRoomTypes);
   const [seasonRates, setSeasonRates] = useState(initialSeasonRates);
-  const [dynamicRates, setDynamicRates] = useState(defaultDynamicRates);
   const [promos, setPromos] = useState(initialPromos);
   const [amenities, setAmenities] = useState(initialAmenities);
   const [rsItems, setRsItems] = useState(initialRoomServiceItems);
@@ -1453,7 +1468,6 @@ function AdminContentReady({
   const [showRoomTypeModal, setShowRoomTypeModal] = useState(false);
   const [editRoomType, setEditRoomType] = useState<AdminRoomType | null>(null);
   const [showSeasonRateModal, setShowSeasonRateModal] = useState(false);
-  const [showDynamicRateModal, setShowDynamicRateModal] = useState(false);
   const [showPromoModal, setShowPromoModal] = useState(false);
   const [editPromo, setEditPromo] = useState<Promo | null>(null);
   const [showAmenityModal, setShowAmenityModal] = useState(false);
@@ -1482,16 +1496,11 @@ function AdminContentReady({
     nav === 'Tipos de habitación' ? 'Tipos de habitación' : 'Gestión de habitaciones';
   const inventorySection: InventorySection =
     nav === 'Movimientos de inventario' ? 'Movimientos de inventario' : 'Gestión de inventario';
-  const ratesSection: RatesSection =
-    nav === 'Tarifas dinámicas' ? 'Tarifas dinámicas' : 'Tarifas por temporada';
+  const ratesSection: RatesSection = 'Tarifas por temporada';
   const servicesSection: ServicesSection =
     nav === 'Catálogo de Room Service' ? 'Catálogo de Room Service' : 'Amenidades';
   const reportGroup: ReportGroup =
-    nav === 'Reportes financieros'
-      ? 'Reportes financieros'
-      : nav === 'Análisis comercial'
-        ? 'Análisis comercial'
-        : 'Resumen operativo';
+    nav === 'Reportes financieros' ? 'Reportes financieros' : 'Resumen operativo';
   const visibleReportTabs = reportTabsByGroup[reportGroup];
   const activeReportTab = visibleReportTabs.includes(reportTab) ? reportTab : visibleReportTabs[0];
 
@@ -1510,12 +1519,7 @@ function AdminContentReady({
   }, []);
 
   useEffect(() => {
-    if (
-      nav === 'Reportes' ||
-      nav === 'Resumen operativo' ||
-      nav === 'Reportes financieros' ||
-      nav === 'Análisis comercial'
-    ) {
+    if (nav === 'Reportes' || nav === 'Resumen operativo' || nav === 'Reportes financieros') {
       void loadOperationalReport(reportFilter);
     }
   }, [loadOperationalReport, nav, reportFilter]);
@@ -2197,15 +2201,24 @@ function AdminContentReady({
                       permissions: nextPermissionKeys,
                     });
 
-                if (editRole && editRole.code !== 'admin') {
+                const isEditingProtectedAdminRole =
+                  editRole !== null && normalizeRoleCode(editRole.code) === 'admin';
+                if (editRole) {
                   saved = await personnelService.updateRolePermissions(
                     editRole.dbId,
                     nextPermissionKeys,
                   );
                 }
 
+                const savedRoleBase = adminRoleFromDomain(saved, [], roles.length);
                 const savedRole = {
-                  ...adminRoleFromDomain(saved, [], roles.length),
+                  ...savedRoleBase,
+                  permissions: isEditingProtectedAdminRole
+                    ? withProtectedAdminPanelPermissions(r.permissions)
+                    : savedRoleBase.permissions,
+                  permissionKeys: isEditingProtectedAdminRole
+                    ? nextPermissionKeys
+                    : savedRoleBase.permissionKeys,
                   userCount: editRole?.userCount ?? 0,
                 };
                 setRoles((current) =>
@@ -2364,32 +2377,47 @@ function AdminContentReady({
                 <p>No hay tipos de habitación registrados</p>
               </div>
             ) : (
-              <div className="adm-roomtype-grid">
+              <AdminTable
+                headers={[
+                  'Tipo',
+                  'Capacidad',
+                  'Características',
+                  'Precio base',
+                  'Estado',
+                  'Acciones',
+                ]}
+              >
                 {roomTypes.map((rt) => (
-                  <div className="adm-roomtype-card" key={rt.id}>
-                    <div className="adm-roomtype-head">
-                      <div>
+                  <tr key={rt.id}>
+                    <td>
+                      <div className="adm-table-main">
                         <strong>{rt.name}</strong>
-                        <span>
-                          {rt.capacity} huéspedes · {rt.features.length} características
-                        </span>
+                        <span>{rt.description}</span>
                       </div>
+                    </td>
+                    <td>{rt.capacity} huéspedes</td>
+                    <td>
+                      <div className="adm-inline-tags">
+                        {rt.features.length > 0 ? (
+                          rt.features.map((f) => (
+                            <span key={f} className="adm-feature-tag">
+                              {f}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="muted">Sin características</span>
+                        )}
+                      </div>
+                    </td>
+                    <td>
+                      <strong>{money(rt.basePrice)}</strong>
+                    </td>
+                    <td>
                       <span className={`status-pill ${statusPillClass(rt.status)}`}>
                         {rt.status}
                       </span>
-                    </div>
-                    <p className="adm-roomtype-desc">{rt.description}</p>
-                    <div className="adm-roomtype-features">
-                      {rt.features.map((f) => (
-                        <span key={f} className="adm-feature-tag">
-                          {f}
-                        </span>
-                      ))}
-                    </div>
-                    <div className="adm-roomtype-price">
-                      Precio base: <strong>{money(rt.basePrice)}</strong>
-                    </div>
-                    <div className="adm-role-actions">
+                    </td>
+                    <td className="adm-actions">
                       <EditIconButton
                         label="Editar tipo de habitación"
                         onClick={() => {
@@ -2416,10 +2444,10 @@ function AdminContentReady({
                           );
                         }}
                       />
-                    </div>
-                  </div>
+                    </td>
+                  </tr>
                 ))}
-              </div>
+              </AdminTable>
             )}
           </div>
         )}
@@ -2529,7 +2557,7 @@ function AdminContentReady({
   }
 
   // ─── TARIFAS ───
-  if (nav === 'Tarifas' || nav === 'Tarifas por temporada' || nav === 'Tarifas dinámicas') {
+  if (nav === 'Tarifas' || nav === 'Tarifas por temporada') {
     return (
       <>
         {ratesSection === 'Tarifas por temporada' && (
@@ -2603,73 +2631,6 @@ function AdminContentReady({
             )}
           </div>
         )}
-        {ratesSection === 'Tarifas dinámicas' && (
-          <div className="panel">
-            <div className="panel-heading">
-              <div>
-                <h3>Tarifas dinámicas</h3>
-                <p>Reglas de ajuste automático según condiciones</p>
-              </div>
-              <button
-                className="button primary"
-                onClick={() =>
-                  onAction('Tarifas dinamicas fuera de alcance: no se modifico la fuente.')
-                }
-              >
-                <Plus size={17} /> Nueva regla
-              </button>
-            </div>
-            <div className="adm-dynrate-grid">
-              {dynamicRates.length === 0 && (
-                <div className="hk-empty">
-                  <TrendingUp size={22} />
-                  <p>Las tarifas dinamicas aun no tienen contrato de datos.</p>
-                </div>
-              )}
-              {dynamicRates.map((dr) => (
-                <div className="adm-dynrate-card" key={dr.id}>
-                  <div className="adm-dynrate-head">
-                    <div>
-                      <strong>{dr.condition}</strong>
-                      <span>
-                        {dr.operator} {dr.threshold}
-                        {dr.condition.includes('Ocupación')
-                          ? '%'
-                          : dr.condition.includes('noches')
-                            ? ' noches'
-                            : ' días'}
-                      </span>
-                    </div>
-                    <span className={`status-pill ${statusPillClass(dr.status)}`}>{dr.status}</span>
-                  </div>
-                  <div className="adm-dynrate-body">
-                    <span
-                      className={`status-pill ${dr.adjustment === 'Aumentar' ? 'warning' : 'info'}`}
-                    >
-                      {dr.adjustment} {dr.value}%
-                    </span>
-                  </div>
-                  <div className="adm-role-actions">
-                    <StatusSwitch
-                      checked={dr.status === 'Activa'}
-                      label={dr.status === 'Activa' ? 'Desactivar regla' : 'Activar regla'}
-                      onChange={() => {
-                        setDynamicRates((cur) =>
-                          cur.map((x) =>
-                            x.id === dr.id
-                              ? { ...x, status: x.status === 'Activa' ? 'Inactiva' : 'Activa' }
-                              : x,
-                          ),
-                        );
-                        onAction(`Regla ${dr.status === 'Activa' ? 'desactivada' : 'activada'}`);
-                      }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
         {showSeasonRateModal && (
           <SeasonRateModal
             roomTypes={roomTypes}
@@ -2700,15 +2661,6 @@ function AdminContentReady({
               ]);
               onAction('Tarifa de temporada creada correctamente');
               setShowSeasonRateModal(false);
-            }}
-          />
-        )}
-        {showDynamicRateModal && (
-          <DynamicRateModal
-            onClose={() => setShowDynamicRateModal(false)}
-            onSave={() => {
-              onAction('Tarifas dinamicas fuera de alcance: no se modifico la fuente.');
-              setShowDynamicRateModal(false);
             }}
           />
         )}
@@ -2746,30 +2698,30 @@ function AdminContentReady({
               <p>No hay promociones registradas</p>
             </div>
           ) : (
-            <div className="adm-promo-grid">
+            <AdminTable
+              headers={['Promoción', 'Código', 'Descuento', 'Vigencia', 'Estado', 'Acciones']}
+            >
               {filtered.map((p) => (
-                <div className="adm-promo-card" key={p.id}>
-                  <div className="adm-promo-head">
-                    <div>
+                <tr key={p.id}>
+                  <td>
+                    <div className="adm-table-main">
                       <strong>{p.name}</strong>
-                      <code>{p.code}</code>
+                      <span>{p.conditions}</span>
                     </div>
+                  </td>
+                  <td>
+                    <code>{p.code}</code>
+                  </td>
+                  <td>
+                    <strong>{p.percentage}%</strong>
+                  </td>
+                  <td>
+                    {p.startDate} → {p.endDate}
+                  </td>
+                  <td>
                     <span className={`status-pill ${statusPillClass(p.status)}`}>{p.status}</span>
-                  </div>
-                  <div className="adm-promo-body">
-                    <div className="adm-promo-pct">
-                      <Percent size={20} />
-                      <strong>{p.percentage}%</strong>
-                    </div>
-                    <p>{p.conditions}</p>
-                    <div className="adm-promo-dates">
-                      <CalendarDays size={14} />
-                      <span>
-                        {p.startDate} → {p.endDate}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="adm-role-actions">
+                  </td>
+                  <td className="adm-actions">
                     <EditIconButton
                       label="Editar promoción"
                       onClick={() => {
@@ -2798,10 +2750,10 @@ function AdminContentReady({
                         }
                       }}
                     />
-                  </div>
-                </div>
+                  </td>
+                </tr>
               ))}
-            </div>
+            </AdminTable>
           )}
         </div>
         {showPromoModal && (
@@ -2890,29 +2842,34 @@ function AdminContentReady({
                 <p>No hay amenidades registradas</p>
               </div>
             ) : (
-              <div className="adm-amenity-grid">
+              <AdminTable headers={['Amenidad', 'Horario', 'Disponibilidad', 'Estado', 'Acciones']}>
                 {amenities.map((a) => {
                   const Icon = amenityIconMap[a.icon] ?? Sparkles;
                   return (
-                    <div className="adm-amenity-card" key={a.id}>
-                      <div className="adm-amenity-icon">
-                        <Icon size={22} />
-                      </div>
-                      <div className="adm-amenity-body">
-                        <div>
-                          <strong>{a.name}</strong>
-                          <span>{a.schedule}</span>
-                        </div>
-                        <div className="adm-amenity-pills">
-                          <span className={`status-pill ${a.available ? 'success' : 'warning'}`}>
-                            {a.available ? 'Disponible' : 'No disponible'}
+                    <tr key={a.id}>
+                      <td>
+                        <div className="adm-table-identity">
+                          <span className="adm-table-icon">
+                            <Icon size={17} />
                           </span>
-                          <span className={`status-pill ${statusPillClass(a.status)}`}>
-                            {a.status}
-                          </span>
+                          <div className="adm-table-main">
+                            <strong>{a.name}</strong>
+                            <span>{a.dbId}</span>
+                          </div>
                         </div>
-                      </div>
-                      <div className="adm-amenity-actions">
+                      </td>
+                      <td>{a.schedule}</td>
+                      <td>
+                        <span className={`status-pill ${a.available ? 'success' : 'warning'}`}>
+                          {a.available ? 'Disponible' : 'No disponible'}
+                        </span>
+                      </td>
+                      <td>
+                        <span className={`status-pill ${statusPillClass(a.status)}`}>
+                          {a.status}
+                        </span>
+                      </td>
+                      <td className="adm-actions">
                         <EditIconButton
                           label="Editar amenidad"
                           onClick={() => {
@@ -2941,11 +2898,11 @@ function AdminContentReady({
                             }
                           }}
                         />
-                      </div>
-                    </div>
+                      </td>
+                    </tr>
                   );
                 })}
-              </div>
+              </AdminTable>
             )}
           </div>
         )}
@@ -2973,27 +2930,39 @@ function AdminContentReady({
                 <p>No hay productos de Room Service registrados</p>
               </div>
             ) : (
-              <div className="adm-rs-grid">
+              <AdminTable
+                headers={[
+                  'Producto',
+                  'Categoría',
+                  'Precio',
+                  'Disponibilidad',
+                  'Estado',
+                  'Acciones',
+                ]}
+              >
                 {filteredRs.map((item) => (
-                  <div className="adm-rs-card" key={item.id}>
-                    <div className="adm-rs-image" style={{ backgroundImage: `url(${item.image})` }}>
+                  <tr key={item.id}>
+                    <td>
+                      <div className="adm-table-main">
+                        <strong>{item.name}</strong>
+                        <span>{item.dbId}</span>
+                      </div>
+                    </td>
+                    <td>{item.category}</td>
+                    <td>
+                      <strong>{money(item.price)}</strong>
+                    </td>
+                    <td>
+                      <span className={`status-pill ${item.available ? 'success' : 'warning'}`}>
+                        {item.available ? 'Disponible' : 'No disponible'}
+                      </span>
+                    </td>
+                    <td>
                       <span className={`status-pill ${statusPillClass(item.status)}`}>
                         {item.status}
                       </span>
-                    </div>
-                    <div className="adm-rs-body">
-                      <div>
-                        <strong>{item.name}</strong>
-                        <span>{item.category}</span>
-                      </div>
-                      <div className="adm-rs-foot">
-                        <strong>{money(item.price)}</strong>
-                        <span className={`status-pill ${item.available ? 'success' : 'warning'}`}>
-                          {item.available ? 'Disponible' : 'No disponible'}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="adm-amenity-actions">
+                    </td>
+                    <td className="adm-actions">
                       <EditIconButton
                         label="Editar producto de room service"
                         onClick={() => {
@@ -3026,10 +2995,10 @@ function AdminContentReady({
                           })();
                         }}
                       />
-                    </div>
-                  </div>
+                    </td>
+                  </tr>
                 ))}
-              </div>
+              </AdminTable>
             )}
           </div>
         )}
@@ -3128,12 +3097,7 @@ function AdminContentReady({
   }
 
   // ─── REPORTES ───
-  if (
-    nav === 'Reportes' ||
-    nav === 'Resumen operativo' ||
-    nav === 'Reportes financieros' ||
-    nav === 'Análisis comercial'
-  ) {
+  if (nav === 'Reportes' || nav === 'Resumen operativo' || nav === 'Reportes financieros') {
     const periodCashMovements = cashMovements.filter((movement) =>
       isDateInReportPeriod(new Date(`${movement.date}T12:00:00`), reportFilter),
     );
@@ -3377,15 +3341,6 @@ function AdminContentReady({
                   color="#a9483c"
                 />
               </>
-            )}
-            {activeReportTab === 'Canales' && (
-              <EmptyReport message="El contrato actual de reservas no define canal de venta; no se muestran cifras simuladas." />
-            )}
-            {activeReportTab === 'Servicios' && (
-              <EmptyReport message="Los ingresos por servicio se veran aqui cuando exista una fuente contractual agregada." />
-            )}
-            {activeReportTab === 'Temporadas' && (
-              <EmptyReport message="La agrupacion por temporadas aun no tiene contrato de datos; se omiten metricas inventadas." />
             )}
           </div>
         )}
@@ -4012,12 +3967,18 @@ function RoleModal({
   onClose: () => void;
   onSave: (r: AdminRole) => void | Promise<void>;
 }) {
+  const isProtectedAdminRole = normalizeRoleCode(role?.code ?? '') === 'admin';
   const [name, setName] = useState(role?.name ?? '');
   const [description, setDescription] = useState(role?.description ?? '');
   const [permissions, setPermissions] = useState<Record<string, boolean>>(
-    role?.permissions ?? Object.fromEntries(ALL_PERMISSIONS.map((p) => [p, false])),
+    isProtectedAdminRole
+      ? withProtectedAdminPanelPermissions(
+          role?.permissions ?? Object.fromEntries(ALL_PERMISSIONS.map((p) => [p, false])),
+        )
+      : (role?.permissions ?? Object.fromEntries(ALL_PERMISSIONS.map((p) => [p, false]))),
   );
   const setGroupPermissions = (group: (typeof ROLE_ACCESS_GROUPS)[number], selected: boolean) => {
+    if (isProtectedAdminRole && group.name === ADMIN_ACCESS_GROUP_NAME) return;
     setPermissions((current) => ({
       ...current,
       ...Object.fromEntries(group.items.map((p) => [roleAccessKey(group.name, p), selected])),
@@ -4035,8 +3996,12 @@ function RoleModal({
           code: role?.code ?? name.toLowerCase().replace(/\s+/g, '_'),
           name,
           description,
-          permissions,
-          permissionKeys: backendPermissionsFromUi(permissions),
+          permissions: isProtectedAdminRole
+            ? withProtectedAdminPanelPermissions(permissions)
+            : permissions,
+          permissionKeys: backendPermissionsFromUi(
+            isProtectedAdminRole ? withProtectedAdminPanelPermissions(permissions) : permissions,
+          ),
           userCount: role?.userCount ?? 0,
         })
       }
@@ -4072,6 +4037,7 @@ function RoleModal({
                   <button
                     type="button"
                     className="button secondary"
+                    disabled={isProtectedAdminRole && group.name === ADMIN_ACCESS_GROUP_NAME}
                     onClick={() => setGroupPermissions(group, true)}
                   >
                     Seleccionar todo
@@ -4079,6 +4045,7 @@ function RoleModal({
                   <button
                     type="button"
                     className="button secondary"
+                    disabled={isProtectedAdminRole && group.name === ADMIN_ACCESS_GROUP_NAME}
                     onClick={() => setGroupPermissions(group, false)}
                   >
                     Deseleccionar todo
@@ -4087,16 +4054,23 @@ function RoleModal({
               </div>
               {group.items.map((p) => {
                 const key = roleAccessKey(group.name, p);
+                const isLockedAdminPanel =
+                  isProtectedAdminRole && group.name === ADMIN_ACCESS_GROUP_NAME;
+                const checked = isLockedAdminPanel ? true : permissions[key];
                 return (
                   <button
                     type="button"
                     key={key}
-                    className={`adm-perm-toggle ${permissions[key] ? 'on' : ''}`}
+                    className={`adm-perm-toggle ${checked ? 'on' : ''}`}
+                    disabled={isLockedAdminPanel}
+                    title={
+                      isLockedAdminPanel
+                        ? 'El rol Administracion conserva todos los accesos del panel.'
+                        : undefined
+                    }
                     onClick={() => setPermissions((cur) => ({ ...cur, [key]: !cur[key] }))}
                   >
-                    <span className="adm-perm-check">
-                      {permissions[key] && <Check size={12} />}
-                    </span>
+                    <span className="adm-perm-check">{checked && <Check size={12} />}</span>
                     <span>{p}</span>
                   </button>
                 );
@@ -4395,88 +4369,6 @@ function SeasonRateModal({
             type="number"
             value={seasonalRate}
             onChange={(e) => setSeasonalRate(Number(e.target.value))}
-          />
-        </label>
-      </div>
-    </AdminModal>
-  );
-}
-
-function DynamicRateModal({
-  onClose,
-  onSave,
-}: {
-  onClose: () => void;
-  onSave: (dr: DynamicRate) => void;
-}) {
-  const [condition, setCondition] = useState('Ocupación');
-  const [operator, setOperator] = useState('>');
-  const [threshold, setThreshold] = useState(80);
-  const [adjustment, setAdjustment] = useState('Aumentar');
-  const [value, setValue] = useState(15);
-  return (
-    <AdminModal
-      title="Nueva regla dinámica"
-      eyebrow="TARIFAS DINÁMICAS"
-      onClose={onClose}
-      onSubmit={() =>
-        onSave({ id: 0, condition, operator, threshold, adjustment, value, status: 'Activa' })
-      }
-      submitLabel="Crear regla"
-    >
-      <div className="rc-form-grid">
-        <label className="hk-form-label">
-          Condición
-          <select
-            className="hk-form-select"
-            value={condition}
-            onChange={(e) => setCondition(e.target.value)}
-          >
-            <option>Ocupación</option>
-            <option>Reservas con menos de</option>
-            <option>Estancia extendida (4+ noches)</option>
-          </select>
-        </label>
-        <label className="hk-form-label">
-          Operador
-          <select
-            className="hk-form-select"
-            value={operator}
-            onChange={(e) => setOperator(e.target.value)}
-          >
-            <option value=">">{'Mayor que (>)'}</option>
-            <option value="<">{'Menor que (<)'}</option>
-            <option value=">=">{'Mayor o igual (>=)'}</option>
-            <option value="<=">{'Menor o igual (<=)'}</option>
-          </select>
-        </label>
-        <label className="hk-form-label">
-          Umbral
-          <input
-            className="hk-form-select"
-            type="number"
-            value={threshold}
-            onChange={(e) => setThreshold(Number(e.target.value))}
-          />
-        </label>
-        <label className="hk-form-label">
-          Ajuste
-          <select
-            className="hk-form-select"
-            value={adjustment}
-            onChange={(e) => setAdjustment(e.target.value)}
-          >
-            <option>Aumentar</option>
-            <option>Disminuir</option>
-          </select>
-        </label>
-        <label className="hk-form-label">
-          Porcentaje (%)
-          <input
-            className="hk-form-select"
-            type="number"
-            value={value}
-            onChange={(e) => setValue(Number(e.target.value))}
           />
         </label>
       </div>

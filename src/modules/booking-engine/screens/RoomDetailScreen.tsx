@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { roomService } from '@/services/roomService';
+import { publicBookingCatalogService } from '@/services/publicBookingCatalogService';
 import { Badge } from '@/shared/components/Badge';
 import { Button } from '@/shared/components/Button';
 import { EmptyState } from '@/shared/components/EmptyState';
@@ -99,15 +99,16 @@ export function RoomDetailScreen() {
     setError(null);
 
     try {
-      const [roomTypes, features, rates] = await Promise.all([
-        roomService.getRoomTypes(),
-        roomService.getRoomFeatures(),
-        roomService.getRates(),
+      const [catalog, rates] = await Promise.all([
+        publicBookingCatalogService.getRoomTypeCatalog(),
+        publicBookingCatalogService.getRates(),
       ]);
 
       setDetail({
-        roomType: roomTypes.find((roomType) => roomType.id === roomTypeId && roomType.active),
-        features,
+        roomType: catalog.roomTypes.find(
+          (roomType) => roomType.id === roomTypeId && roomType.active,
+        ),
+        features: catalog.features,
         rates,
       });
       setStatus('success');

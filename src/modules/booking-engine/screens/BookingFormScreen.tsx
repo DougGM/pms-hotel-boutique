@@ -11,19 +11,15 @@ import {
   UsersRound,
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { bookingService } from '@/services/bookingService';
-import { guestService } from '@/services/guestService';
-import { roomService } from '@/services/roomService';
+import { publicBookingCatalogService } from '@/services/publicBookingCatalogService';
 import { Button } from '@/shared/components/Button';
 import { EmptyState } from '@/shared/components/EmptyState';
 import { ErrorState } from '@/shared/components/ErrorState';
 import { Input } from '@/shared/components/Input';
 import { LoadingState } from '@/shared/components/LoadingState';
 import { Select } from '@/shared/components/Select';
-import type { CreateBookingDto } from '@/shared/types/entities/booking';
 import type { Rate } from '@/shared/types/entities/rate';
 import type { RoomType } from '@/shared/types/entities/room-type';
-import { toDtoCalendarDate } from '@/shared/types/common';
 import { formatCurrency } from '@/shared/utils/currency';
 import { calculateNights, formatDateGT } from '@/shared/utils/date';
 import { validateBookingCapacity } from '@/shared/utils/bookingCapacity';
@@ -150,8 +146,8 @@ export function BookingFormScreen() {
 
     try {
       const [nextRoomTypes, nextRates] = await Promise.all([
-        roomService.getRoomTypes(),
-        roomService.getRates(),
+        publicBookingCatalogService.getRoomTypes(),
+        publicBookingCatalogService.getRates(),
       ]);
       const activeRoomTypes = nextRoomTypes.filter((roomType) => roomType.active);
 
@@ -259,26 +255,25 @@ export function BookingFormScreen() {
 
     setSubmitting(true);
     try {
-      const guest = await guestService.createGuest({
-        first_name: guestFirstName.trim(),
-        last_name: guestLastName.trim(),
-        email: guestEmail.trim(),
-        phone: guestPhone.trim(),
-        document_type: guestDocumentType as 'national_id' | 'passport' | 'driver_license',
-        document_number: guestDocumentNumber.trim(),
-      });
-      const data: CreateBookingDto = {
-        guest_id: guest.id,
-        room_type_id: roomTypeId,
-        rate_id: selectedRate?.id,
-        check_in: toDtoCalendarDate(range.start),
-        check_out: toDtoCalendarDate(range.end),
+      const booking = await publicBookingCatalogService.createBooking({
+        roomTypeId,
+        checkIn: dateKey(range.start),
+        checkOut: dateKey(range.end),
         adults: Number(adults),
         children: Number(children),
         notes: notes.trim() || undefined,
-      };
-      const booking = await bookingService.createBooking(data);
-      navigate(`/booking/${booking.id}/done`);
+        guest: {
+          firstName: guestFirstName.trim(),
+          lastName: guestLastName.trim(),
+          email: guestEmail.trim(),
+          phone: guestPhone.trim() || undefined,
+          documentType: guestDocumentType as 'national_id' | 'passport' | 'driver_license',
+          documentNumber: guestDocumentNumber.trim() || undefined,
+        },
+      });
+      navigate(`/booking/${booking.confirmationCode}/done`, {
+        state: { publicBookingConfirmation: booking },
+      });
     } catch (cause) {
       setSubmitError(cause instanceof Error ? cause.message : 'No fue posible crear la reserva.');
     } finally {

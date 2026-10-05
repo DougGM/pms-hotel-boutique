@@ -88,9 +88,9 @@ Nota 2026-09-30 (#95): en Administracion, las secciones grandes se navegan
 desde submenus desplegables del sidebar, no desde tabs internas. Usuarios y
 roles, Habitaciones, Tarifas, Servicios, Reportes e Inventario conservan sus
 servicios, formularios, modales y persistencia; el sidebar decide la pantalla
-activa. Reportes agrupa sus siete reportes en Resumen operativo, Reportes
-financieros y Analisis comercial, con selector compacto solo dentro de los
-grupos que contienen mas de un tipo de reporte.
+activa. Reportes agrupa solo vistas con datos disponibles en Resumen operativo
+y Reportes financieros; las vistas comerciales sin contrato backend no se
+muestran en el sidebar.
 El panel Roles y permisos representa permisos como accesos agrupados a las
 vistas reales de Administracion, Recepcion, Limpieza, Room Service,
 Conserjeria y Huesped; no debe volver a mostrar solo permisos genericos si se

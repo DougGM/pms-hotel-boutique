@@ -1,4 +1,4 @@
-﻿/* eslint-disable @typescript-eslint/no-unused-vars -- Migracion controlada del prototipo Bolt; se conserva la logica original para portarla incrementalmente. */
+/* eslint-disable @typescript-eslint/no-unused-vars -- Migracion controlada del prototipo Bolt; se conserva la logica original para portarla incrementalmente. */
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -48,6 +48,7 @@ import { routePaths } from '@/app/routes';
 import { GuestContent } from '@/modules/guest-portal/components/GuestContent';
 import { RoomServiceContent } from '@/modules/room-service/components/RoomServiceContent';
 import { AdminContent } from '@/modules/administration/components/AdminContent';
+import { rolePermissionsFromBackendRoles } from '@/modules/administration/utils/rolePermissions';
 import { AccountPreferencesModal, AccountProfileModal } from '@/private/workspace/AccountPanels';
 import { auditService } from '@/services/auditService';
 import { bookingService } from '@/services/bookingService';
@@ -61,6 +62,7 @@ import {
   type HousekeepingChecklistItem,
 } from '@/services/housekeepingService';
 import { orderService } from '@/services/orderService';
+import { personnelService } from '@/services/personnelService';
 import { roomService } from '@/services/roomService';
 import { serviceRequestService } from '@/services/serviceRequestService';
 import { ErrorState } from '@/shared/components/ErrorState';
@@ -1020,13 +1022,11 @@ const navByRole: Record<RoleId, NavItem[]> = {
         navChild('admin', 'Gestión de habitaciones'),
         navChild('admin', 'Tipos de habitación'),
         navChild('admin', 'Tarifas por temporada'),
-        navChild('admin', 'Tarifas dinámicas'),
         navChild('admin', 'Promociones'),
         navChild('admin', 'Amenidades'),
         navChild('admin', 'Catálogo de Room Service'),
         navChild('admin', 'Resumen operativo'),
         navChild('admin', 'Reportes financieros'),
-        navChild('admin', 'Análisis comercial'),
         navChild('admin', 'Gestión de inventario'),
         navChild('admin', 'Movimientos de inventario'),
         navChild('admin', 'Caja'),
@@ -1137,13 +1137,11 @@ const adminPermissionBySidebarLabel: Record<string, string> = {
   'Gestión de habitaciones': 'Habitaciones',
   'Tipos de habitación': 'Habitaciones',
   'Tarifas por temporada': 'Tarifas',
-  'Tarifas dinámicas': 'Tarifas',
   Promociones: 'Promociones',
   Amenidades: 'Servicios',
   'Catálogo de Room Service': 'Servicios',
   'Resumen operativo': 'Reportes',
   'Reportes financieros': 'Reportes',
-  'Análisis comercial': 'Reportes',
   'Gestión de inventario': 'Inventario',
   'Movimientos de inventario': 'Inventario',
   Caja: 'Caja',
@@ -1491,7 +1489,6 @@ function PrivateWorkspaceReady({
   const [showRoleMenu, setShowRoleMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [accountPanel, setAccountPanel] = useState<'profile' | 'preferences' | null>(null);
-  const [showModal, setShowModal] = useState(false);
   const [toast, setToast] = useState('');
   const [tasks, setTasks] = useState(initialData.tasks);
   const [search, setSearch] = useState('');
@@ -1589,6 +1586,26 @@ function PrivateWorkspaceReady({
         r.checkOut > checkIn &&
         r.checkIn < checkOut,
     );
+
+  useEffect(() => {
+    if (activeRole !== 'admin') return;
+    let cancelled = false;
+    personnelService
+      .getRoles()
+      .then((roles) => {
+        if (cancelled) return;
+        setRolePermissions((current) => ({
+          ...current,
+          ...rolePermissionsFromBackendRoles(roles),
+        }));
+      })
+      .catch(() => {
+        // El panel de administracion muestra el error detallado; el sidebar conserva el fallback.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeRole]);
 
   const rolePermissionCode = activeRole === 'room-service' ? 'roomService' : activeRole;
   const baseNav = activeRole ? navByRole.admin : [];
@@ -3024,9 +3041,6 @@ function PrivateWorkspaceReady({
                         >
                           <FileText size={16} /> Exportar reporte
                         </button>
-                        <button className="button primary" onClick={() => setShowModal(true)}>
-                          <Plus size={17} /> Nueva operación
-                        </button>
                       </>
                     )}
                   </>
@@ -3331,16 +3345,6 @@ function PrivateWorkspaceReady({
           )}
         </div>
       </main>
-      {showModal && contentRole !== 'reception' && (
-        <Modal
-          role={contentRoleInfo}
-          onClose={() => setShowModal(false)}
-          onSubmit={(message) => {
-            setShowModal(false);
-            notify(message);
-          }}
-        />
-      )}
       {accountPanel === 'profile' && (
         <AccountProfileModal
           name={accountName}
@@ -6413,62 +6417,6 @@ function RoomStat({ label, value, tone }: { label: string; value: string; tone: 
       <div>
         <strong>{value}</strong>
         <small>{label}</small>
-      </div>
-    </div>
-  );
-}
-
-function Modal({
-  role,
-  onClose,
-  onSubmit,
-}: {
-  role: Role;
-  onClose: () => void;
-  onSubmit: (message: string) => void;
-}) {
-  const [value, setValue] = useState('');
-  return (
-    <div className="modal-backdrop" onMouseDown={onClose}>
-      <div className="modal" onMouseDown={(event) => event.stopPropagation()}>
-        <div className="modal-head">
-          <div>
-            <p className="eyebrow">NUEVA OPERACIÓN</p>
-            <h2>{role.id === 'guest' ? 'Crear solicitud' : 'Crear registro'}</h2>
-          </div>
-          <button className="icon-btn" onClick={onClose}>
-            <X size={18} />
-          </button>
-        </div>
-        <label>¿Qué necesitas registrar?</label>
-        <div className="modal-options">
-          <button className="selected" onClick={() => setValue('Reserva')}>
-            Reserva <CalendarDays size={16} />
-          </button>
-          <button onClick={() => setValue('Solicitud')}>
-            Solicitud <ClipboardList size={16} />
-          </button>
-          <button onClick={() => setValue('Pago')}>
-            Pago <Wallet size={16} />
-          </button>
-        </div>
-        <label>Descripción breve</label>
-        <textarea
-          value={value}
-          onChange={(event) => setValue(event.target.value)}
-          placeholder="Escribe los detalles de la operación..."
-        />
-        <div className="modal-foot">
-          <button className="button secondary" onClick={onClose}>
-            Cancelar
-          </button>
-          <button
-            className="button primary"
-            onClick={() => onSubmit(value || 'Operación creada correctamente')}
-          >
-            Guardar operación <ArrowRight size={16} />
-          </button>
-        </div>
       </div>
     </div>
   );
