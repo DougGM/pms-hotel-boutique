@@ -67,12 +67,6 @@ const ALL_PERMISSIONS = ROLE_ACCESS_GROUPS.flatMap((group) =>
   group.items.map((item) => roleAccessKey(group.name, item)),
 );
 
-const ADMIN_ACCESS_GROUP_NAME = 'ADMINISTRACIÓN';
-const ADMIN_PANEL_PERMISSION_KEYS =
-  ROLE_ACCESS_GROUPS.find((group) => group.name === ADMIN_ACCESS_GROUP_NAME)?.items.map((item) =>
-    roleAccessKey(ADMIN_ACCESS_GROUP_NAME, item),
-  ) ?? [];
-
 const backendPermissionsByAccessKey: Record<string, string[]> = {
   [roleAccessKey('ADMINISTRACIÓN', 'Dashboard')]: ['bookings.read', 'rooms.read', 'cash.read'],
   [roleAccessKey('ADMINISTRACIÓN', 'Usuarios y roles')]: [],
@@ -132,11 +126,6 @@ const backendPermissionsByAccessKey: Record<string, string[]> = {
 
 const normalizeRoleCode = (code: string) => (code === 'room_service' ? 'roomService' : code);
 
-const withProtectedAdminPanelPermissions = (permissions: Record<string, boolean>) => ({
-  ...permissions,
-  ...Object.fromEntries(ADMIN_PANEL_PERMISSION_KEYS.map((key) => [key, true])),
-});
-
 const getRoleDashboardPermissions = (roleCode: string) => {
   const normalized = normalizeRoleCode(roleCode);
   return Object.fromEntries(
@@ -150,11 +139,15 @@ const getRoleDashboardPermissions = (roleCode: string) => {
 };
 
 const uiPermissionsFromBackend = (role: Role): Record<string, boolean> => {
+  // ADMIN tiene acceso completo: en el backend ROLE_ADMIN pasa todas las reglas
+  // sin importar su lista de permisos, y esa lista no es editable. Filtrar su
+  // menú con ella ocultaba secciones (p. ej. la vista previa del portal de
+  // huésped, cuyas claves guest-portal.* no existen en el backend).
+  if (normalizeRoleCode(role.code) === 'admin') {
+    return getRoleDashboardPermissions('admin');
+  }
   if (role.permissionIds.length === 0) {
-    const fallbackPermissions = getRoleDashboardPermissions(role.code);
-    return normalizeRoleCode(role.code) === 'admin'
-      ? withProtectedAdminPanelPermissions(fallbackPermissions)
-      : fallbackPermissions;
+    return getRoleDashboardPermissions(role.code);
   }
   const granted = new Set(role.permissionIds);
   const permissions = Object.fromEntries(
@@ -166,9 +159,7 @@ const uiPermissionsFromBackend = (role: Role): Record<string, boolean> => {
       ];
     }),
   ) as Record<string, boolean>;
-  return normalizeRoleCode(role.code) === 'admin'
-    ? withProtectedAdminPanelPermissions(permissions)
-    : permissions;
+  return permissions;
 };
 
 export const rolePermissionsFromBackendRoles = (roles: Role[]) =>
