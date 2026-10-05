@@ -11,8 +11,9 @@ El proyecto cuenta con dos canalizaciones complementarias:
   On-Premise y permite archivar el build de producción desde el agente Jenkins.
 
 Ambos pipelines instalan dependencias de forma reproducible con `npm ci`,
-ejecutan las validaciones del proyecto y envían el análisis a Sonar. El build
-de producción se ejecuta únicamente para ramas de entrega o tags.
+ejecutan las validaciones del proyecto y envían el análisis a SonarQube
+self-hosted. El build de producción se ejecuta únicamente para ramas de entrega
+o tags.
 
 ## Arquitectura de las canalizaciones
 
@@ -28,7 +29,12 @@ El workflow usa `ubuntu-latest`, Node.js 20 y caché de npm.
 
 El job `validate-and-test` realiza checkout con `fetch-depth: 0`, instala las
 dependencias, ejecuta `npm run check`, ejecuta `npm run test:coverage
---if-present` y lanza el análisis de SonarCloud.
+--if-present` y lanza el análisis de SonarQube cuando los secretos necesarios
+están configurados.
+
+Si `SONAR_TOKEN`, `SONAR_HOST_URL` o `SONAR_PROJECT_KEY` aún no existen, el
+workflow omite SonarQube con una nota para no romper el PR mientras se termina
+de levantar el servidor.
 
 El job `production-build-and-release` depende de `validate-and-test`, ejecuta
 `npm run build` con `NODE_ENV=production` y publica el contenido de `dist/`
@@ -50,9 +56,11 @@ Las etapas son:
    `npm ci`.
 2. **Validation**: ejecuta `npm run check`.
 3. **Tests & Coverage**: ejecuta `npm run test:coverage --if-present`.
-4. **SonarQube Quality Gate**: ejecuta `sonar-scanner` con el token protegido
-   por Jenkins Credentials Manager.
-5. **Build Production**: se ejecuta en `main`, `master` o cuando la ejecución
+4. **SonarQube Quality Gate**: ejecuta `sonar-scanner` contra el servidor
+   SonarQube configurado.
+5. **Wait Quality Gate**: espera el resultado del Quality Gate y corta el
+   pipeline si SonarQube lo rechaza.
+6. **Build Production**: se ejecuta en `main`, `master` o cuando la ejecución
    corresponde a un tag; compila y archiva `dist/**`.
 
 El bloque `post { always { cleanWs() } }` elimina el workspace al finalizar
@@ -65,30 +73,36 @@ variables → Actions → Repository secrets**:
 
 | Secreto | Uso |
 | --- | --- |
-| `SONAR_TOKEN` | Token de autenticación para SonarCloud. |
-| `SONAR_PROJECT_KEY` | Identificador del proyecto en SonarCloud. |
-| `SONAR_ORGANIZATION` | Identificador de la organización en SonarCloud. |
+| `SONAR_TOKEN` | Token de autenticación para SonarQube. |
+| `SONAR_HOST_URL` | URL del servidor SonarQube, por ejemplo `http://localhost:9000`. |
+| `SONAR_PROJECT_KEY` | Identificador del proyecto en SonarQube, por ejemplo `pms-hotel-boutique-frontend`. |
 
 El workflow los consume mediante `${{ secrets.NOMBRE_DEL_SECRETO }}`. Los
 valores no deben escribirse en el repositorio, en archivos YAML ni en logs.
 Después de guardarlos, validar que el token tenga permisos para analizar el
-proyecto correspondiente.
+proyecto correspondiente. No se usa `SONAR_ORGANIZATION` porque ese valor es de
+SonarCloud, no de SonarQube self-hosted.
 
 ## Credenciales de Jenkins
 
-En **Manage Jenkins → Credentials → Global** crear una credencial de tipo
+En **Manage Jenkins → Credentials → Global** crear credenciales de tipo
 **Secret text** con:
 
-- **ID**: `sonar-token`
-- **Secret**: el token de SonarQube/SonarCloud
+| ID de credencial | Valor |
+| --- | --- |
+| `sonar-token` | Token de SonarQube. |
+| `sonar-host-url` | URL del servidor SonarQube. |
+| `sonar-project-key` | Project key del frontend. |
 
-El `Jenkinsfile` expone temporalmente esa credencial como la variable de
-entorno `SONAR_TOKEN` dentro de `withCredentials`. No se debe registrar el
-valor ni sustituirlo por una clave literal en el archivo.
+El `Jenkinsfile` expone temporalmente esas credenciales como variables de
+entorno. No se deben registrar los valores ni sustituirlos por claves literales
+en el archivo.
 
 El agente Jenkins también debe tener disponible el ejecutable `sonar-scanner`
 o una instalación configurada en Jenkins, además del tool NodeJS identificado
-como `NodeJS-20`.
+como `NodeJS-20`. Para `waitForQualityGate()` debe estar instalado el plugin
+SonarQube Scanner for Jenkins y configurado el webhook de SonarQube hacia
+Jenkins.
 
 ## Quality Gate y métricas
 
@@ -103,12 +117,12 @@ configuración del proyecto haya incluido en su Quality Gate:
 - **Cobertura**: proporción de código ejecutado por las pruebas, importada
   desde el reporte LCOV `coverage/lcov.info`.
 
-En Jenkins, el scanner usa explícitamente estos parámetros:
+La configuración común del análisis vive en `sonar-project.properties`:
 
 ```text
--Dsonar.projectKey=pms-hotel-boutique-frontend
--Dsonar.sources=src
--Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
+sonar.sources=src
+sonar.tests=tests,scripts
+sonar.javascript.lcov.reportPaths=coverage/lcov.info
 ```
 
 El comando `npm run test:coverage --if-present` es opcional: si el script
@@ -116,11 +130,8 @@ El comando `npm run test:coverage --if-present` es opcional: si el script
 calcular cobertura. Si el script no existe o no genera el archivo, el análisis
 no tendrá cobertura LCOV disponible.
 
-El stage de Jenkins denominado `SonarQube Quality Gate` ejecuta el scanner y
-publica el análisis en Sonar. La espera explícita mediante
-`waitForQualityGate()` no está declarada actualmente en el `Jenkinsfile`; el
-bloqueo de la ejecución depende de la configuración del scanner, del servidor
-Sonar y de las reglas del proyecto.
+El stage `Wait Quality Gate` usa `waitForQualityGate abortPipeline: true` para
+bloquear la ejecución si SonarQube rechaza el Quality Gate.
 
 ## Empaquetado de producción
 
