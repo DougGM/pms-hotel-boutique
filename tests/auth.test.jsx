@@ -392,6 +392,17 @@ function installFetch() {
     }
     // El workspace de Conserjería carga sus solicitudes desde el backend (INT-11).
     if (path === '/api/v1/concierge/requests') return json([]);
+    // Solicitudes generales/mantenimiento y finanzas globales sin fallback local (#126).
+    if (
+      [
+        '/api/v1/service-requests',
+        '/api/v1/charges',
+        '/api/v1/payments',
+        '/api/v1/deposits',
+      ].includes(path)
+    ) {
+      return json([]);
+    }
     if (path === '/api/v1/probe') {
       const payload = decodeAuth(init);
       if (!payload) return json({ message: 'Unauthorized' }, 401, 'Unauthorized');

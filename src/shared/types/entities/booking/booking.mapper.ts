@@ -30,6 +30,8 @@ export const toDomain = (dto: BookingDto): Booking => ({
   totalAmountCents: dto.total_amount_cents,
   currency: dto.currency,
   notes: dto.notes,
+  cancellationReason: dto.cancellation_reason,
+  cancelledAt: dto.cancelled_at ? toDomainDate(dto.cancelled_at) : undefined,
   createdAt: toDomainDate(dto.created_at),
   updatedAt: toDomainDate(dto.updated_at),
 });
@@ -57,6 +59,8 @@ export const toDTO = (model: Booking): BookingDto => ({
   total_amount_cents: model.totalAmountCents,
   currency: model.currency,
   notes: model.notes,
+  cancellation_reason: model.cancellationReason,
+  cancelled_at: model.cancelledAt ? toDtoDate(model.cancelledAt) : undefined,
   created_at: toDtoDate(model.createdAt),
   updated_at: toDtoDate(model.updatedAt),
 });

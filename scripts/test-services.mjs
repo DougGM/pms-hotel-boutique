@@ -1257,6 +1257,30 @@ function installGuestBookingFetchMock() {
       }
       return json(booking);
     }
+    // Mismas reglas que BookingServiceImpl.confirm/cancel: 400 fuera de estado.
+    if (bookingPathMatch?.[2] === 'confirm' && method === 'POST') {
+      const booking = findBooking(bookingPathMatch[1]);
+      if (!booking) return json({ message: 'Booking not found' }, 404);
+      if (booking.status !== 'pending')
+        return json({ message: 'Only pending bookings can be confirmed' }, 400);
+      booking.status = 'confirmed';
+      booking.updatedAt = now;
+      return json(booking);
+    }
+    if (bookingPathMatch?.[2] === 'cancel' && method === 'POST') {
+      const booking = findBooking(bookingPathMatch[1]);
+      if (!booking) return json({ message: 'Booking not found' }, 404);
+      if (!body?.reason?.trim()) return json({ message: 'Cancellation reason is required' }, 400);
+      if (!['pending', 'confirmed'].includes(booking.status))
+        return json({ message: 'Only pending or confirmed bookings can be cancelled' }, 400);
+      Object.assign(booking, {
+        status: 'cancelled',
+        cancellationReason: body.reason.trim(),
+        cancelledAt: now,
+        updatedAt: now,
+      });
+      return json(booking);
+    }
     if (bookingPathMatch?.[2] === 'folio' && method === 'GET') {
       const booking = findBooking(bookingPathMatch[1]);
       return booking ? json(folio(booking)) : json({ message: 'Booking not found' }, 404);
@@ -2463,11 +2487,12 @@ test('housekeeping: sincroniza estado de habitacion, solicitudes y desperfectos'
     serviceRequestService.createRequest({
       bookingId: reportingBookingId,
       roomId,
-      type: 'housekeeping',
+      type: 'other',
       description: 'Toallas adicionales',
     }),
   );
   assert.equal(pending.status, 'pending');
+  assert.equal(pending.type, 'other');
 
   const defect = await assertServiceCall('serviceRequestService.createMaintenanceReport', () =>
     serviceRequestService.createMaintenanceReport({
@@ -3372,4 +3397,266 @@ test('serviceRequestService: rechazo y cancelación de Conserjería guardan el m
   const pending = await serviceRequestService.getConciergeRequests({ status: 'pending' });
   assert.deepEqual(pending, []);
   assert.equal(calls.at(-1).call, 'GET /concierge/requests?status=pending');
+});
+
+// --- #126: confirmación/cancelación, mantenimiento y finanzas globales -----
+
+test('#126: confirmar y cancelar reserva usan el backend y conservan el motivo', async (t) => {
+  const { calls, bookings, restore } = installGuestBookingFetchMock();
+  t.after(restore);
+  const bookingId = bookings[0].id;
+
+  const confirmed = await assertServiceCall('bookingService.confirmBooking integrado', () =>
+    bookingService.confirmBooking(bookingId),
+  );
+  assert.equal(confirmed.status, 'confirmed');
+  assert.equal(calls.at(-1).call, `POST /bookings/${bookingId}/confirm`);
+
+  await assert.rejects(
+    () => bookingService.confirmBooking(bookingId),
+    /Only pending bookings can be confirmed/,
+    'el 400 del backend se propaga con su mensaje',
+  );
+
+  const callsBeforeEmptyReason = calls.length;
+  await assert.rejects(
+    () => bookingService.cancelBooking(bookingId, '   '),
+    /Se requiere un motivo/,
+  );
+  assert.equal(calls.length, callsBeforeEmptyReason, 'sin motivo no llama al backend');
+
+  const cancelled = await assertServiceCall('bookingService.cancelBooking integrado', () =>
+    bookingService.cancelBooking(bookingId, '  Cambio de planes del huésped  '),
+  );
+  assert.equal(calls.at(-1).call, `POST /bookings/${bookingId}/cancel`);
+  assert.deepEqual(calls.at(-1).body, { reason: 'Cambio de planes del huésped' });
+  assert.equal(cancelled.status, 'cancelled');
+  assert.equal(cancelled.cancellationReason, 'Cambio de planes del huésped');
+  assert.ok(cancelled.cancelledAt instanceof Date, 'cancelledAt llega como Date de dominio');
+
+  await assert.rejects(
+    () => bookingService.cancelBooking(bookingId, 'Otra vez'),
+    /Only pending or confirmed bookings can be cancelled/,
+  );
+  await assert.rejects(
+    () => bookingService.confirmBooking('BKG-001'),
+    /requiere una reserva integrada/,
+    'IDs legacy no simulan la transición',
+  );
+});
+
+function installGeneralServiceRequestFetchMock() {
+  const previousFetch = globalThis.fetch;
+  const calls = [];
+  const now = '2026-10-05T10:00:00Z';
+  const roomId = apiRooms[0].id;
+  const requests = [];
+  const transitions = {
+    pending: ['accepted', 'rejected', 'cancelled'],
+    accepted: ['in_progress', 'cancelled'],
+    in_progress: ['completed', 'cancelled'],
+  };
+  const json = (body, status = 200) =>
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { 'content-type': 'application/json' },
+    });
+
+  globalThis.fetch = async (input, init = {}) => {
+    const url = new URL(String(input));
+    const path = url.pathname.replace(/^\/api\/v1/, '');
+    const method = init.method ?? 'GET';
+    const body = init.body ? JSON.parse(String(init.body)) : undefined;
+    calls.push({ call: `${method} ${path}${url.search}`, body });
+
+    if (method === 'GET' && path === '/service-requests') {
+      const type = url.searchParams.get('type');
+      const status = url.searchParams.get('status');
+      return json(
+        requests.filter(
+          (item) => (!type || item.type === type) && (!status || item.status === status),
+        ),
+      );
+    }
+    if (method === 'POST' && path === '/service-requests') {
+      if (['housekeeping', 'concierge'].includes(body.type))
+        return json({ message: `Use the dedicated endpoint for ${body.type} requests` }, 400);
+      const request = {
+        id: `bbbb1260-0000-4000-8000-${String(requests.length + 1).padStart(12, '0')}`,
+        bookingId: body.bookingId ?? null,
+        roomId: body.roomId,
+        roomNumber: '101',
+        guestId: null,
+        guestName: null,
+        responsibleUserId: null,
+        responsibleUserName: null,
+        responsibleUserEmail: null,
+        type: body.type,
+        description: body.description,
+        status: 'pending',
+        notes: body.notes ?? null,
+        requestedAt: now,
+        startedAt: null,
+        completedAt: null,
+        createdAt: now,
+        updatedAt: now,
+      };
+      requests.push(request);
+      return json(request, 201);
+    }
+    const detail = path.match(/^\/service-requests\/([^/]+)(\/status)?$/);
+    const request = detail && requests.find((item) => item.id === detail[1]);
+    if (detail && !request)
+      return json({ message: `Service request not found: ${detail[1]}` }, 404);
+    if (method === 'GET' && detail && !detail[2]) return json(request);
+    if (method === 'POST' && detail?.[2]) {
+      if (!(transitions[request.status] ?? []).includes(body.status))
+        return json(
+          { message: `Invalid status transition from ${request.status} to ${body.status}` },
+          400,
+        );
+      Object.assign(request, {
+        status: body.status,
+        responsibleUserName: ['accepted', 'in_progress', 'completed'].includes(body.status)
+          ? 'Limpieza Demo'
+          : request.responsibleUserName,
+        startedAt: body.status === 'in_progress' ? now : request.startedAt,
+        completedAt: body.status === 'completed' ? now : request.completedAt,
+        notes: body.notes
+          ? request.notes
+            ? `${request.notes}\n${body.notes}`
+            : body.notes
+          : request.notes,
+        updatedAt: now,
+      });
+      return json(request);
+    }
+    return json({ message: `Ruta #126 no mockeada en test: ${method} ${path}` }, 404);
+  };
+
+  return { calls, roomId, restore: () => (globalThis.fetch = previousFetch) };
+}
+
+test('#126: mantenimiento usa /service-requests para crear, filtrar y cambiar estado', async (t) => {
+  const { calls, roomId, restore } = installGeneralServiceRequestFetchMock();
+  t.after(restore);
+
+  const report = await assertServiceCall('serviceRequestService.createMaintenanceReport', () =>
+    serviceRequestService.createMaintenanceReport({
+      roomId,
+      description: '  Fuga en lavamanos  ',
+      notes: 'Alta',
+    }),
+  );
+  assert.equal(calls.at(-1).call, 'POST /service-requests');
+  assert.deepEqual(calls.at(-1).body, {
+    roomId,
+    type: 'maintenance',
+    description: 'Fuga en lavamanos',
+    notes: 'Alta',
+  });
+  assert.equal(report.type, 'maintenance');
+  assert.equal(report.status, 'pending');
+  assert.ok(!('room_id' in report), 'devuelve Model, no DTO');
+
+  await assert.rejects(
+    () =>
+      serviceRequestService.createRequest({
+        roomId,
+        type: 'housekeeping',
+        description: 'Stayover por la ruta general',
+      }),
+    /Use the dedicated endpoint for housekeeping requests/,
+    'el backend reserva housekeeping/concierge para sus endpoints propios',
+  );
+
+  const filtered = await assertServiceCall('serviceRequestService.getRequests filtrado', () =>
+    serviceRequestService.getRequests({ type: 'maintenance', status: 'pending', roomId }),
+  );
+  assert.equal(filtered.length, 1);
+  assert.equal(
+    calls.at(-1).call,
+    `GET /service-requests?type=maintenance&roomId=${roomId}&status=pending`,
+  );
+
+  const detail = await assertServiceCall('serviceRequestService.getRequestById', () =>
+    serviceRequestService.getRequestById(report.id),
+  );
+  assert.equal(detail?.id, report.id);
+  assert.equal(
+    await serviceRequestService.getRequestById('bbbb1260-0000-4000-8000-999999999999'),
+    undefined,
+    'un 404 real del detalle se devuelve como undefined',
+  );
+
+  const accepted = await assertServiceCall('serviceRequestService.updateRequestStatus', () =>
+    serviceRequestService.updateRequestStatus(report.id, 'accepted'),
+  );
+  assert.equal(accepted.status, 'accepted');
+  assert.equal(accepted.responsibleUserName, 'Limpieza Demo', 'el responsable lo asigna backend');
+  assert.equal(calls.at(-1).call, `POST /service-requests/${report.id}/status`);
+  assert.deepEqual(calls.at(-1).body, { status: 'accepted' });
+
+  const started = await serviceRequestService.updateRequestStatus(report.id, 'inProgress');
+  assert.equal(started.status, 'inProgress');
+  assert.deepEqual(calls.at(-1).body, { status: 'in_progress' });
+
+  const completed = await serviceRequestService.updateRequestStatus(report.id, 'completed', {
+    notes: '  Se cambió el empaque  ',
+  });
+  assert.equal(completed.status, 'completed');
+  assert.equal(completed.notes, 'Alta\nSe cambió el empaque', 'las notas se agregan');
+
+  await assert.rejects(
+    () => serviceRequestService.updateRequestStatus(report.id, 'cancelled'),
+    /Invalid status transition from completed to cancelled/,
+    'la transición inválida del backend se propaga',
+  );
+});
+
+test('#126: listados financieros globales propagan el error real sin fallback', async (t) => {
+  const previousFetch = globalThis.fetch;
+  t.after(() => (globalThis.fetch = previousFetch));
+  const calls = [];
+  globalThis.fetch = async (input) => {
+    const path = new URL(String(input)).pathname.replace(/^\/api\/v1/, '');
+    calls.push(path);
+    return new Response(JSON.stringify({ message: `Access denied: ${path}` }), {
+      status: 403,
+      headers: { 'content-type': 'application/json' },
+    });
+  };
+
+  for (const [label, call, path] of [
+    ['getAccounts', () => guestAccountService.getAccounts(), '/guest-accounts'],
+    ['getCharges', () => guestAccountService.getCharges(), '/charges'],
+    ['getPayments', () => guestAccountService.getPayments(), '/payments'],
+    ['getDeposits', () => guestAccountService.getDeposits(), '/deposits'],
+    ['getRequests', () => serviceRequestService.getRequests(), '/service-requests'],
+  ]) {
+    await assert.rejects(call, new RegExp(`Access denied: ${path}`), `${label} no devuelve []`);
+    assert.equal(calls.at(-1), path, `${label} consulta ${path}`);
+  }
+});
+
+test('#126: listados financieros globales devuelven Models desde la API', async () => {
+  const { bookingId } = installFinancialFetchMock();
+  const charges = await assertServiceCall('guestAccountService.getCharges', () =>
+    guestAccountService.getCharges(),
+  );
+  assert.equal(charges[0].bookingId, bookingId);
+  assert.equal(charges[0].amountCents, 50000);
+  assert.ok(!('amount_cents' in charges[0]), 'devuelve Model, no DTO');
+  assert.deepEqual(
+    await assertServiceCall('guestAccountService.getPayments', () =>
+      guestAccountService.getPayments(),
+    ),
+    [],
+  );
+  assert.deepEqual(
+    await assertServiceCall('guestAccountService.getDeposits', () =>
+      guestAccountService.getDeposits(),
+    ),
+    [],
+  );
 });

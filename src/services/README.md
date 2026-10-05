@@ -524,12 +524,15 @@ ready -> on_the_way -> delivered`; se cancela hasta `ready`; `pending`
 - `updateConciergeRequestStatus(id, status, { notes?, responsibleUserId? })` →
   `POST /concierge/requests/{id}/status`.
 
-`getRequests`, `getRequestById`, `createRequest` y `createMaintenanceReport`
-usan `ServiceRequestController` (`/service-requests`). `createMaintenanceReport`
-envia `type: maintenance`; no usa `src/data/db.ts`.
+`getRequests`, `getRequestById`, `createRequest`, `createMaintenanceReport` y
+`updateRequestStatus` usan `ServiceRequestController` (`/service-requests`);
+ver "Integracion con #126". `createMaintenanceReport` envia
+`type: maintenance`; no usa `src/data/db.ts`.
 Desde INT-12 el portal del huesped usa los metodos `*Guest*` y se eliminaron
-`cancelRequest` y `getRequestsByGuestId`. Se eliminaron `updateRequestStatus`, `updateRequestNotes` y
-`updateRequestType`, que solo usaba Conserjeria.
+`cancelRequest` y `getRequestsByGuestId`. Se eliminaron `updateRequestNotes` y
+`updateRequestType`, que solo usaba Conserjeria; el `updateRequestStatus` de
+Conserjeria paso a `updateConciergeRequestStatus`, y desde #126 el nombre
+`updateRequestStatus` corresponde a la ruta general.
 
 Reglas:
 
@@ -549,6 +552,58 @@ cancelled`). Ante `400`/`403`/`404` la pantalla muestra el error y recarga las
   (`concierge.read`).
 
 Requiere la rama de backend `feature/concierge-responsible-notes`.
+
+## Integracion con #126: mantenimiento, confirmacion/cancelacion y finanzas globales
+
+Contrato final de los flujos operativos que aun conservaban estado local:
+
+| Servicio                | Metodo                                                            | Endpoint                             | Permiso backend          |
+| ----------------------- | ----------------------------------------------------------------- | ------------------------------------ | ------------------------ |
+| `bookingService`        | `confirmBooking(bookingId)`                                       | `POST /bookings/{id}/confirm`        | `bookings.write`         |
+| `bookingService`        | `cancelBooking(bookingId, reason)`                                | `POST /bookings/{id}/cancel`         | `bookings.write`         |
+| `serviceRequestService` | `getRequests({ type?, bookingId?, roomId?, status? })`            | `GET /service-requests`              | `service-requests.read`  |
+| `serviceRequestService` | `getRequestById(id)` (`undefined` ante 404)                       | `GET /service-requests/{id}`         | `service-requests.read`  |
+| `serviceRequestService` | `createRequest(...)` / `createMaintenanceReport(...)`             | `POST /service-requests`             | `service-requests.write` |
+| `serviceRequestService` | `updateRequestStatus(id, status, { notes?, responsibleUserId? })` | `POST /service-requests/{id}/status` | `service-requests.write` |
+| `guestAccountService`   | `getAccounts()`                                                   | `GET /guest-accounts`                | `folios.read`            |
+| `guestAccountService`   | `getCharges()`                                                    | `GET /charges`                       | `charges.read`           |
+| `guestAccountService`   | `getPayments()` (`paymentService` delega aqui)                    | `GET /payments`                      | `payments.read`          |
+| `guestAccountService`   | `getDeposits()`                                                   | `GET /deposits`                      | `deposits.read`          |
+
+Los endpoints por reserva (`/bookings/{id}/folio|charges|payments|deposits`)
+no cambian; ver #103.
+
+Reglas (las decide el backend, el frontend no las replica):
+
+- Confirmar solo aplica a reservas `pending`; cancelar, a `pending` o
+  `confirmed`, con `reason` obligatorio (`@NotBlank`). El servicio rechaza un
+  motivo vacio antes de llamar. Fuera de estado el backend responde `400` y su
+  mensaje se muestra tal cual. IDs legacy `BKG-*` se rechazan sin simular la
+  transicion.
+- `BookingResponse` incluye `cancellationReason` y `cancelledAt`; el contrato
+  `booking` los expone como `cancellation_reason`/`cancelled_at` (DTO) y
+  `cancellationReason`/`cancelledAt` (Model). Recepcion muestra ese motivo, ya no
+  `notes`.
+- `/service-requests` solo crea y cambia de estado `maintenance` y `other`;
+  `housekeeping` (stayover, INT-09) y `concierge` (INT-11) tienen endpoints
+  propios y el backend responde `400` si llegan por aqui. Por eso
+  `createRequest` acepta solo esos dos tipos.
+- Dominio por rol: admin y recepcion leen todos los tipos y escriben
+  `maintenance`/`other`; Limpieza lee `housekeeping`/`maintenance` y solo crea
+  `maintenance`; Conserjeria solo lee `concierge`. Transiciones:
+  `pending -> accepted | rejected | cancelled`, `accepted -> in_progress |
+cancelled`, `in_progress -> completed | cancelled`. Las notas de un cambio de
+  estado se agregan a las existentes y el responsable se asigna desde la sesion
+  al aceptar/iniciar/completar.
+- `ServiceRequestResponse` de esta ruta no trae `chargeId`.
+
+En `PrivateWorkspace`, `getRequests()` se carga solo para admin, recepcion y
+Limpieza, y `getCharges`/`getPayments`/`getDeposits` solo para admin y
+recepcion. Ya no pasan por `safeList`: un error real del backend se propaga en
+vez de mostrar listas vacias. Cancelar una reserva desde Recepcion llama
+`cancelBooking` y recarga reservas y habitaciones; si el backend rechaza, la
+reserva sigue igual y se muestra el error. Reportar un desperfecto espera la
+respuesta de `POST /service-requests` antes de sumarlo al panel de Limpieza.
 
 ## Integracion con INT-12 (#110)
 

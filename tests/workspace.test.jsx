@@ -225,6 +225,21 @@ function installHousekeepingBackend() {
         ],
       },
     ],
+    maintenance: [
+      {
+        id: 'maint-1',
+        bookingId: null,
+        roomId: 'room-102',
+        roomNumber: '102',
+        type: 'maintenance',
+        description: 'Plomería: fuga en lavamanos',
+        status: 'pending',
+        notes: 'Alta',
+        requestedAt: '2026-10-03T08:00:00Z',
+        createdAt: '2026-10-03T08:00:00Z',
+        updatedAt: '2026-10-03T08:00:00Z',
+      },
+    ],
     requests: [],
   };
   const turnover = {
@@ -257,6 +272,31 @@ function installHousekeepingBackend() {
       return json(state.stayovers);
     }
     if (method === 'GET' && path === '/housekeeping/checklists') return json(state.checklists);
+    // ServiceRequestController: Limpieza lee housekeeping/maintenance y solo crea maintenance.
+    if (method === 'GET' && path === '/service-requests') return json(state.maintenance);
+    if (method === 'POST' && path === '/service-requests') {
+      const body = JSON.parse(String(init.body ?? '{}'));
+      if (body.type !== 'maintenance') return json({ status: 403 }, 403);
+      const room = state.rooms.find((item) => item.id === body.roomId);
+      const request = {
+        id: `maint-${state.maintenance.length + 1}`,
+        bookingId: null,
+        roomId: body.roomId,
+        roomNumber: room?.roomNumber ?? null,
+        type: body.type,
+        description: body.description,
+        status: 'pending',
+        notes: body.notes ?? null,
+        requestedAt: '2026-10-03T10:00:00Z',
+        createdAt: '2026-10-03T10:00:00Z',
+        updatedAt: '2026-10-03T10:00:00Z',
+      };
+      state.maintenance.push(request);
+      return json(request, 201);
+    }
+    if (['/charges', '/payments', '/deposits', '/guest-accounts'].includes(path)) {
+      return json({ status: 403 }, 403);
+    }
     if (method === 'POST' && path === '/housekeeping/checklists') {
       const body = JSON.parse(String(init.body ?? '{}'));
       const stayover = state.stayovers.find((item) => item.id === body.serviceRequestId);
@@ -558,6 +598,83 @@ test('limpieza: si el backend rechaza la transición se muestra el estado real',
     toasts().join(),
   );
   assert.equal(cardFor('101').status, 'En proceso', 'se recargó el estado real del backend');
+});
+
+// --- Limpieza: desperfectos contra ServiceRequestController (#126) --------
+
+const defectsReported = () =>
+  text(
+    view.root
+      .find((node) => hasClass(node, 'hk-summary-item') && text(node).includes('Desperfectos'))
+      .find((node) => node.type === 'strong'),
+  );
+const openDefectModal = async () => {
+  await act(async () =>
+    buttons(
+      'Reportar desperfecto',
+      view.root.find((node) => hasClass(node, 'welcome-row')),
+    )[0].props.onClick(),
+  );
+  return view.root.find(
+    (node) => typeof node.props?.onSubmit === 'function' && Array.isArray(node.props.rooms),
+  );
+};
+const defectReport = {
+  room: '101',
+  category: 'Eléctrico',
+  description: 'Lámpara sin funcionar',
+  priority: 'Media',
+  observation: 'Revisar balastro',
+  photo: '',
+};
+
+test('limpieza: los desperfectos salen de /service-requests y no pide finanzas', async () => {
+  await mountHousekeeping();
+  assert.ok(hkBackend.requests.includes('GET /service-requests'));
+  assert.deepEqual(
+    hkBackend.requests.filter((request) =>
+      ['/charges', '/payments', '/deposits', '/guest-accounts'].some((path) =>
+        request.endsWith(path),
+      ),
+    ),
+    [],
+    'Limpieza no tiene permisos financieros: no debe pedirlos',
+  );
+  assert.equal(defectsReported(), '1', 'cuenta el desperfecto que devuelve el backend');
+});
+
+test('limpieza: reportar un desperfecto lo crea como maintenance en el backend', async () => {
+  await mountHousekeeping();
+  const modal = await openDefectModal();
+  await act(async () => modal.props.onSubmit(defectReport));
+  await settle();
+
+  const created = hkBackend.maintenance.at(-1);
+  assert.equal(created.type, 'maintenance');
+  assert.equal(created.roomId, 'room-101');
+  assert.equal(created.description, 'Eléctrico: Lámpara sin funcionar');
+  assert.equal(created.notes, 'Media - Revisar balastro');
+  assert.equal(defectsReported(), '2');
+  assert.ok(toasts().some((toast) => toast.includes('Reporte enviado correctamente')));
+});
+
+test('limpieza: si el backend rechaza el reporte no se agrega un desperfecto local', async () => {
+  await mountHousekeeping();
+  const fetchWithRules = globalThis.fetch;
+  globalThis.fetch = async (input, init = {}) =>
+    (init.method ?? 'GET') === 'POST' && String(input).endsWith('/service-requests')
+      ? new Response(JSON.stringify({ message: 'Room not found: room-101' }), {
+          status: 400,
+          headers: { 'content-type': 'application/json' },
+        })
+      : fetchWithRules(input, init);
+
+  const modal = await openDefectModal();
+  await act(async () => modal.props.onSubmit(defectReport));
+  await settle();
+
+  assert.equal(defectsReported(), '1', 'sin confirmación del backend no cambia el contador');
+  assert.ok(toasts().some((toast) => toast.includes('Room not found: room-101')));
 });
 
 // --- Room Service: backend falso de RoomServiceController (INT-10) --------
@@ -1008,4 +1125,164 @@ test('portal del huésped: el pedido de Room Service no elige la reserva', async
   assert.ok(post, 'el pedido va a /guest/room-service/orders');
   assert.ok(!('bookingId' in post.body), 'la reserva la toma el backend del JWT');
   assert.deepEqual(post.body.items, [{ productId: 'product-1', quantity: 1 }]);
+});
+
+// --- Recepción: cancelación formal contra BookingController (#126) --------
+
+const REC_BOOKING_ID = '1f24bc67-4a9d-4c1d-9210-d661f60e1260';
+
+function installReceptionBackend() {
+  const now = '2026-10-05T10:00:00Z';
+  const state = {
+    booking: {
+      id: REC_BOOKING_ID,
+      confirmationCode: 'BKG-126',
+      guestLinkCode: 'LNK-126',
+      guestId: '7d2f8f2a-0b48-47a4-9bc3-3b1b0874d126',
+      roomId: 'room-101',
+      roomTypeId: 'type-standard',
+      rateId: null,
+      checkIn: '2026-12-10',
+      checkOut: '2026-12-12',
+      status: 'confirmed',
+      adults: 2,
+      children: 0,
+      totalAmountCents: 100000,
+      currency: 'GTQ',
+      notes: 'Llega tarde',
+      cancellationReason: null,
+      cancelledAt: null,
+      createdAt: now,
+      updatedAt: now,
+    },
+    requests: [],
+  };
+  const json = (body, status = 200) =>
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { 'content-type': 'application/json' },
+    });
+
+  originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input, init = {}) => {
+    const path = new URL(String(input)).pathname.replace(/^\/api\/v1/, '');
+    const method = init.method ?? 'GET';
+    const body = init.body ? JSON.parse(String(init.body)) : undefined;
+    state.requests.push({ call: `${method} ${path}`, body });
+    if (method === 'GET' && path === '/bookings') return json([state.booking]);
+    if (method === 'GET' && path === '/guests') {
+      return json([
+        {
+          id: state.booking.guestId,
+          firstName: 'Elena',
+          lastName: 'Castro',
+          email: 'elena@example.com',
+          phone: '+502 5555-1010',
+          documentType: 'national_id',
+          documentNumber: '1000 20000 0101',
+          createdAt: now,
+          updatedAt: now,
+        },
+      ]);
+    }
+    if (method === 'GET' && path === '/rooms') return json([hkRoom('room-101', '101', 'clean')]);
+    if (method === 'GET' && path === '/room-types') {
+      return json([
+        {
+          id: 'type-standard',
+          name: 'Estándar',
+          description: 'Habitación estándar',
+          capacity: 2,
+          basePriceCents: 50000,
+          currency: 'GTQ',
+          roomFeatureIds: [],
+          createdAt: now,
+          updatedAt: now,
+        },
+      ]);
+    }
+    if (method === 'POST' && path === `/bookings/${REC_BOOKING_ID}/cancel`) {
+      if (!['pending', 'confirmed'].includes(state.booking.status)) {
+        return json({ message: 'Only pending or confirmed bookings can be cancelled' }, 400);
+      }
+      Object.assign(state.booking, {
+        status: 'cancelled',
+        cancellationReason: body.reason,
+        cancelledAt: now,
+      });
+      return json(state.booking);
+    }
+    if (method === 'GET') return json([]);
+    return json({ message: `Ruta no mockeada: ${method} ${path}` }, 404);
+  };
+  return state;
+}
+
+let recBackend;
+async function mountReception() {
+  recBackend = installReceptionBackend();
+  await act(async () => {
+    view = create(
+      <MemoryRouter>
+        <PrivateWorkspace role="reception" sessionName="Recepción Test" />
+      </MemoryRouter>,
+    );
+  });
+  for (let i = 0; i < 20 && !view.root.findAll((node) => hasClass(node, 'side-nav')).length; i++) {
+    await settle(300);
+  }
+  assert.ok(view.root.findAll((node) => hasClass(node, 'side-nav')).length, 'workspace cargado');
+}
+const receptionContent = () =>
+  view.root.find(
+    (node) => typeof node.props?.onCancel === 'function' && Array.isArray(node.props.reservations),
+  );
+const recReservation = () =>
+  receptionContent().props.reservations.find((item) => item.bookingId === REC_BOOKING_ID);
+const recCalls = (suffix) =>
+  recBackend.requests.filter(({ call }) => call.endsWith(suffix)).map(({ body }) => body);
+
+test('recepción: carga solicitudes y finanzas globales desde el backend', async () => {
+  await mountReception();
+  for (const path of ['/service-requests', '/charges', '/payments', '/deposits']) {
+    assert.ok(
+      recBackend.requests.some(({ call }) => call === `GET ${path}`),
+      `recepción consulta ${path}`,
+    );
+  }
+});
+
+test('recepción: cancelar una reserva envía el motivo al backend y muestra la reserva real', async () => {
+  await mountReception();
+  assert.equal(recReservation().status, 'Confirmada');
+
+  await act(async () =>
+    receptionContent().props.onCancel(recReservation().id, 'Cambio de planes del huésped'),
+  );
+  await settle();
+
+  assert.deepEqual(recCalls(`/bookings/${REC_BOOKING_ID}/cancel`), [
+    { reason: 'Cambio de planes del huésped' },
+  ]);
+  assert.equal(recReservation().status, 'Cancelada');
+  assert.equal(
+    recReservation().cancelReason,
+    'Cambio de planes del huésped',
+    'el motivo sale de cancellationReason, no de las notas',
+  );
+  assert.ok(toasts().some((toast) => toast.includes('Reserva cancelada correctamente')));
+});
+
+test('recepción: si el backend rechaza la cancelación la reserva no cambia', async () => {
+  await mountReception();
+  recBackend.booking.status = 'checked_in';
+
+  await act(async () => receptionContent().props.onCancel(recReservation().id, 'Ya no viene'));
+  await settle();
+
+  assert.equal(recCalls(`/bookings/${REC_BOOKING_ID}/cancel`).length, 1);
+  assert.equal(recReservation().status, 'Confirmada', 'no se marca cancelada sin el backend');
+  assert.ok(
+    toasts().some((toast) => toast.includes('Only pending or confirmed bookings can be cancelled')),
+  );
 });
