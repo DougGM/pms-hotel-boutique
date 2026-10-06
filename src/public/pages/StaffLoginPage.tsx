@@ -10,8 +10,7 @@ import './staff-login.css';
 
 export function StaffLoginPage() {
   const location = useLocation();
-  // INT-12: la ruta de "cuenta de huésped" es el acceso con código de reserva;
-  // el huésped nunca usa el login del personal.
+  // Keep the guest stay/code flow available; the standard login detects the account role.
   if (location.pathname === routePaths.public.register) return <GuestAccessScreen />;
   return <StaffLoginForm />;
 }
@@ -55,9 +54,9 @@ function StaffLoginForm() {
             <small>HOTEL & RESORT</small>
           </span>
         </Link>
-        <p className="eyebrow">Acceso del personal</p>
+        <p className="eyebrow">Acceso Aurora</p>
         <h1>Iniciar sesión</h1>
-        <p className="muted">Ingresa con tu cuenta para acceder a tu área de trabajo.</p>
+        <p className="muted">Ingresa con tu correo y contraseña para continuar a tu área.</p>
 
         <form className="staff-login-form" onSubmit={submit} aria-busy={isSubmitting}>
           <label htmlFor="staff-email">

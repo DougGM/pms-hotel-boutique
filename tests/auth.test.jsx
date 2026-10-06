@@ -884,15 +884,23 @@ async function loginGuestForm(email, pass) {
   });
 }
 
-test('el login del personal rechaza cuentas de huésped', async () => {
+test('el login general reconoce las credenciales de huésped y abre su portal', async () => {
   await open('/auth/login');
-  await login('huesped@hotelboutique.test');
+  await login('ana.demo@aurora.test', 'huesped1');
+  assert.equal(router.state.location.pathname, '/pms/dashboard');
+  assert.ok(requests.some((request) => request.path === '/api/v1/guest/auth/login'));
+  assert.ok(!requests.some((request) => request.path === '/api/v1/auth/login'));
+  assert.equal(JSON.parse(values.get('PMS_AUTH_SESSION')).user.role, 'GUEST');
+});
+
+test('el login general conserva el error de huésped sin estancia activa', async () => {
+  await open('/auth/login');
+  await login('no.stay@aurora.test', 'huesped1');
   assert.equal(router.state.location.pathname, '/auth/login');
-  assert.ok(
-    text().includes('código de su reserva') || text().includes('Acceso de huésped'),
-    'indica usar el acceso de huésped',
-  );
-  assert.equal(values.size, 0, 'no persiste ninguna sesión');
+  assert.ok(text().includes('No tienes una estancia activa'));
+  assert.ok(requests.some((request) => request.path === '/api/v1/guest/auth/login'));
+  assert.ok(!requests.some((request) => request.path === '/api/v1/auth/login'));
+  assert.equal(values.has('PMS_AUTH_SESSION'), false);
 });
 
 test('el huésped puede iniciar sesión con correo y contraseña contra backend real', async () => {
