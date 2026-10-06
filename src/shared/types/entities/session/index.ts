@@ -2,6 +2,7 @@ export type {
   AuthResponseDTO,
   BackendAuthResponseDTO,
   BackendGuestLinkResponseDTO,
+  BackendGuestLoginResponseDTO,
   LoginDTO,
   SessionUserDTO,
 } from './session.dto';

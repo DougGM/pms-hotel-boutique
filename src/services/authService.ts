@@ -4,6 +4,7 @@ import {
   type AuthSession,
   type BackendAuthResponseDTO,
   type BackendGuestLinkResponseDTO,
+  type BackendGuestLoginResponseDTO,
   type SessionUser,
 } from '@/shared/types/entities/session';
 import type { UserRole } from '@/shared/types/common';
@@ -135,6 +136,7 @@ function normalizeGuestSession(
   tokenType: string,
   expiresInSeconds: number,
   name?: string,
+  email?: string,
 ): AuthResponseDTO {
   const payload = decodeJwt(token);
   if (payload.type !== 'guest') throw new Error('El acceso recibido no corresponde a un huésped.');
@@ -150,7 +152,7 @@ function normalizeGuestSession(
   return {
     user: {
       id: subject,
-      email: '',
+      email: email?.trim().toLowerCase() || '',
       name: name?.trim() || 'Huésped',
       role,
       createdAt: issuedAt.toISOString(),
@@ -162,6 +164,26 @@ function normalizeGuestSession(
     tokenType,
     authorities,
   };
+}
+
+function guestLoginErrorMessage(error: unknown): string {
+  if (error instanceof HttpError) {
+    if (error.status === 401) {
+      return 'Correo o contraseña incorrectos.';
+    }
+    if (error.status === 400) {
+      const data = error.data as { message?: string } | undefined;
+      const msg = typeof data?.message === 'string' ? data.message.toLowerCase() : '';
+      if (msg.includes('active stay') || msg.includes('estancia')) {
+        return 'No tienes una estancia activa en este momento. El acceso funciona desde el check-in hasta el check-out.';
+      }
+      return messageFromHttpError(error, 'El correo y la contraseña son requeridos.');
+    }
+    if (error.status === 403) {
+      return 'Esta información no pertenece a tu estancia o tu estancia ya no está activa.';
+    }
+  }
+  return messageFromHttpError(error, 'No fue posible iniciar sesión como huésped.');
 }
 
 function guestLinkErrorMessage(error: unknown): string {
@@ -268,7 +290,50 @@ export const authService = {
       throw new Error(messageFromHttpError(error, 'Correo o contraseña incorrectos.'));
     }
   },
-  /** Canjea el código de la reserva por una sesión de huésped (no usa el login del personal). */
+  /** Inicia sesión de huésped con correo y contraseña contra `POST /guest/auth/login`. */
+  async loginGuest(email: string, password: string, signal?: AbortSignal): Promise<AuthSession> {
+    const current = ++revision;
+    checkRequest(current, signal);
+    const trimmedEmail = email.trim().toLowerCase();
+    if (!trimmedEmail) throw new Error('Ingresa tu correo electrónico.');
+    if (!password) throw new Error('Ingresa tu contraseña.');
+    let dto: AuthResponseDTO;
+    try {
+      const response = await httpClient.post<BackendGuestLoginResponseDTO>(
+        '/guest/auth/login',
+        { email: trimmedEmail, password },
+        { signal, auth: { skipAuthorization: true, skipRefresh: true } },
+      );
+      checkRequest(current, signal);
+      dto = normalizeGuestSession(
+        response.accessToken,
+        response.tokenType,
+        response.expiresIn,
+        undefined,
+        trimmedEmail,
+      );
+    } catch (error) {
+      checkRequest(current, signal);
+      throw new Error(guestLoginErrorMessage(error));
+    }
+    httpClient.setToken(dto.token);
+    try {
+      // El nombre visible sale de la estancia; si falla, la sesión sigue siendo válida.
+      const stay = await httpClient.get<{ guestFirstName?: string; guestLastName?: string }>(
+        '/guest/stay',
+        { signal, auth: { skipRefresh: true } },
+      );
+      const name = [stay.guestFirstName, stay.guestLastName].filter(Boolean).join(' ');
+      if (name) dto = { ...dto, user: { ...dto.user, name } };
+    } catch {
+      /* El portal vuelve a pedir la estancia al cargar. */
+    }
+    checkRequest(current, signal);
+    this.clearGuestAccessExpired();
+    persistSession(dto);
+    return toAuthSession(dto);
+  },
+  /** Canjea el código de la reserva por una sesión de huésped (flujo secundario de compatibilidad). */
   async linkGuest(code: string, signal?: AbortSignal): Promise<AuthSession> {
     const current = ++revision;
     checkRequest(current, signal);
@@ -352,6 +417,7 @@ export const authService = {
           stored.tokenType ?? 'Bearer',
           0,
           stored.user.name,
+          stored.user.email,
         );
         persistSession(guest);
         httpClient.setToken(guest.token);

@@ -1,4 +1,4 @@
-﻿import { authService as sharedAuthService } from '@/services/authService';
+import { authService as sharedAuthService } from '@/services/authService';
 import { toSession } from '@/modules/auth/mappers/session-mapper';
 import type { Credentials, Session } from '@/modules/auth/models/session';
 
@@ -9,6 +9,11 @@ export const authService = {
   async login(credentials: Credentials, signal?: AbortSignal): Promise<Session> {
     return toSession(
       await sharedAuthService.login(credentials.email, credentials.password, signal),
+    );
+  },
+  async loginGuest(credentials: Credentials, signal?: AbortSignal): Promise<Session> {
+    return toSession(
+      await sharedAuthService.loginGuest(credentials.email, credentials.password, signal),
     );
   },
   async linkGuest(code: string, signal?: AbortSignal): Promise<Session> {
