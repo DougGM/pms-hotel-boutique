@@ -550,19 +550,20 @@ cancelled`). Ante `400`/`403`/`404` la pantalla muestra el error y recarga las
 
 Requiere la rama de backend `feature/concierge-responsible-notes`.
 
-## Integracion con INT-12 (#110)
+## Integracion con INT-12 (#110) y AUTH-GUEST (#134)
 
-El portal del huesped usa **Guest Access**, no el login del personal:
+El portal del huésped usa **Guest Access**, separado del login del personal:
 
-1. Recepcion ve el `guestLinkCode` en el detalle de la reserva (solo en
-   check-in) y se lo entrega al huesped.
-2. El huesped lo ingresa en "Acceso de huesped" (`/auth/register`, la ruta
-   publica existente; las rutas `/my-account/...` siguen reservadas en
-   `routes.ts`, congelado).
-3. `authService.linkGuest(code)` llama `POST /guest/auth/link` y guarda una
-   sesion de rol `GUEST` con el JWT `type: guest`. No hay refresh token: la
-   sesion dura lo mismo que el token y, al vencer, se pide de nuevo el codigo.
-4. `authService.login()` rechaza cuentas `ROLE_GUEST`.
+1. **Flujo principal:** El huésped inicia sesión con su correo electrónico y
+   contraseña en "Acceso de huésped" (`/auth/register`). `authService.loginGuest(email, password)`
+   llama a `POST /guest/auth/login` y recibe un JWT de tipo `guest` (`ROLE_GUEST`),
+   sin refresh token.
+2. **Flujo secundario:** Como alternativa de compatibilidad/demo, el huésped
+   puede canjear el código de vinculación de su reserva (`guestLinkCode`) entregado en check-in.
+   `authService.linkGuest(code)` llama a `POST /guest/auth/link`.
+3. La sesión de rol `GUEST` dura lo mismo que el token (sin refresh token) y,
+   al vencer, se solicita nuevamente la autenticación al huésped.
+4. `authService.login()` del personal rechaza cuentas `ROLE_GUEST`.
 
 Todas las llamadas del portal van a `/guest/...` con ese JWT. **Ninguna envia
 `bookingId`**: el backend toma la reserva del token (ownership); un recurso ajeno

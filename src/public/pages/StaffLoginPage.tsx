@@ -104,8 +104,7 @@ function StaffLoginForm() {
         </form>
 
         <p className="muted">
-          ¿Eres huésped?{' '}
-          <Link to={routePaths.public.register}>Accede con el código de tu reserva</Link>
+          ¿Eres huésped? <Link to={routePaths.public.register}>Accede a tu estancia aquí</Link>
         </p>
         <Link className="button secondary" to={routePaths.public.home}>
           Volver al inicio

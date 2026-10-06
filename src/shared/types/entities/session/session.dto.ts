@@ -37,6 +37,16 @@ export interface BackendGuestLinkResponseDTO {
   expiresIn: number;
 }
 
+/**
+ * Respuesta de `POST /guest/auth/login`: el huésped se autentica con
+ * correo y contraseña y recibe un JWT de tipo `guest`, sin refresh token.
+ */
+export interface BackendGuestLoginResponseDTO {
+  accessToken: string;
+  tokenType: string;
+  expiresIn: number;
+}
+
 export interface AuthResponseDTO {
   user: SessionUserDTO;
   token: string;

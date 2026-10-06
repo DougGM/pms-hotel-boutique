@@ -79,6 +79,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setError(null);
   }
 
+  async function loginGuest(credentials: Credentials) {
+    const current = ++requestId.current;
+    request.current?.abort();
+    const controller = new AbortController();
+    request.current = controller;
+    const next = await authService.loginGuest(credentials, controller.signal);
+    if (current !== requestId.current) return;
+    setSession(next);
+    setError(null);
+  }
+
   async function linkGuest(code: string) {
     const current = ++requestId.current;
     request.current?.abort();
@@ -91,7 +102,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ session, isLoading, error, login, linkGuest, logout, retry }}>
+    <AuthContext.Provider
+      value={{ session, isLoading, error, login, loginGuest, linkGuest, logout, retry }}
+    >
       {children}
     </AuthContext.Provider>
   );
