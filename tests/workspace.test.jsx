@@ -1163,8 +1163,11 @@ test('portal del huésped: muestra el error si falla la lista de reservas, sin f
 
 test('portal del huésped: marcar todas usa read-all y el contador del backend', async () => {
   await mountGuestPortal();
-  await goTo('Notificaciones');
-  assert.ok(text(view.root).includes('2 notificaciones sin leer'));
+  await act(async () => {
+    view.root.findByProps({ className: 'icon-btn notification' }).props.onClick();
+    await settle();
+  });
+  assert.ok(text(view.root).includes('2 notificaciones sin leer'), text(view.root));
 
   await act(async () => buttons('Marcar todas como leídas')[0].props.onClick());
   await settle();

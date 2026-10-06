@@ -1126,7 +1126,6 @@ const navByRole: Record<RoleId, NavItem[]> = {
     { label: 'Servicios de habitación', icon: ClipboardList },
     { label: 'Room service', icon: Package },
     { label: 'Mis solicitudes y pedidos', icon: FileText },
-    // INT-12: lista, contador y "marcar como leída" con las notificaciones del backend.
     { label: 'Notificaciones', icon: Bell },
   ],
 };
@@ -1597,7 +1596,16 @@ function PrivateWorkspaceReady({
 
   const rolePermissionCode = activeRole === 'room-service' ? 'roomService' : activeRole;
   const baseNav = activeRole ? navByRole.admin : [];
-  const permittedNav = filterNavByPermissions(baseNav, rolePermissions[rolePermissionCode] ?? {});
+  const filteredNav = filterNavByPermissions(baseNav, rolePermissions[rolePermissionCode] ?? {});
+  const permittedNav =
+    activeRole === 'guest'
+      ? filteredNav.map((item) =>
+          item.label === 'Huésped' &&
+          !item.children?.some((child) => child.label === 'Notificaciones')
+            ? { ...item, children: [...(item.children ?? []), navChild('guest', 'Notificaciones')] }
+            : item,
+        )
+      : filteredNav;
   const shouldGroupNav = activeRole === 'admin' || permittedNav.length > 1;
   const nav = shouldGroupNav ? permittedNav : flattenPermittedNav(permittedNav);
   const groupedNavLabels = nav
@@ -1616,8 +1624,9 @@ function PrivateWorkspaceReady({
     const isVisible =
       nav.some((item) => (item.nav ?? item.label) === activeNav) ||
       nav.some((item) => item.children?.some((child) => child.nav === activeNav));
-    if (!isVisible) setActiveNav(firstNavValue(nav));
-  }, [activeNav, nav]);
+    const isGuestBellDestination = activeRole === 'guest' && activeNav === 'Notificaciones';
+    if (!isVisible && !isGuestBellDestination) setActiveNav(firstNavValue(nav));
+  }, [activeNav, activeRole, nav]);
   const activeWorkspace = resolveWorkspaceNav(activeRole, activeNav, nav);
   const contentRole = activeWorkspace.role;
   const contentNav = activeWorkspace.nav;
@@ -1639,11 +1648,20 @@ function PrivateWorkspaceReady({
           Solicitudes: hkRequests.filter(isOpenGuestRequest).length,
         }
       : {};
-  const sidebarNav = nav.map((item) =>
-    item.label in hkNavBadges
-      ? { ...item, badge: hkNavBadges[item.label] ? String(hkNavBadges[item.label]) : undefined }
-      : item,
-  );
+  const sidebarNav = nav
+    .map((item) => {
+      const visibleChildren = item.children?.filter(
+        (child) => !(child.role === 'guest' && child.label === 'Notificaciones'),
+      );
+      const visibleItem = visibleChildren ? { ...item, children: visibleChildren } : item;
+      return item.label in hkNavBadges
+        ? {
+            ...visibleItem,
+            badge: hkNavBadges[item.label] ? String(hkNavBadges[item.label]) : undefined,
+          }
+        : visibleItem;
+    })
+    .filter((item) => !(activeRole === 'guest' && item.label === 'Notificaciones'));
   const showsGreeting = [
     'Resumen',
     'Dashboard',
@@ -1659,17 +1677,6 @@ function PrivateWorkspaceReady({
       ),
     [tasks, search],
   );
-  const guestRoomServiceNotifications: NotificationItem[] = rsOrders
-    .filter(
-      (order) =>
-        order.room === '402' && !['Entregado', 'Cancelado', 'Rechazado'].includes(order.status),
-    )
-    .slice(0, 2)
-    .map((order) => ({
-      title: `Pedido #${order.id} de Room Service`,
-      detail: `${order.items.map((item) => `${item.quantity}x ${item.name}`).join(', ')} · ${order.status}`,
-      tone: order.status === 'Listo' || order.status === 'En camino' ? 'success' : 'info',
-    }));
   const currentMetrics =
     activeRole === 'housekeeping'
       ? [
@@ -1780,19 +1787,7 @@ function PrivateWorkspaceReady({
                   },
                 ]
               : activeRole === 'guest'
-                ? [
-                    {
-                      title: 'Reserva activa',
-                      detail: 'Suite Aurora · Habitacion 402 · Check-out 28 ago',
-                      tone: 'success',
-                    },
-                    ...guestRoomServiceNotifications,
-                    {
-                      title: 'Cargo de Room Service',
-                      detail: '$560.00 agregado a tu cuenta de estancia',
-                      tone: 'info',
-                    },
-                  ]
+                ? []
                 : [
                     {
                       title: 'Reserva activa',
@@ -2805,19 +2800,28 @@ function PrivateWorkspaceReady({
             <X size={20} />
           </button>
         </div>
-        <div className="workspace-label">ESPACIO DE TRABAJO</div>
-        <button className="property-switcher" onClick={() => notify('Hotel Aurora · Sede Centro')}>
-          <span className="property-icon">
-            <Home size={16} />
-          </span>
-          <span>
-            <strong>Hotel Aurora</strong>
-            <small>Sede Centro</small>
-          </span>
-          <ChevronDown size={15} />
-        </button>
+        {activeRole !== 'guest' && (
+          <>
+            <div className="workspace-label">ESPACIO DE TRABAJO</div>
+            <button
+              className="property-switcher"
+              onClick={() => notify('Hotel Aurora · Sede Centro')}
+            >
+              <span className="property-icon">
+                <Home size={16} />
+              </span>
+              <span>
+                <strong>Hotel Aurora</strong>
+                <small>Sede Centro</small>
+              </span>
+              <ChevronDown size={15} />
+            </button>
+          </>
+        )}
         <nav className="side-nav">
-          <div className="workspace-label">OPERACIÓN</div>
+          <div className="workspace-label">
+            {activeRole === 'guest' ? 'TU ESTANCIA' : 'OPERACIÓN'}
+          </div>
           {sidebarNav.map((item) => {
             const Icon = item.icon;
             const hasChildren = Boolean(item.children?.length);
@@ -2913,7 +2917,12 @@ function PrivateWorkspaceReady({
               <button
                 className="icon-btn notification"
                 onClick={() => {
-                  setShowNotifications((value) => !value);
+                  if (contentRole === 'guest') {
+                    setShowNotifications(false);
+                    setActiveNav('Notificaciones');
+                  } else {
+                    setShowNotifications((value) => !value);
+                  }
                   setShowRoleMenu(false);
                 }}
                 aria-label="Notificaciones"

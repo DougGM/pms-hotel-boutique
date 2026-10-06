@@ -569,8 +569,8 @@ test('each staff role only sees its menu and direct unauthorized URLs are blocke
     ['limpieza', '/pms/housekeeping', 'Habitaciones', '/pms/cash', 4],
     ['conserjeria', '/pms/concierge', 'Solicitudes', '/pms/cash', 3],
     ['roomservice', '/pms/room-service', 'Pedidos activos', '/pms/users', 4],
-    // 47: se omiten módulos sin contrato backend visible.
-    ['admin', '/pms/dashboard', 'Administración', null, 47],
+    // 46: se omiten módulos sin contrato backend visible.
+    ['admin', '/pms/dashboard', 'Administración', null, 46],
   ];
   for (const [account, expectedPath, section, forbidden, count] of roles) {
     await login(`${account}@hotelboutique.test`);
@@ -915,8 +915,14 @@ test('el huésped puede iniciar sesión con correo y contraseña contra backend 
     .findAllByType('button')
     .map((button) => button.findByType('span').children.join(''));
   assert.ok(labels.includes('Room service'));
-  assert.ok(labels.includes('Notificaciones'));
-  assert.equal(labels.length, 8);
+  assert.ok(!labels.includes('Notificaciones'));
+  assert.equal(labels.length, 7);
+  assert.equal(view.root.findAllByProps({ className: 'property-switcher' }).length, 0);
+  const sidebarSectionLabels = view.root
+    .findAllByProps({ className: 'workspace-label' })
+    .map((element) => element.children.join(''));
+  assert.ok(!sidebarSectionLabels.includes('ESPACIO DE TRABAJO'));
+  assert.ok(sidebarSectionLabels.includes('TU ESTANCIA'));
   assert.ok(text().includes('Q450.00'), 'el saldo viene de /guest/stay en GTQ');
   assert.ok(text().includes('Reservas'));
   assert.ok(!text().includes('Puntos Aurora'));
@@ -938,6 +944,12 @@ test('el huésped puede iniciar sesión con correo y contraseña contra backend 
     !requests.some((request) => /^\/api\/v1\/(bookings|guests|rooms|admin)/.test(request.path)),
     'el portal no consume endpoints del personal',
   );
+  await act(async () => {
+    view.root.findByProps({ className: 'icon-btn notification' }).props.onClick();
+    await wait();
+  });
+  assert.ok(text().includes('Notificaciones'));
+  assert.ok(!text().includes('Suite Aurora · Habitacion 402 · Check-out 28 ago'));
   const stored = JSON.parse(values.get('PMS_AUTH_SESSION'));
   assert.equal(stored.user.role, 'GUEST');
   assert.equal(stored.user.name, 'Ana López');
@@ -984,8 +996,8 @@ test('el huésped entra con el código de su reserva y sale a su acceso', async 
     .findAllByType('button')
     .map((button) => button.findByType('span').children.join(''));
   assert.ok(labels.includes('Room service'));
-  assert.ok(labels.includes('Notificaciones'));
-  assert.equal(labels.length, 8);
+  assert.ok(!labels.includes('Notificaciones'));
+  assert.equal(labels.length, 7);
   assert.ok(requests.some((request) => request.path === '/api/v1/guest/auth/link'));
   assert.ok(!requests.some((request) => request.path === '/api/v1/auth/login'));
   assert.ok(
