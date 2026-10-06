@@ -1302,30 +1302,7 @@ const metricsByRole: Record<
     },
     { label: 'Satisfacción', value: '98%', change: '+2.8%', icon: Sparkles, tone: 'blue' },
   ],
-  guest: [
-    {
-      label: 'Noches restantes',
-      value: '03',
-      change: 'Check-out: 28 ago',
-      icon: CalendarDays,
-      tone: 'sage',
-    },
-    { label: 'Saldo pendiente', value: '$420', change: 'Al finalizar', icon: Wallet, tone: 'gold' },
-    {
-      label: 'Servicios activos',
-      value: '02',
-      change: '1 solicitud',
-      icon: Sparkles,
-      tone: 'terracotta',
-    },
-    {
-      label: 'Puntos Aurora',
-      value: '1,840',
-      change: '+240 esta estancia',
-      icon: Activity,
-      tone: 'blue',
-    },
-  ],
+  guest: [],
 };
 
 type PrivateWorkspaceProps = {
@@ -3077,7 +3054,7 @@ function PrivateWorkspaceReady({
               </div>
             )}
           </section>
-          {contentNav === summaryNavByRole[contentRole] && (
+          {contentRole !== 'guest' && contentNav === summaryNavByRole[contentRole] && (
             <section className="metric-grid">
               {currentMetrics.map((metric) => {
                 const Icon = metric.icon;

@@ -24,7 +24,11 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import type { Reservation, GuestInfo } from '@/private/workspace/PrivateWorkspace';
 import { catalogService } from '@/services/catalogService';
-import { guestPortalService, type GuestBooking } from '@/services/guestPortalService';
+import {
+  guestPortalService,
+  type GuestBooking,
+  type GuestStay,
+} from '@/services/guestPortalService';
 import { housekeepingService } from '@/services/housekeepingService';
 import { notificationService, type Notification } from '@/services/notificationService';
 import { orderService } from '@/services/orderService';
@@ -35,6 +39,7 @@ import type { Order } from '@/shared/types/entities/order';
 import type { Product } from '@/shared/types/entities/product';
 import type { ServiceRequest } from '@/shared/types/entities/service-request';
 import { toDomainCalendarDate, toDtoCalendarDate } from '@/shared/types/common';
+import { formatCurrency } from '@/shared/utils/currency';
 import { calculateNights } from '@/shared/utils/date';
 import {
   CancelOrderModal,
@@ -150,6 +155,7 @@ type ScreenState =
   | { status: 'error'; message: string }
   | {
       status: 'ready';
+      stay: GuestStay;
       profile: GuestInfo;
       reservations: PortalReservation[];
       notifications: GuestNotification[];
@@ -174,6 +180,7 @@ function toPortalReservationFromBooking(
   profile: GuestInfo,
   roomTypeName?: string,
   roomNumber?: string,
+  balanceCents = 0,
 ): PortalReservation {
   const nights = Math.max(1, calculateNights(booking.checkIn, booking.checkOut));
   return {
@@ -181,7 +188,7 @@ function toPortalReservationFromBooking(
     bookingId: booking.id,
     guestId: booking.guestId,
     roomId: booking.roomId,
-    balanceCents: 0,
+    balanceCents,
     code: booking.confirmationCode,
     guestLinkCode: booking.guestLinkCode,
     checkIn: toDtoCalendarDate(booking.checkIn),
@@ -265,6 +272,33 @@ function getErrorMessage(cause: unknown): string {
   return cause instanceof Error ? cause.message : 'No fue posible cargar tu portal de huésped.';
 }
 
+function GuestMetric({
+  label,
+  value,
+  detail,
+  icon: Icon,
+  tone,
+}: {
+  label: string;
+  value: string;
+  detail: string;
+  icon: LucideIcon;
+  tone: string;
+}) {
+  return (
+    <article className="metric-card">
+      <div className={`metric-icon ${tone}`}>
+        <Icon size={19} />
+      </div>
+      <div>
+        <p>{label}</p>
+        <h2>{value}</h2>
+        <span>{detail}</span>
+      </div>
+    </article>
+  );
+}
+
 export function GuestContent({
   nav,
   onAction,
@@ -330,6 +364,7 @@ export function GuestContent({
             profile,
             isCurrentStay ? stay.roomTypeName : undefined,
             isCurrentStay ? stay.roomNumber : undefined,
+            isCurrentStay ? stay.balanceCents : 0,
           );
         });
 
@@ -364,6 +399,7 @@ export function GuestContent({
         if (active) {
           setScreen({
             status: 'ready',
+            stay,
             profile,
             reservations,
             notifications,
@@ -407,6 +443,7 @@ export function GuestContent({
       onLogout={onLogout}
       onReload={() => setReloadToken((value) => value + 1)}
       initialProfile={screen.profile}
+      initialStay={screen.stay}
       initialReservations={screen.reservations}
       initialNotifications={screen.notifications}
       initialUnreadCount={screen.unreadCount}
@@ -425,6 +462,7 @@ function GuestContentReady({
   onLogout,
   onReload,
   initialProfile,
+  initialStay,
   initialReservations,
   initialNotifications,
   initialUnreadCount,
@@ -439,6 +477,7 @@ function GuestContentReady({
   onLogout: () => void;
   onReload: () => void;
   initialProfile: GuestInfo;
+  initialStay: GuestStay;
   initialReservations: PortalReservation[];
   initialNotifications: GuestNotification[];
   initialUnreadCount: number;
@@ -481,6 +520,18 @@ function GuestContentReady({
   );
   const currentStay =
     reservations.find((r) => r.status === 'Check-in') ?? activeReservations[0] ?? null;
+  const today = toDtoCalendarDate(new Date());
+  const checkout = toDtoCalendarDate(initialStay.checkOut);
+  const nightsRemaining =
+    initialStay.status === 'checked_in' && checkout > today
+      ? calculateNights(toDomainCalendarDate(today), initialStay.checkOut)
+      : 0;
+  const activeRequestCount = serviceRequests.filter(
+    (request) => !['Completada', 'Cancelada'].includes(request.status),
+  ).length;
+  const activeOrderCount = orders.filter(
+    (order) => !['Entregado', 'Cancelado'].includes(order.status),
+  ).length;
 
   const filteredReservations =
     resFilter === 'Todas'
@@ -635,6 +686,42 @@ function GuestContentReady({
   if (nav === 'Inicio') {
     return (
       <>
+        <section className="metric-grid" aria-label="Resumen de tu estancia">
+          <GuestMetric
+            label="Noches restantes"
+            value={
+              initialStay.status === 'checked_in' ? String(nightsRemaining).padStart(2, '0') : '—'
+            }
+            detail={
+              initialStay.status === 'checked_in'
+                ? `Check-out: ${fmtDate(checkout)}`
+                : 'Sin estancia activa'
+            }
+            icon={CalendarDays}
+            tone="sage"
+          />
+          <GuestMetric
+            label="Saldo pendiente"
+            value={formatCurrency(Math.max(0, initialStay.balanceCents), initialStay.currency)}
+            detail="Saldo actual de tu estancia"
+            icon={Wallet}
+            tone="gold"
+          />
+          <GuestMetric
+            label="Servicios activos"
+            value={String(activeRequestCount + activeOrderCount).padStart(2, '0')}
+            detail={`${activeRequestCount} solicitudes · ${activeOrderCount} pedidos`}
+            icon={Sparkles}
+            tone="terracotta"
+          />
+          <GuestMetric
+            label="Reservas"
+            value={String(reservations.length).padStart(2, '0')}
+            detail={`${activeReservations.length} activas`}
+            icon={Activity}
+            tone="blue"
+          />
+        </section>
         <div className="gs-overview">
           <div className="gs-overview-main">
             <div className="gs-overview-hero">
@@ -673,7 +760,7 @@ function GuestContentReady({
               </div>
               <div>
                 <span>Saldo pendiente</span>
-                <strong>{money(Math.max(0, (currentStay?.balanceCents ?? 0) / 100))}</strong>
+                <strong>{formatCurrency(Math.max(0, currentStay?.balanceCents ?? 0))}</strong>
                 <small>Se carga al finalizar tu estancia</small>
               </div>
             </div>

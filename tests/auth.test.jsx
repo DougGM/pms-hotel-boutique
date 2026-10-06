@@ -917,6 +917,10 @@ test('el huésped puede iniciar sesión con correo y contraseña contra backend 
   assert.ok(labels.includes('Room service'));
   assert.ok(labels.includes('Notificaciones'));
   assert.equal(labels.length, 8);
+  assert.ok(text().includes('Q450.00'), 'el saldo viene de /guest/stay en GTQ');
+  assert.ok(text().includes('Reservas'));
+  assert.ok(!text().includes('Puntos Aurora'));
+  assert.ok(!text().includes('$420'));
   assert.ok(requests.some((request) => request.path === '/api/v1/guest/auth/login'));
   assert.ok(!requests.some((request) => request.path === '/api/v1/auth/login'));
   assert.ok(
