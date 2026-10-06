@@ -976,7 +976,7 @@ test('conserjería: si el backend rechaza la transición se recargan las solicit
 
 // --- Portal del huésped: backend falso de GuestAccessController (INT-12) ----
 
-function installGuestPortalBackend() {
+function installGuestPortalBackend({ failBookings = false } = {}) {
   const state = {
     calls: [],
     notifications: [
@@ -1026,6 +1026,42 @@ function installGuestPortalBackend() {
         balanceCents: 45000,
         currency: 'GTQ',
       });
+    }
+    if (path === '/guest/bookings') {
+      if (failBookings) return json({ message: 'Service unavailable' }, 503);
+      return json([
+        {
+          id: 'booking-guest',
+          confirmationCode: 'CURRENT-BOOKING',
+          guestId: 'guest-1',
+          roomId: 'room-305',
+          roomTypeId: 'type-suite',
+          checkIn: '2026-10-03',
+          checkOut: '2026-10-06',
+          status: 'checked_in',
+          adults: 2,
+          children: 0,
+          totalAmountCents: 135000,
+          currency: 'GTQ',
+          createdAt: '2026-10-01T10:00:00Z',
+          updatedAt: '2026-10-01T10:00:00Z',
+        },
+        {
+          id: 'booking-upcoming',
+          confirmationCode: 'UPCOMING-BOOKING',
+          guestId: 'guest-1',
+          roomTypeId: 'type-standard',
+          checkIn: '2026-11-03',
+          checkOut: '2026-11-06',
+          status: 'confirmed',
+          adults: 1,
+          children: 1,
+          totalAmountCents: 90000,
+          currency: 'GTQ',
+          createdAt: '2026-10-01T10:00:00Z',
+          updatedAt: '2026-10-01T10:00:00Z',
+        },
+      ]);
     }
     if (path === '/guest/room-service/products') {
       return json([
@@ -1097,11 +1133,32 @@ test('portal del huésped: carga solo desde /guest, sin endpoints del personal',
   await mountGuestPortal();
   const paths = guestBackend.calls.map(({ call }) => call.split(' ')[1]);
   assert.ok(paths.includes('/guest/stay'));
+  assert.ok(paths.includes('/guest/bookings'));
   assert.ok(paths.includes('/guest/notifications/unread-count'));
   assert.ok(
     paths.every((path) => path.startsWith('/guest/')),
     `solo rutas de huésped: ${paths.join(', ')}`,
   );
+});
+
+test('portal del huésped: muestra el error si falla la lista de reservas, sin fallback a la estancia', async () => {
+  guestBackend = installGuestPortalBackend({ failBookings: true });
+  await act(async () => {
+    view = create(
+      <MemoryRouter>
+        <PrivateWorkspace role="guest" sessionName="Ana López" />
+      </MemoryRouter>,
+    );
+  });
+  for (
+    let i = 0;
+    i < 20 && !text(view.root).includes('No pudimos cargar tu portal de huésped');
+    i++
+  ) {
+    await settle(300);
+  }
+  assert.ok(text(view.root).includes('No pudimos cargar tu portal de huésped'));
+  assert.ok(!text(view.root).includes('Habitacion 305'));
 });
 
 test('portal del huésped: marcar todas usa read-all y el contador del backend', async () => {

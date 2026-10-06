@@ -24,7 +24,7 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import type { Reservation, GuestInfo } from '@/private/workspace/PrivateWorkspace';
 import { catalogService } from '@/services/catalogService';
-import { guestPortalService, type GuestStay } from '@/services/guestPortalService';
+import { guestPortalService, type GuestBooking } from '@/services/guestPortalService';
 import { housekeepingService } from '@/services/housekeepingService';
 import { notificationService, type Notification } from '@/services/notificationService';
 import { orderService } from '@/services/orderService';
@@ -38,6 +38,7 @@ import { toDomainCalendarDate, toDtoCalendarDate } from '@/shared/types/common';
 import { calculateNights } from '@/shared/utils/date';
 import {
   CancelOrderModal,
+  CreateBookingModal,
   RequestServiceModal,
   ReservationDetailModal,
   money,
@@ -159,10 +160,7 @@ type ScreenState =
       amenities: GuestAmenity[];
     };
 
-/**
- * La única reserva visible es la del JWT de huésped (`/guest/stay`): el portal
- * nunca elige un bookingId ni consulta reservas ajenas (INT-12).
- */
+/** Las reservas visibles vienen del endpoint autenticado del huésped. */
 type PortalReservation = Reservation & {
   bookingId: string;
   guestId: string;
@@ -170,27 +168,34 @@ type PortalReservation = Reservation & {
   balanceCents: number;
 };
 
-function toPortalReservation(stay: GuestStay, profile: GuestInfo): PortalReservation {
+function toPortalReservationFromBooking(
+  booking: GuestBooking,
+  index: number,
+  profile: GuestInfo,
+  roomTypeName?: string,
+  roomNumber?: string,
+): PortalReservation {
+  const nights = Math.max(1, calculateNights(booking.checkIn, booking.checkOut));
   return {
-    id: 1,
-    bookingId: stay.bookingId,
-    guestId: stay.guestId,
-    roomId: stay.roomId,
-    balanceCents: stay.balanceCents,
-    code: stay.bookingId.slice(0, 8).toUpperCase(),
-    checkIn: toDtoCalendarDate(stay.checkIn),
-    checkOut: toDtoCalendarDate(stay.checkOut),
-    roomNumber: stay.roomNumber ?? 'Sin asignar',
-    roomType: roomTypeLabel(stay.roomTypeName),
-    // `/guest/stay` no expone tarifa ni ocupación: la UI las muestra como "consulta en recepción".
-    rate: 0,
-    guestCount: 0,
-    status: mapStayStatus(stay.status),
-    origin: 'Hotel Aurora',
-    observations: '',
+    id: index,
+    bookingId: booking.id,
+    guestId: booking.guestId,
+    roomId: booking.roomId,
+    balanceCents: 0,
+    code: booking.confirmationCode,
+    guestLinkCode: booking.guestLinkCode,
+    checkIn: toDtoCalendarDate(booking.checkIn),
+    checkOut: toDtoCalendarDate(booking.checkOut),
+    roomNumber: roomNumber ?? (booking.roomId ? 'Asignada' : 'Sin asignar'),
+    roomType: roomTypeLabel(roomTypeName),
+    rate: booking.totalAmountCents > 0 ? Math.round(booking.totalAmountCents / (100 * nights)) : 0,
+    guestCount: booking.adults + booking.children,
+    status: mapStayStatus(booking.status),
+    origin: 'Portal del Huésped',
+    observations: booking.notes ?? '',
     checkInTime: null,
     checkOutTime: null,
-    cancelReason: '',
+    cancelReason: booking.cancellationReason ?? '',
     voidReason: '',
     guest: profile,
     companions: [],
@@ -284,16 +289,25 @@ export function GuestContent({
     async function load() {
       setScreen({ status: 'loading' });
       try {
-        const [stay, amenitiesData, products, ordersRaw, stayovers, concierge, notificationsRaw] =
-          await Promise.all([
-            guestPortalService.getStay(),
-            catalogService.getGuestAmenities(),
-            catalogService.getGuestProducts(),
-            orderService.getGuestOrders(),
-            housekeepingService.getGuestStayoverRequests(),
-            serviceRequestService.getGuestConciergeRequests(),
-            notificationService.getGuestNotifications(),
-          ]);
+        const [
+          stay,
+          amenitiesData,
+          products,
+          ordersRaw,
+          stayovers,
+          concierge,
+          notificationsRaw,
+          bookingsRaw,
+        ] = await Promise.all([
+          guestPortalService.getStay(),
+          catalogService.getGuestAmenities(),
+          catalogService.getGuestProducts(),
+          orderService.getGuestOrders(),
+          housekeepingService.getGuestStayoverRequests(),
+          serviceRequestService.getGuestConciergeRequests(),
+          notificationService.getGuestNotifications(),
+          guestPortalService.getBookings(),
+        ]);
         const unreadCount = await notificationService.getGuestUnreadCount();
 
         // Perfil: `/guest/stay` solo trae el nombre; el resto se consulta en recepción.
@@ -307,7 +321,18 @@ export function GuestContent({
           birthDate: '',
           nationality: '',
         };
-        const reservations = [toPortalReservation(stay, profile)];
+
+        const reservations = bookingsRaw.map((booking, index) => {
+          const isCurrentStay = booking.id === stay.bookingId;
+          return toPortalReservationFromBooking(
+            booking,
+            index + 1,
+            profile,
+            isCurrentStay ? stay.roomTypeName : undefined,
+            isCurrentStay ? stay.roomNumber : undefined,
+          );
+        });
+
         const roomNumber = stay.roomNumber ?? 'Sin asignar';
 
         const serviceRequests: GuestServiceRequest[] = [
@@ -380,6 +405,7 @@ export function GuestContent({
       onAction={onAction}
       onNavigate={onNavigate}
       onLogout={onLogout}
+      onReload={() => setReloadToken((value) => value + 1)}
       initialProfile={screen.profile}
       initialReservations={screen.reservations}
       initialNotifications={screen.notifications}
@@ -397,6 +423,7 @@ function GuestContentReady({
   onAction,
   onNavigate,
   onLogout,
+  onReload,
   initialProfile,
   initialReservations,
   initialNotifications,
@@ -410,6 +437,7 @@ function GuestContentReady({
   onAction: (message: string) => void;
   onNavigate: (nav: string) => void;
   onLogout: () => void;
+  onReload: () => void;
   initialProfile: GuestInfo;
   initialReservations: PortalReservation[];
   initialNotifications: GuestNotification[];
@@ -430,9 +458,11 @@ function GuestContentReady({
   const [orderNote, setOrderNote] = useState('');
 
   const [detailResId, setDetailResId] = useState<number | null>(null);
+  const [showCreateBooking, setShowCreateBooking] = useState(false);
   const [showRequestService, setShowRequestService] = useState<'Limpieza' | 'Articulos' | null>(
     null,
   );
+
   const [cancelOrderId, setCancelOrderId] = useState<number | null>(null);
   const [resFilter, setResFilter] = useState<'Todas' | 'Activas' | 'Pasadas' | 'Canceladas'>(
     'Todas',
@@ -717,11 +747,22 @@ function GuestContentReady({
     return (
       <>
         <div className="panel">
-          <div className="panel-heading">
+          <div
+            className="panel-heading"
+            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+          >
             <div>
               <h3>Mis reservas</h3>
-              <p>Tu estancia actual. Para otras reservas o cambios, consulta en recepción.</p>
+              <p>Historial y reservas activas asociadas a tu cuenta de huésped.</p>
             </div>
+            <button
+              type="button"
+              className="button primary"
+              style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.9rem' }}
+              onClick={() => setShowCreateBooking(true)}
+            >
+              <Plus size={16} /> Nueva reserva
+            </button>
           </div>
           <div className="toolbar">
             <div className="filter-dropdown">
@@ -729,6 +770,7 @@ function GuestContentReady({
                 <span>{resFilter}</span>
                 <ChevronDown size={15} />
               </button>
+
               <div className="filter-menu">
                 <button
                   className={resFilter === 'Todas' ? 'active' : ''}
@@ -814,6 +856,16 @@ function GuestContentReady({
         </div>
         {detailRes && (
           <ReservationDetailModal reservation={detailRes} onClose={() => setDetailResId(null)} />
+        )}
+        {showCreateBooking && (
+          <CreateBookingModal
+            onClose={() => setShowCreateBooking(false)}
+            onCreated={(msg) => {
+              setShowCreateBooking(false);
+              onAction(msg);
+              onReload();
+            }}
+          />
         )}
       </>
     );

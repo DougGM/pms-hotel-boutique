@@ -7,12 +7,22 @@ import { HttpError } from './http-client';
  */
 export function guestErrorMessage(error: unknown, fallback: string): string {
   if (!(error instanceof HttpError)) return error instanceof Error ? error.message : fallback;
-  if (error.status === 401) return 'Tu acceso de huésped venció. Ingresa de nuevo tu código.';
+  const backendMsg = (error.data as { message?: string } | undefined)?.message;
+  if (error.status === 401)
+    return 'Tu acceso de huésped venció. Ingresa de nuevo tus credenciales.';
   if (error.status === 403) {
-    return 'Esta información no pertenece a tu estancia o tu estancia ya no está activa.';
+    return 'Esta información no pertenece a tu estancia o tu cuenta.';
   }
-  if (error.status === 400) return `${fallback} El hotel no permite ese cambio en este momento.`;
-  if (error.status === 404) return `${fallback} No encontramos ese registro en tu estancia.`;
+  if (error.status === 409) {
+    if (backendMsg && backendMsg.includes('No availability')) {
+      return 'Ya no hay habitaciones disponibles para esas fechas. Elige otras fechas u otro tipo de habitación.';
+    }
+    return backendMsg || `${fallback} Conflicto con la disponibilidad o el estado de la reserva.`;
+  }
+  if (error.status === 400) {
+    return backendMsg || `${fallback} Revisa los datos de la solicitud.`;
+  }
+  if (error.status === 404) return `${fallback} No encontramos ese registro.`;
   return fallback;
 }
 
