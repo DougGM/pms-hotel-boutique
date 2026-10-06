@@ -24,11 +24,7 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import type { Reservation, GuestInfo } from '@/private/workspace/PrivateWorkspace';
 import { catalogService } from '@/services/catalogService';
-import {
-  guestPortalService,
-  type GuestStay,
-  type GuestBooking,
-} from '@/services/guestPortalService';
+import { guestPortalService, type GuestBooking } from '@/services/guestPortalService';
 import { housekeepingService } from '@/services/housekeepingService';
 import { notificationService, type Notification } from '@/services/notificationService';
 import { orderService } from '@/services/orderService';
@@ -164,10 +160,7 @@ type ScreenState =
       amenities: GuestAmenity[];
     };
 
-/**
- * La única reserva visible es la del JWT de huésped (`/guest/stay`): el portal
- * nunca elige un bookingId ni consulta reservas ajenas (INT-12).
- */
+/** Las reservas visibles vienen del endpoint autenticado del huésped. */
 type PortalReservation = Reservation & {
   bookingId: string;
   guestId: string;
@@ -203,34 +196,6 @@ function toPortalReservationFromBooking(
     checkInTime: null,
     checkOutTime: null,
     cancelReason: booking.cancellationReason ?? '',
-    voidReason: '',
-    guest: profile,
-    companions: [],
-    folio: [],
-  };
-}
-
-function toPortalReservation(stay: GuestStay, profile: GuestInfo): PortalReservation {
-  return {
-    id: 1,
-    bookingId: stay.bookingId,
-    guestId: stay.guestId,
-    roomId: stay.roomId,
-    balanceCents: stay.balanceCents,
-    code: stay.bookingId.slice(0, 8).toUpperCase(),
-    checkIn: toDtoCalendarDate(stay.checkIn),
-    checkOut: toDtoCalendarDate(stay.checkOut),
-    roomNumber: stay.roomNumber ?? 'Sin asignar',
-    roomType: roomTypeLabel(stay.roomTypeName),
-    // `/guest/stay` no expone tarifa ni ocupación: la UI las muestra como "consulta en recepción".
-    rate: 0,
-    guestCount: 0,
-    status: mapStayStatus(stay.status),
-    origin: 'Hotel Aurora',
-    observations: '',
-    checkInTime: null,
-    checkOutTime: null,
-    cancelReason: '',
     voidReason: '',
     guest: profile,
     companions: [],
@@ -341,7 +306,7 @@ export function GuestContent({
           housekeepingService.getGuestStayoverRequests(),
           serviceRequestService.getGuestConciergeRequests(),
           notificationService.getGuestNotifications(),
-          guestPortalService.getBookings().catch(() => []),
+          guestPortalService.getBookings(),
         ]);
         const unreadCount = await notificationService.getGuestUnreadCount();
 
@@ -357,21 +322,16 @@ export function GuestContent({
           nationality: '',
         };
 
-        let reservations: PortalReservation[] = [];
-        if (bookingsRaw.length > 0) {
-          reservations = bookingsRaw.map((booking, index) => {
-            const isCurrentStay = booking.id === stay.bookingId;
-            return toPortalReservationFromBooking(
-              booking,
-              index + 1,
-              profile,
-              isCurrentStay ? stay.roomTypeName : undefined,
-              isCurrentStay ? stay.roomNumber : undefined,
-            );
-          });
-        } else {
-          reservations = [toPortalReservation(stay, profile)];
-        }
+        const reservations = bookingsRaw.map((booking, index) => {
+          const isCurrentStay = booking.id === stay.bookingId;
+          return toPortalReservationFromBooking(
+            booking,
+            index + 1,
+            profile,
+            isCurrentStay ? stay.roomTypeName : undefined,
+            isCurrentStay ? stay.roomNumber : undefined,
+          );
+        });
 
         const roomNumber = stay.roomNumber ?? 'Sin asignar';
 
