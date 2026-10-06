@@ -157,7 +157,41 @@ const apiRoles = [
     code: 'ADMIN',
     name: 'Administrador',
     active: true,
-    permissions: ['bookings.read', 'rooms.write', 'cash.read'],
+    // Igual que el seed del backend (020 y 023): admin recibe todos los permisos.
+    permissions: [
+      'rooms.read',
+      'rooms.write',
+      'room-types.read',
+      'room-types.write',
+      'room-features.read',
+      'rates.read',
+      'rates.write',
+      'guests.read',
+      'guests.write',
+      'bookings.read',
+      'bookings.write',
+      'housekeeping.read',
+      'housekeeping.write',
+      'room-service.read',
+      'room-service.write',
+      'payments.read',
+      'deposits.read',
+      'charges.read',
+      'inventory.read',
+      'inventory.write',
+      'cash.read',
+      'cash.write',
+      'concierge.read',
+      'concierge.write',
+      'guest-portal.home',
+      'guest-portal.reservations',
+      'guest-portal.stay',
+      'guest-portal.amenities',
+      'guest-portal.services',
+      'guest-portal.room-service',
+      'guest-portal.requests',
+      'guest-portal.notifications',
+    ],
   },
   {
     id: '60000000-0000-4000-8000-000000000002',
@@ -412,6 +446,17 @@ function installFetch() {
     }
     // El workspace de Conserjería carga sus solicitudes desde el backend (INT-11).
     if (path === '/api/v1/concierge/requests') return json([]);
+    // Solicitudes generales/mantenimiento y finanzas globales sin fallback local (#126).
+    if (
+      [
+        '/api/v1/service-requests',
+        '/api/v1/charges',
+        '/api/v1/payments',
+        '/api/v1/deposits',
+      ].includes(path)
+    ) {
+      return json([]);
+    }
     if (path === '/api/v1/probe') {
       const payload = decodeAuth(init);
       if (!payload) return json({ message: 'Unauthorized' }, 401, 'Unauthorized');

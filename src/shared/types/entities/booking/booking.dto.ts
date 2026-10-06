@@ -25,6 +25,9 @@ export interface BookingDTO {
   total_amount_cents: number;
   currency: Currency;
   notes?: string;
+  /** Motivo registrado por `POST /bookings/{id}/cancel`; solo en reservas canceladas. */
+  cancellation_reason?: string;
+  cancelled_at?: string;
   created_at: string;
   updated_at: string;
 }

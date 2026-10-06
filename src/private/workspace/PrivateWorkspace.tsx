@@ -757,6 +757,13 @@ const ROOM_READ_ROLES: readonly RoleId[] = ['admin', 'reception', 'housekeeping'
 const ROOM_CATALOG_READ_ROLES: readonly RoleId[] = ['admin', 'reception'];
 const BOOKING_READ_ROLES: readonly RoleId[] = ['admin', 'reception'];
 const GUEST_READ_ROLES: readonly RoleId[] = ['admin', 'reception'];
+/**
+ * `service-requests.read`: Conserjería también lo tiene, pero el backend solo le
+ * devuelve solicitudes de conserjería, que ya carga desde `/concierge/requests`.
+ */
+const SERVICE_REQUEST_READ_ROLES: readonly RoleId[] = ['admin', 'reception', 'housekeeping'];
+/** `folios.read`, `charges.read`, `payments.read` y `deposits.read`. */
+const FINANCE_READ_ROLES: readonly RoleId[] = ['admin', 'reception'];
 
 async function safeList<T>(load: () => Promise<T[]>): Promise<T[]> {
   try {
@@ -771,6 +778,8 @@ async function loadWorkspaceData(role: RoleId): Promise<WorkspaceState> {
   const canReadRoomCatalog = ROOM_CATALOG_READ_ROLES.includes(role);
   const canReadBookings = BOOKING_READ_ROLES.includes(role);
   const canReadGuests = GUEST_READ_ROLES.includes(role);
+  const canReadServiceRequests = SERVICE_REQUEST_READ_ROLES.includes(role);
+  const canReadFinance = FINANCE_READ_ROLES.includes(role);
   const [
     rooms,
     roomTypes,
@@ -794,11 +803,11 @@ async function loadWorkspaceData(role: RoleId): Promise<WorkspaceState> {
     canReadGuests ? guestService.getGuests() : [],
     ROOM_SERVICE_READ_ROLES.includes(role) ? catalogService.getProducts() : [],
     ROOM_SERVICE_READ_ROLES.includes(role) ? orderService.getOrders() : [],
-    safeList(() => serviceRequestService.getRequests()),
+    canReadServiceRequests ? serviceRequestService.getRequests() : [],
     safeList(() => auditService.getLogs()),
-    safeList(() => guestAccountService.getCharges()),
-    safeList(() => guestAccountService.getPayments()),
-    safeList(() => guestAccountService.getDeposits()),
+    canReadFinance ? guestAccountService.getCharges() : [],
+    canReadFinance ? guestAccountService.getPayments() : [],
+    canReadFinance ? guestAccountService.getDeposits() : [],
     // Solo el rol de Limpieza tiene `housekeeping.read` en el backend.
     role === 'housekeeping' ? fetchHousekeepingData() : null,
     CONCIERGE_READ_ROLES.includes(role) ? serviceRequestService.getConciergeRequests() : [],
@@ -891,7 +900,9 @@ async function loadWorkspaceData(role: RoleId): Promise<WorkspaceState> {
         status === 'Check-in' || status === 'Check-out' ? formatDbTime(booking.updatedAt) : null,
       checkOutTime: status === 'Check-out' ? formatDbTime(booking.updatedAt) : null,
       cancelReason:
-        status === 'Cancelada' ? (booking.notes ?? 'Cancelación registrada en sistema') : '',
+        status === 'Cancelada'
+          ? (booking.cancellationReason ?? 'Cancelación registrada en sistema')
+          : '',
       voidReason: status === 'Anulada' ? (booking.notes ?? 'Reserva anulada en sistema') : '',
       guest: {
         name: guest?.firstName ?? 'Huésped',
@@ -938,7 +949,7 @@ async function loadWorkspaceData(role: RoleId): Promise<WorkspaceState> {
         id: parseDbId(request.id, index + 1),
         requestId: request.id,
         roomId: request.roomId,
-        room: room?.roomNumber ?? 'Sin habitación',
+        room: request.roomNumber ?? room?.roomNumber ?? 'Sin habitación',
         category: 'Mantenimiento',
         description: request.description,
         priority: request.status === 'pending' ? 'Alta' : 'Media',
@@ -2587,12 +2598,30 @@ function PrivateWorkspaceReady({
     notify(`Check-out completado · ${res?.code}`);
   };
 
-  const recCancelReservation = (id: number, reason: string) => {
-    setRecReservationList((current) =>
-      current.map((r) => (r.id === id ? { ...r, status: 'Cancelada', cancelReason: reason } : r)),
-    );
+  const recCancelReservation = async (id: number, reason: string) => {
+    const reservation = recReservationList.find((r) => r.id === id);
+    if (!reservation?.bookingId) {
+      notify('La reserva no está vinculada al backend.');
+      return;
+    }
+
+    try {
+      // El backend valida el estado (solo pending/confirmed) y guarda el motivo.
+      await bookingService.cancelBooking(reservation.bookingId, reason);
+    } catch (cause) {
+      notifyError(cause);
+      return;
+    }
+
     setRecShowCancel(null);
     notify('Reserva cancelada correctamente');
+    try {
+      const data = await loadWorkspaceData(workspaceDataRole);
+      setRecReservationList(data.recReservations);
+      setRecRoomList(data.recRooms);
+    } catch (cause) {
+      notifyError(cause);
+    }
   };
 
   const recVoidReservation = (id: number, reason: string) => {

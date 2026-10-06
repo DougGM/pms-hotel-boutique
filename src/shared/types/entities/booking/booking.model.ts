@@ -19,6 +19,8 @@ export interface Booking {
   totalAmountCents: number;
   currency: Currency;
   notes?: string;
+  cancellationReason?: string;
+  cancelledAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }

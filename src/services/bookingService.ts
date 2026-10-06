@@ -31,6 +31,8 @@ type ApiBooking = {
   totalAmountCents: number;
   currency?: BookingDto['currency'];
   notes?: string | null;
+  cancellationReason?: string | null;
+  cancelledAt?: string | null;
   createdAt?: string | null;
   updatedAt?: string | null;
 };
@@ -101,6 +103,8 @@ function toBookingDto(api: ApiBooking): BookingDto {
     total_amount_cents: api.totalAmountCents,
     currency: api.currency ?? 'GTQ',
     notes: api.notes ?? undefined,
+    cancellation_reason: api.cancellationReason ?? undefined,
+    cancelled_at: api.cancelledAt ?? undefined,
     created_at: api.createdAt ?? timestamp,
     updated_at: timestamp,
   };

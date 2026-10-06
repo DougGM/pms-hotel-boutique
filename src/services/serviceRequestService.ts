@@ -97,6 +97,13 @@ async function request<T>(call: () => Promise<T>, fallback: string): Promise<T> 
   }
 }
 
+/**
+ * Tipos que `/service-requests` acepta para crear o cambiar de estado.
+ * Conserjería y stayover de limpieza tienen endpoints propios y el backend
+ * responde 400 si llegan por esta ruta.
+ */
+type GeneralServiceRequestType = Extract<ServiceRequestTypeDto, 'maintenance' | 'other'>;
+
 const conciergePath = '/concierge/requests';
 const serviceRequestsPath = '/service-requests';
 
@@ -198,11 +205,26 @@ export const serviceRequestService = {
     );
     return toServiceRequest(toServiceRequestDto(response));
   },
-  async getRequests(): Promise<ServiceRequest[]> {
+  async getRequests(
+    filters: {
+      type?: ServiceRequestTypeDto;
+      bookingId?: ID;
+      roomId?: ID;
+      status?: ServiceRequestStatus;
+    } = {},
+  ): Promise<ServiceRequest[]> {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar las solicitudes.');
     const response = await request(
-      () => httpClient.get<ServiceRequestResponse[]>(serviceRequestsPath),
+      () =>
+        httpClient.get<ServiceRequestResponse[]>(
+          withQuery(serviceRequestsPath, {
+            type: filters.type,
+            bookingId: filters.bookingId,
+            roomId: filters.roomId,
+            status: filters.status ? toStatusParam(filters.status) : undefined,
+          }),
+        ),
       'No fue posible cargar las solicitudes.',
     );
     return response.map((item) => toServiceRequest(toServiceRequestDto(item)));
@@ -221,8 +243,7 @@ export const serviceRequestService = {
   async createRequest(data: {
     bookingId?: ID;
     roomId: ID;
-    guestId?: ID;
-    type: ServiceRequestTypeDto;
+    type: GeneralServiceRequestType;
     description: string;
     notes?: string;
   }): Promise<ServiceRequest> {
@@ -254,6 +275,24 @@ export const serviceRequestService = {
       description: data.description,
       notes: data.notes,
     });
+  },
+  async updateRequestStatus(
+    id: ID,
+    status: ServiceRequestStatus,
+    options: { notes?: string; responsibleUserId?: ID } = {},
+  ): Promise<ServiceRequest> {
+    await simulateLatency();
+    mockUtils.throwIfSimulatingError('No fue posible actualizar la solicitud.');
+    const response = await request(
+      () =>
+        httpClient.post<ServiceRequestResponse>(`${serviceRequestsPath}/${id}/status`, {
+          status: toStatusParam(status),
+          notes: options.notes?.trim() || undefined,
+          responsibleUserId: options.responsibleUserId,
+        }),
+      'No fue posible actualizar la solicitud.',
+    );
+    return toServiceRequest(toServiceRequestDto(response));
   },
 };
 export default serviceRequestService;
