@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components -- Helpers compartidos del prototipo Bolt migrado. */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ArrowRight,
   Ban,
@@ -869,6 +869,311 @@ export function RequestServiceModal({
             Enviar solicitud <ArrowRight size={16} />
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+export function CreateBookingModal({
+  onClose,
+  onCreated,
+}: {
+  onClose: () => void;
+  onCreated: (message: string) => void;
+}) {
+  const [roomTypes, setRoomTypes] = useState<
+    import('@/shared/types/entities/room-type').RoomType[]
+  >([]);
+  const [loadingRooms, setLoadingRooms] = useState(true);
+  const [selectedRoomTypeId, setSelectedRoomTypeId] = useState('');
+  const [checkIn, setCheckIn] = useState('');
+  const [checkOut, setCheckOut] = useState('');
+  const [adults, setAdults] = useState(1);
+  const [children, setChildren] = useState(0);
+  const [notes, setNotes] = useState('');
+
+  const [checkingAvailability, setCheckingAvailability] = useState(false);
+  const [availabilityResult, setAvailabilityResult] = useState<{
+    availableRooms: number;
+    totalAmountCents: number;
+    rateName: string;
+  } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    async function loadRoomTypes() {
+      try {
+        const types = await import('@/services/publicBookingCatalogService').then((m) =>
+          m.publicBookingCatalogService.getRoomTypes(),
+        );
+        if (active) {
+          setRoomTypes(types);
+          if (types.length > 0) {
+            setSelectedRoomTypeId(types[0].id);
+          }
+        }
+      } catch {
+        if (active) setError('No fue posible cargar los tipos de habitación disponibles.');
+      } finally {
+        if (active) setLoadingRooms(false);
+      }
+    }
+    void loadRoomTypes();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const handleCheckAvailability = async () => {
+    if (!checkIn || !checkOut || !selectedRoomTypeId) {
+      setError('Selecciona las fechas y el tipo de habitación para consultar.');
+      return;
+    }
+    if (checkIn >= checkOut) {
+      setError('La fecha de salida debe ser posterior a la de entrada.');
+      return;
+    }
+    setError(null);
+    setCheckingAvailability(true);
+    setAvailabilityResult(null);
+
+    try {
+      const results = await import('@/services/publicBookingCatalogService').then((m) =>
+        m.publicBookingCatalogService.getAvailability({
+          checkIn,
+          checkOut,
+          adults,
+          children,
+          roomTypeId: selectedRoomTypeId,
+        }),
+      );
+      const match = results.find((r) => r.roomType.id === selectedRoomTypeId);
+      if (match && match.availableRooms > 0) {
+        setAvailabilityResult({
+          availableRooms: match.availableRooms,
+          totalAmountCents: match.totalAmountCents,
+          rateName: match.rate.name,
+        });
+      } else {
+        setError('No hay habitaciones disponibles para esas fechas y cantidad de huéspedes.');
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Error al consultar disponibilidad.');
+    } finally {
+      setCheckingAvailability(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedRoomTypeId || !checkIn || !checkOut) {
+      setError('Por favor completa todos los campos requeridos.');
+      return;
+    }
+    if (checkIn >= checkOut) {
+      setError('La fecha de salida debe ser posterior a la de entrada.');
+      return;
+    }
+    setError(null);
+    setSubmitting(true);
+    try {
+      const { guestPortalService } = await import('@/services/guestPortalService');
+      const booking = await guestPortalService.createBooking({
+        roomTypeId: selectedRoomTypeId,
+        checkIn,
+        checkOut,
+        adults,
+        children,
+        notes: notes.trim() || undefined,
+      });
+      onCreated(`¡Reserva creada exitosamente! Código: ${booking.confirmationCode}`);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'No fue posible crear la reserva.');
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="modal-backdrop" onMouseDown={onClose}>
+      <div
+        className="modal"
+        style={{ width: 520, maxWidth: 'calc(100vw - 32px)' }}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <div className="modal-head">
+          <div>
+            <p className="eyebrow">PORTAL DEL HUÉSPED</p>
+            <h2>Nueva reserva</h2>
+          </div>
+          <button className="icon-btn" onClick={onClose} disabled={submitting}>
+            <X size={18} />
+          </button>
+        </div>
+
+        <p className="login-helper">
+          Crea una nueva reserva asociada a tu cuenta. Se aplicarán las tarifas y disponibilidad
+          vigentes.
+        </p>
+
+        {error && (
+          <div
+            className="status-banner"
+            style={{
+              background: '#fee2e2',
+              color: '#991b1b',
+              padding: '0.75rem 1rem',
+              borderRadius: 8,
+              marginBottom: '1rem',
+              fontSize: '0.9rem',
+            }}
+          >
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit}>
+          <label className="hk-form-label">
+            Tipo de habitación *
+            <select
+              className="hk-form-select"
+              value={selectedRoomTypeId}
+              onChange={(e) => {
+                setSelectedRoomTypeId(e.target.value);
+                setAvailabilityResult(null);
+              }}
+              disabled={loadingRooms || submitting}
+            >
+              {roomTypes.map((rt) => (
+                <option key={rt.id} value={rt.id}>
+                  {rt.name} (Capacidad: {rt.capacity} huéspedes)
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+            <label className="hk-form-label">
+              Fecha de entrada (Check-in) *
+              <input
+                type="date"
+                className="hk-form-select"
+                value={checkIn}
+                min={new Date().toISOString().split('T')[0]}
+                onChange={(e) => {
+                  setCheckIn(e.target.value);
+                  setAvailabilityResult(null);
+                }}
+                required
+                disabled={submitting}
+              />
+            </label>
+            <label className="hk-form-label">
+              Fecha de salida (Check-out) *
+              <input
+                type="date"
+                className="hk-form-select"
+                value={checkOut}
+                min={checkIn || new Date().toISOString().split('T')[0]}
+                onChange={(e) => {
+                  setCheckOut(e.target.value);
+                  setAvailabilityResult(null);
+                }}
+                required
+                disabled={submitting}
+              />
+            </label>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+            <label className="hk-form-label">
+              Adultos *
+              <input
+                type="number"
+                min={1}
+                max={10}
+                className="hk-form-select"
+                value={adults}
+                onChange={(e) => {
+                  setAdults(Math.max(1, Number(e.target.value)));
+                  setAvailabilityResult(null);
+                }}
+                required
+                disabled={submitting}
+              />
+            </label>
+            <label className="hk-form-label">
+              Niños
+              <input
+                type="number"
+                min={0}
+                max={10}
+                className="hk-form-select"
+                value={children}
+                onChange={(e) => {
+                  setChildren(Math.max(0, Number(e.target.value)));
+                  setAvailabilityResult(null);
+                }}
+                disabled={submitting}
+              />
+            </label>
+          </div>
+
+          <div style={{ margin: '0.5rem 0 1rem 0' }}>
+            <button
+              type="button"
+              className="button secondary"
+              style={{ fontSize: '0.85rem', padding: '0.4rem 0.8rem' }}
+              onClick={handleCheckAvailability}
+              disabled={checkingAvailability || submitting || !checkIn || !checkOut}
+            >
+              {checkingAvailability ? 'Verificando...' : 'Verificar disponibilidad y tarifa'}
+            </button>
+
+            {availabilityResult && (
+              <div
+                style={{
+                  marginTop: '0.5rem',
+                  padding: '0.6rem 0.8rem',
+                  background: '#ecfdf5',
+                  color: '#065f46',
+                  borderRadius: 6,
+                  fontSize: '0.85rem',
+                }}
+              >
+                ✓ <strong>{availabilityResult.availableRooms}</strong> habitación(es) disponible(s).
+                Tarifa: {availabilityResult.rateName} · Total:{' '}
+                {money(availabilityResult.totalAmountCents / 100)}
+              </div>
+            )}
+          </div>
+
+          <label className="hk-form-label">
+            Notas u observaciones
+            <textarea
+              className="hk-form-textarea"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Peticiones especiales, hora estimada de llegada, etc."
+              disabled={submitting}
+            />
+          </label>
+
+          <div className="modal-foot">
+            <button
+              type="button"
+              className="button secondary"
+              onClick={onClose}
+              disabled={submitting}
+            >
+              Cancelar
+            </button>
+            <button type="submit" className="button primary" disabled={submitting}>
+              {submitting ? 'Confirmando reserva...' : 'Crear reserva'}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
