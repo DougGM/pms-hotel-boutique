@@ -69,6 +69,7 @@ test('INT-13: servicios integrados no hacen fallback silencioso a mocks', async 
     'src/services/bookingService.ts',
     'src/services/guestService.ts',
     'src/services/roomService.ts',
+    'src/services/publicBookingCatalogService.ts',
   ];
   const offenders = [];
 
@@ -81,6 +82,40 @@ test('INT-13: servicios integrados no hacen fallback silencioso a mocks', async 
     offenders,
     [],
     `Los servicios integrados deben propagar errores del backend y no volver a mocks: ${offenders.join(', ')}`,
+  );
+});
+
+test('#127: la web pública solo usa los contratos /public del backend', async () => {
+  const service = await readFile('src/services/publicBookingCatalogService.ts', 'utf8');
+  const paths = [...service.matchAll(/httpClient\.\w+<[^>]*>\(\s*[`'"]([^`'"?]+)/g)].map(
+    (match) => match[1],
+  );
+  assert.ok(paths.length > 0, 'publicBookingCatalogService debe llamar al backend');
+  assert.deepEqual(
+    paths.filter((target) => !target.startsWith('/public/')),
+    [],
+    'publicBookingCatalogService solo puede llamar rutas /public/*',
+  );
+  assert.equal(
+    /mockPersistence|shared\/mocks|@\/data\//.test(service),
+    false,
+    'publicBookingCatalogService no puede leer datos locales',
+  );
+
+  const screens = await collectFiles('src/modules/booking-engine', (file) =>
+    sourceExtensions.has(path.extname(file)),
+  );
+  const offenders = [];
+  for (const file of screens) {
+    const content = await readFile(file, 'utf8');
+    if (/services\/(bookingService|guestService|roomService)['"]/.test(content)) {
+      offenders.push(toPosix(file));
+    }
+  }
+  assert.deepEqual(
+    offenders,
+    [],
+    `El motor público no debe usar servicios privados de reservas/huéspedes/habitaciones: ${offenders.join(', ')}`,
   );
 });
 

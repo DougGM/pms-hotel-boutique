@@ -253,6 +253,7 @@ export function SearchScreen() {
   }, [guests, range, setSearchParams]);
 
   const nights = isCompleteStayRange(range) ? calculateNights(range.start, range.end) : 0;
+  const guestCounts = parseGuests(guests);
   const roomCards = hasSearched
     ? results
     : roomTypes.map((roomType) => ({ roomType, availableRooms: undefined, rate: undefined }));
@@ -427,7 +428,7 @@ export function SearchScreen() {
                 {roomCards.map(({ roomType, availableRooms, rate }, index) => {
                   const displayRate = rate ?? findLowestRate(rates, roomType.id);
                   const detailUrl = isCompleteStayRange(range)
-                    ? `/rooms/${roomType.id}?checkIn=${dateKey(range.start)}&checkOut=${dateKey(range.end)}`
+                    ? `/rooms/${roomType.id}?checkIn=${dateKey(range.start)}&checkOut=${dateKey(range.end)}&adults=${guestCounts.adults}&children=${guestCounts.children}`
                     : `/rooms/${roomType.id}`;
 
                   return (

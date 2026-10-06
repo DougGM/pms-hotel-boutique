@@ -3,6 +3,7 @@ import { test, beforeEach, afterEach } from 'node:test';
 import { create, act } from 'react-test-renderer';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { router as configuredRouter } from '@/app/router';
+import { rolePermissionsFromBackendRoles } from '@/modules/administration/utils/rolePermissions';
 import { AuthProvider } from '@/modules/auth/components/AuthProvider';
 import { authService, sessionStorageKey } from '@/modules/auth/services/auth-service';
 import { getLoginDestination } from '@/private/routes/navigation';
@@ -344,6 +345,25 @@ function installFetch() {
       return json(authResponse(email));
     }
     if (path === '/api/v1/auth/logout') return new Response(null, { status: 204 });
+    if (path === '/api/v1/guest/auth/login') {
+      const email = body?.email?.trim().toLowerCase();
+      const guestPassword = body?.password;
+      if (
+        (email === 'ana.demo@aurora.test' && guestPassword === 'huesped1') ||
+        (email === 'carlos.demo@aurora.test' && guestPassword === 'huesped2') ||
+        (email === 'huesped@hotelboutique.test' && guestPassword === password)
+      ) {
+        return json({
+          accessToken: guestJwt(guestTokenSeconds),
+          tokenType: 'Bearer',
+          expiresIn: guestTokenSeconds,
+        });
+      }
+      if (email === 'no.stay@aurora.test' || email === 'no-stay@hotelboutique.test') {
+        return json({ message: 'Guest has no active stay' }, 400, 'Bad Request');
+      }
+      return json({ message: 'Invalid email or password' }, 401, 'Unauthorized');
+    }
     if (path === '/api/v1/guest/auth/link') {
       if (body?.code !== GUEST_CODE) {
         return json({ message: 'Guest link code not found' }, 400, 'Bad Request');
@@ -573,6 +593,74 @@ test('each staff role only sees its menu and direct unauthorized URLs are blocke
   }
 });
 
+test('ADMIN keeps full UI access regardless of its backend permission list; other roles do not', () => {
+  // Permisos operativos reales de ADMIN en el backend (migraciones 008 y 010).
+  const realBackendAdminPermissions = [
+    'rooms.read',
+    'rooms.write',
+    'room-types.read',
+    'room-types.write',
+    'room-features.read',
+    'rates.read',
+    'rates.write',
+    'guests.read',
+    'guests.write',
+    'bookings.read',
+    'bookings.write',
+    'bookings.check-in',
+    'bookings.check-out',
+    'booking-companions.read',
+    'booking-companions.write',
+    'housekeeping.read',
+    'housekeeping.write',
+    'room-service.read',
+    'room-service.write',
+    'payments.read',
+    'payments.write',
+    'deposits.read',
+    'deposits.write',
+    'folios.read',
+    'folios.write',
+    'charges.read',
+    'charges.write',
+    'inventory.read',
+    'inventory.write',
+    'cash.read',
+    'cash.write',
+    'concierge.read',
+    'concierge.write',
+  ];
+  const role = (code, permissionIds) => ({ code, permissionIds });
+  // Sin lista de permisos, ADMIN recibe el conjunto completo de referencia.
+  const full = rolePermissionsFromBackendRoles([role('admin', [])]).admin;
+  const fullKeys = Object.keys(full);
+  assert.ok(fullKeys.length > 0);
+  assert.ok(Object.values(full).every(Boolean));
+  assert.equal(full['HUÉSPED::Notificaciones'], true, 'incluye la vista previa del portal');
+
+  for (const permissionIds of [
+    ['bookings.read', 'rooms.write', 'cash.read'],
+    realBackendAdminPermissions,
+  ]) {
+    const admin = rolePermissionsFromBackendRoles([role('admin', permissionIds)]).admin;
+    assert.deepEqual(
+      admin,
+      full,
+      `ADMIN con ${permissionIds.length} permisos debe tener acceso completo`,
+    );
+  }
+
+  const reception = rolePermissionsFromBackendRoles([
+    role('reception', ['bookings.read']),
+  ]).reception;
+  assert.deepEqual(Object.keys(reception).sort(), [...fullKeys].sort());
+  assert.equal(reception['RECEPCIÓN::Reservas'], true);
+  assert.equal(reception['RECEPCIÓN::Huéspedes'], false);
+  assert.equal(reception['RECEPCIÓN::Caja'], false);
+  assert.equal(reception['ADMINISTRACIÓN::Usuarios y roles'], false);
+  assert.equal(reception['HUÉSPED::Inicio'], false);
+});
+
 test('session survives remount; logout in another tab clears access', async () => {
   await open('/auth/login');
   await login('limpieza@hotelboutique.test');
@@ -764,8 +852,31 @@ test('shared service rejects wrong passwords and unknown email addresses', async
 });
 
 async function linkGuest(code) {
+  const toggleBtn = view.root.findAllByProps({ id: 'guest-toggle-code-mode' });
+  if (toggleBtn.length > 0) {
+    act(() => {
+      toggleBtn[0].props.onClick();
+    });
+  }
   act(() => {
     view.root.findByProps({ id: 'guest-link-code' }).props.onChange({ target: { value: code } });
+  });
+  await act(async () => {
+    await view.root.findByType('form').props.onSubmit({ preventDefault() {} });
+    await wait();
+  });
+}
+
+async function loginGuestForm(email, pass) {
+  const toggleCredentials = view.root.findAllByProps({ id: 'guest-toggle-credentials-mode' });
+  if (toggleCredentials.length > 0) {
+    act(() => {
+      toggleCredentials[0].props.onClick();
+    });
+  }
+  act(() => {
+    view.root.findByProps({ id: 'guest-email' }).props.onChange({ target: { value: email } });
+    view.root.findByProps({ id: 'guest-password' }).props.onChange({ target: { value: pass } });
   });
   await act(async () => {
     await view.root.findByType('form').props.onSubmit({ preventDefault() {} });
@@ -777,8 +888,77 @@ test('el login del personal rechaza cuentas de huésped', async () => {
   await open('/auth/login');
   await login('huesped@hotelboutique.test');
   assert.equal(router.state.location.pathname, '/auth/login');
-  assert.ok(text().includes('código de su reserva'), 'indica usar el acceso de huésped');
+  assert.ok(
+    text().includes('código de su reserva') || text().includes('Acceso de huésped'),
+    'indica usar el acceso de huésped',
+  );
   assert.equal(values.size, 0, 'no persiste ninguna sesión');
+});
+
+test('el huésped puede iniciar sesión con correo y contraseña contra backend real', async () => {
+  await open('/auth/register');
+  assert.ok(text().includes('Acceso de huésped'));
+  assert.ok(text().includes('Correo electrónico'));
+  await loginGuestForm('ana.demo@aurora.test', 'huesped1');
+
+  assert.equal(router.state.location.pathname, '/pms/dashboard');
+  const labels = view.root
+    .findByType('nav')
+    .findAllByType('button')
+    .map((button) => button.findByType('span').children.join(''));
+  assert.ok(labels.includes('Room service'));
+  assert.ok(labels.includes('Notificaciones'));
+  assert.equal(labels.length, 8);
+  assert.ok(requests.some((request) => request.path === '/api/v1/guest/auth/login'));
+  assert.ok(!requests.some((request) => request.path === '/api/v1/auth/login'));
+  assert.ok(
+    requests
+      .filter(
+        (request) =>
+          request.path.startsWith('/api/v1/guest/') &&
+          request.path !== '/api/v1/guest/auth/login' &&
+          request.path !== '/api/v1/guest/auth/link',
+      )
+      .every((request) => request.authorization?.startsWith('Bearer ')),
+    'todas las rutas /guest viajan con el JWT de huésped',
+  );
+  assert.ok(
+    !requests.some((request) => /^\/api\/v1\/(bookings|guests|rooms|admin)/.test(request.path)),
+    'el portal no consume endpoints del personal',
+  );
+  const stored = JSON.parse(values.get('PMS_AUTH_SESSION'));
+  assert.equal(stored.user.role, 'GUEST');
+  assert.equal(stored.user.name, 'Ana López');
+  assert.equal(stored.user.email, 'ana.demo@aurora.test');
+  assert.equal(stored.refreshToken, '', 'el huésped no tiene refresh token');
+
+  // Verifica que no se persistan datos de dominio (habitaciones, reservas, pagos) en localStorage
+  for (const key of values.keys()) {
+    assert.ok(
+      key === 'PMS_AUTH_SESSION' || key === 'PMS_GUEST_ACCESS_EXPIRED',
+      `clave no permitida en almacenamiento local: ${key}`,
+    );
+  }
+
+  await logoutFromWorkspace();
+  assert.equal(router.state.location.pathname, '/auth/register');
+  assert.equal(values.has('PMS_AUTH_SESSION'), false);
+});
+
+test('credenciales inválidas de huésped muestran error controlado', async () => {
+  await open('/auth/register');
+  await loginGuestForm('ana.demo@aurora.test', 'wrong-pass');
+  assert.equal(router.state.location.pathname, '/auth/register');
+  assert.ok(text().includes('Correo o contraseña incorrectos'));
+  assert.equal(values.has('PMS_AUTH_SESSION'), false);
+});
+
+test('huésped sin estancia activa muestra error controlado', async () => {
+  await open('/auth/register');
+  await loginGuestForm('no.stay@aurora.test', 'huesped1');
+  assert.equal(router.state.location.pathname, '/auth/register');
+  assert.ok(text().includes('No tienes una estancia activa'));
+  assert.equal(values.has('PMS_AUTH_SESSION'), false);
 });
 
 test('el huésped entra con el código de su reserva y sale a su acceso', async () => {
@@ -800,7 +980,9 @@ test('el huésped entra con el código de su reserva y sale a su acceso', async 
     requests
       .filter(
         (request) =>
-          request.path.startsWith('/api/v1/guest/') && request.path !== '/api/v1/guest/auth/link',
+          request.path.startsWith('/api/v1/guest/') &&
+          request.path !== '/api/v1/guest/auth/link' &&
+          request.path !== '/api/v1/guest/auth/login',
       )
       .every((request) => request.authorization?.startsWith('Bearer ')),
     'todas las rutas /guest viajan con el JWT de huésped',
@@ -827,7 +1009,7 @@ test('un código inválido muestra el error y no crea sesión', async () => {
   assert.equal(values.has('PMS_AUTH_SESSION'), false);
 });
 
-test('al vencer el token del huésped se le pide de nuevo el código', async () => {
+test('al vencer el token del huésped se le pide de nuevo el acceso', async () => {
   guestTokenSeconds = 2;
   await open('/auth/register');
   await linkGuest(GUEST_CODE);

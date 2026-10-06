@@ -6,7 +6,9 @@ export interface AuthContextValue {
   isLoading: boolean;
   error: string | null;
   login: (credentials: Credentials) => Promise<void>;
-  /** Acceso de huésped con el código de su reserva (INT-12). */
+  /** Login de huésped con correo y contraseña contra backend real. */
+  loginGuest: (credentials: Credentials) => Promise<void>;
+  /** Acceso de huésped con el código de su reserva (flujo secundario). */
   linkGuest: (code: string) => Promise<void>;
   logout: () => void;
   retry: () => void;

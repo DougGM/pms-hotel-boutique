@@ -106,11 +106,16 @@ correr por separado: `npm run test:auth`, `test:currency`, `test:date`,
 `test:money-contract`, `test:contract`, `test:services`,
 `test:e2e-integration`, `test:presentation`.
 
-## Autenticacion con backend (INT-01)
+## Autenticacion con backend (INT-01 / AUTH-GUEST #134)
 
-Abrir `/auth/login`. Desde 2026-10-01, `services/authService.ts` usa el backend
-Spring real: `POST /auth/login`, JWT Bearer automatico, `POST /auth/refresh`
-ante `401` con retry unico y `POST /auth/logout` con `refreshToken`.
+- **Personal:** Abrir `/auth/login`. Desde 2026-10-01, `services/authService.ts` usa el backend
+  Spring real: `POST /auth/login`, JWT Bearer automático, `POST /auth/refresh`
+  ante `401` con retry único y `POST /auth/logout` con `refreshToken`.
+- **Huéspedes:** Abrir `/auth/register` (Acceso de huésped). Desde Issue #134,
+  el huésped se autentica con correo electrónico y contraseña contra
+  `POST /guest/auth/login` (credenciales demo: `ana.demo@aurora.test` / `huesped1`,
+  `carlos.demo@aurora.test` / `huesped2`). La vinculación por código de reserva
+  (`POST /guest/auth/link`) se conserva como flujo secundario de compatibilidad.
 
 Las credenciales ya no se validan contra `sessionAccountsDB`; deben existir en
 PostgreSQL/backend. El frontend deriva email, rol y authorities del JWT
