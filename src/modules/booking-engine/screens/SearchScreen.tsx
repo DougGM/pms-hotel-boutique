@@ -49,7 +49,10 @@ const AMENITY_CATEGORY_ICONS: Record<AmenityCategory, typeof Sparkles> = {
 };
 
 function formatAmenitySchedule(amenity: Amenity): string | null {
-  return amenity.opensAt && amenity.closesAt ? `${amenity.opensAt} - ${amenity.closesAt}` : null;
+  // El backend envía "HH:mm:ss"; en la web pública basta "HH:mm".
+  return amenity.opensAt && amenity.closesAt
+    ? `${amenity.opensAt.slice(0, 5)} - ${amenity.closesAt.slice(0, 5)}`
+    : null;
 }
 
 const promotions = [

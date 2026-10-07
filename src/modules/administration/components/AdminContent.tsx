@@ -932,7 +932,7 @@ function AdminModal({
   const close = submitting ? () => undefined : onClose;
   return (
     <div className="modal-backdrop" onMouseDown={close}>
-      <div className="modal" style={{ width }} onMouseDown={(e) => e.stopPropagation()}>
+      <div className="modal adm-modal" style={{ width }} onMouseDown={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <div>
             <p className="eyebrow">{eyebrow}</p>
@@ -4367,6 +4367,11 @@ function RoomTypeModal({
 function useModalSave(gallery: GalleryItem[], onClose: () => void) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // El aviso de "no se puede guardar" deja de valer en cuanto cambia la galería.
+  useEffect(() => {
+    setError(null);
+  }, [gallery]);
 
   async function submit(save: () => Promise<void>) {
     const blocker = getGallerySaveBlocker(gallery);

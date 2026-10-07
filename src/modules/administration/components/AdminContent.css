@@ -41,3 +41,9 @@
   align-items: center;
   gap: var(--space-4);
 }
+
+/* En pantallas angostas el modal nunca supera el ancho visible. */
+.adm-modal {
+  max-width: calc(100vw - var(--space-6));
+  box-sizing: border-box;
+}

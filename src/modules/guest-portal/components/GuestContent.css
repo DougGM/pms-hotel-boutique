@@ -3,7 +3,7 @@
 .gs-menu-card-photo {
   overflow: hidden;
   margin-bottom: var(--space-4);
-  aspect-ratio: var(--media-aspect-ratio);
+  height: var(--size-legacy-140);
   border-radius: var(--radius-md);
   background: var(--media-placeholder-bg);
 }
