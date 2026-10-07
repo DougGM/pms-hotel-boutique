@@ -4674,7 +4674,6 @@ function AmenityModal({
   const [description, setDescription] = useState(amenity?.description ?? '');
   const [category, setCategory] = useState<AmenityCategory>(amenity?.category ?? 'hotel');
   const [schedule, setSchedule] = useState(amenity?.schedule ?? '');
-  const [available, setAvailable] = useState(amenity?.available ?? true);
   const [status, setStatus] = useState<'Activo' | 'Inactivo'>(amenity?.status ?? 'Activo');
   const [icon, setIcon] = useState(amenity?.icon ?? 'Sparkles');
   const [gallery, setGallery] = useState<GalleryItem[]>(() =>
@@ -4698,7 +4697,8 @@ function AmenityModal({
               description,
               category,
               schedule,
-              available,
+              // La disponibilidad sale del estado: el backend solo guarda `active`.
+              available: status === 'Activo',
               status,
               icon,
               images: amenity?.images ?? [],
@@ -4753,17 +4753,6 @@ function AmenityModal({
             <option value="Sparkles">Spa</option>
             <option value="Star">Terraza</option>
             <option value="Wifi">Wi-Fi</option>
-          </select>
-        </label>
-        <label className="hk-form-label">
-          Disponibilidad
-          <select
-            className="hk-form-select"
-            value={available ? 'si' : 'no'}
-            onChange={(e) => setAvailable(e.target.value === 'si')}
-          >
-            <option value="si">Disponible</option>
-            <option value="no">No disponible</option>
           </select>
         </label>
         <label className="hk-form-label">
