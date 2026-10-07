@@ -23,7 +23,8 @@ import { EmptyState } from '@/shared/components/EmptyState';
 import { ErrorState } from '@/shared/components/ErrorState';
 import { LoadingState } from '@/shared/components/LoadingState';
 
-const money = (n: number) => `$${n.toLocaleString('es-MX')}`;
+const money = (n: number) =>
+  `Q${n.toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const statusClass = (status: OrderStatus): string =>
   status === 'Pendiente'
@@ -129,6 +130,7 @@ export function RoomServiceContent({
   const [inventoryQuantity, setInventoryQuantity] = useState('1');
   const [inventoryNotes, setInventoryNotes] = useState('');
   const [inventorySaving, setInventorySaving] = useState(false);
+  const [refreshingOrders, setRefreshingOrders] = useState(false);
 
   const loadCatalog = async () => {
     setCatalog({ status: 'loading' });
@@ -176,6 +178,16 @@ export function RoomServiceContent({
   const refreshCatalog = async (message: string) => {
     await loadCatalog();
     onAction(message);
+  };
+
+  const refreshOrders = async () => {
+    if (refreshingOrders) return;
+    setRefreshingOrders(true);
+    try {
+      await onRefreshOrders();
+    } finally {
+      setRefreshingOrders(false);
+    }
   };
 
   const registerInventoryMovement = async () => {
@@ -427,7 +439,8 @@ export function RoomServiceContent({
               {filteredActive.length === 0 ? (
                 <div className="hk-empty">
                   <Package size={22} />
-                  <p>No hay pedidos activos</p>
+                  <p>No hay pedidos pendientes de gestionar</p>
+                  <small>Los pedidos finalizados están disponibles en Historial.</small>
                 </div>
               ) : (
                 filteredActive.map(renderOrder)
@@ -437,14 +450,13 @@ export function RoomServiceContent({
           <aside className="panel rs-side-panel">
             <div className="panel-heading">
               <div>
-                <h3>Turno de Douglas</h3>
-                <p>Room service · Hotel Aurora</p>
+                <h3>Resumen de pedidos</h3>
+                <p>Estados de los pedidos cargados</p>
               </div>
-              <span className="avatar blue">DG</span>
             </div>
             <div className="rs-shift-card">
               <div>
-                <span>Pedidos del turno</span>
+                <span>Pedidos consultados</span>
                 <strong>{orders.length}</strong>
               </div>
               <div>
@@ -479,7 +491,7 @@ export function RoomServiceContent({
               </span>
             </div>
             <div className="rs-legend" style={{ borderTop: 'none', paddingTop: 0 }}>
-              <strong>Ventas del turno</strong>
+              <strong>Total de pedidos entregados</strong>
               <span style={{ fontSize: '18px', color: '#9b713d', fontWeight: 700 }}>
                 {money(
                   orders
@@ -653,8 +665,12 @@ export function RoomServiceContent({
             <h3>Historial de pedidos</h3>
             <p>Consulta los pedidos entregados, rechazados y cancelados</p>
           </div>
-          <button className="button small secondary" onClick={() => void onRefreshOrders()}>
-            <FileText size={14} /> Actualizar
+          <button
+            className="button small secondary"
+            onClick={() => void refreshOrders()}
+            disabled={refreshingOrders}
+          >
+            <FileText size={14} /> {refreshingOrders ? 'Actualizando...' : 'Actualizar'}
           </button>
         </div>
         <div className="rs-history-list">
@@ -750,17 +766,27 @@ export function RoomServiceContent({
         )}
         {inventoryModalOpen && (
           <div className="modal-backdrop" onMouseDown={() => setInventoryModalOpen(false)}>
-            <div className="modal" style={{ width: 460 }} onMouseDown={(e) => e.stopPropagation()}>
+            <div
+              className="modal rs-inventory-modal"
+              onMouseDown={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="rs-inventory-title"
+            >
               <div className="modal-head">
                 <div>
                   <p className="eyebrow">INVENTARIO DE COCINA</p>
-                  <h2>Registrar insumo</h2>
+                  <h2 id="rs-inventory-title">Registrar insumo</h2>
                 </div>
-                <button className="icon-btn" onClick={() => setInventoryModalOpen(false)}>
+                <button
+                  className="icon-btn"
+                  onClick={() => setInventoryModalOpen(false)}
+                  aria-label="Cerrar"
+                >
                   <X size={18} />
                 </button>
               </div>
-              <label>
+              <label className="rs-inventory-field">
                 Insumo
                 <select
                   value={inventoryItemId}
@@ -774,13 +800,17 @@ export function RoomServiceContent({
                 </select>
               </label>
               {selectedInventoryItem && (
-                <p className="login-helper">
-                  Stock actual: {selectedInventoryItem.stock} {selectedInventoryItem.unit}
+                <p className="rs-inventory-stock">
+                  <span>Existencia actual</span>
+                  <strong>
+                    {selectedInventoryItem.stock} {selectedInventoryItem.unit}
+                  </strong>
                 </p>
               )}
-              <label>
+              <label className="rs-inventory-field">
                 Cantidad recibida
                 <input
+                  className="rs-inventory-quantity"
                   type="number"
                   min="1"
                   step="1"
@@ -788,16 +818,21 @@ export function RoomServiceContent({
                   onChange={(event) => setInventoryQuantity(event.target.value)}
                 />
               </label>
-              <label>
+              <label className="rs-inventory-field">
                 Observaciones
                 <textarea
+                  className="rs-inventory-notes"
                   value={inventoryNotes}
                   onChange={(event) => setInventoryNotes(event.target.value)}
                   placeholder="Ej. Reposición de turno, compra de cocina..."
                 />
               </label>
               <div className="modal-foot">
-                <button className="button secondary" onClick={() => setInventoryModalOpen(false)}>
+                <button
+                  className="button secondary"
+                  onClick={() => setInventoryModalOpen(false)}
+                  disabled={inventorySaving}
+                >
                   Cancelar
                 </button>
                 <button

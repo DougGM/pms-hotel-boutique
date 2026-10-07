@@ -10,6 +10,7 @@ import {
   DoorOpen,
   Eye,
   FileText,
+  LoaderCircle,
   Plus,
   Search,
   Users,
@@ -25,6 +26,7 @@ import type {
   ReservationStatus,
   RoomBlock,
 } from '@/private/workspace/PrivateWorkspace';
+import { toDtoCalendarDate } from '@/shared/types/common';
 import { ReservationDetail } from './ReservationDetail';
 import {
   BlockModal,
@@ -127,7 +129,7 @@ export function ReceptionContent({
   onSelectRes: (id: number) => void;
   onCloseRes: () => void;
   onUpdateRes: (id: number, updates: Partial<Reservation>) => void;
-  onAddReservation: (res: Reservation) => void;
+  onAddReservation: (res: Reservation) => Promise<Reservation>;
   nextCode: string;
   nights: (ci: string, co: string) => number;
   folioTotals: (f: FolioEntry[]) => Totals;
@@ -206,9 +208,21 @@ export function ReceptionContent({
   onNavigate: (nav: string) => void;
   onRefresh: () => Promise<void>;
 }) {
+  const [refreshingCalendar, setRefreshingCalendar] = useState(false);
+
+  const refreshCalendar = async () => {
+    if (refreshingCalendar) return;
+    setRefreshingCalendar(true);
+    try {
+      await onRefresh();
+    } finally {
+      setRefreshingCalendar(false);
+    }
+  };
+
   /* ---------- Dashboard / Resumen ---------- */
   if (nav === 'Resumen') {
-    const today = '2024-08-26';
+    const today = toDtoCalendarDate(new Date());
     const arrivals = reservations.filter(
       (r) => r.checkIn === today && !['Cancelada', 'Anulada'].includes(r.status),
     );
@@ -424,10 +438,10 @@ export function ReceptionContent({
             nights={nights}
             folioTotals={folioTotals}
             onClose={() => setShowNewRes(false)}
-            onSave={(res) => {
-              onAddReservation(res);
+            onSave={async (res) => {
+              const saved = await onAddReservation(res);
               setShowNewRes(false);
-              onAction(`Reserva ${res.code} creada`);
+              onAction(`Reserva ${saved.code} creada`);
             }}
           />
         )}
@@ -441,11 +455,11 @@ export function ReceptionContent({
             nights={nights}
             folioTotals={folioTotals}
             onClose={() => setShowWalkin(false)}
-            onSave={(res) => {
-              onAddReservation(res);
+            onSave={async (res) => {
+              const saved = await onAddReservation(res);
               setShowWalkin(false);
-              setShowCheckin(res.id);
-              onAction(`Walk-in ${res.code} registrado`);
+              setShowCheckin(saved.id);
+              onAction(`Walk-in ${saved.code} registrado`);
             }}
           />
         )}
@@ -458,10 +472,6 @@ export function ReceptionContent({
             rooms={rooms}
             blocks={blocks}
             onClose={onCloseRes}
-            onEdit={() => {
-              onCloseRes();
-              onAction('Edición disponible desde la lista de reservas');
-            }}
             onCheckin={() => setShowCheckin(selectedRes.id)}
             onCheckout={() => setShowCheckout(selectedRes.id)}
             onCancel={() => setShowCancel(selectedRes.id)}
@@ -475,6 +485,7 @@ export function ReceptionContent({
             hasConflict={hasConflict}
             isRoomBlocked={isRoomBlocked}
             folioTotals={folioTotals}
+            onRefresh={onRefresh}
           />
         )}
         {RenderActionModals({ ...argumentsForModals() })}
@@ -523,13 +534,15 @@ export function ReceptionContent({
 
   /* ---------- Calendario Gantt ---------- */
   if (nav === 'Calendario') {
-    const calStart = '2024-08-24';
-    const days: string[] = [];
-    for (let i = 0; i < 10; i++) {
-      const d = new Date(calStart + 'T00:00:00');
-      d.setDate(d.getDate() + i);
-      days.push(d.toISOString().slice(0, 10));
-    }
+    const calendarStart = new Date();
+    calendarStart.setHours(12, 0, 0, 0);
+    calendarStart.setDate(calendarStart.getDate() - ((calendarStart.getDay() + 6) % 7));
+    const calStart = toDtoCalendarDate(calendarStart);
+    const days = Array.from({ length: 10 }, (_, index) => {
+      const day = new Date(calendarStart);
+      day.setDate(day.getDate() + index);
+      return toDtoCalendarDate(day);
+    });
     const filteredRooms = rooms.filter(
       (r) =>
         (calFilter.room === 'Todos' || r.number === calFilter.room) &&
@@ -541,8 +554,8 @@ export function ReceptionContent({
           res.roomNumber === r.number &&
           !['Cancelada', 'Anulada'].includes(res.status) &&
           (calFilter.status === 'Todos' || res.status === calFilter.status) &&
-          new Date(res.checkOut) > new Date(calStart) &&
-          new Date(res.checkIn) < new Date(days[days.length - 1]),
+          res.checkOut > calStart &&
+          res.checkIn < days[days.length - 1],
       );
 
     const clearFilters = () => setCalFilter({ room: 'Todos', type: 'Todos', status: 'Todos' });
@@ -556,8 +569,18 @@ export function ReceptionContent({
             <h3>Calendario de reservas</h3>
             <p>Vista tipo Gantt · habitaciones y ocupación</p>
           </div>
-          <button className="button small secondary" onClick={() => void onRefresh()}>
-            <CalendarDays size={14} /> Actualizar
+          <button
+            className="button small secondary"
+            onClick={() => void refreshCalendar()}
+            disabled={refreshingCalendar}
+            aria-busy={refreshingCalendar}
+          >
+            {refreshingCalendar ? (
+              <LoaderCircle size={14} className="rc-refresh-spinner" />
+            ) : (
+              <CalendarDays size={14} />
+            )}
+            {refreshingCalendar ? 'Actualizando...' : 'Actualizar'}
           </button>
         </div>
         <div className="toolbar rc-cal-toolbar">
@@ -701,10 +724,10 @@ export function ReceptionContent({
             nights={nights}
             folioTotals={folioTotals}
             onClose={() => setShowNewRes(false)}
-            onSave={(res) => {
-              onAddReservation(res);
+            onSave={async (res) => {
+              const saved = await onAddReservation(res);
               setShowNewRes(false);
-              onAction(`Reserva ${res.code} creada`);
+              onAction(`Reserva ${saved.code} creada`);
             }}
           />
         )}
@@ -714,10 +737,6 @@ export function ReceptionContent({
             rooms={rooms}
             blocks={blocks}
             onClose={onCloseRes}
-            onEdit={() => {
-              onCloseRes();
-              onAction('Edición disponible desde la lista de reservas');
-            }}
             onCheckin={() => setShowCheckin(selectedRes.id)}
             onCheckout={() => setShowCheckout(selectedRes.id)}
             onCancel={() => setShowCancel(selectedRes.id)}
@@ -731,6 +750,7 @@ export function ReceptionContent({
             hasConflict={hasConflict}
             isRoomBlocked={isRoomBlocked}
             folioTotals={folioTotals}
+            onRefresh={onRefresh}
           />
         )}
         {RenderActionModals({
@@ -870,10 +890,10 @@ export function ReceptionContent({
             nights={nights}
             folioTotals={folioTotals}
             onClose={() => setShowNewRes(false)}
-            onSave={(res) => {
-              onAddReservation(res);
+            onSave={async (res) => {
+              const saved = await onAddReservation(res);
               setShowNewRes(false);
-              onAction(`Reserva ${res.code} creada`);
+              onAction(`Reserva ${saved.code} creada`);
             }}
           />
         )}
@@ -887,11 +907,11 @@ export function ReceptionContent({
             nights={nights}
             folioTotals={folioTotals}
             onClose={() => setShowWalkin(false)}
-            onSave={(res) => {
-              onAddReservation(res);
+            onSave={async (res) => {
+              const saved = await onAddReservation(res);
               setShowWalkin(false);
-              setShowCheckin(res.id);
-              onAction(`Walk-in ${res.code} registrado`);
+              setShowCheckin(saved.id);
+              onAction(`Walk-in ${saved.code} registrado`);
             }}
           />
         )}
@@ -901,7 +921,6 @@ export function ReceptionContent({
             rooms={rooms}
             blocks={blocks}
             onClose={onCloseRes}
-            onEdit={() => onAction('Edición de reserva')}
             onCheckin={() => setShowCheckin(selectedRes.id)}
             onCheckout={() => setShowCheckout(selectedRes.id)}
             onCancel={() => setShowCancel(selectedRes.id)}
@@ -915,6 +934,7 @@ export function ReceptionContent({
             hasConflict={hasConflict}
             isRoomBlocked={isRoomBlocked}
             folioTotals={folioTotals}
+            onRefresh={onRefresh}
           />
         )}
         {RenderActionModals({
@@ -1025,7 +1045,6 @@ export function ReceptionContent({
             rooms={rooms}
             blocks={blocks}
             onClose={onCloseRes}
-            onEdit={() => onAction('Edición de reserva')}
             onCheckin={() => setShowCheckin(selectedRes.id)}
             onCheckout={() => setShowCheckout(selectedRes.id)}
             onCancel={() => setShowCancel(selectedRes.id)}
@@ -1039,6 +1058,7 @@ export function ReceptionContent({
             hasConflict={hasConflict}
             isRoomBlocked={isRoomBlocked}
             folioTotals={folioTotals}
+            onRefresh={onRefresh}
           />
         )}
         {RenderActionModals({
@@ -1208,10 +1228,10 @@ export function ReceptionContent({
             nights={nights}
             folioTotals={folioTotals}
             onClose={() => setShowNewRes(false)}
-            onSave={(res) => {
-              onAddReservation(res);
+            onSave={async (res) => {
+              const saved = await onAddReservation(res);
               setShowNewRes(false);
-              onAction(`Reserva ${res.code} creada`);
+              onAction(`Reserva ${saved.code} creada`);
             }}
           />
         )}
@@ -1500,7 +1520,6 @@ export function ReceptionContent({
             rooms={rooms}
             blocks={blocks}
             onClose={onCloseRes}
-            onEdit={() => onAction('Edición de reserva')}
             onCheckin={() => setShowCheckin(selectedRes.id)}
             onCheckout={() => setShowCheckout(selectedRes.id)}
             onCancel={() => setShowCancel(selectedRes.id)}
@@ -1514,6 +1533,7 @@ export function ReceptionContent({
             hasConflict={hasConflict}
             isRoomBlocked={isRoomBlocked}
             folioTotals={folioTotals}
+            onRefresh={onRefresh}
           />
         )}
         {RenderActionModals({

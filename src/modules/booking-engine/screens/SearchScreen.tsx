@@ -5,7 +5,6 @@ import {
   Car,
   Check,
   Coffee,
-  Percent,
   ShieldCheck,
   Sparkles,
   UserRound,
@@ -54,33 +53,6 @@ function formatAmenitySchedule(amenity: Amenity): string | null {
     ? `${amenity.opensAt.slice(0, 5)} - ${amenity.closesAt.slice(0, 5)}`
     : null;
 }
-
-const promotions = [
-  {
-    name: 'Estancia extendida',
-    code: 'AURORA15',
-    value: '15%',
-    detail: 'Ahorra en reservas de 4 noches o más.',
-    image:
-      'https://images.pexels.com/photos/754628/pexels-photo-754628.jpeg?auto=compress&cs=tinysrgb&w=900',
-  },
-  {
-    name: 'Escapada romántica',
-    code: 'ROMANCE',
-    value: '10%',
-    detail: 'Cena para dos y botella de vino incluida.',
-    image:
-      'https://images.pexels.com/photos/1707828/pexels-photo-1707828.jpeg?auto=compress&cs=tinysrgb&w=900',
-  },
-  {
-    name: 'Fin de semana',
-    code: 'WEEKEND10',
-    value: '10%',
-    detail: 'Tarifa especial de viernes a domingo.',
-    image:
-      'https://images.pexels.com/photos/3754595/pexels-photo-3754595.jpeg?auto=compress&cs=tinysrgb&w=900',
-  },
-];
 
 const policies = [
   {
@@ -573,43 +545,6 @@ export function SearchScreen() {
               <span>
                 <Sparkles size={16} aria-hidden="true" /> Servicio a la habitación
               </span>
-            </div>
-          </section>
-        ) : null}
-
-        {publicTab === 'promociones' ? (
-          <section className="booking-public-section" id="promociones">
-            <div className="visitor-section-head">
-              <div>
-                <p className="eyebrow">Ofertas vigentes</p>
-                <h2>Promociones para reservar mejor</h2>
-              </div>
-            </div>
-            <div className="booking-promo-grid">
-              {promotions.map((promo) => (
-                <article className="booking-promo-card" key={promo.code}>
-                  <div
-                    className="booking-promo-image"
-                    style={{ backgroundImage: `url(${promo.image})` }}
-                  >
-                    <span>
-                      <Percent size={15} aria-hidden="true" /> {promo.code}
-                    </span>
-                  </div>
-                  <div className="booking-promo-body">
-                    <small>{promo.value} de beneficio</small>
-                    <h3>{promo.name}</h3>
-                    <p>{promo.detail}</p>
-                    <button
-                      className="button small secondary"
-                      type="button"
-                      onClick={scrollToSearch}
-                    >
-                      Usar promoción <ArrowRight size={13} aria-hidden="true" />
-                    </button>
-                  </div>
-                </article>
-              ))}
             </div>
           </section>
         ) : null}

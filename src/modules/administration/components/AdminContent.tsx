@@ -63,7 +63,7 @@ import type {
 } from '@/shared/types/entities/audit-log';
 import type { Booking } from '@/shared/types/entities/booking';
 import type { CashSession } from '@/shared/types/entities/cash-session';
-import type { InventoryItemCategory } from '@/shared/types/entities/inventory-item';
+import type { InventoryItemCategory, InventoryUnit } from '@/shared/types/entities/inventory-item';
 import type { InventoryItemCategoryDto } from '@/shared/types/entities/inventory-item';
 import type { InventoryMovementReasonDto } from '@/shared/types/entities/inventory-movement';
 import type { InventoryMovementReason } from '@/shared/types/entities/inventory-movement';
@@ -169,7 +169,9 @@ type RoomServiceItem = {
 type InventoryProduct = {
   id: number;
   dbId: string;
+  sku: string;
   categoryCode: InventoryItemCategory;
+  unit: InventoryUnit;
   name: string;
   category: string;
   stock: number;
@@ -268,6 +270,7 @@ const ROLE_ACCESS_GROUPS = [
       'Mis reservas',
       'Mi estancia',
       'Amenidades',
+      'Conserjería',
       'Servicios de habitación',
       'Room service',
       'Mis solicitudes y pedidos',
@@ -343,6 +346,7 @@ const backendPermissionsByAccessKey: Record<string, string[]> = {
   [roleAccessKey('HUÉSPED', 'Mis reservas')]: ['guest-portal.reservations'],
   [roleAccessKey('HUÉSPED', 'Mi estancia')]: ['guest-portal.stay'],
   [roleAccessKey('HUÉSPED', 'Amenidades')]: ['guest-portal.amenities'],
+  [roleAccessKey('HUÉSPED', 'Conserjería')]: ['guest-portal.requests'],
   [roleAccessKey('HUÉSPED', 'Servicios de habitación')]: ['guest-portal.services'],
   [roleAccessKey('HUÉSPED', 'Room service')]: ['guest-portal.room-service'],
   [roleAccessKey('HUÉSPED', 'Mis solicitudes y pedidos')]: ['guest-portal.requests'],
@@ -510,6 +514,15 @@ const INVENTORY_CATEGORY_LABELS: Record<InventoryItemCategory, string> = {
   housekeeping: 'Housekeeping',
   maintenance: 'Mantenimiento',
   office: 'Oficina',
+};
+
+const INVENTORY_UNIT_LABELS: Record<InventoryUnit, string> = {
+  unit: 'Unidad',
+  box: 'Caja',
+  bottle: 'Botella',
+  kg: 'Kilogramo',
+  liter: 'Litro',
+  roll: 'Rollo',
 };
 
 const INVENTORY_REASON_LABELS: Record<InventoryMovementReason, string> = {
@@ -1204,6 +1217,7 @@ export function AdminContent({
   onRolePermissionsChange?: (roleCode: string, permissions: Record<string, boolean>) => void;
 }) {
   const [screen, setScreen] = useState<ScreenState>({ status: 'loading' });
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -1325,7 +1339,9 @@ export function AdminContent({
           return {
             id: parseDbId(item.id, index + 1),
             dbId: item.id,
+            sku: item.sku,
             categoryCode: item.category,
+            unit: item.unit,
             name: item.name,
             category: INVENTORY_CATEGORY_LABELS[item.category],
             stock: item.currentQuantity,
@@ -1395,7 +1411,7 @@ export function AdminContent({
     return () => {
       active = false;
     };
-  }, []);
+  }, [reloadKey]);
 
   if (screen.status === 'loading') {
     return <LoadingState label="Cargando el panel de administración..." />;
@@ -1406,16 +1422,18 @@ export function AdminContent({
       <ErrorState
         title="No pudimos cargar el panel de administración"
         description={screen.message}
-        onRetry={() => setScreen({ status: 'loading' })}
+        onRetry={() => setReloadKey((current) => current + 1)}
       />
     );
   }
 
   return (
     <AdminContentReady
+      key={reloadKey}
       nav={nav}
       onAction={onAction}
       onNavigate={onNavigate}
+      onRefresh={() => setReloadKey((current) => current + 1)}
       onRolePermissionsChange={onRolePermissionsChange}
       initialAdminUsers={screen.users}
       initialAdminRoles={screen.roles}
@@ -1440,6 +1458,7 @@ function AdminContentReady({
   nav,
   onAction,
   onNavigate,
+  onRefresh,
   onRolePermissionsChange,
   initialAdminUsers,
   initialAdminRoles,
@@ -1460,6 +1479,7 @@ function AdminContentReady({
   nav: string;
   onAction: (message: string) => void;
   onNavigate?: (nav: string) => void;
+  onRefresh: () => void;
   onRolePermissionsChange?: (roleCode: string, permissions: Record<string, boolean>) => void;
   initialAdminUsers: AdminUser[];
   initialAdminRoles: AdminRole[];
@@ -1980,7 +2000,7 @@ function AdminContentReady({
                 <h3>Actividad reciente</h3>
                 <p>Últimos movimientos del hotel</p>
               </div>
-              <button className="icon-btn" onClick={() => onAction('Actividad actualizada')}>
+              <button className="icon-btn" onClick={onRefresh} aria-label="Actualizar actividad">
                 <Activity size={17} />
               </button>
             </div>
@@ -2586,6 +2606,21 @@ function AdminContentReady({
                   active: rt.status === 'Activo',
                   images,
                 });
+                try {
+                  await roomService.createRate({
+                    room_type_id: created.id,
+                    name: 'Tarifa base',
+                    valid_from: toDtoCalendarDate(new Date()),
+                    valid_to: '9999-12-31',
+                    price_cents: amountToCents(rt.basePrice),
+                    active: true,
+                  });
+                } catch (cause) {
+                  setShowRoomTypeModal(false);
+                  notifyError(cause);
+                  onRefresh();
+                  return;
+                }
                 setRoomTypes((cur) => [
                   ...cur,
                   {
@@ -3476,7 +3511,7 @@ function AdminContentReady({
                       <strong>{p.stock}</strong>
                     </td>
                     <td>{p.minStock}</td>
-                    <td>{money(p.price)}</td>
+                    <td>{p.price > 0 ? money(p.price) : '—'}</td>
                     <td>
                       <span className={`status-pill ${statusPillClass(p.status)}`}>{p.status}</span>
                     </td>
@@ -3565,7 +3600,35 @@ function AdminContentReady({
             onSave={async (p) => {
               try {
                 if (!editProduct) {
-                  onAction('Alta de inventario fuera de alcance: no se modifico la fuente.');
+                  if (!p.sku.trim() || !p.name.trim()) {
+                    throw new Error('Completa el SKU y el nombre del insumo.');
+                  }
+                  if (!Number.isInteger(p.minStock) || p.minStock < 0) {
+                    throw new Error('El stock mínimo debe ser un entero igual o mayor a cero.');
+                  }
+                  const created = await inventoryService.createItem({
+                    sku: p.sku,
+                    name: p.name,
+                    category: toInventoryCategoryDto(p.categoryCode),
+                    unit: p.unit,
+                    minimumQuantity: p.minStock,
+                    active: p.status === 'Activo',
+                  });
+                  const newItem: InventoryProduct = {
+                    id: parseDbId(created.id, inventory.length + 1),
+                    dbId: created.id,
+                    sku: created.sku,
+                    categoryCode: created.category,
+                    unit: created.unit,
+                    name: created.name,
+                    category: INVENTORY_CATEGORY_LABELS[created.category],
+                    stock: created.currentQuantity,
+                    minStock: created.minimumQuantity,
+                    price: 0,
+                    status: created.active ? 'Activo' : 'Inactivo',
+                  };
+                  setInventory((cur) => [...cur, newItem]);
+                  onAction('Insumo creado correctamente con existencias en cero');
                   setShowProductModal(false);
                   return;
                 }
@@ -3585,7 +3648,9 @@ function AdminContentReady({
                           ...p,
                           id: editProduct.id,
                           dbId: updated.id,
+                          sku: updated.sku,
                           categoryCode,
+                          unit: updated.unit,
                           category: INVENTORY_CATEGORY_LABELS[categoryCode],
                           stock: updated.currentQuantity,
                           minStock: updated.minimumQuantity,
@@ -4842,10 +4907,13 @@ function ProductModal({
   onSave: (p: InventoryProduct) => void;
 }) {
   const [name, setName] = useState(product?.name ?? '');
-  const [category, setCategory] = useState(product?.category ?? 'Lencería');
+  const [sku, setSku] = useState(product?.sku ?? '');
+  const [category, setCategory] = useState(
+    product?.category ?? INVENTORY_CATEGORY_LABELS.roomService,
+  );
+  const [unit, setUnit] = useState<InventoryUnit>(product?.unit ?? 'unit');
   const [stock, setStock] = useState(product?.stock ?? 0);
   const [minStock, setMinStock] = useState(product?.minStock ?? 0);
-  const [price, setPrice] = useState(product?.price ?? 0);
   const [status, setStatus] = useState<'Activo' | 'Inactivo'>(product?.status ?? 'Activo');
   return (
     <AdminModal
@@ -4856,13 +4924,15 @@ function ProductModal({
         onSave({
           id: product?.id ?? 0,
           dbId: product?.dbId ?? '',
+          sku,
           categoryCode:
-            INVENTORY_CATEGORY_BY_LABEL[category] ?? product?.categoryCode ?? 'housekeeping',
+            INVENTORY_CATEGORY_BY_LABEL[category] ?? product?.categoryCode ?? 'roomService',
+          unit,
           name,
           category,
           stock,
           minStock,
-          price,
+          price: product?.price ?? 0,
           status,
         })
       }
@@ -4878,6 +4948,19 @@ function ProductModal({
             placeholder="Ej. Toallas de baño"
           />
         </label>
+        {!product && (
+          <label className="hk-form-label">
+            SKU
+            <input
+              className="hk-form-select"
+              value={sku}
+              onChange={(e) => setSku(e.target.value)}
+              placeholder="Ej. COC-AGUA-001"
+              maxLength={80}
+              required
+            />
+          </label>
+        )}
         <label className="hk-form-label">
           Categoría
           <select
@@ -4885,38 +4968,52 @@ function ProductModal({
             value={category}
             onChange={(e) => setCategory(e.target.value)}
           >
-            <option>Lencería</option>
-            <option>Amenidades</option>
-            <option>Cocina</option>
-            <option>Bebidas</option>
-            <option>Limpieza</option>
+            {Object.entries(INVENTORY_CATEGORY_LABELS).map(([code, label]) => (
+              <option key={code} value={label}>
+                {label}
+              </option>
+            ))}
           </select>
         </label>
         <label className="hk-form-label">
-          Stock
-          <input
+          Unidad de medida
+          <select
             className="hk-form-select"
-            type="number"
-            value={stock}
-            onChange={(e) => setStock(Number(e.target.value))}
-          />
+            value={unit}
+            onChange={(e) => setUnit(e.target.value as InventoryUnit)}
+            disabled={Boolean(product)}
+          >
+            {Object.entries(INVENTORY_UNIT_LABELS).map(([code, label]) => (
+              <option key={code} value={code}>
+                {label}
+              </option>
+            ))}
+          </select>
         </label>
+        {product ? (
+          <label className="hk-form-label">
+            Existencias actuales
+            <input
+              className="hk-form-select"
+              type="number"
+              min="0"
+              step="1"
+              value={stock}
+              onChange={(e) => setStock(Number(e.target.value))}
+            />
+          </label>
+        ) : (
+          <p className="login-helper">El nuevo insumo inicia con existencias en cero.</p>
+        )}
         <label className="hk-form-label">
           Stock mínimo
           <input
             className="hk-form-select"
             type="number"
+            min="0"
+            step="1"
             value={minStock}
             onChange={(e) => setMinStock(Number(e.target.value))}
-          />
-        </label>
-        <label className="hk-form-label">
-          Precio
-          <input
-            className="hk-form-select"
-            type="number"
-            value={price}
-            onChange={(e) => setPrice(Number(e.target.value))}
           />
         </label>
         <label className="hk-form-label">

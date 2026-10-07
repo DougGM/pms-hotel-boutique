@@ -604,7 +604,8 @@
 .booking-rate-summary > div {
   display: flex;
   justify-content: space-between;
-  gap: var(--space-5);
+  align-items: baseline;
+  gap: var(--space-3);
   padding-bottom: var(--space-3);
   border-bottom: var(--size-legacy-1) solid var(--color-border);
 }
@@ -616,6 +617,7 @@
 .booking-rate-summary strong {
   color: var(--color-text-primary);
   text-align: right;
+  overflow-wrap: anywhere;
 }
 
 @media (max-width: 900px) {
@@ -792,10 +794,12 @@
 }
 
 .booking-payment-method {
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   gap: var(--space-3);
   width: 100%;
+  min-height: 74px;
   padding: var(--space-4);
   border: var(--size-legacy-1) solid var(--color-legacy-e0d0bc);
   border-radius: var(--radius-md);

@@ -172,7 +172,6 @@ export type DefectReport = {
   description: string;
   priority: string;
   observation: string;
-  photo: string;
 };
 
 export type OrderStatus =
@@ -285,6 +284,8 @@ export type Reservation = {
 
 export type RecRoom = {
   id: number;
+  backendRoomId: string;
+  roomTypeId: string;
   number: string;
   floor: string;
   type: RoomType;
@@ -367,6 +368,8 @@ const parseDbId = (id: string, fallback: number) => {
 };
 
 const centsToAmount = (cents: number) => Math.round(cents / 100);
+const formatGTQ = (amount: number) =>
+  `Q${amount.toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const formatDbTime = (value?: Date) => {
   if (!value) return '';
@@ -825,6 +828,8 @@ async function loadWorkspaceData(role: RoleId): Promise<WorkspaceState> {
 
     return {
       id: index + 1,
+      backendRoomId: room.id,
+      roomTypeId: room.roomTypeId,
       number: room.roomNumber,
       floor: `Piso ${room.floor}`,
       type: getRoomTypeLabel(room.roomTypeId, roomTypes),
@@ -954,7 +959,6 @@ async function loadWorkspaceData(role: RoleId): Promise<WorkspaceState> {
         description: request.description,
         priority: request.status === 'pending' ? 'Alta' : 'Media',
         observation: request.notes ?? '',
-        photo: '',
       };
     });
 
@@ -1015,7 +1019,7 @@ async function loadWorkspaceData(role: RoleId): Promise<WorkspaceState> {
 const navByRole: Record<RoleId, NavItem[]> = {
   reception: [
     { label: 'Resumen', icon: Gauge },
-    { label: 'Calendario', icon: CalendarDays, badge: '12' },
+    { label: 'Calendario', icon: CalendarDays },
     { label: 'Reservas', icon: ClipboardList },
     { label: 'Huéspedes', icon: Users },
     { label: 'Disponibilidad', icon: BedDouble },
@@ -1094,6 +1098,7 @@ const navByRole: Record<RoleId, NavItem[]> = {
         navChild('guest', 'Mis reservas'),
         navChild('guest', 'Mi estancia'),
         navChild('guest', 'Amenidades'),
+        navChild('guest', 'Conserjería'),
         navChild('guest', 'Servicios de habitación'),
         navChild('guest', 'Room service'),
         navChild('guest', 'Mis solicitudes y pedidos'),
@@ -1108,13 +1113,13 @@ const navByRole: Record<RoleId, NavItem[]> = {
     { label: 'Historial', icon: FileText },
   ],
   'room-service': [
-    { label: 'Pedidos activos', icon: Gauge, badge: '4' },
+    { label: 'Pedidos activos', icon: Gauge },
     { label: 'Menú', icon: ClipboardList },
     { label: 'Historial', icon: FileText },
     { label: 'Inventario', icon: Package },
   ],
   concierge: [
-    { label: 'Solicitudes', icon: ClipboardList, badge: '4' },
+    { label: 'Solicitudes', icon: ClipboardList },
     { label: 'Por habitación', icon: BedDouble },
     { label: 'Historial', icon: FileText },
   ],
@@ -1123,10 +1128,10 @@ const navByRole: Record<RoleId, NavItem[]> = {
     { label: 'Mis reservas', icon: CalendarDays },
     { label: 'Mi estancia', icon: BedDouble },
     { label: 'Amenidades', icon: Sparkles },
+    { label: 'Conserjería', icon: MessageSquare },
     { label: 'Servicios de habitación', icon: ClipboardList },
     { label: 'Room service', icon: Package },
     { label: 'Mis solicitudes y pedidos', icon: FileText },
-    // INT-12: lista, contador y "marcar como leída" con las notificaciones del backend.
     { label: 'Notificaciones', icon: Bell },
   ],
 };
@@ -1218,114 +1223,6 @@ const summaryNavByRole: Record<RoleId, string> = {
   'room-service': 'Pedidos activos',
   concierge: 'Solicitudes',
   guest: 'Inicio',
-};
-
-const metricsByRole: Record<
-  RoleId,
-  { label: string; value: string; change: string; icon: IconType; tone: string }[]
-> = {
-  reception: [
-    { label: 'Ocupación hoy', value: '78%', change: '+6.4%', icon: BedDouble, tone: 'sage' },
-    { label: 'Check-ins', value: '18', change: '4 próximos', icon: DoorOpen, tone: 'gold' },
-    {
-      label: 'Check-outs',
-      value: '11',
-      change: '3 pendientes',
-      icon: ClipboardList,
-      tone: 'terracotta',
-    },
-    { label: 'Ingresos del día', value: '$8,420', change: '+12.8%', icon: Wallet, tone: 'blue' },
-  ],
-  admin: [
-    { label: 'Ocupación mensual', value: '84.6%', change: '+8.2%', icon: BedDouble, tone: 'sage' },
-    { label: 'Ingresos', value: '$128.4K', change: '+14.5%', icon: Wallet, tone: 'gold' },
-    {
-      label: 'Reservas activas',
-      value: '142',
-      change: '18 nuevas',
-      icon: CalendarDays,
-      tone: 'terracotta',
-    },
-    { label: 'NPS huésped', value: '92', change: '+4.1 pts', icon: Sparkles, tone: 'blue' },
-  ],
-  housekeeping: [
-    {
-      label: 'Habitaciones hoy',
-      value: '14',
-      change: '6 pendientes',
-      icon: BedDouble,
-      tone: 'sage',
-    },
-    { label: 'En limpieza', value: '3', change: 'Ahora', icon: Sparkles, tone: 'gold' },
-    {
-      label: 'Solicitudes',
-      value: '5',
-      change: '2 urgentes',
-      icon: ClipboardList,
-      tone: 'terracotta',
-    },
-    { label: 'Eficiencia', value: '96%', change: '+3.2%', icon: Activity, tone: 'blue' },
-  ],
-  'room-service': [
-    {
-      label: 'Pedidos activos',
-      value: '4',
-      change: '2 nuevos',
-      icon: ClipboardList,
-      tone: 'terracotta',
-    },
-    { label: 'En preparación', value: '2', change: 'Ahora', icon: Package, tone: 'gold' },
-    {
-      label: 'Listos para entrega',
-      value: '1',
-      change: 'Habitación 208',
-      icon: DoorOpen,
-      tone: 'sage',
-    },
-    { label: 'Ventas de hoy', value: '$1,860', change: '+18.4%', icon: Wallet, tone: 'blue' },
-  ],
-  concierge: [
-    {
-      label: 'Solicitudes abiertas',
-      value: '5',
-      change: '2 urgentes',
-      icon: ClipboardList,
-      tone: 'terracotta',
-    },
-    { label: 'En atención', value: '3', change: 'Ahora', icon: Headphones, tone: 'gold' },
-    {
-      label: 'Habitaciones ocupadas',
-      value: '86',
-      change: '78% del hotel',
-      icon: BedDouble,
-      tone: 'sage',
-    },
-    { label: 'Satisfacción', value: '98%', change: '+2.8%', icon: Sparkles, tone: 'blue' },
-  ],
-  guest: [
-    {
-      label: 'Noches restantes',
-      value: '03',
-      change: 'Check-out: 28 ago',
-      icon: CalendarDays,
-      tone: 'sage',
-    },
-    { label: 'Saldo pendiente', value: '$420', change: 'Al finalizar', icon: Wallet, tone: 'gold' },
-    {
-      label: 'Servicios activos',
-      value: '02',
-      change: '1 solicitud',
-      icon: Sparkles,
-      tone: 'terracotta',
-    },
-    {
-      label: 'Puntos Aurora',
-      value: '1,840',
-      change: '+240 esta estancia',
-      icon: Activity,
-      tone: 'blue',
-    },
-  ],
 };
 
 type PrivateWorkspaceProps = {
@@ -1620,7 +1517,16 @@ function PrivateWorkspaceReady({
 
   const rolePermissionCode = activeRole === 'room-service' ? 'roomService' : activeRole;
   const baseNav = activeRole ? navByRole.admin : [];
-  const permittedNav = filterNavByPermissions(baseNav, rolePermissions[rolePermissionCode] ?? {});
+  const filteredNav = filterNavByPermissions(baseNav, rolePermissions[rolePermissionCode] ?? {});
+  const permittedNav =
+    activeRole === 'guest'
+      ? filteredNav.map((item) =>
+          item.label === 'Huésped' &&
+          !item.children?.some((child) => child.label === 'Notificaciones')
+            ? { ...item, children: [...(item.children ?? []), navChild('guest', 'Notificaciones')] }
+            : item,
+        )
+      : filteredNav;
   const shouldGroupNav = activeRole === 'admin' || permittedNav.length > 1;
   const nav = shouldGroupNav ? permittedNav : flattenPermittedNav(permittedNav);
   const groupedNavLabels = nav
@@ -1639,8 +1545,9 @@ function PrivateWorkspaceReady({
     const isVisible =
       nav.some((item) => (item.nav ?? item.label) === activeNav) ||
       nav.some((item) => item.children?.some((child) => child.nav === activeNav));
-    if (!isVisible) setActiveNav(firstNavValue(nav));
-  }, [activeNav, nav]);
+    const isGuestBellDestination = activeRole === 'guest' && activeNav === 'Notificaciones';
+    if (!isVisible && !isGuestBellDestination) setActiveNav(firstNavValue(nav));
+  }, [activeNav, activeRole, nav]);
   const activeWorkspace = resolveWorkspaceNav(activeRole, activeNav, nav);
   const contentRole = activeWorkspace.role;
   const contentNav = activeWorkspace.nav;
@@ -1653,20 +1560,48 @@ function PrivateWorkspaceReady({
   const accountRoleLabel = sessionRoleLabel ?? role.name;
   const greetingName = accountName.trim().split(/\s+/)[0] || role.person;
   const preferenceViews = nav.map((item) => item.label);
-  // Badges de Limpieza derivados del estado, con los mismos conteos que su KPI y sus
-  // notificaciones: habitaciones pendientes y solicitudes activas. Sin trabajo, sin badge.
-  const hkNavBadges: Record<string, number> =
-    activeRole === 'housekeeping'
-      ? {
-          Habitaciones: hkRooms.filter((room) => room.status === 'Pendiente').length,
-          Solicitudes: hkRequests.filter(isOpenGuestRequest).length,
-        }
-      : {};
-  const sidebarNav = nav.map((item) =>
-    item.label in hkNavBadges
-      ? { ...item, badge: hkNavBadges[item.label] ? String(hkNavBadges[item.label]) : undefined }
-      : item,
-  );
+  const today = toDtoCalendarDate(new Date());
+  const arrivalsToday = recReservationList.filter(
+    (reservation) =>
+      reservation.checkIn === today && ['Pendiente', 'Confirmada'].includes(reservation.status),
+  ).length;
+  const departuresToday = recReservationList.filter(
+    (reservation) => reservation.checkOut === today && reservation.status === 'Check-in',
+  ).length;
+  const openConciergeRequests = cgRequests.filter((request) => !isClosedConcierge(request.status));
+  const navBadge = (roleId: RoleId, label: string) => {
+    if (roleId === 'housekeeping' && label === 'Habitaciones') {
+      return hkRooms.filter((room) => room.status === 'Pendiente').length;
+    }
+    if (roleId === 'housekeeping' && label === 'Solicitudes') {
+      return hkRequests.filter(isOpenGuestRequest).length;
+    }
+    if (roleId === 'reception' && label === 'Calendario') {
+      return arrivalsToday + departuresToday;
+    }
+    if (roleId === 'room-service' && label === 'Pedidos activos') {
+      return rsOrders.filter(
+        (order) => !['Entregado', 'Rechazado', 'Cancelado'].includes(order.status),
+      ).length;
+    }
+    if (roleId === 'concierge' && label === 'Solicitudes') {
+      return openConciergeRequests.length;
+    }
+    return undefined;
+  };
+  const sidebarNav = nav
+    .map((item) => {
+      const visibleChildren = item.children
+        ?.filter((child) => !(child.role === 'guest' && child.label === 'Notificaciones'))
+        .map((child) => {
+          const count = navBadge(child.role, child.label);
+          return { ...child, badge: count ? String(count) : undefined };
+        });
+      const visibleItem = visibleChildren ? { ...item, children: visibleChildren } : item;
+      const count = navBadge(item.role ?? activeRole, item.label);
+      return { ...visibleItem, badge: count ? String(count) : undefined };
+    })
+    .filter((item) => !(activeRole === 'guest' && item.label === 'Notificaciones'));
   const showsGreeting = [
     'Resumen',
     'Dashboard',
@@ -1682,153 +1617,230 @@ function PrivateWorkspaceReady({
       ),
     [tasks, search],
   );
-  const guestRoomServiceNotifications: NotificationItem[] = rsOrders
-    .filter(
-      (order) =>
-        order.room === '402' && !['Entregado', 'Cancelado', 'Rechazado'].includes(order.status),
-    )
-    .slice(0, 2)
-    .map((order) => ({
-      title: `Pedido #${order.id} de Room Service`,
-      detail: `${order.items.map((item) => `${item.quantity}x ${item.name}`).join(', ')} · ${order.status}`,
-      tone: order.status === 'Listo' || order.status === 'En camino' ? 'success' : 'info',
-    }));
+  const roomServiceActiveOrders = rsOrders.filter(
+    (order) => !['Entregado', 'Rechazado', 'Cancelado'].includes(order.status),
+  );
+  const roomServiceInProgress = rsOrders.filter((order) =>
+    ['Aceptado', 'En preparación'].includes(order.status),
+  );
+  const roomServiceReadyToDeliver = rsOrders.filter((order) =>
+    ['Listo', 'En camino'].includes(order.status),
+  );
+  const roomServiceDeliveredTotal = rsOrders
+    .filter((order) => order.status === 'Entregado')
+    .reduce(
+      (total, order) =>
+        total +
+        order.items.reduce((orderTotal, item) => orderTotal + item.quantity * item.price, 0),
+      0,
+    );
+  const occupancyCount = recRoomList.filter((room) => room.status === 'Ocupada').length;
+  const occupancyRate =
+    recRoomList.length > 0 ? Math.round((occupancyCount / recRoomList.length) * 100) : 0;
+  const paymentsToday = recReservationList
+    .flatMap((reservation) => reservation.folio)
+    .filter((entry) => entry.date === today && entry.type === 'Pago' && entry.status === 'Activo');
+  const paymentsTodayTotal = paymentsToday.reduce((total, entry) => total + entry.amount, 0);
   const currentMetrics =
-    activeRole === 'housekeeping'
+    contentRole === 'reception'
       ? [
           {
-            label: 'Habitaciones hoy',
-            value: String(hkRooms.length),
-            change: `${hkRooms.filter((r) => r.status === 'Pendiente').length} pendientes`,
-            icon: BedDouble as IconType,
+            label: 'Ocupación actual',
+            value: `${occupancyRate}%`,
+            change: `${occupancyCount} de ${recRoomList.length} habitaciones ocupadas`,
+            icon: BedDouble,
             tone: 'sage',
           },
           {
-            label: 'En limpieza',
-            value: String(hkRooms.filter((r) => r.status === 'En proceso').length),
-            change: 'Ahora',
-            icon: Sparkles as IconType,
+            label: 'Entradas de hoy',
+            value: String(arrivalsToday),
+            change: 'Reservas pendientes o confirmadas',
+            icon: DoorOpen,
             tone: 'gold',
           },
           {
-            label: 'Solicitudes',
-            value: String(hkRequests.filter(isOpenGuestRequest).length),
-            change: `${hkRequests.filter((r) => r.priority === 'Alta' && isOpenGuestRequest(r)).length} urgentes`,
-            icon: ClipboardList as IconType,
+            label: 'Salidas de hoy',
+            value: String(departuresToday),
+            change: 'Huéspedes con check-in activo',
+            icon: ClipboardList,
             tone: 'terracotta',
           },
           {
-            label: 'Eficiencia',
-            value: '96%',
-            change: '+3.2%',
-            icon: Activity as IconType,
+            label: 'Pagos de hoy',
+            value: formatGTQ(paymentsTodayTotal),
+            change: `${paymentsToday.length} pagos registrados`,
+            icon: Wallet,
             tone: 'blue',
           },
         ]
-      : metricsByRole[contentRole ?? 'reception'];
-  const notificationItems: NotificationItem[] =
-    activeRole === 'admin'
-      ? [
-          {
-            title: 'Stock bajo: Toallas de baño',
-            detail: '48 unidades disponibles, mínimo 50',
-            tone: 'warning',
-          },
-          {
-            title: 'Stock bajo: Shampoo',
-            detail: '25 unidades disponibles, mínimo 40',
-            tone: 'warning',
-          },
-          {
-            title: 'Stock bajo: Café molido',
-            detail: '8 unidades disponibles, mínimo 15',
-            tone: 'warning',
-          },
-          {
-            title: 'Stock bajo: Toallas de piscina',
-            detail: '12 unidades disponibles, mínimo 25',
-            tone: 'warning',
-          },
-        ]
-      : activeRole === 'housekeeping'
+      : contentRole === 'room-service'
         ? [
             {
-              title: `${hkRooms.filter((room) => room.status === 'Pendiente').length} habitaciones pendientes`,
-              detail: 'Revisa la cola de limpieza de hoy',
+              label: 'Pedidos activos',
+              value: String(roomServiceActiveOrders.length),
+              change: `${rsOrders.filter((order) => order.status === 'Pendiente').length} pendientes de aceptar`,
+              icon: ClipboardList,
+              tone: 'terracotta',
+            },
+            {
+              label: 'En proceso',
+              value: String(roomServiceInProgress.length),
+              change: 'Aceptados o preparando',
+              icon: Package,
+              tone: 'gold',
+            },
+            {
+              label: 'Por entregar',
+              value: String(roomServiceReadyToDeliver.length),
+              change: 'Listos o en camino',
+              icon: DoorOpen,
+              tone: 'sage',
+            },
+            {
+              label: 'Ventas entregadas',
+              value: formatGTQ(roomServiceDeliveredTotal),
+              change: `${rsOrders.filter((order) => order.status === 'Entregado').length} pedidos entregados`,
+              icon: Wallet,
+              tone: 'blue',
+            },
+          ]
+        : contentRole === 'housekeeping'
+          ? [
+              {
+                label: 'Habitaciones hoy',
+                value: String(hkRooms.length),
+                change: `${hkRooms.filter((r) => r.status === 'Pendiente').length} pendientes`,
+                icon: BedDouble as IconType,
+                tone: 'sage',
+              },
+              {
+                label: 'En limpieza',
+                value: String(hkRooms.filter((r) => r.status === 'En proceso').length),
+                change: 'Ahora',
+                icon: Sparkles as IconType,
+                tone: 'gold',
+              },
+              {
+                label: 'Solicitudes',
+                value: String(hkRequests.filter(isOpenGuestRequest).length),
+                change: `${hkRequests.filter((r) => r.priority === 'Alta' && isOpenGuestRequest(r)).length} urgentes`,
+                icon: ClipboardList as IconType,
+                tone: 'terracotta',
+              },
+              {
+                label: 'Inspeccionadas',
+                value: String(hkRooms.filter((room) => room.status === 'Inspeccionada').length),
+                change: 'Habitaciones en estado inspeccionado',
+                icon: ShieldCheck as IconType,
+                tone: 'blue',
+              },
+            ]
+          : contentRole === 'concierge'
+            ? [
+                {
+                  label: 'Solicitudes abiertas',
+                  value: String(openConciergeRequests.length),
+                  change: 'Pendientes o en atención',
+                  icon: ClipboardList,
+                  tone: 'terracotta',
+                },
+                {
+                  label: 'En atención',
+                  value: String(
+                    cgRequests.filter((request) =>
+                      ['Aceptada', 'En proceso'].includes(request.status),
+                    ).length,
+                  ),
+                  change: 'Aceptadas o en proceso',
+                  icon: Headphones,
+                  tone: 'gold',
+                },
+                {
+                  label: 'Completadas',
+                  value: String(
+                    cgRequests.filter((request) => request.status === 'Completada').length,
+                  ),
+                  change: 'Solicitudes completadas',
+                  icon: Sparkles,
+                  tone: 'sage',
+                },
+                {
+                  label: 'Rechazadas o canceladas',
+                  value: String(
+                    cgRequests.filter((request) =>
+                      ['Rechazada', 'Cancelada'].includes(request.status),
+                    ).length,
+                  ),
+                  change: 'Solicitudes cerradas sin completar',
+                  icon: ClipboardList,
+                  tone: 'blue',
+                },
+              ]
+            : [];
+  const notificationItems: NotificationItem[] =
+    contentRole === 'housekeeping'
+      ? [
+          {
+            title: `${hkRooms.filter((room) => room.status === 'Pendiente').length} habitaciones pendientes`,
+            detail: 'Revisa la cola de limpieza de hoy',
+            tone: 'warning',
+          },
+          {
+            title: `${hkRequests.filter(isOpenGuestRequest).length} solicitudes activas`,
+            detail: 'Amenidades y pedidos de huéspedes',
+            tone: 'info',
+          },
+        ]
+      : contentRole === 'reception'
+        ? [
+            {
+              title: `${recReservationList.filter((reservation) => reservation.status === 'Pendiente').length} reservas pendientes`,
+              detail: 'Confirma o da seguimiento desde Reservas',
               tone: 'warning',
             },
             {
-              title: `${hkRequests.filter(isOpenGuestRequest).length} solicitudes activas`,
-              detail: 'Amenidades y pedidos de huéspedes',
+              title: `${recRoomList.filter((room) => room.status === 'Limpieza').length} habitaciones en limpieza`,
+              detail: 'Valida disponibilidad antes de asignar',
               tone: 'info',
             },
           ]
-        : activeRole === 'reception'
+        : contentRole === 'room-service'
           ? [
               {
-                title: `${recReservationList.filter((reservation) => reservation.status === 'Pendiente').length} reservas pendientes`,
-                detail: 'Confirma o da seguimiento desde Reservas',
+                title: `${rsOrders.filter((order) => order.status === 'Pendiente').length} pedidos pendientes`,
+                detail: 'Acepta o rechaza los pedidos nuevos',
                 tone: 'warning',
               },
               {
-                title: `${recRoomList.filter((room) => room.status === 'Limpieza').length} habitaciones en limpieza`,
-                detail: 'Valida disponibilidad antes de asignar',
-                tone: 'info',
+                title: `${rsOrders.filter((order) => order.status === 'Listo').length} pedidos listos`,
+                detail: 'Coordina entrega a habitación',
+                tone: 'success',
               },
             ]
-          : activeRole === 'room-service'
+          : contentRole === 'concierge'
             ? [
                 {
-                  title: `${rsOrders.filter((order) => order.status === 'Pendiente').length} pedidos pendientes`,
-                  detail: 'Acepta o rechaza los pedidos nuevos',
+                  title: `${cgRequests.filter((request) => request.status === 'Pendiente').length} solicitudes pendientes`,
+                  detail: 'Transporte, reservas y servicios especiales',
                   tone: 'warning',
                 },
                 {
-                  title: `${rsOrders.filter((order) => order.status === 'Listo').length} pedidos listos`,
-                  detail: 'Coordina entrega a habitación',
-                  tone: 'success',
+                  title: `${cgRequests.filter((request) => ['Aceptada', 'En proceso'].includes(request.status)).length} solicitudes en atención`,
+                  detail: 'Solicitudes aceptadas o en proceso',
+                  tone: 'info',
                 },
               ]
-            : activeRole === 'concierge'
-              ? [
+            : contentRole === 'guest' || contentRole === 'admin'
+              ? []
+              : [
                   {
-                    title: `${cgRequests.filter((request) => request.status === 'Pendiente').length} solicitudes pendientes`,
-                    detail: 'Transporte, reservas y servicios especiales',
-                    tone: 'warning',
+                    title: 'Reserva activa',
+                    detail: 'Tu estancia y servicios están disponibles',
+                    tone: 'success',
                   },
-                  {
-                    title: `${cgRequests.filter((request) => request.priority === 'Alta' && request.status !== 'Completada').length} prioridades altas`,
-                    detail: 'Atender primero durante el turno',
-                    tone: 'info',
-                  },
-                ]
-              : activeRole === 'guest'
-                ? [
-                    {
-                      title: 'Reserva activa',
-                      detail: 'Suite Aurora · Habitacion 402 · Check-out 28 ago',
-                      tone: 'success',
-                    },
-                    ...guestRoomServiceNotifications,
-                    {
-                      title: 'Cargo de Room Service',
-                      detail: '$560.00 agregado a tu cuenta de estancia',
-                      tone: 'info',
-                    },
-                  ]
-                : [
-                    {
-                      title: 'Reserva activa',
-                      detail: 'Tu estancia y servicios están disponibles',
-                      tone: 'success',
-                    },
-                  ];
+                ];
 
   const notify = (message: string) => {
-    if (activeRole === 'reception' && message.startsWith('Edición') && recSelectedResId !== null) {
-      navigate(routePaths.pms.bookingEdit.replace(':bookingId', recSelectedRes?.bookingId ?? ''));
-      return;
-    }
     setToast(message);
     window.setTimeout(() => setToast(''), 2800);
   };
@@ -1893,12 +1905,10 @@ function PrivateWorkspaceReady({
 
   const refreshRoomServiceOrders = async () => {
     try {
-      const data = await loadWorkspaceData(workspaceDataRole);
-      setRsOrders(data.roomServiceOrders);
+      const orders = await orderService.getOrders();
+      setRsOrders(orders.map((order, index) => toRoomServiceOrder(order, index + 1)));
       setRsSelectedOrderId((currentId) =>
-        currentId !== null && data.roomServiceOrders.some((order) => order.id === currentId)
-          ? currentId
-          : null,
+        currentId !== null && currentId <= orders.length ? currentId : null,
       );
       notify('Historial de pedidos actualizado');
     } catch (cause) {
@@ -2550,24 +2560,102 @@ function PrivateWorkspaceReady({
     );
   };
 
-  const recAddReservation = (reservation: Reservation) => {
-    setRecReservationList((current) => [...current, reservation]);
+  const recAddReservation = async (reservation: Reservation): Promise<Reservation> => {
+    const room = recRoomList.find((item) => item.number === reservation.roomNumber);
+    if (!room?.backendRoomId || !room.roomTypeId) {
+      throw new Error('La habitación seleccionada no está vinculada al backend.');
+    }
+
+    const [guests, rates] = await Promise.all([guestService.getGuests(), roomService.getRates()]);
+    const email = reservation.guest.email.trim().toLowerCase();
+    const existingGuest = email
+      ? guests.find((guest) => guest.email?.trim().toLowerCase() === email)
+      : undefined;
+    const guest =
+      existingGuest ??
+      (await guestService.createGuest({
+        first_name: reservation.guest.name,
+        last_name: reservation.guest.lastName,
+        email: reservation.guest.email,
+        phone: reservation.guest.phone,
+        nationality: reservation.guest.nationality || undefined,
+        document_number: reservation.guest.docNumber || undefined,
+      }));
+
+    const lastNight = new Date(`${reservation.checkOut}T00:00:00`);
+    lastNight.setDate(lastNight.getDate() - 1);
+    const lastNightDate = toDtoCalendarDate(lastNight);
+    const stayNights = calculateNights(
+      toDomainCalendarDate(reservation.checkIn),
+      toDomainCalendarDate(reservation.checkOut),
+    );
+    const rate = rates
+      .filter(
+        (item) =>
+          item.active &&
+          item.roomTypeId === room.roomTypeId &&
+          toDtoCalendarDate(item.validFrom) <= reservation.checkIn &&
+          toDtoCalendarDate(item.validTo) >= lastNightDate &&
+          stayNights >= item.minimumNights,
+      )
+      .sort((left, right) => left.priceCents - right.priceCents)[0];
+    if (!rate)
+      throw new Error('No hay una tarifa activa para el tipo de habitación y las fechas elegidas.');
+
+    const created = await bookingService.createBooking({
+      guest_id: guest.id,
+      room_type_id: room.roomTypeId,
+      room_id: room.backendRoomId,
+      rate_id: rate.id,
+      check_in: reservation.checkIn,
+      check_out: reservation.checkOut,
+      adults: reservation.guestCount,
+      children: 0,
+      notes: reservation.observations.trim() || undefined,
+    });
+    const confirmed = await bookingService.confirmBooking(created.id);
+    const saved: Reservation = {
+      ...reservation,
+      id: Number.parseInt(confirmed.id.replace(/-/g, '').slice(-8), 16),
+      bookingId: confirmed.id,
+      code: confirmed.confirmationCode,
+      guestLinkCode: confirmed.guestLinkCode,
+      guest: { ...reservation.guest, name: guest.firstName, lastName: guest.lastName },
+      rate: rate.priceCents / 100,
+      folio: reservation.folio.map((entry) => ({
+        ...entry,
+        amount: (rate.priceCents / 100) * stayNights,
+      })),
+      status: 'Confirmada',
+    };
+    setRecReservationList((current) => [...current, saved]);
+    return saved;
   };
 
-  const recDoCheckin = (
+  const recDoCheckin = async (
     id: number,
-    updates: Partial<GuestInfo>,
-    companions: Companion[],
+    _updates: Partial<GuestInfo>,
+    _companions: Companion[],
     res: Reservation,
   ) => {
+    if (!res.bookingId) {
+      notify('La reserva no está vinculada al backend.');
+      return;
+    }
+
+    try {
+      await bookingService.checkIn(res.bookingId);
+    } catch (cause) {
+      notifyError(cause);
+      return;
+    }
+
     const now = new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
     setRecReservationList((current) =>
       current.map((r) =>
         r.id === id
           ? {
               ...r,
-              guest: { ...r.guest, ...updates },
-              companions,
               status: 'Check-in',
               checkInTime: now,
               checkIn: res.checkIn,
@@ -2582,6 +2670,14 @@ function PrivateWorkspaceReady({
     );
     setRecShowCheckin(null);
     notify(`Check-in realizado · ${res.code}`);
+
+    try {
+      const data = await loadWorkspaceData(workspaceDataRole);
+      setRecReservationList(data.recReservations);
+      setRecRoomList(data.recRooms);
+    } catch (cause) {
+      notifyError(cause);
+    }
   };
 
   const recDoCheckout = (id: number) => {
@@ -2632,21 +2728,25 @@ function PrivateWorkspaceReady({
     notify('Reserva anulada · conservada para auditoría');
   };
 
-  const recChangeRoom = (id: number, newRoomNumber: string) => {
+  const recChangeRoom = async (id: number, newRoomNumber: string) => {
     const res = recReservationList.find((r) => r.id === id);
     if (!res) return;
-    setRecReservationList((current) =>
-      current.map((r) => (r.id === id ? { ...r, roomNumber: newRoomNumber } : r)),
-    );
-    setRecRoomList((current) =>
-      current.map((rm) => {
-        if (rm.number === res.roomNumber) return { ...rm, status: 'Limpieza' };
-        if (rm.number === newRoomNumber) return { ...rm, status: 'Ocupada' };
-        return rm;
-      }),
-    );
-    setRecShowRoomChange(null);
-    notify(`Habitación cambiada a ${newRoomNumber}`);
+    const targetRoom = recRoomList.find((room) => room.number === newRoomNumber);
+    if (!res.bookingId || !targetRoom?.backendRoomId) {
+      notify('No se pudo vincular la habitación o reserva con el backend.');
+      return;
+    }
+
+    try {
+      await bookingService.assignRoom(res.bookingId, targetRoom.backendRoomId);
+      const data = await loadWorkspaceData(workspaceDataRole);
+      setRecReservationList(data.recReservations);
+      setRecRoomList(data.recRooms);
+      setRecShowRoomChange(null);
+      notify(`Habitación ${newRoomNumber} asignada correctamente`);
+    } catch (cause) {
+      notifyError(cause);
+    }
   };
 
   const recAddCharge = (
@@ -2828,19 +2928,28 @@ function PrivateWorkspaceReady({
             <X size={20} />
           </button>
         </div>
-        <div className="workspace-label">ESPACIO DE TRABAJO</div>
-        <button className="property-switcher" onClick={() => notify('Hotel Aurora · Sede Centro')}>
-          <span className="property-icon">
-            <Home size={16} />
-          </span>
-          <span>
-            <strong>Hotel Aurora</strong>
-            <small>Sede Centro</small>
-          </span>
-          <ChevronDown size={15} />
-        </button>
+        {activeRole !== 'guest' && (
+          <>
+            <div className="workspace-label">ESPACIO DE TRABAJO</div>
+            <button
+              className="property-switcher"
+              onClick={() => notify('Hotel Aurora · Sede Centro')}
+            >
+              <span className="property-icon">
+                <Home size={16} />
+              </span>
+              <span>
+                <strong>Hotel Aurora</strong>
+                <small>Sede Centro</small>
+              </span>
+              <ChevronDown size={15} />
+            </button>
+          </>
+        )}
         <nav className="side-nav">
-          <div className="workspace-label">OPERACIÓN</div>
+          <div className="workspace-label">
+            {activeRole === 'guest' ? 'TU ESTANCIA' : 'OPERACIÓN'}
+          </div>
           {sidebarNav.map((item) => {
             const Icon = item.icon;
             const hasChildren = Boolean(item.children?.length);
@@ -2936,7 +3045,12 @@ function PrivateWorkspaceReady({
               <button
                 className="icon-btn notification"
                 onClick={() => {
-                  setShowNotifications((value) => !value);
+                  if (contentRole === 'guest') {
+                    setShowNotifications(false);
+                    setActiveNav('Notificaciones');
+                  } else {
+                    setShowNotifications((value) => !value);
+                  }
                   setShowRoleMenu(false);
                 }}
                 aria-label="Notificaciones"
@@ -3077,28 +3191,30 @@ function PrivateWorkspaceReady({
               </div>
             )}
           </section>
-          {contentNav === summaryNavByRole[contentRole] && (
-            <section className="metric-grid">
-              {currentMetrics.map((metric) => {
-                const Icon = metric.icon;
-                return (
-                  <div className="metric-card" key={metric.label}>
-                    <div className={`metric-icon ${metric.tone}`}>
-                      <Icon size={19} />
+          {contentRole !== 'guest' &&
+            contentRole !== 'admin' &&
+            contentNav === summaryNavByRole[contentRole] && (
+              <section className="metric-grid">
+                {currentMetrics.map((metric) => {
+                  const Icon = metric.icon;
+                  return (
+                    <div className="metric-card" key={metric.label}>
+                      <div className={`metric-icon ${metric.tone}`}>
+                        <Icon size={19} />
+                      </div>
+                      <div>
+                        <p>{metric.label}</p>
+                        <h2>{metric.value}</h2>
+                        <span className={metric.change.includes('+') ? 'positive' : ''}>
+                          {metric.change}
+                        </span>
+                      </div>
+                      <MoreHorizontal className="metric-more" size={18} />
                     </div>
-                    <div>
-                      <p>{metric.label}</p>
-                      <h2>{metric.value}</h2>
-                      <span className={metric.change.includes('+') ? 'positive' : ''}>
-                        {metric.change}
-                      </span>
-                    </div>
-                    <MoreHorizontal className="metric-more" size={18} />
-                  </div>
-                );
-              })}
-            </section>
-          )}
+                  );
+                })}
+              </section>
+            )}
           {contentRole === 'housekeeping' ? (
             <HousekeepingContent
               nav={contentNav}
@@ -3270,7 +3386,17 @@ function PrivateWorkspaceReady({
                     </div>
                     <button
                       className="text-button"
-                      onClick={() => notify('Vista completa abierta')}
+                      onClick={() => {
+                        const destination = {
+                          admin: scopedNav('admin', 'Reportes'),
+                          reception: 'Reservas',
+                          housekeeping: 'Habitaciones',
+                          'room-service': 'Pedidos activos',
+                          concierge: 'Solicitudes',
+                          guest: 'Mis reservas',
+                        }[contentRole];
+                        setActiveNav(destination);
+                      }}
                     >
                       Ver todo <ArrowRight size={15} />
                     </button>
@@ -3322,16 +3448,38 @@ function PrivateWorkspaceReady({
                     </button>
                   </div>
                   <div className="room-stats">
-                    <RoomStat label="Ocupadas" value="86" tone="occupied" />
-                    <RoomStat label="Disponibles" value="24" tone="available" />
-                    <RoomStat label="Limpieza" value="08" tone="cleaning" />
-                    <RoomStat label="Mantenimiento" value="02" tone="maintenance" />
+                    <RoomStat
+                      label="Ocupadas"
+                      value={String(recRoomList.filter((room) => room.status === 'Ocupada').length)}
+                      tone="occupied"
+                    />
+                    <RoomStat
+                      label="Disponibles"
+                      value={String(
+                        recRoomList.filter((room) => room.status === 'Disponible').length,
+                      )}
+                      tone="available"
+                    />
+                    <RoomStat
+                      label="Limpieza"
+                      value={String(
+                        recRoomList.filter((room) => room.status === 'Limpieza').length,
+                      )}
+                      tone="cleaning"
+                    />
+                    <RoomStat
+                      label="Mantenimiento"
+                      value={String(
+                        recRoomList.filter((room) => room.status === 'Mantenimiento').length,
+                      )}
+                      tone="maintenance"
+                    />
                   </div>
                   <div className="progress-line">
                     <span>Ocupación general</span>
-                    <strong>78%</strong>
+                    <strong>{occupancyRate}%</strong>
                     <div>
-                      <i style={{ width: '78%' }} />
+                      <i style={{ width: `${occupancyRate}%` }} />
                     </div>
                   </div>
                 </div>
@@ -4912,7 +5060,7 @@ function DefectModal({
       setErrors(e);
       return;
     }
-    onSubmit({ room, category, description: description.trim(), priority, observation, photo: '' });
+    onSubmit({ room, category, description: description.trim(), priority, observation });
   };
   return (
     <div className="modal-backdrop" onMouseDown={onClose}>
@@ -4994,13 +5142,6 @@ function DefectModal({
             onChange={(e) => setObservation(e.target.value)}
             placeholder="Notas adicionales (opcional)..."
           />
-        </label>
-        <label className="hk-form-label">
-          Fotografía (opcional)
-          <div className="hk-photo-upload">
-            <Plus size={20} />
-            <span>Adjuntar foto</span>
-          </div>
         </label>
         <div className="modal-foot">
           <button className="button secondary" onClick={onClose}>
