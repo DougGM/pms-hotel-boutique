@@ -20,6 +20,7 @@ import type {
   ReservationStatus,
   RoomBlock,
 } from '@/private/workspace/PrivateWorkspace';
+import { ReservationEditModal } from './ReceptionModals';
 
 const statusClass = (status: ReservationStatus): string =>
   status === 'Pendiente'
@@ -48,7 +49,6 @@ export function ReservationDetail({
   rooms,
   blocks,
   onClose,
-  onEdit,
   onCheckin,
   onCheckout,
   onCancel,
@@ -62,12 +62,12 @@ export function ReservationDetail({
   hasConflict,
   isRoomBlocked,
   folioTotals,
+  onRefresh,
 }: {
   reservation: Reservation;
   rooms: RecRoom[];
   blocks: RoomBlock[];
   onClose: () => void;
-  onEdit: () => void;
   onCheckin: () => void;
   onCheckout: () => void;
   onCancel: () => void;
@@ -81,8 +81,10 @@ export function ReservationDetail({
   hasConflict: (room: string, ci: string, co: string, excludeId?: number) => boolean;
   isRoomBlocked: (room: string, ci: string, co: string) => boolean;
   folioTotals: (folio: FolioEntry[]) => Totals;
+  onRefresh: () => Promise<void>;
 }) {
   const [tab, setTab] = useState<'info' | 'folio'>('info');
+  const [editing, setEditing] = useState(false);
   const t = folioTotals(reservation.folio);
   const nights = Math.max(
     1,
@@ -255,7 +257,7 @@ export function ReservationDetail({
               {isActive && (
                 <button
                   className="button small secondary rc-action-icon-btn"
-                  onClick={onEdit}
+                  onClick={() => setEditing(true)}
                   aria-label="Editar"
                   title="Editar"
                 >
@@ -385,8 +387,8 @@ export function ReservationDetail({
                     ) : (
                       <span />
                     )}
-                  </div>
-                </div>
+        </div>
+      </div>
               ))}
             </div>
 
@@ -440,6 +442,13 @@ export function ReservationDetail({
               </div>
             )}
           </>
+        )}
+        {editing && (
+          <ReservationEditModal
+            reservation={reservation}
+            onClose={() => setEditing(false)}
+            onSaved={onRefresh}
+          />
         )}
       </div>
     </div>

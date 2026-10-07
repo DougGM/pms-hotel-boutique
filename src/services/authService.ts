@@ -188,9 +188,21 @@ function guestLoginErrorMessage(error: unknown): string {
 
 function guestLinkErrorMessage(error: unknown): string {
   if (error instanceof HttpError && (error.status === 400 || error.status === 404)) {
-    return 'El código no es válido o tu estancia no está activa. El acceso funciona desde el check-in hasta el check-out.';
+    return 'El código no es válido, la reserva no está vigente o fue cancelada.';
   }
   return messageFromHttpError(error, 'No fue posible validar tu código de reserva.');
+}
+
+function guestRegistrationErrorMessage(error: unknown): string {
+  if (error instanceof HttpError) {
+    const message = messageFromHttpError(error, '').toLowerCase();
+    if (error.status === 409) return 'Esta reserva o correo ya tiene una cuenta. Inicia sesión con tu correo y contraseña.';
+    if (message.includes('email does not match')) return 'El correo no coincide con el registrado en la reserva.';
+    if (message.includes('code is invalid')) return 'El código de reserva no es válido.';
+    if (message.includes('expired or not yet active')) return 'La reserva ya venció o aún no está disponible para acceso al portal.';
+    if (error.status === 400) return messageFromHttpError(error, 'Revisa el código, el correo y la contraseña.');
+  }
+  return messageFromHttpError(error, 'No fue posible crear tu cuenta de huésped.');
 }
 
 function readStoredSession(): AuthResponseDTO | null {
@@ -327,6 +339,54 @@ export const authService = {
       if (name) dto = { ...dto, user: { ...dto.user, name } };
     } catch {
       /* El portal vuelve a pedir la estancia al cargar. */
+    }
+    checkRequest(current, signal);
+    this.clearGuestAccessExpired();
+    persistSession(dto);
+    return toAuthSession(dto);
+  },
+  /** Creates guest credentials only after the backend validates the reservation code and email. */
+  async registerGuest(
+    code: string,
+    email: string,
+    password: string,
+    signal?: AbortSignal,
+  ): Promise<AuthSession> {
+    const current = ++revision;
+    checkRequest(current, signal);
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!code.trim()) throw new Error('Ingresa el código de tu reserva.');
+    if (!normalizedEmail) throw new Error('Ingresa el correo asociado a tu reserva.');
+    if (password.length < 8) throw new Error('La contraseña debe tener al menos 8 caracteres.');
+    let response: BackendGuestLinkResponseDTO;
+    try {
+      response = await httpClient.post<BackendGuestLinkResponseDTO>(
+        '/guest/auth/register',
+        { code: code.trim(), email: normalizedEmail, password },
+        { signal, auth: { skipAuthorization: true, skipRefresh: true } },
+      );
+    } catch (error) {
+      checkRequest(current, signal);
+      throw new Error(guestRegistrationErrorMessage(error));
+    }
+    checkRequest(current, signal);
+    const dto = normalizeGuestSession(
+      response.accessToken,
+      response.tokenType,
+      response.expiresIn,
+      undefined,
+      normalizedEmail,
+    );
+    httpClient.setToken(dto.token);
+    try {
+      const stay = await httpClient.get<{ guestFirstName?: string; guestLastName?: string }>(
+        '/guest/stay',
+        { signal, auth: { skipRefresh: true } },
+      );
+      const name = [stay.guestFirstName, stay.guestLastName].filter(Boolean).join(' ');
+      if (name) dto.user = { ...dto.user, name };
+    } catch {
+      /* The token remains valid; the portal can retry loading the stay. */
     }
     checkRequest(current, signal);
     this.clearGuestAccessExpired();

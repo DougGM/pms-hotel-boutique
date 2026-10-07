@@ -5,6 +5,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { BookingConfirmationScreen } from '@/modules/booking-engine/screens/BookingConfirmationScreen';
 import { BookingFormScreen } from '@/modules/booking-engine/screens/BookingFormScreen';
 import { RoomDetailScreen } from '@/modules/booking-engine/screens/RoomDetailScreen';
+import { getRoomTypeCover, getRoomTypeGallery } from '@/modules/booking-engine/screens/room-media';
 import { httpClient } from '@/services/http-client';
 import {
   PublicBookingError,
@@ -538,6 +539,12 @@ test('RoomDetailScreen: con fechas y huéspedes usa /public/availability', async
   assert.ok(!content.includes('9999'), 'la fecha abierta interna no se muestra');
 });
 
+test('room media: resuelve galerías de los tipos demo por code aunque sus id sean UUID', () => {
+  const roomType = { ...apiRoomType, code: 'DLX-DEMO' };
+  assert.equal(getRoomTypeGallery(roomType).length, 3);
+  assert.equal(getRoomTypeCover(roomType), getRoomTypeGallery(roomType)[0].src);
+});
+
 test('RoomDetailScreen: sin huéspedes no consulta ni inventa disponibilidad', async () => {
   handler = (request) =>
     pathOf(request) === '/public/room-types' ? json([apiRoomType]) : json([openEndedRate]);
@@ -608,5 +615,14 @@ test('BookingConfirmationScreen: muestra "Reserva registrada" y pendiente de con
   assert.ok(content.includes('Reserva registrada'));
   assert.ok(content.includes('Pendiente de confirmación por el hotel'));
   assert.ok(!content.includes('Reserva confirmada'));
+  const roomLink = view.root.find(
+    (node) => node.type === 'a' && text(node) === 'Ver habitación',
+  );
+  const roomUrl = new URL(roomLink.props.href, 'http://localhost');
+  assert.equal(roomUrl.pathname, `/rooms/${ROOM_TYPE_ID}`);
+  assert.equal(roomUrl.searchParams.get('checkIn'), CHECK_IN);
+  assert.equal(roomUrl.searchParams.get('checkOut'), CHECK_OUT);
+  assert.equal(roomUrl.searchParams.get('adults'), '2');
+  assert.equal(roomUrl.searchParams.get('children'), '0');
   assert.equal(requests.length, 0, 'la confirmación no consulta endpoints privados');
 });

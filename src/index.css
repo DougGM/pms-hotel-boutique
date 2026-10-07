@@ -1428,6 +1428,112 @@ button {
   background: var(--color-legacy-faf5ee);
   color: var(--color-legacy-8b6535);
 }
+.gs-service-modal {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  column-gap: var(--space-5);
+  width: min(720px, calc(100vw - 32px));
+  max-height: min(88dvh, 820px);
+  overflow-y: auto;
+  padding: var(--space-7);
+}
+.gs-service-modal .modal-head {
+  grid-column: 1 / -1;
+  align-items: flex-start;
+  gap: var(--space-5);
+}
+.gs-service-type-field {
+  grid-column: 1;
+}
+.gs-service-time-field {
+  grid-column: 2;
+}
+.gs-service-notes-field,
+.gs-service-modal .modal-foot {
+  grid-column: 1 / -1;
+}
+.gs-service-side-fields {
+  grid-column: 2;
+  align-self: start;
+  display: grid;
+  gap: var(--space-3);
+}
+.gs-service-side-fields .hk-form-label {
+  margin-top: var(--space-5);
+}
+.gs-service-side-fields .gs-service-time-field {
+  grid-column: 1;
+}
+.gs-service-subtitle {
+  max-width: 48ch;
+  margin: var(--space-3) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+}
+.gs-service-modal .hk-form-label {
+  margin: var(--space-5) 0 var(--space-2);
+}
+.gs-service-select {
+  min-height: 48px;
+  margin-top: var(--space-2);
+  padding-inline: var(--space-4);
+  font-size: var(--font-size-sm);
+}
+.gs-service-modal textarea.hk-form-textarea {
+  min-height: 82px;
+  max-height: 180px;
+}
+.gs-service-modal .gs-notes-count {
+  text-align: right;
+}
+.gs-service-select:focus-visible,
+.gs-service-modal .button:focus-visible {
+  outline: 2px solid var(--color-brand-gold);
+  outline-offset: 2px;
+}
+.gs-service-hint,
+.gs-service-optional {
+  display: block;
+  margin-top: var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-regular);
+}
+.gs-service-optional {
+  display: inline;
+  margin-left: var(--space-2);
+}
+.gs-service-modal .modal-foot {
+  margin-top: var(--space-6);
+}
+.gs-req-category {
+  display: block;
+  margin-bottom: var(--space-1);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+}
+@media (max-width: 560px) {
+  .gs-service-modal {
+    grid-template-columns: minmax(0, 1fr);
+    padding: var(--space-5);
+  }
+  .gs-service-type-field,
+  .gs-service-time-field {
+    grid-column: 1;
+  }
+  .gs-service-side-fields {
+    grid-column: 1;
+  }
+  .gs-service-modal .modal-foot {
+    flex-direction: column-reverse;
+  }
+  .gs-service-modal .modal-foot .button {
+    width: 100%;
+    justify-content: center;
+  }
+}
 .modal textarea {
   width: 100%;
   min-height: var(--size-legacy-95);
@@ -4067,27 +4173,6 @@ button {
 .hk-form-textarea:focus {
   border-color: var(--color-brand-gold);
 }
-.hk-photo-upload {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-  min-height: var(--size-legacy-70);
-  border: var(--size-legacy-1_5) dashed var(--color-legacy-d7c4ae);
-  border-radius: var(--radius-md);
-  background: var(--color-surface-secondary);
-  color: var(--color-legacy-a89c92);
-  font-size: var(--font-size-xs);
-  margin-top: var(--space-1);
-  cursor: pointer;
-  transition: 0.2s;
-}
-.hk-photo-upload:hover {
-  border-color: var(--color-brand-gold);
-  color: var(--color-brand-gold-dark);
-}
-
 .hk-room-card.priority-urgente {
   border-left: var(--size-legacy-3) solid var(--color-legacy-b55a4e);
 }
@@ -4474,6 +4559,68 @@ button {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: var(--space-5);
+  margin-top: var(--space-7);
+}
+.rs-inventory-modal {
+  width: min(100%, 560px);
+  padding: var(--size-legacy-30);
+}
+.rs-inventory-modal .modal-head {
+  align-items: flex-start;
+  margin-bottom: var(--space-7);
+}
+.rs-inventory-modal .rs-inventory-field {
+  display: grid;
+  gap: var(--space-2);
+  margin: var(--space-5) 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+.rs-inventory-modal .rs-inventory-field select,
+.rs-inventory-modal .rs-inventory-field input,
+.rs-inventory-modal .rs-inventory-field textarea {
+  width: 100%;
+  min-width: 0;
+  border: var(--size-legacy-1) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  font: inherit;
+  font-weight: var(--font-weight-regular);
+}
+.rs-inventory-modal .rs-inventory-field select,
+.rs-inventory-modal .rs-inventory-field input {
+  min-height: 48px;
+  padding: 0 var(--space-4);
+}
+.rs-inventory-modal .rs-inventory-field textarea {
+  min-height: 112px;
+  padding: var(--space-3) var(--space-4);
+  resize: vertical;
+}
+.rs-inventory-modal .rs-inventory-field select:focus,
+.rs-inventory-modal .rs-inventory-field input:focus,
+.rs-inventory-modal .rs-inventory-field textarea:focus {
+  border-color: var(--color-brand-gold);
+  outline: 2px solid var(--color-border);
+  outline-offset: 1px;
+}
+.rs-inventory-stock {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin: var(--space-4) 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-background);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+.rs-inventory-stock strong {
+  color: var(--color-text-primary);
+}
+.rs-inventory-modal .modal-foot {
   margin-top: var(--space-7);
 }
 .rs-inventory-item {
@@ -5741,6 +5888,14 @@ button {
 /* Gantt Calendar */
 .rc-cal-panel {
   overflow: hidden;
+}
+.rc-refresh-spinner {
+  animation: rc-refresh-rotate 0.9s linear infinite;
+}
+@keyframes rc-refresh-rotate {
+  to {
+    transform: rotate(360deg);
+  }
 }
 .rc-cal-toolbar {
   margin: var(--space-6) 0 var(--space-4);
@@ -7689,11 +7844,16 @@ button {
   background: var(--surface);
   cursor: pointer;
 }
-.gs-qty-selector span {
+.gs-qty-selector span,
+.gs-qty-selector output {
   font-size: var(--font-size-legacy-15);
   font-weight: var(--font-weight-semibold);
   min-width: var(--size-legacy-24);
   text-align: center;
+}
+.gs-qty-selector button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 /* Guest responsive */

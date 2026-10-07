@@ -28,6 +28,14 @@ export const authService = {
       await sharedAuthService.loginGuest(credentials.email, credentials.password, signal),
     );
   },
+  async registerGuest(
+    code: string,
+    email: string,
+    password: string,
+    signal?: AbortSignal,
+  ): Promise<Session> {
+    return toSession(await sharedAuthService.registerGuest(code, email, password, signal));
+  },
   async linkGuest(code: string, signal?: AbortSignal): Promise<Session> {
     return toSession(await sharedAuthService.linkGuest(code, signal));
   },

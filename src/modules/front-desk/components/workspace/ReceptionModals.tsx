@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unused-vars -- Migracion controlada del prototipo Bolt; se conserva la logica original para portarla incrementalmente. */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Ban, BedDouble, Check, Printer, TriangleAlert, X } from 'lucide-react';
 import type {
   Companion,
@@ -9,6 +9,8 @@ import type {
   RecRoom,
   Reservation,
 } from '@/private/workspace/PrivateWorkspace';
+import { bookingService } from '@/services/bookingService';
+import { toDtoCalendarDate } from '@/shared/types/common';
 
 const money = (n: number) => `$${n.toLocaleString('es-MX')}`;
 const emptyGuest: GuestInfo = {
@@ -37,6 +39,144 @@ const stayRangeError = (checkIn: string, checkOut: string) => {
     return INVALID_STAY_RANGE;
   return '';
 };
+const localDateInput = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+export function ReservationEditModal({
+  reservation,
+  onClose,
+  onSaved,
+}: {
+  reservation: Reservation;
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+}) {
+  const [booking, setBooking] = useState<Awaited<ReturnType<typeof bookingService.getBookingById>>>();
+  const [checkIn, setCheckIn] = useState(reservation.checkIn);
+  const [checkOut, setCheckOut] = useState(reservation.checkOut);
+  const [adults, setAdults] = useState(reservation.guestCount);
+  const [notes, setNotes] = useState(reservation.observations);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    if (!reservation.bookingId) {
+      setError('La reserva no está vinculada al backend.');
+      setLoading(false);
+      return;
+    }
+    void bookingService
+      .getBookingById(reservation.bookingId)
+      .then((value) => {
+        if (!active) return;
+        if (!value) {
+          setError('No encontramos la reserva en el backend.');
+          return;
+        }
+        setBooking(value);
+        setCheckIn(toDtoCalendarDate(value.checkIn));
+        setCheckOut(toDtoCalendarDate(value.checkOut));
+        setAdults(value.adults);
+        setNotes(value.notes ?? '');
+      })
+      .catch((cause: unknown) => {
+        if (active) setError(cause instanceof Error ? cause.message : 'No fue posible cargar la reserva.');
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [reservation.bookingId]);
+
+  const save = async () => {
+    if (!booking || !reservation.bookingId) return;
+    const rangeError = stayRangeError(checkIn, checkOut);
+    if (rangeError) {
+      setError(rangeError);
+      return;
+    }
+    if (adults < 1) {
+      setError('Debe haber al menos un adulto.');
+      return;
+    }
+    setSaving(true);
+    setError('');
+    try {
+      await bookingService.updateBooking(reservation.bookingId, {
+        guest_id: booking.guestId,
+        room_id: booking.roomId,
+        room_type_id: booking.roomTypeId,
+        rate_id: booking.rateId,
+        check_in: checkIn,
+        check_out: checkOut,
+        adults,
+        children: booking.children,
+        notes: notes.trim() || undefined,
+      });
+      await onSaved();
+      onClose();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'No fue posible guardar los cambios.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="modal-backdrop" onMouseDown={onClose}>
+      <div className="modal rc-form-modal" role="dialog" aria-modal="true" aria-labelledby="reservation-edit-title" onMouseDown={(event) => event.stopPropagation()}>
+        <div className="modal-head">
+          <div>
+            <p className="eyebrow">EDITAR RESERVA</p>
+            <h2 id="reservation-edit-title">{reservation.code}</h2>
+          </div>
+          <button className="icon-btn" onClick={onClose} disabled={saving} aria-label="Cerrar edición">
+            <X size={18} />
+          </button>
+        </div>
+        <div className="rc-form-scroll">
+          <div className="rc-form-grid">
+            <label className="rc-field">
+              <span>Entrada</span>
+              <input type="date" value={checkIn} onChange={(event) => setCheckIn(event.target.value)} disabled={loading || saving} />
+            </label>
+            <label className="rc-field">
+              <span>Salida</span>
+              <input type="date" value={checkOut} onChange={(event) => setCheckOut(event.target.value)} disabled={loading || saving} />
+            </label>
+            <label className="rc-field">
+              <span>Adultos</span>
+              <input type="number" min={1} value={adults} onChange={(event) => setAdults(Number(event.target.value))} disabled={loading || saving} />
+            </label>
+            <label className="rc-field">
+              <span>Menores</span>
+              <input type="number" value={booking?.children ?? 0} disabled />
+            </label>
+            <label className="rc-field rc-field-full">
+              <span>Notas</span>
+              <textarea value={notes} onChange={(event) => setNotes(event.target.value)} disabled={loading || saving} rows={3} />
+            </label>
+          </div>
+          {error && <small className="rc-field-error" role="alert">{error}</small>}
+        </div>
+        <div className="modal-foot">
+          <button className="button secondary" onClick={onClose} disabled={saving}>Cancelar</button>
+          <button className="button primary" onClick={() => void save()} disabled={loading || saving || !booking}>
+            <Check size={16} /> {saving ? 'Guardando...' : 'Guardar cambios'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /* ---------- New Reservation / Walk-in ---------- */
 export function ReservationFormModal({
@@ -54,15 +194,19 @@ export function ReservationFormModal({
   rooms: RecRoom[];
   hasConflict: (room: string, ci: string, co: string, excludeId?: number) => boolean;
   isRoomBlocked: (room: string, ci: string, co: string) => boolean;
-  onSave: (res: Reservation) => void;
+  onSave: (res: Reservation) => void | Promise<void>;
   onClose: () => void;
   walkin?: boolean;
   nights: (ci: string, co: string) => number;
   folioTotals: (folio: FolioEntry[]) => Totals;
 }) {
   const [guest, setGuest] = useState<GuestInfo>({ ...emptyGuest });
-  const [checkIn, setCheckIn] = useState('2024-08-31');
-  const [checkOut, setCheckOut] = useState('2024-09-02');
+  const [checkIn, setCheckIn] = useState(() => localDateInput(new Date()));
+  const [checkOut, setCheckOut] = useState(() => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    return localDateInput(tomorrow);
+  });
   const [roomNumber, setRoomNumber] = useState('');
   const [guestCount, setGuestCount] = useState(1);
   const [origin, setOrigin] = useState(walkin ? 'Walk-in' : 'Teléfono');
@@ -73,6 +217,7 @@ export function ReservationFormModal({
   const [compAge, setCompAge] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [showSummary, setShowSummary] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const availableRooms = rooms.filter((r) => r.status === 'Disponible');
   const selectedRoom = rooms.find((r) => r.number === roomNumber);
@@ -119,40 +264,50 @@ export function ReservationFormModal({
     return Object.keys(e).length === 0;
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!validate() || n === null) return;
     const room = rooms.find((r) => r.number === roomNumber)!;
-    const res: Reservation = {
-      id: Date.now(),
-      code: nextCode,
-      guest,
-      companions,
-      checkIn,
-      checkOut,
-      roomNumber: room.number,
-      roomType: room.type,
-      rate: room.rate,
-      guestCount,
-      status: 'Confirmada',
-      origin,
-      observations,
-      folio: [
-        {
-          id: Date.now(),
-          concept: `Alojamiento ${n} ${n === 1 ? 'noche' : 'noches'}`,
-          category: 'Alojamiento',
-          amount: total,
-          date: checkIn,
-          type: 'Cargo',
-          status: 'Activo',
-        },
-      ],
-      cancelReason: '',
-      voidReason: '',
-      checkInTime: null,
-      checkOutTime: null,
-    };
-    onSave(res);
+    setSaving(true);
+    setErrors((current) => ({ ...current, submit: '' }));
+    try {
+      await onSave({
+        id: Date.now(),
+        code: nextCode,
+        guest,
+        companions,
+        checkIn,
+        checkOut,
+        roomNumber: room.number,
+        roomType: room.type,
+        rate: room.rate,
+        guestCount,
+        status: 'Confirmada',
+        origin,
+        observations,
+        folio: [
+          {
+            id: Date.now(),
+            concept: `Alojamiento ${n} ${n === 1 ? 'noche' : 'noches'}`,
+            category: 'Alojamiento',
+            amount: total,
+            date: checkIn,
+            type: 'Cargo',
+            status: 'Activo',
+          },
+        ],
+        cancelReason: '',
+        voidReason: '',
+        checkInTime: null,
+        checkOutTime: null,
+      });
+    } catch (cause) {
+      setErrors((current) => ({
+        ...current,
+        submit: cause instanceof Error ? cause.message : 'No fue posible guardar la reserva.',
+      }));
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (showSummary) {
@@ -200,12 +355,13 @@ export function ReservationFormModal({
               <strong>{money(total)}</strong>
             </div>
           </div>
+          {errors.submit && <small className="rc-field-error" role="alert">{errors.submit}</small>}
           <div className="modal-foot">
-            <button className="button secondary" onClick={() => setShowSummary(false)}>
+            <button className="button secondary" onClick={() => setShowSummary(false)} disabled={saving}>
               Volver
             </button>
-            <button className="button primary" onClick={handleSave}>
-              <Check size={16} /> Confirmar reserva
+            <button className="button primary" onClick={() => void handleSave()} disabled={saving}>
+              <Check size={16} /> {saving ? 'Guardando...' : 'Confirmar reserva'}
             </button>
           </div>
         </div>
@@ -343,6 +499,7 @@ export function ReservationFormModal({
           </div>
           {errors.room && <small className="rc-field-error">{errors.room}</small>}
           {errors.capacity && <small className="rc-field-error">{errors.capacity}</small>}
+          {errors.submit && <small className="rc-field-error" role="alert">{errors.submit}</small>}
           {selectedRoom && n !== null && (
             <div className="rc-rate-preview">
               Tarifa: {money(selectedRoom.rate)} × {n} {n === 1 ? 'noche' : 'noches'} ={' '}
@@ -445,6 +602,9 @@ export function CheckinModal({
 
   const room = rooms.find((r) => r.number === reservation.roomNumber);
   const capacityExceeded = room ? 1 + companions.length > room.capacity : false;
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Guatemala' }).format(
+    new Date(),
+  );
 
   const addCompanion = () => {
     if (!compName.trim()) return;
@@ -465,6 +625,26 @@ export function CheckinModal({
   const removeCompanion = (id: number) => setCompanions((c) => c.filter((x) => x.id !== id));
 
   const submit = () => {
+    if (!reservation.bookingId) {
+      setError('La reserva no está vinculada al backend.');
+      return;
+    }
+    if (reservation.status !== 'Confirmada') {
+      setError('Confirma la reserva antes de hacer check-in.');
+      return;
+    }
+    if (today < reservation.checkIn || today >= reservation.checkOut) {
+      setError('El check-in solo se puede realizar durante las fechas de la estadía.');
+      return;
+    }
+    if (!room) {
+      setError('Asigna una habitación antes de hacer check-in.');
+      return;
+    }
+    if (room.status !== 'Disponible') {
+      setError('La habitación asignada no está disponible para check-in.');
+      return;
+    }
     if (!docNumber.trim()) {
       setError('El número de documento es obligatorio');
       return;
@@ -901,7 +1081,7 @@ export function RoomChangeModal({
     (r) =>
       r.number !== reservation.roomNumber &&
       r.type === reservation.roomType &&
-      (r.status === 'Disponible' || r.status === 'Limpieza'),
+      r.status === 'Disponible',
   );
   const available = compatible.filter(
     (r) =>
@@ -915,7 +1095,9 @@ export function RoomChangeModal({
       <div className="modal" style={{ width: 440 }} onMouseDown={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <div>
-            <p className="eyebrow">CAMBIO DE HABITACIÓN</p>
+            <p className="eyebrow">
+              {reservation.roomNumber === 'Sin asignar' ? 'ASIGNAR HABITACIÓN' : 'CAMBIO DE HABITACIÓN'}
+            </p>
             <h2>{reservation.code}</h2>
           </div>
           <button className="icon-btn" onClick={onClose}>
@@ -923,10 +1105,11 @@ export function RoomChangeModal({
           </button>
         </div>
         <div className="rc-room-change-current">
-          <span>Actual:</span>
+          <span>{reservation.roomNumber === 'Sin asignar' ? 'Tipo reservado:' : 'Actual:'}</span>
           <strong>
-            Hab. {reservation.roomNumber} · {reservation.roomType} · {money(currentRoom?.rate ?? 0)}
-            /noche
+            {reservation.roomNumber === 'Sin asignar'
+              ? reservation.roomType
+              : `Hab. ${reservation.roomNumber} · ${reservation.roomType} · ${money(currentRoom?.rate ?? 0)}/noche`}
           </strong>
         </div>
         {available.length === 0 ? (
@@ -974,7 +1157,8 @@ export function RoomChangeModal({
             disabled={!selected}
             onClick={() => onConfirm(reservation.id, selected)}
           >
-            <Check size={16} /> Cambiar habitación
+            <Check size={16} />
+            {reservation.roomNumber === 'Sin asignar' ? 'Asignar habitación' : 'Cambiar habitación'}
           </button>
         </div>
       </div>

@@ -13,6 +13,7 @@ import {
   FileText,
   Home,
   LogOut,
+  MessageSquare,
   Package,
   Plus,
   ShieldCheck,
@@ -498,9 +499,9 @@ function GuestContentReady({
 
   const [detailResId, setDetailResId] = useState<number | null>(null);
   const [showCreateBooking, setShowCreateBooking] = useState(false);
-  const [showRequestService, setShowRequestService] = useState<'Limpieza' | 'Articulos' | null>(
-    null,
-  );
+  const [showRequestService, setShowRequestService] = useState<
+    'Limpieza' | 'Articulos' | 'Conserjería' | null
+  >(null);
 
   const [cancelOrderId, setCancelOrderId] = useState<number | null>(null);
   const [resFilter, setResFilter] = useState<'Todas' | 'Activas' | 'Pasadas' | 'Canceladas'>(
@@ -624,7 +625,11 @@ function GuestContentReady({
       );
       setServiceRequests((prev) => [newReq, ...prev]);
       setShowRequestService(null);
-      onAction('Solicitud enviada correctamente');
+      onAction(
+        kind === 'housekeeping'
+          ? 'Solicitud enviada al equipo de limpieza'
+          : 'Solicitud enviada a conserjería',
+      );
     } catch (cause) {
       onAction(getErrorMessage(cause));
     }
@@ -754,9 +759,7 @@ function GuestContentReady({
               <div>
                 <span>Proximo evento</span>
                 <strong>{currentStay ? 'Check-out' : 'Reserva'}</strong>
-                <small>
-                  {currentStay ? `${fmtDate(currentStay.checkOut)} · 12:00 hrs` : 'Pendiente'}
-                </small>
+                <small>{currentStay ? fmtDate(currentStay.checkOut) : 'Pendiente'}</small>
               </div>
               <div>
                 <span>Saldo pendiente</span>
@@ -786,7 +789,7 @@ function GuestContentReady({
                 <strong>Room Service</strong>
                 <small>Pide a tu cuarto</small>
               </button>
-              <button onClick={() => onAction('Redirigiendo a amenidades')}>
+              <button onClick={() => onNavigate('Amenidades')}>
                 <span className="gs-quick-icon blue">
                   <Activity size={18} />
                 </span>
@@ -821,6 +824,7 @@ function GuestContentReady({
         {showRequestService && (
           <RequestServiceModal
             mode={showRequestService}
+            roomNumber={currentStay?.roomNumber}
             onClose={() => setShowRequestService(null)}
             onSubmit={submitServiceRequest}
           />
@@ -1111,6 +1115,7 @@ function GuestContentReady({
         {showRequestService && (
           <RequestServiceModal
             mode={showRequestService}
+            roomNumber={currentStay?.roomNumber}
             onClose={() => setShowRequestService(null)}
             onSubmit={submitServiceRequest}
           />
@@ -1165,15 +1170,98 @@ function GuestContentReady({
     );
   }
 
+  if (nav === 'Conserjería') {
+    const conciergeRequests = serviceRequests.filter((request) => request.kind === 'concierge');
+    return (
+      <>
+        <div className="panel">
+          <div className="panel-heading">
+            <div>
+              <h3>Conserjería</h3>
+              <p>Traslados, reservas y ayuda personalizada durante tu estancia.</p>
+            </div>
+            <button
+              className="button small primary"
+              onClick={() => setShowRequestService('Conserjería')}
+            >
+              <MessageSquare size={15} /> Solicitar asistencia
+            </button>
+          </div>
+          <div className="gs-req-summary">
+            <div>
+              <span className="status-pill warning">Pendientes</span>
+              <strong>{conciergeRequests.filter((r) => r.status === 'Pendiente').length}</strong>
+            </div>
+            <div>
+              <span className="status-pill info">En proceso</span>
+              <strong>{conciergeRequests.filter((r) => r.status === 'En proceso').length}</strong>
+            </div>
+            <div>
+              <span className="status-pill success">Completadas</span>
+              <strong>{conciergeRequests.filter((r) => r.status === 'Completada').length}</strong>
+            </div>
+          </div>
+          <div className="gs-req-list">
+            {conciergeRequests.length === 0 ? (
+              <div className="hk-empty">
+                <MessageSquare size={22} />
+                <p>Aún no tienes solicitudes de conserjería</p>
+              </div>
+            ) : (
+              conciergeRequests.map((req) => (
+                <div className="gs-req-row" key={req.id}>
+                  <div className="gs-req-info">
+                    <span className="gs-req-type">
+                      <MessageSquare size={15} />
+                    </span>
+                    <div>
+                      <small className="gs-req-category">Conserjería</small>
+                      <strong>{req.description}</strong>
+                      <small>
+                        Solicitada: {req.time} · Habitación {req.room}
+                      </small>
+                    </div>
+                  </div>
+                  <div className="gs-req-actions">
+                    <span className={`status-pill ${reqStatusClass(req.status)}`}>
+                      {req.status}
+                    </span>
+                    {canCancelGuestRequest(req) && (
+                      <button
+                        className="button small terracotta-btn"
+                        onClick={() => cancelServiceRequest(req.id)}
+                      >
+                        <Ban size={14} /> Cancelar
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+        {showRequestService === 'Conserjería' && (
+          <RequestServiceModal
+            mode="Conserjería"
+            roomNumber={currentStay?.roomNumber}
+            onClose={() => setShowRequestService(null)}
+            onSubmit={submitServiceRequest}
+          />
+        )}
+      </>
+    );
+  }
+
   // ─── ROOM SERVICES (Cleaning + Items) ──────────────────────────
   if (nav === 'Servicios de habitación') {
+    const roomRequests = serviceRequests.filter((request) => request.kind === 'housekeeping');
     return (
       <>
         <div className="panel">
           <div className="panel-heading">
             <div>
               <h3>Servicios de habitación</h3>
-              <p>Solicita limpieza o artículos adicionales</p>
+              <p>Solicita limpieza para tu habitación; otros servicios están en tus solicitudes.</p>
             </div>
             <div className="gs-heading-actions">
               <button
@@ -1193,29 +1281,29 @@ function GuestContentReady({
           <div className="gs-req-summary">
             <div>
               <span className="status-pill warning">Pendientes</span>
-              <strong>{serviceRequests.filter((r) => r.status === 'Pendiente').length}</strong>
+              <strong>{roomRequests.filter((r) => r.status === 'Pendiente').length}</strong>
             </div>
             <div>
               <span className="status-pill info">En proceso</span>
-              <strong>{serviceRequests.filter((r) => r.status === 'En proceso').length}</strong>
+              <strong>{roomRequests.filter((r) => r.status === 'En proceso').length}</strong>
             </div>
             <div>
               <span className="status-pill success">Completadas</span>
-              <strong>{serviceRequests.filter((r) => r.status === 'Completada').length}</strong>
+              <strong>{roomRequests.filter((r) => r.status === 'Completada').length}</strong>
             </div>
           </div>
           <div className="gs-req-list">
-            {serviceRequests.length === 0 ? (
+            {roomRequests.length === 0 ? (
               <div className="hk-empty">
                 <ClipboardList size={22} />
-                <p>No tienes solicitudes de servicio</p>
+                <p>No tienes solicitudes de limpieza</p>
               </div>
             ) : (
-              serviceRequests.map((req) => (
+              roomRequests.map((req) => (
                 <div className="gs-req-row" key={req.id}>
                   <div className="gs-req-info">
                     <span className="gs-req-type">
-                      {req.type === 'Limpieza' ? <Sparkles size={15} /> : <Package size={15} />}
+                      <Sparkles size={15} />
                     </span>
                     <div>
                       <strong>{req.description}</strong>
@@ -1254,6 +1342,7 @@ function GuestContentReady({
         {showRequestService && (
           <RequestServiceModal
             mode={showRequestService}
+            roomNumber={currentStay?.roomNumber}
             onClose={() => setShowRequestService(null)}
             onSubmit={submitServiceRequest}
           />
@@ -1475,9 +1564,12 @@ function GuestContentReady({
                 <div className="gs-req-row" key={req.id}>
                   <div className="gs-req-info">
                     <span className="gs-req-type">
-                      {req.type === 'Limpieza' ? <Sparkles size={15} /> : <Package size={15} />}
+                      {req.kind === 'housekeeping' ? <Sparkles size={15} /> : <Package size={15} />}
                     </span>
                     <div>
+                      <small className="gs-req-category">
+                        {req.kind === 'housekeeping' ? 'Limpieza de habitación' : 'Conserjería'}
+                      </small>
                       <strong>{req.description}</strong>
                       <small>
                         Solicitada: {req.time} · Habitación {req.room}

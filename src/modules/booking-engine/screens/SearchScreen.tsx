@@ -6,7 +6,6 @@ import {
   Check,
   Coffee,
   Dumbbell,
-  Percent,
   ShieldCheck,
   Sparkles,
   UserRound,
@@ -23,7 +22,7 @@ import type { Rate } from '@/shared/types/entities/rate';
 import type { RoomType } from '@/shared/types/entities/room-type';
 import { formatCurrency } from '@/shared/utils/currency';
 import { calculateNights, formatDateGT } from '@/shared/utils/date';
-import { ROOM_TYPE_COVER_IMAGES } from './room-media';
+import { getRoomTypeCover, ROOM_TYPE_COVER_IMAGES } from './room-media';
 import './booking-engine.css';
 
 type SearchStatus = 'idle' | 'loading' | 'success' | 'error';
@@ -63,33 +62,6 @@ const amenities = [
     icon: Dumbbell,
     image:
       'https://images.pexels.com/photos/3757957/pexels-photo-3757957.jpeg?auto=compress&cs=tinysrgb&w=900',
-  },
-];
-
-const promotions = [
-  {
-    name: 'Estancia extendida',
-    code: 'AURORA15',
-    value: '15%',
-    detail: 'Ahorra en reservas de 4 noches o más.',
-    image:
-      'https://images.pexels.com/photos/754628/pexels-photo-754628.jpeg?auto=compress&cs=tinysrgb&w=900',
-  },
-  {
-    name: 'Escapada romántica',
-    code: 'ROMANCE',
-    value: '10%',
-    detail: 'Cena para dos y botella de vino incluida.',
-    image:
-      'https://images.pexels.com/photos/1707828/pexels-photo-1707828.jpeg?auto=compress&cs=tinysrgb&w=900',
-  },
-  {
-    name: 'Fin de semana',
-    code: 'WEEKEND10',
-    value: '10%',
-    detail: 'Tarifa especial de viernes a domingo.',
-    image:
-      'https://images.pexels.com/photos/3754595/pexels-photo-3754595.jpeg?auto=compress&cs=tinysrgb&w=900',
   },
 ];
 
@@ -427,6 +399,9 @@ export function SearchScreen() {
               <div className="room-cards">
                 {roomCards.map(({ roomType, availableRooms, rate }, index) => {
                   const displayRate = rate ?? findLowestRate(rates, roomType.id);
+                  const coverImage =
+                    getRoomTypeCover(roomType) ??
+                    ROOM_TYPE_COVER_IMAGES[index % ROOM_TYPE_COVER_IMAGES.length];
                   const detailUrl = isCompleteStayRange(range)
                     ? `/rooms/${roomType.id}?checkIn=${dateKey(range.start)}&checkOut=${dateKey(range.end)}&adults=${guestCounts.adults}&children=${guestCounts.children}`
                     : `/rooms/${roomType.id}`;
@@ -436,7 +411,7 @@ export function SearchScreen() {
                       <div
                         className={`room-visual booking-room-visual booking-room-visual-${index % 3}`}
                         style={{
-                          backgroundImage: `linear-gradient(180deg, rgba(46, 33, 26, 0.08) 0%, transparent 42%, rgba(46, 33, 26, 0.35) 100%), url(${ROOM_TYPE_COVER_IMAGES[index % ROOM_TYPE_COVER_IMAGES.length]})`,
+                          backgroundImage: `linear-gradient(180deg, rgba(46, 33, 26, 0.08) 0%, transparent 42%, rgba(46, 33, 26, 0.35) 100%), url(${coverImage})`,
                         }}
                       >
                         <span className="room-tag">
@@ -537,43 +512,6 @@ export function SearchScreen() {
               <span>
                 <Sparkles size={16} aria-hidden="true" /> Servicio a la habitación
               </span>
-            </div>
-          </section>
-        ) : null}
-
-        {publicTab === 'promociones' ? (
-          <section className="booking-public-section" id="promociones">
-            <div className="visitor-section-head">
-              <div>
-                <p className="eyebrow">Ofertas vigentes</p>
-                <h2>Promociones para reservar mejor</h2>
-              </div>
-            </div>
-            <div className="booking-promo-grid">
-              {promotions.map((promo) => (
-                <article className="booking-promo-card" key={promo.code}>
-                  <div
-                    className="booking-promo-image"
-                    style={{ backgroundImage: `url(${promo.image})` }}
-                  >
-                    <span>
-                      <Percent size={15} aria-hidden="true" /> {promo.code}
-                    </span>
-                  </div>
-                  <div className="booking-promo-body">
-                    <small>{promo.value} de beneficio</small>
-                    <h3>{promo.name}</h3>
-                    <p>{promo.detail}</p>
-                    <button
-                      className="button small secondary"
-                      type="button"
-                      onClick={scrollToSearch}
-                    >
-                      Usar promoción <ArrowRight size={13} aria-hidden="true" />
-                    </button>
-                  </div>
-                </article>
-              ))}
             </div>
           </section>
         ) : null}

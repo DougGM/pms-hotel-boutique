@@ -9,7 +9,10 @@ import { Select } from '@/shared/components/Select';
 import { bookingService } from '@/services/bookingService';
 import { guestService } from '@/services/guestService';
 import { roomService } from '@/services/roomService';
+import { toDtoCalendarDate } from '@/shared/types/common';
+import type { Booking } from '@/shared/types/entities/booking';
 import type { Guest } from '@/shared/types/entities/guest';
+import type { Room } from '@/shared/types/entities/room';
 import type { RoomType } from '@/shared/types/entities/room-type';
 import { validateBookingCapacity } from '@/shared/utils/bookingCapacity';
 import './occupancy.css';
@@ -17,11 +20,12 @@ import './occupancy.css';
 type ScreenState =
   | { status: 'loading' }
   | { status: 'error'; message: string }
-  | { status: 'ready'; guests: Guest[]; roomTypes: RoomType[] };
+  | { status: 'ready'; guests: Guest[]; roomTypes: RoomType[]; rooms: Room[]; bookings: Booking[] };
 
 type FormState = {
   guestId: string;
   roomTypeId: string;
+  roomId: string;
   rateId: string;
   checkIn: string;
   checkOut: string;
@@ -35,6 +39,7 @@ type FormErrors = Partial<Record<keyof FormState, string>>;
 const initialForm: FormState = {
   guestId: '',
   roomTypeId: '',
+  roomId: '',
   rateId: '',
   checkIn: '',
   checkOut: '',
@@ -57,6 +62,7 @@ function validateForm(form: FormState, roomTypes: RoomType[]): FormErrors {
   const selectedRoomType = roomTypes.find((roomType) => roomType.id === form.roomTypeId);
   if (!form.guestId) errors.guestId = 'Selecciona un huésped.';
   if (!form.roomTypeId) errors.roomTypeId = 'Selecciona un tipo de habitación.';
+  if (!form.roomId) errors.roomId = 'Selecciona una habitación disponible.';
   if (!form.checkIn) errors.checkIn = 'Ingresa la fecha de entrada.';
   if (!form.checkOut) errors.checkOut = 'Ingresa la fecha de salida.';
   if (
@@ -95,14 +101,18 @@ export function ManualBookingScreen() {
   const loadData = useCallback(async () => {
     setScreen({ status: 'loading' });
     try {
-      const [guests, roomTypes] = await Promise.all([
+      const [guests, roomTypes, rooms, bookings] = await Promise.all([
         guestService.getGuests(),
         roomService.getRoomTypes(),
+        roomService.getRooms(),
+        bookingService.getBookings(),
       ]);
       setScreen({
         status: 'ready',
         guests,
         roomTypes: roomTypes.filter((roomType) => roomType.active),
+        rooms,
+        bookings,
       });
     } catch (cause) {
       setScreen({ status: 'error', message: getErrorMessage(cause) });
@@ -129,9 +139,25 @@ export function ManualBookingScreen() {
         roomTypeName: selectedRoomType.name,
       })
     : undefined;
+  const availableRooms = useMemo(() => {
+    if (screen.status !== 'ready' || !form.roomTypeId || !form.checkIn || !form.checkOut) return [];
+    return screen.rooms.filter((room) => {
+      if (!room.isAssignable || room.roomTypeId !== form.roomTypeId) return false;
+      return !screen.bookings.some((booking) =>
+        booking.roomId === room.id &&
+        ['pending', 'confirmed', 'checkedIn'].includes(booking.status) &&
+        toDtoCalendarDate(booking.checkIn) < form.checkOut &&
+        toDtoCalendarDate(booking.checkOut) > form.checkIn,
+      );
+    });
+  }, [form.checkIn, form.checkOut, form.roomTypeId, screen]);
 
   function updateField<Key extends keyof FormState>(key: Key, value: FormState[Key]) {
-    setForm((current) => ({ ...current, [key]: value }));
+    setForm((current) => ({
+      ...current,
+      [key]: value,
+      ...(['roomTypeId', 'checkIn', 'checkOut'].includes(key) ? { roomId: '' } : {}),
+    }));
     setErrors((current) => ({ ...current, [key]: undefined }));
     setSubmitError(null);
   }
@@ -148,6 +174,7 @@ export function ManualBookingScreen() {
       await bookingService.createBooking({
         guest_id: form.guestId,
         room_type_id: form.roomTypeId,
+        room_id: form.roomId,
         rate_id: form.rateId || undefined,
         check_in: form.checkIn,
         check_out: form.checkOut,
@@ -220,6 +247,26 @@ export function ManualBookingScreen() {
               </option>
             ))}
           </Select>
+
+          <Select
+            label="Habitación"
+            required
+            value={form.roomId}
+            error={errors.roomId}
+            onChange={(event) => updateField('roomId', event.target.value)}
+          >
+            <option value="">Seleccionar habitación</option>
+            {availableRooms.map((room) => (
+              <option key={room.id} value={room.id}>
+                Hab. {room.roomNumber} · {room.floor}° piso
+              </option>
+            ))}
+          </Select>
+          {form.checkIn && form.checkOut && form.roomTypeId && availableRooms.length === 0 && (
+            <p className="occupancy-error occupancy-form-full">
+              No hay habitaciones limpias y disponibles de este tipo para esas fechas.
+            </p>
+          )}
 
           <Input
             label="Tarifa"
