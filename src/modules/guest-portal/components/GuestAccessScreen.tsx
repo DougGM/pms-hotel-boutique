@@ -45,8 +45,12 @@ export function GuestAccessScreen() {
     <main className="public-page-shell">
       <section className="public-page-card staff-login">
         <Link className="login-brand staff-login-brand" to={routePaths.public.home}>
-          <span className="brand-mark" aria-hidden="true"><Sparkles size={18} /></span>
-          <span>AURORA<small>HOTEL &amp; RESORT</small></span>
+          <span className="brand-mark" aria-hidden="true">
+            <Sparkles size={18} />
+          </span>
+          <span>
+            AURORA<small>HOTEL &amp; RESORT</small>
+          </span>
         </Link>
         <p className="eyebrow">Acceso de huésped</p>
         <h1>{mode === 'register' ? 'Crea tu acceso' : 'Código de reserva'}</h1>
@@ -55,7 +59,11 @@ export function GuestAccessScreen() {
             ? 'Usa el código de tu reserva y el correo registrado para crear tu contraseña. El código confirma que la reserva es tuya.'
             : 'Ingresa el código de confirmación para acceder temporalmente a tu estancia, sin crear contraseña.'}
         </p>
-        {expired && <p className="staff-login-success" role="status">Tu acceso venció. Ingresa otra vez el código de reserva.</p>}
+        {expired && (
+          <p className="staff-login-success" role="status">
+            Tu acceso venció. Ingresa otra vez el código de reserva.
+          </p>
+        )}
         <form className="staff-login-form" onSubmit={submit} aria-busy={isSubmitting}>
           <label htmlFor="guest-reservation-code">
             Código de reserva
@@ -103,10 +111,22 @@ export function GuestAccessScreen() {
               </label>
             </>
           )}
-          {error && <p id="guest-registration-error" role="alert">{error}</p>}
+          {error && (
+            <p id="guest-registration-error" role="alert">
+              {error}
+            </p>
+          )}
           <button className="button primary" type="submit" disabled={isSubmitting}>
-            {mode === 'register' ? <LogIn size={16} aria-hidden="true" /> : <KeyRound size={16} aria-hidden="true" />}
-            {isSubmitting ? 'Validando reserva...' : mode === 'register' ? 'Crear cuenta y entrar' : 'Ingresar con código'}
+            {mode === 'register' ? (
+              <LogIn size={16} aria-hidden="true" />
+            ) : (
+              <KeyRound size={16} aria-hidden="true" />
+            )}
+            {isSubmitting
+              ? 'Validando reserva...'
+              : mode === 'register'
+                ? 'Crear cuenta y entrar'
+                : 'Ingresar con código'}
           </button>
         </form>
         <div className="guest-secondary-access" style={{ marginTop: '1.25rem' }}>
@@ -114,14 +134,23 @@ export function GuestAccessScreen() {
             type="button"
             id="guest-toggle-temporary-mode"
             className="button secondary"
-            onClick={() => { setMode(mode === 'register' ? 'temporary' : 'register'); setError(null); }}
+            onClick={() => {
+              setMode(mode === 'register' ? 'temporary' : 'register');
+              setError(null);
+            }}
             disabled={isSubmitting}
           >
-            {mode === 'register' ? 'Solo quiero entrar temporalmente' : 'Crear cuenta con este código'}
+            {mode === 'register'
+              ? 'Solo quiero entrar temporalmente'
+              : 'Crear cuenta con este código'}
           </button>
         </div>
-        <p className="muted">¿Ya tienes cuenta? <Link to={routePaths.public.login}>Inicia sesión</Link></p>
-        <Link className="button secondary" to={routePaths.public.home}>Volver al inicio</Link>
+        <p className="muted">
+          ¿Ya tienes cuenta? <Link to={routePaths.public.login}>Inicia sesión</Link>
+        </p>
+        <Link className="button secondary" to={routePaths.public.home}>
+          Volver al inicio
+        </Link>
       </section>
     </main>
   );

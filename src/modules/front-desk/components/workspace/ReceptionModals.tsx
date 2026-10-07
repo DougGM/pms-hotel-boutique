@@ -55,7 +55,8 @@ export function ReservationEditModal({
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
-  const [booking, setBooking] = useState<Awaited<ReturnType<typeof bookingService.getBookingById>>>();
+  const [booking, setBooking] =
+    useState<Awaited<ReturnType<typeof bookingService.getBookingById>>>();
   const [checkIn, setCheckIn] = useState(reservation.checkIn);
   const [checkOut, setCheckOut] = useState(reservation.checkOut);
   const [adults, setAdults] = useState(reservation.guestCount);
@@ -86,7 +87,8 @@ export function ReservationEditModal({
         setNotes(value.notes ?? '');
       })
       .catch((cause: unknown) => {
-        if (active) setError(cause instanceof Error ? cause.message : 'No fue posible cargar la reserva.');
+        if (active)
+          setError(cause instanceof Error ? cause.message : 'No fue posible cargar la reserva.');
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -132,13 +134,24 @@ export function ReservationEditModal({
 
   return (
     <div className="modal-backdrop" onMouseDown={onClose}>
-      <div className="modal rc-form-modal" role="dialog" aria-modal="true" aria-labelledby="reservation-edit-title" onMouseDown={(event) => event.stopPropagation()}>
+      <div
+        className="modal rc-form-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="reservation-edit-title"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
         <div className="modal-head">
           <div>
             <p className="eyebrow">EDITAR RESERVA</p>
             <h2 id="reservation-edit-title">{reservation.code}</h2>
           </div>
-          <button className="icon-btn" onClick={onClose} disabled={saving} aria-label="Cerrar edición">
+          <button
+            className="icon-btn"
+            onClick={onClose}
+            disabled={saving}
+            aria-label="Cerrar edición"
+          >
             <X size={18} />
           </button>
         </div>
@@ -146,15 +159,31 @@ export function ReservationEditModal({
           <div className="rc-form-grid">
             <label className="rc-field">
               <span>Entrada</span>
-              <input type="date" value={checkIn} onChange={(event) => setCheckIn(event.target.value)} disabled={loading || saving} />
+              <input
+                type="date"
+                value={checkIn}
+                onChange={(event) => setCheckIn(event.target.value)}
+                disabled={loading || saving}
+              />
             </label>
             <label className="rc-field">
               <span>Salida</span>
-              <input type="date" value={checkOut} onChange={(event) => setCheckOut(event.target.value)} disabled={loading || saving} />
+              <input
+                type="date"
+                value={checkOut}
+                onChange={(event) => setCheckOut(event.target.value)}
+                disabled={loading || saving}
+              />
             </label>
             <label className="rc-field">
               <span>Adultos</span>
-              <input type="number" min={1} value={adults} onChange={(event) => setAdults(Number(event.target.value))} disabled={loading || saving} />
+              <input
+                type="number"
+                min={1}
+                value={adults}
+                onChange={(event) => setAdults(Number(event.target.value))}
+                disabled={loading || saving}
+              />
             </label>
             <label className="rc-field">
               <span>Menores</span>
@@ -162,14 +191,29 @@ export function ReservationEditModal({
             </label>
             <label className="rc-field rc-field-full">
               <span>Notas</span>
-              <textarea value={notes} onChange={(event) => setNotes(event.target.value)} disabled={loading || saving} rows={3} />
+              <textarea
+                value={notes}
+                onChange={(event) => setNotes(event.target.value)}
+                disabled={loading || saving}
+                rows={3}
+              />
             </label>
           </div>
-          {error && <small className="rc-field-error" role="alert">{error}</small>}
+          {error && (
+            <small className="rc-field-error" role="alert">
+              {error}
+            </small>
+          )}
         </div>
         <div className="modal-foot">
-          <button className="button secondary" onClick={onClose} disabled={saving}>Cancelar</button>
-          <button className="button primary" onClick={() => void save()} disabled={loading || saving || !booking}>
+          <button className="button secondary" onClick={onClose} disabled={saving}>
+            Cancelar
+          </button>
+          <button
+            className="button primary"
+            onClick={() => void save()}
+            disabled={loading || saving || !booking}
+          >
             <Check size={16} /> {saving ? 'Guardando...' : 'Guardar cambios'}
           </button>
         </div>
@@ -355,9 +399,17 @@ export function ReservationFormModal({
               <strong>{money(total)}</strong>
             </div>
           </div>
-          {errors.submit && <small className="rc-field-error" role="alert">{errors.submit}</small>}
+          {errors.submit && (
+            <small className="rc-field-error" role="alert">
+              {errors.submit}
+            </small>
+          )}
           <div className="modal-foot">
-            <button className="button secondary" onClick={() => setShowSummary(false)} disabled={saving}>
+            <button
+              className="button secondary"
+              onClick={() => setShowSummary(false)}
+              disabled={saving}
+            >
               Volver
             </button>
             <button className="button primary" onClick={() => void handleSave()} disabled={saving}>
@@ -499,7 +551,11 @@ export function ReservationFormModal({
           </div>
           {errors.room && <small className="rc-field-error">{errors.room}</small>}
           {errors.capacity && <small className="rc-field-error">{errors.capacity}</small>}
-          {errors.submit && <small className="rc-field-error" role="alert">{errors.submit}</small>}
+          {errors.submit && (
+            <small className="rc-field-error" role="alert">
+              {errors.submit}
+            </small>
+          )}
           {selectedRoom && n !== null && (
             <div className="rc-rate-preview">
               Tarifa: {money(selectedRoom.rate)} × {n} {n === 1 ? 'noche' : 'noches'} ={' '}
@@ -1096,7 +1152,9 @@ export function RoomChangeModal({
         <div className="modal-head">
           <div>
             <p className="eyebrow">
-              {reservation.roomNumber === 'Sin asignar' ? 'ASIGNAR HABITACIÓN' : 'CAMBIO DE HABITACIÓN'}
+              {reservation.roomNumber === 'Sin asignar'
+                ? 'ASIGNAR HABITACIÓN'
+                : 'CAMBIO DE HABITACIÓN'}
             </p>
             <h2>{reservation.code}</h2>
           </div>

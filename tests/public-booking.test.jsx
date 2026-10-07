@@ -615,9 +615,7 @@ test('BookingConfirmationScreen: muestra "Reserva registrada" y pendiente de con
   assert.ok(content.includes('Reserva registrada'));
   assert.ok(content.includes('Pendiente de confirmación por el hotel'));
   assert.ok(!content.includes('Reserva confirmada'));
-  const roomLink = view.root.find(
-    (node) => node.type === 'a' && text(node) === 'Ver habitación',
-  );
+  const roomLink = view.root.find((node) => node.type === 'a' && text(node) === 'Ver habitación');
   const roomUrl = new URL(roomLink.props.href, 'http://localhost');
   assert.equal(roomUrl.pathname, `/rooms/${ROOM_TYPE_ID}`);
   assert.equal(roomUrl.searchParams.get('checkIn'), CHECK_IN);

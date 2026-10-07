@@ -378,11 +378,15 @@ function installFetch() {
       if (body?.code !== GUEST_CODE || body?.email !== 'ana.demo@aurora.test') {
         return json({ message: 'Email does not match the reservation guest' }, 400, 'Bad Request');
       }
-      return json({
-        accessToken: guestJwt(guestTokenSeconds),
-        tokenType: 'Bearer',
-        expiresIn: guestTokenSeconds,
-      }, 201, 'Created');
+      return json(
+        {
+          accessToken: guestJwt(guestTokenSeconds),
+          tokenType: 'Bearer',
+          expiresIn: guestTokenSeconds,
+        },
+        201,
+        'Created',
+      );
     }
     if (path.startsWith('/api/v1/guest/')) {
       const payload = decodeAuth(init);
@@ -869,7 +873,9 @@ async function linkGuest(code) {
     });
   }
   act(() => {
-    view.root.findByProps({ id: 'guest-reservation-code' }).props.onChange({ target: { value: code } });
+    view.root
+      .findByProps({ id: 'guest-reservation-code' })
+      .props.onChange({ target: { value: code } });
   });
   await act(async () => {
     await view.root.findByType('form').props.onSubmit({ preventDefault() {} });
@@ -1033,9 +1039,15 @@ test('un código inválido muestra el error y no crea sesión', async () => {
 test('el huésped crea una cuenta desde su código y correo de reserva', async () => {
   await open('/auth/register');
   act(() => {
-    view.root.findByProps({ id: 'guest-reservation-code' }).props.onChange({ target: { value: GUEST_CODE } });
-    view.root.findByProps({ id: 'guest-registration-email' }).props.onChange({ target: { value: 'ana.demo@aurora.test' } });
-    view.root.findByProps({ id: 'guest-registration-password' }).props.onChange({ target: { value: 'safe-pass-123' } });
+    view.root
+      .findByProps({ id: 'guest-reservation-code' })
+      .props.onChange({ target: { value: GUEST_CODE } });
+    view.root
+      .findByProps({ id: 'guest-registration-email' })
+      .props.onChange({ target: { value: 'ana.demo@aurora.test' } });
+    view.root
+      .findByProps({ id: 'guest-registration-password' })
+      .props.onChange({ target: { value: 'safe-pass-123' } });
   });
   await act(async () => {
     await view.root.findByType('form').props.onSubmit({ preventDefault() {} });

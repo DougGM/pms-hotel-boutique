@@ -387,8 +387,8 @@ export function ReservationDetail({
                     ) : (
                       <span />
                     )}
-        </div>
-      </div>
+                  </div>
+                </div>
               ))}
             </div>
 

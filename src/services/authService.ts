@@ -196,11 +196,15 @@ function guestLinkErrorMessage(error: unknown): string {
 function guestRegistrationErrorMessage(error: unknown): string {
   if (error instanceof HttpError) {
     const message = messageFromHttpError(error, '').toLowerCase();
-    if (error.status === 409) return 'Esta reserva o correo ya tiene una cuenta. Inicia sesión con tu correo y contraseña.';
-    if (message.includes('email does not match')) return 'El correo no coincide con el registrado en la reserva.';
+    if (error.status === 409)
+      return 'Esta reserva o correo ya tiene una cuenta. Inicia sesión con tu correo y contraseña.';
+    if (message.includes('email does not match'))
+      return 'El correo no coincide con el registrado en la reserva.';
     if (message.includes('code is invalid')) return 'El código de reserva no es válido.';
-    if (message.includes('expired or not yet active')) return 'La reserva ya venció o aún no está disponible para acceso al portal.';
-    if (error.status === 400) return messageFromHttpError(error, 'Revisa el código, el correo y la contraseña.');
+    if (message.includes('expired or not yet active'))
+      return 'La reserva ya venció o aún no está disponible para acceso al portal.';
+    if (error.status === 400)
+      return messageFromHttpError(error, 'Revisa el código, el correo y la contraseña.');
   }
   return messageFromHttpError(error, 'No fue posible crear tu cuenta de huésped.');
 }

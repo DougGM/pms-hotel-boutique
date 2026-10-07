@@ -56,7 +56,10 @@ function StaffLoginForm() {
         </Link>
         <p className="eyebrow">Acceso Aurora</p>
         <h1>Iniciar sesión</h1>
-        <p className="muted">Ingresa con el mismo correo y contraseña. Te llevaremos automáticamente a tu espacio de huésped o de trabajo.</p>
+        <p className="muted">
+          Ingresa con el mismo correo y contraseña. Te llevaremos automáticamente a tu espacio de
+          huésped o de trabajo.
+        </p>
 
         <form className="staff-login-form" onSubmit={submit} aria-busy={isSubmitting}>
           <label htmlFor="staff-email">
@@ -103,7 +106,8 @@ function StaffLoginForm() {
         </form>
 
         <p className="muted">
-          ¿Primera vez como huésped? <Link to={routePaths.public.register}>Crea tu acceso con el código de reserva</Link>
+          ¿Primera vez como huésped?{' '}
+          <Link to={routePaths.public.register}>Crea tu acceso con el código de reserva</Link>
         </p>
         <Link className="button secondary" to={routePaths.public.home}>
           Volver al inicio

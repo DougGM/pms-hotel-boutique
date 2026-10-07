@@ -143,11 +143,12 @@ export function ManualBookingScreen() {
     if (screen.status !== 'ready' || !form.roomTypeId || !form.checkIn || !form.checkOut) return [];
     return screen.rooms.filter((room) => {
       if (!room.isAssignable || room.roomTypeId !== form.roomTypeId) return false;
-      return !screen.bookings.some((booking) =>
-        booking.roomId === room.id &&
-        ['pending', 'confirmed', 'checkedIn'].includes(booking.status) &&
-        toDtoCalendarDate(booking.checkIn) < form.checkOut &&
-        toDtoCalendarDate(booking.checkOut) > form.checkIn,
+      return !screen.bookings.some(
+        (booking) =>
+          booking.roomId === room.id &&
+          ['pending', 'confirmed', 'checkedIn'].includes(booking.status) &&
+          toDtoCalendarDate(booking.checkIn) < form.checkOut &&
+          toDtoCalendarDate(booking.checkOut) > form.checkIn,
       );
     });
   }, [form.checkIn, form.checkOut, form.roomTypeId, screen]);
