@@ -55,19 +55,20 @@ fuente visible principal de gestion de usuarios.
 ## Cuentas mock para pruebas (Personal)
 
 Nota 2026-10-01 (#99 / INT-01): estas cuentas quedan como referencia historica
-del frontend beta y para datos administrativos mock. El login real ya valida
-contra el backend Spring/PostgreSQL; las credenciales disponibles dependen del
-seed o base local del backend.
+del frontend beta y para datos administrativos mock. No usar estas cuentas
+`@hotelboutique.test` ni la contraseña compartida para iniciar sesión contra el
+backend real. El login real valida contra las cuentas sembradas en PostgreSQL.
 
-Todas usan la contrasena publica de demo `AuroraDemo2026!`.
+Para el seed local del backend (migration `021-simple-demo-users.sql`),
+Recepción usa:
 
-| Correo                           | Rol            |
-| -------------------------------- | -------------- |
-| `admin@hotelboutique.test`       | `ADMIN`        |
-| `recepcion@hotelboutique.test`   | `RECEPTION`    |
-| `limpieza@hotelboutique.test`    | `HOUSEKEEPING` |
-| `conserjeria@hotelboutique.test` | `CONCIERGE`    |
-| `roomservice@hotelboutique.test` | `ROOM_SERVICE` |
+- Correo: `recepcion@aurora.test`
+- Contraseña: `recepcion`
+
+Verificado el 2026-10-06 contra `POST /api/v1/auth/login`: devuelve un JWT con
+`ROLE_RECEPTION`. Estas son credenciales solo para desarrollo local; no deben
+usarse en producción. Las credenciales del resto de roles dependen del seed
+vigente y no deben inferirse desde la tabla histórica de cuentas mock.
 
 ## Credenciales reales de Huésped (AUTH-GUEST #134)
 

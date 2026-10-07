@@ -374,6 +374,20 @@ function installFetch() {
         expiresIn: guestTokenSeconds,
       });
     }
+    if (path === '/api/v1/guest/auth/register') {
+      if (body?.code !== GUEST_CODE || body?.email !== 'ana.demo@aurora.test') {
+        return json({ message: 'Email does not match the reservation guest' }, 400, 'Bad Request');
+      }
+      return json(
+        {
+          accessToken: guestJwt(guestTokenSeconds),
+          tokenType: 'Bearer',
+          expiresIn: guestTokenSeconds,
+        },
+        201,
+        'Created',
+      );
+    }
     if (path.startsWith('/api/v1/guest/')) {
       const payload = decodeAuth(init);
       if (payload?.type !== 'guest') return json({ message: 'Forbidden' }, 403, 'Forbidden');
@@ -565,7 +579,7 @@ test('wrong credentials show an error, retry succeeds, and intended URL is resto
 test('each staff role only sees its menu and direct unauthorized URLs are blocked', async () => {
   await open('/login');
   const roles = [
-    ['recepcion', '/pms/reception', 'Recepción', '/pms/users', 3],
+    ['recepcion', '/pms/reception', 'Reservas', '/pms/users', 7],
     ['limpieza', '/pms/housekeeping', 'Habitaciones', '/pms/cash', 4],
     ['conserjeria', '/pms/concierge', 'Solicitudes', '/pms/cash', 3],
     ['roomservice', '/pms/room-service', 'Pedidos activos', '/pms/users', 4],
@@ -579,7 +593,7 @@ test('each staff role only sees its menu and direct unauthorized URLs are blocke
     const labels = nav
       .findAllByType('button')
       .map((button) => button.findByType('span').children.join(''));
-    assert.ok(labels.includes(section), account);
+    assert.ok(labels.includes(section), `${account}: ${labels.join(', ')}`);
     assert.equal(labels.length, count, account);
     if (forbidden) {
       await act(async () => {
@@ -852,14 +866,16 @@ test('shared service rejects wrong passwords and unknown email addresses', async
 });
 
 async function linkGuest(code) {
-  const toggleBtn = view.root.findAllByProps({ id: 'guest-toggle-code-mode' });
+  const toggleBtn = view.root.findAllByProps({ id: 'guest-toggle-temporary-mode' });
   if (toggleBtn.length > 0) {
     act(() => {
       toggleBtn[0].props.onClick();
     });
   }
   act(() => {
-    view.root.findByProps({ id: 'guest-link-code' }).props.onChange({ target: { value: code } });
+    view.root
+      .findByProps({ id: 'guest-reservation-code' })
+      .props.onChange({ target: { value: code } });
   });
   await act(async () => {
     await view.root.findByType('form').props.onSubmit({ preventDefault() {} });
@@ -868,37 +884,30 @@ async function linkGuest(code) {
 }
 
 async function loginGuestForm(email, pass) {
-  const toggleCredentials = view.root.findAllByProps({ id: 'guest-toggle-credentials-mode' });
-  if (toggleCredentials.length > 0) {
-    act(() => {
-      toggleCredentials[0].props.onClick();
-    });
-  }
-  act(() => {
-    view.root.findByProps({ id: 'guest-email' }).props.onChange({ target: { value: email } });
-    view.root.findByProps({ id: 'guest-password' }).props.onChange({ target: { value: pass } });
-  });
-  await act(async () => {
-    await view.root.findByType('form').props.onSubmit({ preventDefault() {} });
-    await wait();
-  });
+  await open('/auth/login');
+  await login(email, pass);
 }
 
-test('el login del personal rechaza cuentas de huésped', async () => {
+test('el login general reconoce las credenciales de huésped y abre su portal', async () => {
   await open('/auth/login');
-  await login('huesped@hotelboutique.test');
+  await login('ana.demo@aurora.test', 'huesped1');
+  assert.equal(router.state.location.pathname, '/pms/dashboard');
+  assert.ok(requests.some((request) => request.path === '/api/v1/guest/auth/login'));
+  assert.ok(!requests.some((request) => request.path === '/api/v1/auth/login'));
+  assert.equal(JSON.parse(values.get('PMS_AUTH_SESSION')).user.role, 'GUEST');
+});
+
+test('el login general conserva el error de huésped sin estancia activa', async () => {
+  await open('/auth/login');
+  await login('no.stay@aurora.test', 'huesped1');
   assert.equal(router.state.location.pathname, '/auth/login');
-  assert.ok(
-    text().includes('código de su reserva') || text().includes('Acceso de huésped'),
-    'indica usar el acceso de huésped',
-  );
-  assert.equal(values.size, 0, 'no persiste ninguna sesión');
+  assert.ok(text().includes('No tienes una estancia activa'));
+  assert.ok(requests.some((request) => request.path === '/api/v1/guest/auth/login'));
+  assert.ok(!requests.some((request) => request.path === '/api/v1/auth/login'));
+  assert.equal(values.has('PMS_AUTH_SESSION'), false);
 });
 
 test('el huésped puede iniciar sesión con correo y contraseña contra backend real', async () => {
-  await open('/auth/register');
-  assert.ok(text().includes('Acceso de huésped'));
-  assert.ok(text().includes('Correo electrónico'));
   await loginGuestForm('ana.demo@aurora.test', 'huesped1');
 
   assert.equal(router.state.location.pathname, '/pms/dashboard');
@@ -907,8 +916,19 @@ test('el huésped puede iniciar sesión con correo y contraseña contra backend 
     .findAllByType('button')
     .map((button) => button.findByType('span').children.join(''));
   assert.ok(labels.includes('Room service'));
-  assert.ok(labels.includes('Notificaciones'));
+  assert.ok(labels.includes('Conserjería'));
+  assert.ok(!labels.includes('Notificaciones'));
   assert.equal(labels.length, 8);
+  assert.equal(view.root.findAllByProps({ className: 'property-switcher' }).length, 0);
+  const sidebarSectionLabels = view.root
+    .findAllByProps({ className: 'workspace-label' })
+    .map((element) => element.children.join(''));
+  assert.ok(!sidebarSectionLabels.includes('ESPACIO DE TRABAJO'));
+  assert.ok(sidebarSectionLabels.includes('TU ESTANCIA'));
+  assert.ok(text().includes('Q450.00'), 'el saldo viene de /guest/stay en GTQ');
+  assert.ok(text().includes('Reservas'));
+  assert.ok(!text().includes('Puntos Aurora'));
+  assert.ok(!text().includes('$420'));
   assert.ok(requests.some((request) => request.path === '/api/v1/guest/auth/login'));
   assert.ok(!requests.some((request) => request.path === '/api/v1/auth/login'));
   assert.ok(
@@ -926,6 +946,12 @@ test('el huésped puede iniciar sesión con correo y contraseña contra backend 
     !requests.some((request) => /^\/api\/v1\/(bookings|guests|rooms|admin)/.test(request.path)),
     'el portal no consume endpoints del personal',
   );
+  await act(async () => {
+    view.root.findByProps({ className: 'icon-btn notification' }).props.onClick();
+    await wait();
+  });
+  assert.ok(text().includes('Notificaciones'));
+  assert.ok(!text().includes('Suite Aurora · Habitacion 402 · Check-out 28 ago'));
   const stored = JSON.parse(values.get('PMS_AUTH_SESSION'));
   assert.equal(stored.user.role, 'GUEST');
   assert.equal(stored.user.name, 'Ana López');
@@ -946,24 +972,24 @@ test('el huésped puede iniciar sesión con correo y contraseña contra backend 
 });
 
 test('credenciales inválidas de huésped muestran error controlado', async () => {
-  await open('/auth/register');
+  await open('/auth/login');
   await loginGuestForm('ana.demo@aurora.test', 'wrong-pass');
-  assert.equal(router.state.location.pathname, '/auth/register');
+  assert.equal(router.state.location.pathname, '/auth/login');
   assert.ok(text().includes('Correo o contraseña incorrectos'));
   assert.equal(values.has('PMS_AUTH_SESSION'), false);
 });
 
 test('huésped sin estancia activa muestra error controlado', async () => {
-  await open('/auth/register');
+  await open('/auth/login');
   await loginGuestForm('no.stay@aurora.test', 'huesped1');
-  assert.equal(router.state.location.pathname, '/auth/register');
+  assert.equal(router.state.location.pathname, '/auth/login');
   assert.ok(text().includes('No tienes una estancia activa'));
   assert.equal(values.has('PMS_AUTH_SESSION'), false);
 });
 
 test('el huésped entra con el código de su reserva y sale a su acceso', async () => {
   await open('/auth/register');
-  assert.ok(text().includes('Acceso de huésped'));
+  assert.ok(text().includes('Crea tu acceso'));
   await linkGuest(GUEST_CODE);
 
   assert.equal(router.state.location.pathname, '/pms/dashboard');
@@ -972,7 +998,8 @@ test('el huésped entra con el código de su reserva y sale a su acceso', async 
     .findAllByType('button')
     .map((button) => button.findByType('span').children.join(''));
   assert.ok(labels.includes('Room service'));
-  assert.ok(labels.includes('Notificaciones'));
+  assert.ok(labels.includes('Conserjería'));
+  assert.ok(!labels.includes('Notificaciones'));
   assert.equal(labels.length, 8);
   assert.ok(requests.some((request) => request.path === '/api/v1/guest/auth/link'));
   assert.ok(!requests.some((request) => request.path === '/api/v1/auth/login'));
@@ -1007,6 +1034,30 @@ test('un código inválido muestra el error y no crea sesión', async () => {
   assert.equal(router.state.location.pathname, '/auth/register');
   assert.ok(text().includes('El código no es válido'));
   assert.equal(values.has('PMS_AUTH_SESSION'), false);
+});
+
+test('el huésped crea una cuenta desde su código y correo de reserva', async () => {
+  await open('/auth/register');
+  act(() => {
+    view.root
+      .findByProps({ id: 'guest-reservation-code' })
+      .props.onChange({ target: { value: GUEST_CODE } });
+    view.root
+      .findByProps({ id: 'guest-registration-email' })
+      .props.onChange({ target: { value: 'ana.demo@aurora.test' } });
+    view.root
+      .findByProps({ id: 'guest-registration-password' })
+      .props.onChange({ target: { value: 'safe-pass-123' } });
+  });
+  await act(async () => {
+    await view.root.findByType('form').props.onSubmit({ preventDefault() {} });
+    await wait();
+  });
+  assert.equal(router.state.location.pathname, '/pms/dashboard');
+  const registration = requests.find((request) => request.path === '/api/v1/guest/auth/register');
+  assert.equal(registration.body.email, 'ana.demo@aurora.test');
+  assert.equal(registration.body.password, 'safe-pass-123');
+  assert.equal(JSON.parse(values.get('PMS_AUTH_SESSION')).user.role, 'GUEST');
 });
 
 test('al vencer el token del huésped se le pide de nuevo el acceso', async () => {

@@ -11,6 +11,10 @@ import {
   type InventoryMovementTypeDto,
 } from '@/shared/types/entities/inventory-movement';
 import type { ID } from '@/shared/types/common';
+import type {
+  InventoryItemCategoryDto,
+  InventoryUnitDto,
+} from '@/shared/types/entities/inventory-item';
 import { simulateLatency } from './mockUtils';
 import { httpClient } from './http-client';
 
@@ -45,6 +49,16 @@ type ApiInventoryMovement = {
 type UpdateInventoryItemData = Partial<
   Pick<InventoryItemDto, 'name' | 'category' | 'current_quantity' | 'minimum_quantity' | 'active'>
 >;
+
+type CreateInventoryItemData = {
+  sku: string;
+  name: string;
+  description?: string;
+  category: InventoryItemCategoryDto;
+  unit: InventoryUnitDto;
+  minimumQuantity: number;
+  active: boolean;
+};
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -113,6 +127,16 @@ function toUpdateRequest(item: InventoryItem, data: UpdateInventoryItemData) {
 }
 
 export const inventoryService = {
+  async createItem(data: CreateInventoryItemData): Promise<InventoryItem> {
+    await simulateLatency();
+    const item = await httpClient.post<ApiInventoryItem>('/admin/inventory/items', {
+      ...data,
+      sku: data.sku.trim(),
+      name: data.name.trim(),
+      description: data.description?.trim() || undefined,
+    });
+    return toInventoryItem(toInventoryItemDto(item));
+  },
   async getItems(): Promise<InventoryItem[]> {
     await simulateLatency();
     const items = await httpClient.get<ApiInventoryItem[]>('/inventory/items');

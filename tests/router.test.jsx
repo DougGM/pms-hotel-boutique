@@ -7,7 +7,6 @@ import { PrivateNotFoundPage } from '@/private/pages/PrivateNotFoundPage';
 import { RoomListScreen } from '@/modules/rooms/screens/RoomListScreen';
 import { RoomTypeListScreen } from '@/modules/rooms/screens/RoomTypeListScreen';
 import { OccupancyScreen } from '@/modules/occupancy/screens/OccupancyScreen';
-import { ReceptionScreen } from '@/modules/front-desk/screens/ReceptionScreen';
 import { PrivateSessionWorkspace } from '@/private/workspace/PrivateSessionWorkspace';
 
 /**
@@ -56,11 +55,14 @@ function leafElementType(pathname) {
   return matches[matches.length - 1].route.element?.type;
 }
 
-test('rooms, tipos de habitación, ocupación y recepción resuelven a su pantalla real, no al placeholder', () => {
+test('rooms, tipos de habitación y ocupación resuelven a su pantalla real, no al placeholder', () => {
   assert.equal(leafElementType('/pms/rooms'), RoomListScreen);
   assert.equal(leafElementType('/pms/room-types'), RoomTypeListScreen);
   assert.equal(leafElementType('/pms/occupancy'), OccupancyScreen);
-  assert.equal(leafElementType('/pms/reception'), ReceptionScreen);
+});
+
+test('recepción abre su workspace al entrar directamente, no la pantalla diaria antigua', () => {
+  assert.equal(leafElementType('/pms/reception'), PrivateSessionWorkspace);
 });
 
 test('los módulos web de Ronda 1 sin pantalla propia todavía siguen mostrando el placeholder', () => {

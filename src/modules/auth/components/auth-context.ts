@@ -8,6 +8,7 @@ export interface AuthContextValue {
   login: (credentials: Credentials) => Promise<void>;
   /** Login de huésped con correo y contraseña contra backend real. */
   loginGuest: (credentials: Credentials) => Promise<void>;
+  registerGuest: (code: string, email: string, password: string) => Promise<void>;
   /** Acceso de huésped con el código de su reserva (flujo secundario). */
   linkGuest: (code: string) => Promise<void>;
   logout: () => void;

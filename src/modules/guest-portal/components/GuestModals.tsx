@@ -6,6 +6,7 @@ import {
   BedDouble,
   CalendarDays,
   Download,
+  Minus,
   Plus,
   TriangleAlert,
   X,
@@ -761,12 +762,14 @@ export function CancelOrderModal({
 
 export function RequestServiceModal({
   mode,
+  roomNumber,
   onClose,
   onSubmit,
 }: {
-  mode: 'Limpieza' | 'Articulos';
+  mode: 'Limpieza' | 'Articulos' | 'Conserjería';
+  roomNumber?: string;
   onClose: () => void;
-  onSubmit: (data: { type: string; description: string; time: string }) => void;
+  onSubmit: (data: { type: string; description: string; time: string }) => Promise<void>;
 }) {
   const cleaningTypes = ['Limpieza de estancia', 'Limpieza de salida', 'Limpieza completa'];
   const timeSlots = ['Lo antes posible', 'Por la mañana', 'Por la tarde', 'Esta noche'];
@@ -777,96 +780,181 @@ export function RequestServiceModal({
     'Cobijas',
     'Otros',
   ];
+  const conciergeTypes = [
+    'Taxi al aeropuerto',
+    'Transporte local',
+    'Traslado privado',
+    'Reserva de restaurante',
+    'Tour o actividad',
+    'Otra solicitud',
+  ];
   const [selectedType, setSelectedType] = useState(
-    mode === 'Limpieza' ? cleaningTypes[0] : itemTypes[0],
+    mode === 'Limpieza'
+      ? cleaningTypes[0]
+      : mode === 'Articulos'
+        ? itemTypes[0]
+        : conciergeTypes[0],
   );
   const [selectedTime, setSelectedTime] = useState(timeSlots[0]);
   const [quantity, setQuantity] = useState(1);
   const [notes, setNotes] = useState('');
-  const handleSubmit = () => {
-    const description =
-      mode === 'Limpieza'
-        ? `${selectedType}${notes ? ` — ${notes}` : ''}`
-        : `${quantity}× ${selectedType}${notes ? ` — ${notes}` : ''}`;
-    onSubmit({
-      type: mode === 'Limpieza' ? 'Limpieza' : 'Artículos',
-      description,
-      time: selectedTime,
-    });
+  const [submitting, setSubmitting] = useState(false);
+  const handleSubmit = async () => {
+    if (submitting) return;
+    const baseDescription = mode === 'Articulos' ? `${quantity}× ${selectedType}` : selectedType;
+    const description = `${baseDescription}${notes ? ` — ${notes}` : ''}`;
+    setSubmitting(true);
+    try {
+      await onSubmit({
+        type: mode === 'Limpieza' ? 'Limpieza' : mode === 'Articulos' ? 'Artículos' : 'Conserjería',
+        description,
+        time: selectedTime,
+      });
+    } finally {
+      setSubmitting(false);
+    }
   };
+  const options =
+    mode === 'Limpieza' ? cleaningTypes : mode === 'Articulos' ? itemTypes : conciergeTypes;
+  const title =
+    mode === 'Limpieza'
+      ? 'Limpieza de habitación'
+      : mode === 'Articulos'
+        ? 'Artículos adicionales'
+        : 'Solicitar a conserjería';
+  const notesPlaceholder =
+    mode === 'Limpieza'
+      ? 'Indica una hora o detalle importante para el equipo de limpieza.'
+      : mode === 'Articulos'
+        ? 'Por ejemplo, déjalo en la puerta o no tocar el timbre.'
+        : selectedType === 'Taxi al aeropuerto'
+          ? 'Indica la hora del vuelo, pasajeros y equipaje.'
+          : selectedType === 'Transporte local' || selectedType === 'Traslado privado'
+            ? 'Indica destino, hora y número de pasajeros.'
+            : selectedType === 'Reserva de restaurante'
+              ? 'Indica restaurante, horario y número de personas.'
+              : selectedType === 'Tour o actividad'
+                ? 'Cuéntanos qué actividad te interesa y para cuántas personas.'
+                : 'Cuéntanos qué necesitas y cuándo prefieres recibir ayuda.';
+  const timeField = (
+    <div className="hk-form-label gs-service-time-field">
+      <span>Momento preferido</span>
+      <select
+        className="hk-form-select gs-service-select"
+        value={selectedTime}
+        aria-label="Momento preferido"
+        onChange={(event) => setSelectedTime(event.target.value)}
+      >
+        {timeSlots.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
   return (
-    <div className="modal-backdrop" onMouseDown={onClose}>
+    <div className="modal-backdrop" onMouseDown={() => !submitting && onClose()}>
       <div
-        className="modal"
-        style={{ width: 440, maxWidth: 'calc(100vw - 32px)' }}
+        className={`modal gs-service-modal gs-service-form-${mode === 'Conserjería' ? 'concierge' : mode === 'Articulos' ? 'items' : 'cleaning'}`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="gs-service-title"
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="modal-head">
           <div>
             <p className="eyebrow">SOLICITAR SERVICIO</p>
-            <h2>{mode === 'Limpieza' ? 'Limpieza de habitación' : 'Artículos adicionales'}</h2>
+            <h2 id="gs-service-title">{title}</h2>
+            <p className="gs-service-subtitle">
+              {roomNumber ? `Solicitud para habitación ${roomNumber}. ` : ''}
+              {mode === 'Limpieza'
+                ? 'Elige el tipo de limpieza y el horario que prefieres.'
+                : mode === 'Articulos'
+                  ? 'Selecciona lo que necesitas y la cantidad. Conserjería recibirá esta solicitud.'
+                  : 'Elige el servicio y cuéntanos los detalles para que conserjería pueda ayudarte.'}
+            </p>
           </div>
-          <button className="icon-btn" onClick={onClose}>
+          <button className="icon-btn" onClick={onClose} disabled={submitting} aria-label="Cerrar">
             <X size={18} />
           </button>
         </div>
-        <label className="hk-form-label">
-          {mode === 'Limpieza' ? 'Tipo de limpieza' : 'Artículo'}
-          <div className="modal-options">
-            {(mode === 'Limpieza' ? cleaningTypes : itemTypes).map((opt) => (
-              <button
-                key={opt}
-                className={selectedType === opt ? 'selected' : ''}
-                onClick={() => setSelectedType(opt)}
-              >
-                {opt}
-              </button>
+        <div className="hk-form-label gs-service-type-field">
+          <span>
+            {mode === 'Limpieza'
+              ? 'Tipo de limpieza'
+              : mode === 'Articulos'
+                ? 'Artículo'
+                : '¿Con qué necesitas ayuda?'}
+          </span>
+          <select
+            className="hk-form-select gs-service-select"
+            value={selectedType}
+            aria-label={
+              mode === 'Limpieza'
+                ? 'Tipo de limpieza'
+                : mode === 'Articulos'
+                  ? 'Artículo'
+                  : 'Tipo de solicitud'
+            }
+            onChange={(event) => setSelectedType(event.target.value)}
+          >
+            {options.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
             ))}
-          </div>
-        </label>
-        {mode === 'Articulos' && (
-          <label className="hk-form-label">
-            Cantidad
-            <div className="gs-qty-selector">
-              <button onClick={() => setQuantity((q) => Math.max(1, q - 1))}>
-                <X size={14} />
-              </button>
-              <span>{quantity}</span>
-              <button onClick={() => setQuantity((q) => Math.min(5, q + 1))}>
-                <Plus size={14} />
-              </button>
+          </select>
+        </div>
+        {mode === 'Articulos' ? (
+          <div className="gs-service-side-fields">
+            <div className="hk-form-label gs-service-quantity-field">
+              <span>Cantidad</span>
+              <div className="gs-qty-selector">
+                <button
+                  type="button"
+                  aria-label="Disminuir cantidad"
+                  disabled={quantity <= 1}
+                  onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                >
+                  <Minus size={14} />
+                </button>
+                <output aria-live="polite">{quantity}</output>
+                <button
+                  type="button"
+                  aria-label="Aumentar cantidad"
+                  disabled={quantity >= 5}
+                  onClick={() => setQuantity((q) => Math.min(5, q + 1))}
+                >
+                  <Plus size={14} />
+                </button>
+              </div>
+              <small className="gs-service-hint">Máximo 5 artículos por solicitud.</small>
             </div>
-          </label>
-        )}
-        <label className="hk-form-label">
-          Momento preferido
-          <div className="modal-options">
-            {timeSlots.map((opt) => (
-              <button
-                key={opt}
-                className={selectedTime === opt ? 'selected' : ''}
-                onClick={() => setSelectedTime(opt)}
-              >
-                {opt}
-              </button>
-            ))}
+            {timeField}
           </div>
-        </label>
-        <label className="hk-form-label">
-          Notas
+        ) : (
+          timeField
+        )}
+        <label className="hk-form-label gs-service-notes-field" htmlFor="gs-service-notes">
+          Detalles adicionales <span className="gs-service-optional">Opcional</span>
           <textarea
+            id="gs-service-notes"
             className="hk-form-textarea"
             value={notes}
+            maxLength={300}
             onChange={(e) => setNotes(e.target.value)}
-            placeholder="Indica cualquier detalle adicional..."
+            placeholder={notesPlaceholder}
           />
+          <small className="gs-service-hint gs-notes-count">{notes.length}/300</small>
         </label>
         <div className="modal-foot">
-          <button className="button secondary" onClick={onClose}>
+          <button className="button secondary" onClick={onClose} disabled={submitting}>
             Cancelar
           </button>
-          <button className="button primary" onClick={handleSubmit}>
-            Enviar solicitud <ArrowRight size={16} />
+          <button className="button primary" onClick={handleSubmit} disabled={submitting}>
+            {submitting ? 'Enviando…' : 'Enviar solicitud'}{' '}
+            {!submitting && <ArrowRight size={16} />}
           </button>
         </div>
       </div>

@@ -178,6 +178,10 @@ export function BookingDetailScreen() {
     void loadData();
   }, [loadData]);
 
+  useEffect(() => {
+    setIsEditing(location.pathname.endsWith('/edit'));
+  }, [location.pathname]);
+
   const canEdit = useMemo(() => {
     if (screen.status !== 'ready') return false;
     return screen.booking.status === 'pending' || screen.booking.status === 'confirmed';

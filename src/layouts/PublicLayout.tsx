@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
-import { BedDouble, Percent, ShieldCheck, Sparkles } from 'lucide-react';
+import { BedDouble, ShieldCheck, Sparkles } from 'lucide-react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { routePaths } from '@/app/routes';
-import { PublicAuthModal, type PublicAuthMode } from '@/public/components/PublicAuthModal';
+import { PublicAuthModal } from '@/public/components/PublicAuthModal';
 
 export function PublicLayout() {
   const location = useLocation();
-  const [authMode, setAuthMode] = useState<PublicAuthMode | null>(null);
+  const [authMode, setAuthMode] = useState(false);
   const [headerScrolled, setHeaderScrolled] = useState(false);
   const isLoginPage =
     location.pathname === routePaths.public.login ||
@@ -58,13 +58,6 @@ export function PublicLayout() {
               <span className="visitor-tab-label">Amenidades</span>
             </Link>
             <Link
-              className={`visitor-tab ${activeSection === 'promociones' ? 'active' : ''}`}
-              to="/#promociones"
-            >
-              <Percent size={15} aria-hidden="true" />
-              <span className="visitor-tab-label">Promociones</span>
-            </Link>
-            <Link
               className={`visitor-tab ${activeSection === 'politicas' ? 'active' : ''}`}
               to="/#politicas"
             >
@@ -74,20 +67,14 @@ export function PublicLayout() {
           </div>
 
           <nav className="visitor-auth" aria-label="Navegacion publica">
-            <button className="visitor-link" type="button" onClick={() => setAuthMode('login')}>
+            <button className="visitor-link" type="button" onClick={() => setAuthMode(true)}>
               Iniciar sesion
             </button>
           </nav>
         </header>
       ) : null}
       <Outlet />
-      {authMode ? (
-        <PublicAuthModal
-          mode={authMode}
-          onClose={() => setAuthMode(null)}
-          onModeChange={setAuthMode}
-        />
-      ) : null}
+      {authMode ? <PublicAuthModal onClose={() => setAuthMode(false)} /> : null}
     </div>
   );
 }
