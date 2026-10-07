@@ -102,6 +102,21 @@ export type {
   InventoryMovementReason,
 } from './inventory-movement';
 export type {
+  MediaImageDTO,
+  MediaImageDto,
+  MediaImageUrlsDto,
+  MediaImageAssignmentDto,
+  MediaTargetDto,
+  MediaUploadDto,
+  MediaVariantDto,
+  MediaImage,
+  MediaImageUrls,
+  MediaImageAssignment,
+  MediaTarget,
+  MediaUpload,
+  MediaVariant,
+} from './media-image';
+export type {
   OrderDTO,
   OrderDto,
   OrderStatusDto,

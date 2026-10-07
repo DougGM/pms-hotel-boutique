@@ -11,6 +11,13 @@ import {
 import { simulateLatency } from './mockUtils';
 import { httpClient } from './http-client';
 import { guestRequest } from './guestHttp';
+import {
+  describeImageAssignmentError,
+  toImagesRequest,
+  toMediaImageDtos,
+  type ApiMediaImage,
+} from './mediaService';
+import type { MediaImageAssignmentDto } from '@/shared/types/entities/media-image';
 
 type ApiAmenity = {
   id: string;
@@ -21,6 +28,7 @@ type ApiAmenity = {
   opensAt?: string;
   closesAt?: string;
   active: boolean;
+  images?: ApiMediaImage[];
   createdAt?: string;
   updatedAt?: string;
 };
@@ -34,6 +42,7 @@ type ApiProduct = {
   priceCents: number;
   currency?: ProductDto['currency'];
   active: boolean;
+  images?: ApiMediaImage[];
   createdAt?: string;
   updatedAt?: string;
 };
@@ -46,6 +55,8 @@ type SaveAmenityData = {
   opensAt?: string;
   closesAt?: string;
   active?: boolean;
+  /** Ausente: no cambia la galería. Lista vacía: quita todas las imágenes. */
+  images?: MediaImageAssignmentDto[];
 };
 
 type SaveProductData = {
@@ -56,6 +67,8 @@ type SaveProductData = {
   priceCents: number;
   currency?: ProductDto['currency'];
   active?: boolean;
+  /** Ausente: no cambia la galería. Lista vacía: quita todas las imágenes. */
+  images?: MediaImageAssignmentDto[];
 };
 
 const nowIso = () => new Date().toISOString();
@@ -71,6 +84,7 @@ function mapAmenityFromApi(api: ApiAmenity): AmenityDto {
     opens_at: api.opensAt,
     closes_at: api.closesAt,
     active: api.active,
+    images: toMediaImageDtos(api.images),
     created_at: createdAt,
     updated_at: api.updatedAt ?? createdAt,
   };
@@ -89,6 +103,7 @@ function mapProductFromApi(api: ApiProduct): ProductDto {
     stock_quantity: 0,
     reorder_level: 0,
     active: api.active,
+    images: toMediaImageDtos(api.images),
     created_at: timestamp,
     updated_at: api.updatedAt ?? timestamp,
   };
@@ -103,6 +118,7 @@ function toAmenityRequest(data: SaveAmenityData) {
     opensAt: data.opensAt || undefined,
     closesAt: data.closesAt || undefined,
     active: data.active ?? true,
+    images: toImagesRequest(data.images),
   };
 }
 
@@ -115,7 +131,19 @@ function toProductRequest(data: SaveProductData) {
     priceCents: data.priceCents,
     currency: data.currency ?? 'GTQ',
     active: data.active ?? true,
+    images: toImagesRequest(data.images),
   };
+}
+
+/** Traduce los errores de `images` del backend; el resto se propaga igual que antes. */
+async function saveRequest<T>(call: () => Promise<T>): Promise<T> {
+  try {
+    return await call();
+  } catch (error) {
+    const imageMessage = describeImageAssignmentError(error);
+    if (imageMessage) throw new Error(imageMessage);
+    throw error;
+  }
 }
 
 export const catalogService = {
@@ -137,9 +165,8 @@ export const catalogService = {
       throw new Error('El precio debe ser un entero mayor o igual a 1.');
     }
 
-    const product = await httpClient.post<ApiProduct>(
-      '/admin/room-service/products',
-      toProductRequest(data),
+    const product = await saveRequest(() =>
+      httpClient.post<ApiProduct>('/admin/room-service/products', toProductRequest(data)),
     );
     return toProduct(mapProductFromApi(product));
   },
@@ -153,19 +180,22 @@ export const catalogService = {
     }
     const current = (await this.getAdminProducts()).find((product) => product.id === id);
     if (!current) throw new Error(`No existe el producto ${id}.`);
-    const product = await httpClient.put<ApiProduct>(
-      `/admin/room-service/products/${id}`,
-      toProductRequest({
-        sku: data.sku ?? current.sku,
-        name: data.name ?? current.name,
-        description: data.description ?? current.description,
-        category:
-          data.category ??
-          (current.category === 'foodAndBeverage' ? 'food_and_beverage' : current.category),
-        priceCents: data.priceCents ?? current.priceCents,
-        currency: data.currency ?? current.currency,
-        active: data.active ?? current.active,
-      }),
+    const product = await saveRequest(() =>
+      httpClient.put<ApiProduct>(
+        `/admin/room-service/products/${id}`,
+        toProductRequest({
+          sku: data.sku ?? current.sku,
+          name: data.name ?? current.name,
+          description: data.description ?? current.description,
+          category:
+            data.category ??
+            (current.category === 'foodAndBeverage' ? 'food_and_beverage' : current.category),
+          priceCents: data.priceCents ?? current.priceCents,
+          currency: data.currency ?? current.currency,
+          active: data.active ?? current.active,
+          images: data.images,
+        }),
+      ),
     );
     return toProduct(mapProductFromApi(product));
   },
@@ -199,24 +229,29 @@ export const catalogService = {
     await simulateLatency();
     if (!data.name.trim()) throw new Error('La amenidad requiere nombre.');
 
-    const amenity = await httpClient.post<ApiAmenity>('/admin/amenities', toAmenityRequest(data));
+    const amenity = await saveRequest(() =>
+      httpClient.post<ApiAmenity>('/admin/amenities', toAmenityRequest(data)),
+    );
     return toAmenity(mapAmenityFromApi(amenity));
   },
   async updateAmenity(id: string, data: Partial<SaveAmenityData>): Promise<Amenity> {
     await simulateLatency();
     const current = (await this.getAdminAmenities()).find((amenity) => amenity.id === id);
     if (!current) throw new Error(`No existe la amenidad ${id}.`);
-    const amenity = await httpClient.put<ApiAmenity>(
-      `/admin/amenities/${id}`,
-      toAmenityRequest({
-        name: data.name ?? current.name,
-        description: data.description ?? current.description,
-        category: data.category ?? current.category,
-        location: data.location ?? current.location,
-        opensAt: data.opensAt ?? current.opensAt,
-        closesAt: data.closesAt ?? current.closesAt,
-        active: data.active ?? current.active,
-      }),
+    const amenity = await saveRequest(() =>
+      httpClient.put<ApiAmenity>(
+        `/admin/amenities/${id}`,
+        toAmenityRequest({
+          name: data.name ?? current.name,
+          description: data.description ?? current.description,
+          category: data.category ?? current.category,
+          location: data.location ?? current.location,
+          opensAt: data.opensAt ?? current.opensAt,
+          closesAt: data.closesAt ?? current.closesAt,
+          active: data.active ?? current.active,
+          images: data.images,
+        }),
+      ),
     );
     return toAmenity(mapAmenityFromApi(amenity));
   },

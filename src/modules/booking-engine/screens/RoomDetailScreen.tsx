@@ -6,15 +6,16 @@ import {
 } from '@/services/publicBookingCatalogService';
 import { Badge } from '@/shared/components/Badge';
 import { Button } from '@/shared/components/Button';
+import { CatalogImage } from '@/shared/components/CatalogImage';
 import { EmptyState } from '@/shared/components/EmptyState';
 import { ErrorState } from '@/shared/components/ErrorState';
 import { LoadingState } from '@/shared/components/LoadingState';
+import { orderGalleryImages } from '@/shared/types/entities/media-image';
 import type { Rate } from '@/shared/types/entities/rate';
 import type { RoomFeature } from '@/shared/types/entities/room-feature';
 import type { RoomType } from '@/shared/types/entities/room-type';
 import { formatCurrency } from '@/shared/utils/currency';
 import { calculateNights, formatDateGT } from '@/shared/utils/date';
-import { getRoomTypeGallery } from './room-media';
 import './booking-engine.css';
 
 type DetailStatus = 'loading' | 'success' | 'error';
@@ -233,7 +234,9 @@ export function RoomDetailScreen() {
           : quote.status === 'error'
             ? quote.message
             : undefined;
-  const galleryImages = getRoomTypeGallery(detail.roomType);
+  // Principal primero, luego en el orden de la galería del backend.
+  const galleryImages = orderGalleryImages(detail.roomType.images);
+  const roomTypeName = detail.roomType.name;
 
   return (
     <section className="content booking-detail-page">
@@ -252,14 +255,21 @@ export function RoomDetailScreen() {
         <div className="booking-detail-main">
           <div className="booking-photo-grid" aria-label="Fotografías de la habitación">
             {galleryImages.length > 0 ? (
-              galleryImages.map((image) => (
-                <figure className="booking-photo-card" key={image.src}>
-                  <img src={image.src} alt={image.alt} />
+              galleryImages.map((image, index) => (
+                <figure className="booking-photo-card" key={image.id}>
+                  <CatalogImage
+                    image={image}
+                    variant={index === 0 ? 'large' : 'medium'}
+                    alt={`Foto ${index + 1} de ${roomTypeName}`}
+                  />
                 </figure>
               ))
             ) : (
               <div className="booking-photo-card booking-photo-card--fallback">
-                <span>{detail.roomType.name}</span>
+                <CatalogImage
+                  alt={`${detail.roomType.name}: sin fotografías todavía`}
+                  placeholderLabel="Fotografías próximamente"
+                />
               </div>
             )}
           </div>

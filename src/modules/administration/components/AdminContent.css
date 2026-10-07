@@ -1,0 +1,43 @@
+/* Estilos nuevos de AdminContent (issue #146). El resto del módulo sigue en index.css. */
+
+.adm-modal-error {
+  margin: var(--space-4) 0 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  background: var(--ui-danger-bg);
+  color: var(--color-error);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+}
+
+.adm-modal-section {
+  margin-top: var(--space-5);
+}
+
+.adm-catalog-thumb {
+  flex: none;
+  width: var(--size-legacy-56);
+  overflow: hidden;
+  aspect-ratio: var(--media-aspect-ratio);
+  border-radius: var(--radius-sm);
+  background: var(--media-placeholder-bg);
+}
+
+.adm-catalog-thumb .catalog-image--placeholder {
+  padding: 0;
+}
+
+.adm-catalog-thumb .catalog-image--placeholder span {
+  display: none;
+}
+
+.adm-catalog-thumb .catalog-image__icon {
+  width: var(--space-7);
+  height: var(--space-7);
+}
+
+.adm-catalog-name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}

@@ -1,4 +1,8 @@
 import { toDomainDate, toDtoDate } from '@/shared/types/common';
+import {
+  toDomain as toMediaImage,
+  toDTO as toMediaImageDTO,
+} from '@/shared/types/entities/media-image';
 import type { AmenityDto } from './amenity.dto';
 import type { Amenity } from './amenity.model';
 
@@ -11,6 +15,7 @@ export const toDomain = (dto: AmenityDto): Amenity => ({
   opensAt: dto.opens_at,
   closesAt: dto.closes_at,
   active: dto.active,
+  images: dto.images.map(toMediaImage),
   createdAt: toDomainDate(dto.created_at),
   updatedAt: toDomainDate(dto.updated_at),
 });
@@ -24,6 +29,7 @@ export const toDTO = (model: Amenity): AmenityDto => ({
   opens_at: model.opensAt,
   closes_at: model.closesAt,
   active: model.active,
+  images: model.images.map(toMediaImageDTO),
   created_at: toDtoDate(model.createdAt),
   updated_at: toDtoDate(model.updatedAt),
 });

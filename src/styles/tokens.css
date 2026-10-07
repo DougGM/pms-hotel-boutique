@@ -478,4 +478,17 @@
   --ui-table-width: 32rem;
   --ui-motion-duration: 0.8s;
   --ui-disabled-opacity: 0.55;
+
+  /* Imágenes de catálogo (issue #146): CatalogImage e ImageGalleryField. El
+     placeholder es neutral a propósito — un registro sin foto nunca muestra la
+     foto de otro. */
+  --media-aspect-ratio: 4 / 3;
+  --media-placeholder-bg: var(--color-surface-secondary);
+  --media-placeholder-ink: var(--color-text-muted);
+  --media-placeholder-icon-size: var(--size-legacy-28);
+  --media-gallery-card-width: var(--size-legacy-160);
+  --media-gallery-overlay: color-mix(in srgb, var(--color-text-primary) 55%, transparent);
+  --media-gallery-overlay-ink: var(--color-surface);
+  --media-primary-badge-bg: var(--color-brand-gold);
+  --media-primary-badge-ink: var(--color-surface);
 }

@@ -40,11 +40,20 @@ import { promotionService } from '@/services/promotionService';
 import { reportingService, type OperationalReport } from '@/services/reportingService';
 import { roomService } from '@/services/roomService';
 import { HttpError } from '@/services/http-client';
+import { CatalogImage } from '@/shared/components/CatalogImage';
 import { ErrorState } from '@/shared/components/ErrorState';
+import { ImageGalleryField } from '@/shared/components/ImageGalleryField';
 import { LoadingState } from '@/shared/components/LoadingState';
 import { toDtoCalendarDate } from '@/shared/types/common';
 import { formatCurrency } from '@/shared/utils/currency';
 import { exportDateSuffix, exportToCSV } from '@/shared/utils/exportCsv';
+import {
+  discardPendingUploads,
+  galleryFromImages,
+  getGallerySaveBlocker,
+  toImageAssignments,
+  type GalleryItem,
+} from '@/shared/utils/mediaGallery';
 import type {
   AuditAction,
   AuditLog,
@@ -59,11 +68,17 @@ import type { InventoryItemCategoryDto } from '@/shared/types/entities/inventory
 import type { InventoryMovementReasonDto } from '@/shared/types/entities/inventory-movement';
 import type { InventoryMovementReason } from '@/shared/types/entities/inventory-movement';
 import type { Amenity as DomainAmenity } from '@/shared/types/entities/amenity';
+import {
+  findPrimaryImage,
+  type MediaImage,
+  type MediaImageAssignmentDto,
+} from '@/shared/types/entities/media-image';
 import type { Product } from '@/shared/types/entities/product';
 import type { Role } from '@/shared/types/entities/role';
 import type { Room, RoomStatusDto } from '@/shared/types/entities/room';
 import type { RoomType } from '@/shared/types/entities/room-type';
 import type { User } from '@/shared/types/entities/user';
+import './AdminContent.css';
 
 type AdminUser = {
   id: number;
@@ -107,6 +122,7 @@ type AdminRoomType = {
   features: string[];
   basePrice: number;
   status: 'Activo' | 'Inactivo';
+  images: MediaImage[];
 };
 type SeasonRate = {
   id: number;
@@ -138,6 +154,7 @@ type Amenity = {
   available: boolean;
   status: 'Activo' | 'Inactivo';
   icon: string;
+  images: MediaImage[];
 };
 type RoomServiceItem = {
   id: number;
@@ -147,7 +164,7 @@ type RoomServiceItem = {
   price: number;
   available: boolean;
   status: 'Activo' | 'Inactivo';
-  image: string;
+  images: MediaImage[];
 };
 type InventoryProduct = {
   id: number;
@@ -592,6 +609,7 @@ const adminAmenityFromDomain = (amenity: DomainAmenity, index: number): Amenity 
   available: amenity.active,
   status: amenity.active ? 'Activo' : 'Inactivo',
   icon: ['Waves', 'Utensils', 'Dumbbell', 'Sparkles', 'Star', 'Wifi'][index % 6],
+  images: amenity.images,
 });
 
 const adminProductFromDomain = (product: Product, index: number): RoomServiceItem => ({
@@ -602,7 +620,7 @@ const adminProductFromDomain = (product: Product, index: number): RoomServiceIte
   price: centsToAmount(product.priceCents),
   available: product.active,
   status: product.active ? 'Activo' : 'Inactivo',
-  image: '',
+  images: product.images,
 });
 
 const productSkuFromName = (name: string) => {
@@ -896,6 +914,8 @@ function AdminModal({
   onSubmit,
   submitLabel,
   width = 480,
+  submitting = false,
+  error,
 }: {
   title: string;
   eyebrow: string;
@@ -904,27 +924,42 @@ function AdminModal({
   onSubmit?: () => void;
   submitLabel?: string;
   width?: number;
+  /** Deshabilita los botones mientras se guarda. */
+  submitting?: boolean;
+  /** Error del último intento de guardar; el modal sigue abierto para corregirlo. */
+  error?: string | null;
 }) {
+  const close = submitting ? () => undefined : onClose;
   return (
-    <div className="modal-backdrop" onMouseDown={onClose}>
+    <div className="modal-backdrop" onMouseDown={close}>
       <div className="modal" style={{ width }} onMouseDown={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <div>
             <p className="eyebrow">{eyebrow}</p>
             <h2>{title}</h2>
           </div>
-          <button className="icon-btn" onClick={onClose}>
+          <button className="icon-btn" onClick={close} disabled={submitting} aria-label="Cerrar">
             <X size={18} />
           </button>
         </div>
         {children}
+        {error ? (
+          <p className="adm-modal-error" role="alert">
+            {error}
+          </p>
+        ) : null}
         {onSubmit && (
           <div className="modal-foot">
-            <button className="button secondary" onClick={onClose}>
+            <button className="button secondary" onClick={close} disabled={submitting}>
               Cancelar
             </button>
-            <button className="button primary" onClick={onSubmit}>
-              {submitLabel || 'Guardar'} <ArrowRight size={16} />
+            <button
+              className="button primary"
+              onClick={onSubmit}
+              disabled={submitting}
+              aria-busy={submitting || undefined}
+            >
+              {submitting ? 'Guardando…' : submitLabel || 'Guardar'} <ArrowRight size={16} />
             </button>
           </div>
         )}
@@ -1252,6 +1287,7 @@ export function AdminContent({
             rates.find((rate) => rate.roomTypeId === roomType.id)?.priceCents ?? 0,
           ),
           status: roomType.active ? 'Activo' : 'Inactivo',
+          images: roomType.images,
         }));
 
         const seasonRates: SeasonRate[] = rates.map((rate, index) => ({
@@ -2390,9 +2426,19 @@ function AdminContentReady({
                 {roomTypes.map((rt) => (
                   <tr key={rt.id}>
                     <td>
-                      <div className="adm-table-main">
-                        <strong>{rt.name}</strong>
-                        <span>{rt.description}</span>
+                      <div className="adm-catalog-name">
+                        <div className="adm-catalog-thumb">
+                          <CatalogImage
+                            image={findPrimaryImage(rt.images)}
+                            variant="thumb"
+                            alt={`Foto principal de ${rt.name}`}
+                            staffFallback
+                          />
+                        </div>
+                        <div className="adm-table-main">
+                          <strong>{rt.name}</strong>
+                          <span>{rt.description}</span>
+                        </div>
                       </div>
                     </td>
                     <td>{rt.capacity} huéspedes</td>
@@ -2504,7 +2550,7 @@ function AdminContentReady({
           <RoomTypeModal
             roomType={editRoomType}
             onClose={() => setShowRoomTypeModal(false)}
-            onSave={async (rt) => {
+            onSave={async (rt, images) => {
               if (editRoomType) {
                 const updated = await roomService.updateRoomType(editRoomType.dbId, {
                   name: rt.name,
@@ -2513,6 +2559,7 @@ function AdminContentReady({
                   bed_configuration: editRoomType.features.join(', ') || rt.name,
                   room_feature_ids: rt.roomFeatureIds,
                   active: rt.status === 'Activo',
+                  images,
                 });
                 setRoomTypes((cur) =>
                   cur.map((x) =>
@@ -2522,6 +2569,7 @@ function AdminContentReady({
                           id: editRoomType.id,
                           dbId: updated.id,
                           status: updated.active ? 'Activo' : 'Inactivo',
+                          images: updated.images,
                         }
                       : x,
                   ),
@@ -2536,6 +2584,7 @@ function AdminContentReady({
                   bed_configuration: rt.name,
                   room_feature_ids: rt.roomFeatureIds,
                   active: rt.status === 'Activo',
+                  images,
                 });
                 setRoomTypes((cur) => [
                   ...cur,
@@ -2544,6 +2593,7 @@ function AdminContentReady({
                     id: parseDbId(created.id, Date.now()),
                     dbId: created.id,
                     status: created.active ? 'Activo' : 'Inactivo',
+                    images: created.images,
                   },
                 ]);
                 onAction('Tipo de habitación creado correctamente');
@@ -2849,9 +2899,20 @@ function AdminContentReady({
                     <tr key={a.id}>
                       <td>
                         <div className="adm-table-identity">
-                          <span className="adm-table-icon">
-                            <Icon size={17} />
-                          </span>
+                          {a.images.length > 0 ? (
+                            <div className="adm-catalog-thumb">
+                              <CatalogImage
+                                image={findPrimaryImage(a.images)}
+                                variant="thumb"
+                                alt={`Foto de ${a.name}`}
+                                staffFallback
+                              />
+                            </div>
+                          ) : (
+                            <span className="adm-table-icon">
+                              <Icon size={17} />
+                            </span>
+                          )}
                           <div className="adm-table-main">
                             <strong>{a.name}</strong>
                             <span>{a.dbId}</span>
@@ -2943,9 +3004,19 @@ function AdminContentReady({
                 {filteredRs.map((item) => (
                   <tr key={item.id}>
                     <td>
-                      <div className="adm-table-main">
-                        <strong>{item.name}</strong>
-                        <span>{item.dbId}</span>
+                      <div className="adm-catalog-name">
+                        <div className="adm-catalog-thumb">
+                          <CatalogImage
+                            image={findPrimaryImage(item.images)}
+                            variant="thumb"
+                            alt={`Foto de ${item.name}`}
+                            staffFallback
+                          />
+                        </div>
+                        <div className="adm-table-main">
+                          <strong>{item.name}</strong>
+                          <span>{item.dbId}</span>
+                        </div>
                       </div>
                     </td>
                     <td>{item.category}</td>
@@ -3006,43 +3077,41 @@ function AdminContentReady({
           <AmenityModal
             amenity={editAmenity}
             onClose={() => setShowAmenityModal(false)}
-            onSave={async (a) => {
-              try {
-                const schedule = parseAmenitySchedule(a.schedule);
-                const payload = {
-                  name: a.name,
-                  description: a.schedule,
-                  category: 'hotel' as const,
-                  location: undefined,
-                  opensAt: schedule.opensAt,
-                  closesAt: schedule.closesAt,
-                  active: a.status === 'Activo',
-                };
-                const saved = editAmenity
-                  ? await catalogService.updateAmenity(editAmenity.dbId, payload)
-                  : await catalogService.createAmenity(payload);
-                setAmenities((current) =>
-                  editAmenity
-                    ? current.map((item, index) =>
-                        item.dbId === editAmenity.dbId
-                          ? { ...adminAmenityFromDomain(saved, index), icon: a.icon }
-                          : item,
-                      )
-                    : [
-                        ...current,
-                        { ...adminAmenityFromDomain(saved, current.length), icon: a.icon },
-                      ],
-                );
-                onAction(
-                  editAmenity
-                    ? 'Amenidad actualizada correctamente'
-                    : 'Amenidad creada correctamente',
-                );
-                setShowAmenityModal(false);
-                setEditAmenity(null);
-              } catch (error) {
-                onAction(serviceErrorMessage(error));
-              }
+            onSave={async (a, images) => {
+              // Sin try/catch: si el backend rechaza, el modal muestra el error y sigue abierto.
+              const schedule = parseAmenitySchedule(a.schedule);
+              const payload = {
+                name: a.name,
+                description: a.schedule,
+                category: 'hotel' as const,
+                location: undefined,
+                opensAt: schedule.opensAt,
+                closesAt: schedule.closesAt,
+                active: a.status === 'Activo',
+                images,
+              };
+              const saved = editAmenity
+                ? await catalogService.updateAmenity(editAmenity.dbId, payload)
+                : await catalogService.createAmenity(payload);
+              setAmenities((current) =>
+                editAmenity
+                  ? current.map((item, index) =>
+                      item.dbId === editAmenity.dbId
+                        ? { ...adminAmenityFromDomain(saved, index), icon: a.icon }
+                        : item,
+                    )
+                  : [
+                      ...current,
+                      { ...adminAmenityFromDomain(saved, current.length), icon: a.icon },
+                    ],
+              );
+              onAction(
+                editAmenity
+                  ? 'Amenidad actualizada correctamente'
+                  : 'Amenidad creada correctamente',
+              );
+              setShowAmenityModal(false);
+              setEditAmenity(null);
             }}
           />
         )}
@@ -3050,45 +3119,36 @@ function AdminContentReady({
           <RsItemModal
             item={editRsItem}
             onClose={() => setShowRsItemModal(false)}
-            onSave={async (item) => {
-              try {
-                const payload = {
-                  sku: editRsItem?.dbId ? undefined : productSkuFromName(item.name),
-                  name: item.name,
-                  description: item.category,
-                  category: 'food_and_beverage' as const,
-                  priceCents: amountToCents(item.price),
-                  currency: 'GTQ' as const,
-                  active: item.status === 'Activo',
-                };
-                const saved = editRsItem
-                  ? await catalogService.updateAdminProduct(editRsItem.dbId, payload)
-                  : await catalogService.createAdminProduct({
-                      ...payload,
-                      sku: payload.sku ?? productSkuFromName(item.name),
-                    });
-                setRsItems((current) =>
-                  editRsItem
-                    ? current.map((entry, index) =>
-                        entry.dbId === editRsItem.dbId
-                          ? { ...adminProductFromDomain(saved, index), image: item.image }
-                          : entry,
-                      )
-                    : [
-                        ...current,
-                        { ...adminProductFromDomain(saved, current.length), image: item.image },
-                      ],
-                );
-                onAction(
-                  editRsItem
-                    ? 'Producto actualizado correctamente'
-                    : 'Producto creado correctamente',
-                );
-                setShowRsItemModal(false);
-                setEditRsItem(null);
-              } catch (error) {
-                onAction(serviceErrorMessage(error));
-              }
+            onSave={async (item, images) => {
+              // Sin try/catch: si el backend rechaza, el modal muestra el error y sigue abierto.
+              const payload = {
+                sku: editRsItem?.dbId ? undefined : productSkuFromName(item.name),
+                name: item.name,
+                description: item.category,
+                category: 'food_and_beverage' as const,
+                priceCents: amountToCents(item.price),
+                currency: 'GTQ' as const,
+                active: item.status === 'Activo',
+                images,
+              };
+              const saved = editRsItem
+                ? await catalogService.updateAdminProduct(editRsItem.dbId, payload)
+                : await catalogService.createAdminProduct({
+                    ...payload,
+                    sku: payload.sku ?? productSkuFromName(item.name),
+                  });
+              setRsItems((current) =>
+                editRsItem
+                  ? current.map((entry, index) =>
+                      entry.dbId === editRsItem.dbId ? adminProductFromDomain(saved, index) : entry,
+                    )
+                  : [...current, adminProductFromDomain(saved, current.length)],
+              );
+              onAction(
+                editRsItem ? 'Producto actualizado correctamente' : 'Producto creado correctamente',
+              );
+              setShowRsItemModal(false);
+              setEditRsItem(null);
             }}
           />
         )}
@@ -4194,30 +4254,43 @@ function RoomTypeModal({
 }: {
   roomType: AdminRoomType | null;
   onClose: () => void;
-  onSave: (rt: AdminRoomType) => void;
+  onSave: (rt: AdminRoomType, images: MediaImageAssignmentDto[]) => Promise<void>;
 }) {
   const [name, setName] = useState(roomType?.name ?? '');
   const [capacity, setCapacity] = useState(roomType?.capacity ?? 2);
   const [description, setDescription] = useState(roomType?.description ?? '');
   const [basePrice, setBasePrice] = useState(roomType?.basePrice ?? 1850);
   const [status, setStatus] = useState<'Activo' | 'Inactivo'>(roomType?.status ?? 'Activo');
+  const [gallery, setGallery] = useState<GalleryItem[]>(() =>
+    galleryFromImages(roomType?.images ?? []),
+  );
+  const save = useModalSave(gallery, onClose);
   return (
     <AdminModal
       title={roomType ? 'Editar tipo de habitación' : 'Nuevo tipo de habitación'}
       eyebrow="TIPOS DE HABITACIÓN"
-      onClose={onClose}
+      width={640}
+      onClose={save.cancel}
+      submitting={save.submitting}
+      error={save.error}
       onSubmit={() =>
-        onSave({
-          id: roomType?.id ?? 0,
-          dbId: roomType?.dbId ?? '',
-          name,
-          capacity,
-          description,
-          roomFeatureIds: roomType?.roomFeatureIds ?? [],
-          features: roomType?.features ?? ['Cama king', 'Wi-Fi'],
-          basePrice,
-          status,
-        })
+        save.submit(() =>
+          onSave(
+            {
+              id: roomType?.id ?? 0,
+              dbId: roomType?.dbId ?? '',
+              name,
+              capacity,
+              description,
+              roomFeatureIds: roomType?.roomFeatureIds ?? [],
+              features: roomType?.features ?? ['Cama king', 'Wi-Fi'],
+              basePrice,
+              status,
+              images: roomType?.images ?? [],
+            },
+            toImageAssignments(gallery),
+          ),
+        )
       }
       submitLabel={roomType ? 'Guardar cambios' : 'Crear tipo'}
     >
@@ -4272,8 +4345,52 @@ function RoomTypeModal({
           </select>
         </label>
       </div>
+      <div className="adm-modal-section">
+        <ImageGalleryField
+          label="Fotos del tipo de habitación"
+          target="roomType"
+          items={gallery}
+          onChange={setGallery}
+          recordName={name || 'el tipo de habitación'}
+          disabled={save.submitting}
+        />
+      </div>
     </AdminModal>
   );
+}
+
+/**
+ * Guardado de un modal de catálogo con imágenes: no guarda mientras una
+ * imagen sube o falló, muestra el error del backend sin cerrar el modal y, si
+ * se cancela, borra las imágenes subidas que nunca se guardaron.
+ */
+function useModalSave(gallery: GalleryItem[], onClose: () => void) {
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(save: () => Promise<void>) {
+    const blocker = getGallerySaveBlocker(gallery);
+    if (blocker) {
+      setError(blocker);
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      await save();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'No fue posible guardar los cambios.');
+      setSubmitting(false);
+    }
+  }
+
+  function cancel() {
+    if (submitting) return;
+    void discardPendingUploads(gallery);
+    onClose();
+  }
+
+  return { submit, cancel, submitting, error };
 }
 
 function SeasonRateModal({
@@ -4490,28 +4607,40 @@ function AmenityModal({
 }: {
   amenity: Amenity | null;
   onClose: () => void;
-  onSave: (a: Amenity) => void;
+  onSave: (a: Amenity, images: MediaImageAssignmentDto[]) => Promise<void>;
 }) {
   const [name, setName] = useState(amenity?.name ?? '');
   const [schedule, setSchedule] = useState(amenity?.schedule ?? '');
   const [available, setAvailable] = useState(amenity?.available ?? true);
   const [status, setStatus] = useState<'Activo' | 'Inactivo'>(amenity?.status ?? 'Activo');
   const [icon, setIcon] = useState(amenity?.icon ?? 'Sparkles');
+  const [gallery, setGallery] = useState<GalleryItem[]>(() =>
+    galleryFromImages(amenity?.images ?? []),
+  );
+  const save = useModalSave(gallery, onClose);
   return (
     <AdminModal
       title={amenity ? 'Editar amenidad' : 'Nueva amenidad'}
       eyebrow="GESTIÓN DE AMENIDADES"
-      onClose={onClose}
+      onClose={save.cancel}
+      submitting={save.submitting}
+      error={save.error}
       onSubmit={() =>
-        onSave({
-          id: amenity?.id ?? 0,
-          dbId: amenity?.dbId ?? '',
-          name,
-          schedule,
-          available,
-          status,
-          icon,
-        })
+        save.submit(() =>
+          onSave(
+            {
+              id: amenity?.id ?? 0,
+              dbId: amenity?.dbId ?? '',
+              name,
+              schedule,
+              available,
+              status,
+              icon,
+              images: amenity?.images ?? [],
+            },
+            toImageAssignments(gallery),
+          ),
+        )
       }
       submitLabel={amenity ? 'Guardar cambios' : 'Crear amenidad'}
     >
@@ -4568,6 +4697,17 @@ function AmenityModal({
           </select>
         </label>
       </div>
+      <div className="adm-modal-section">
+        <ImageGalleryField
+          label="Foto de la amenidad"
+          target="amenity"
+          items={gallery}
+          onChange={setGallery}
+          maxImages={1}
+          recordName={name || 'la amenidad'}
+          disabled={save.submitting}
+        />
+      </div>
     </AdminModal>
   );
 }
@@ -4579,32 +4719,40 @@ function RsItemModal({
 }: {
   item: RoomServiceItem | null;
   onClose: () => void;
-  onSave: (i: RoomServiceItem) => void;
+  onSave: (i: RoomServiceItem, images: MediaImageAssignmentDto[]) => Promise<void>;
 }) {
   const [name, setName] = useState(item?.name ?? '');
   const [category, setCategory] = useState(item?.category ?? 'Desayunos');
   const [price, setPrice] = useState(item?.price ?? 0);
   const [available, setAvailable] = useState(item?.available ?? true);
   const [status, setStatus] = useState<'Activo' | 'Inactivo'>(item?.status ?? 'Activo');
-  const [image, setImage] = useState(item?.image ?? '');
+  const [gallery, setGallery] = useState<GalleryItem[]>(() =>
+    galleryFromImages(item?.images ?? []),
+  );
+  const save = useModalSave(gallery, onClose);
   return (
     <AdminModal
       title={item ? 'Editar producto' : 'Nuevo producto'}
       eyebrow="CATÁLOGO DE ROOM SERVICE"
-      onClose={onClose}
+      onClose={save.cancel}
+      submitting={save.submitting}
+      error={save.error}
       onSubmit={() =>
-        onSave({
-          id: item?.id ?? 0,
-          dbId: item?.dbId ?? '',
-          name,
-          category,
-          price,
-          available,
-          status,
-          image:
-            image ||
-            'https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg?auto=compress&cs=tinysrgb&h=200&w=300',
-        })
+        save.submit(() =>
+          onSave(
+            {
+              id: item?.id ?? 0,
+              dbId: item?.dbId ?? '',
+              name,
+              category,
+              price,
+              available,
+              status,
+              images: item?.images ?? [],
+            },
+            toImageAssignments(gallery),
+          ),
+        )
       }
       submitLabel={item ? 'Guardar cambios' : 'Crear producto'}
     >
@@ -4664,15 +4812,17 @@ function RsItemModal({
           </select>
         </label>
       </div>
-      <label className="hk-form-label">
-        URL de imagen
-        <input
-          className="hk-form-select"
-          value={image}
-          onChange={(e) => setImage(e.target.value)}
-          placeholder="https://..."
+      <div className="adm-modal-section">
+        <ImageGalleryField
+          label="Foto del producto"
+          target="product"
+          items={gallery}
+          onChange={setGallery}
+          maxImages={1}
+          recordName={name || 'el producto'}
+          disabled={save.submitting}
         />
-      </label>
+      </div>
     </AdminModal>
   );
 }

@@ -6,11 +6,17 @@ import {
   type RoomFeatureDto,
 } from '@/shared/types/entities/room-feature';
 import {
+  toDomain as toAmenity,
+  type Amenity,
+  type AmenityDto,
+} from '@/shared/types/entities/amenity';
+import {
   toDomain as toRoomType,
   type RoomType,
   type RoomTypeDto,
 } from '@/shared/types/entities/room-type';
 import { HttpError, httpClient } from './http-client';
+import { toMediaImageDtos, type ApiMediaImage } from './mediaService';
 import { mockUtils, simulateLatency } from './mockUtils';
 
 type ApiRoomType = {
@@ -24,6 +30,7 @@ type ApiRoomType = {
   roomFeatures?: ApiRoomFeature[];
   features?: ApiRoomFeature[];
   active?: boolean;
+  images?: ApiMediaImage[];
   createdAt?: string | null;
   updatedAt?: string | null;
 };
@@ -72,6 +79,18 @@ type PublicAvailabilityResponse = {
   adults: number;
   children: number;
   results: PublicAvailabilityResult[];
+};
+
+/** Amenidad activa de `GET /public/amenities`: sin `active` ni timestamps internos. */
+type ApiPublicAmenity = {
+  id: string;
+  name: string;
+  description?: string | null;
+  category: AmenityDto['category'];
+  location?: string | null;
+  opensAt?: string | null;
+  closesAt?: string | null;
+  images?: ApiMediaImage[];
 };
 
 export type PublicAvailableRoomType = {
@@ -158,6 +177,7 @@ function toRoomTypeDto(api: ApiRoomType): RoomTypeDto {
       api.features?.map((feature) => feature.id) ??
       [],
     active: api.active ?? true,
+    images: toMediaImageDtos(api.images),
     created_at: api.createdAt ?? timestamp,
     updated_at: timestamp,
   };
@@ -359,6 +379,27 @@ function buildRoomTypeCatalog(roomTypes: ApiRoomType[]): PublicRoomTypeCatalog {
   };
 }
 
+/**
+ * El endpoint público solo devuelve amenidades activas y omite timestamps:
+ * se completan para cumplir el contrato compartido, sin valor de negocio.
+ */
+function toPublicAmenityDto(api: ApiPublicAmenity): AmenityDto {
+  const timestamp = nowIso();
+  return {
+    id: api.id,
+    name: api.name,
+    description: api.description ?? undefined,
+    category: api.category,
+    location: api.location ?? undefined,
+    opens_at: api.opensAt ?? undefined,
+    closes_at: api.closesAt ?? undefined,
+    active: true,
+    images: toMediaImageDtos(api.images),
+    created_at: timestamp,
+    updated_at: timestamp,
+  };
+}
+
 function buildRoomTypeFromAvailability(result: PublicAvailabilityResult): RoomType {
   return toRoomType(
     toRoomTypeDto({
@@ -407,6 +448,19 @@ export const publicBookingCatalogService = {
     await simulateLatency();
     mockUtils.throwIfSimulatingError('No fue posible cargar los tipos de habitacion.');
     return buildRoomTypeCatalog(await fetchPublicRoomTypes());
+  },
+  /** Amenidades activas del hotel con sus imágenes, sin sesión. */
+  async getAmenities(): Promise<Amenity[]> {
+    await simulateLatency();
+    mockUtils.throwIfSimulatingError('No fue posible cargar las amenidades.');
+    const amenities = await publicRequest(
+      () =>
+        httpClient.get<ApiPublicAmenity[]>('/public/amenities', {
+          auth: { skipAuthorization: true, skipRefresh: true },
+        }),
+      'catalog',
+    );
+    return amenities.map(toPublicAmenityDto).map(toAmenity);
   },
   async getRates(): Promise<Rate[]> {
     await simulateLatency();
