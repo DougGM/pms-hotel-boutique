@@ -45,6 +45,7 @@ import { ErrorState } from '@/shared/components/ErrorState';
 import { ImageGalleryField } from '@/shared/components/ImageGalleryField';
 import { LoadingState } from '@/shared/components/LoadingState';
 import { toDtoCalendarDate } from '@/shared/types/common';
+import { formatAmenitySchedule, parseAmenityScheduleInput } from '@/shared/utils/amenitySchedule';
 import { formatCurrency } from '@/shared/utils/currency';
 import { exportDateSuffix, exportToCSV } from '@/shared/utils/exportCsv';
 import {
@@ -67,7 +68,7 @@ import type { InventoryItemCategory, InventoryUnit } from '@/shared/types/entiti
 import type { InventoryItemCategoryDto } from '@/shared/types/entities/inventory-item';
 import type { InventoryMovementReasonDto } from '@/shared/types/entities/inventory-movement';
 import type { InventoryMovementReason } from '@/shared/types/entities/inventory-movement';
-import type { Amenity as DomainAmenity } from '@/shared/types/entities/amenity';
+import type { Amenity as DomainAmenity, AmenityCategory } from '@/shared/types/entities/amenity';
 import {
   findPrimaryImage,
   type MediaImage,
@@ -150,6 +151,9 @@ type Amenity = {
   id: number;
   dbId: string;
   name: string;
+  description: string;
+  category: AmenityCategory;
+  /** Texto editable "HH:mm - HH:mm"; vacío = servicio continuo. */
   schedule: string;
   available: boolean;
   status: 'Activo' | 'Inactivo';
@@ -598,26 +602,12 @@ const roleIdFromDisplay = (roles: AdminRole[], roleName: string) => {
   return role.dbId;
 };
 
-const formatAmenitySchedule = (amenity: DomainAmenity) => {
-  if (amenity.opensAt && amenity.closesAt) return `${amenity.opensAt} - ${amenity.closesAt}`;
-  return 'Disponible';
-};
-
-const parseAmenitySchedule = (schedule: string) => {
-  const [opensAt, closesAt] = schedule
-    .split(/\s*(?:-|—|a)\s*/i)
-    .map((value) => value.trim())
-    .filter(Boolean);
-  return {
-    opensAt: /^\d{2}:\d{2}$/.test(opensAt ?? '') ? opensAt : undefined,
-    closesAt: /^\d{2}:\d{2}$/.test(closesAt ?? '') ? closesAt : undefined,
-  };
-};
-
 const adminAmenityFromDomain = (amenity: DomainAmenity, index: number): Amenity => ({
   id: parseDbId(amenity.id, index + 1),
   dbId: amenity.id,
   name: amenity.name,
+  description: amenity.description ?? '',
+  category: amenity.category,
   schedule: formatAmenitySchedule(amenity),
   available: amenity.active,
   status: amenity.active ? 'Activo' : 'Inactivo',
@@ -2954,7 +2944,7 @@ function AdminContentReady({
                           </div>
                         </div>
                       </td>
-                      <td>{a.schedule}</td>
+                      <td>{a.schedule || 'Disponible'}</td>
                       <td>
                         <span className={`status-pill ${a.available ? 'success' : 'warning'}`}>
                           {a.available ? 'Disponible' : 'No disponible'}
@@ -3114,11 +3104,12 @@ function AdminContentReady({
             onClose={() => setShowAmenityModal(false)}
             onSave={async (a, images) => {
               // Sin try/catch: si el backend rechaza, el modal muestra el error y sigue abierto.
-              const schedule = parseAmenitySchedule(a.schedule);
+              const schedule = parseAmenityScheduleInput(a.schedule);
+              if (!schedule.ok) throw new Error(schedule.error);
               const payload = {
                 name: a.name,
-                description: a.schedule,
-                category: 'hotel' as const,
+                description: a.description,
+                category: a.category,
                 location: undefined,
                 opensAt: schedule.opensAt,
                 closesAt: schedule.closesAt,
@@ -4680,8 +4671,9 @@ function AmenityModal({
   onSave: (a: Amenity, images: MediaImageAssignmentDto[]) => Promise<void>;
 }) {
   const [name, setName] = useState(amenity?.name ?? '');
+  const [description, setDescription] = useState(amenity?.description ?? '');
+  const [category, setCategory] = useState<AmenityCategory>(amenity?.category ?? 'hotel');
   const [schedule, setSchedule] = useState(amenity?.schedule ?? '');
-  const [available, setAvailable] = useState(amenity?.available ?? true);
   const [status, setStatus] = useState<'Activo' | 'Inactivo'>(amenity?.status ?? 'Activo');
   const [icon, setIcon] = useState(amenity?.icon ?? 'Sparkles');
   const [gallery, setGallery] = useState<GalleryItem[]>(() =>
@@ -4702,8 +4694,11 @@ function AmenityModal({
               id: amenity?.id ?? 0,
               dbId: amenity?.dbId ?? '',
               name,
+              description,
+              category,
               schedule,
-              available,
+              // La disponibilidad sale del estado: el backend solo guarda `active`.
+              available: status === 'Activo',
               status,
               icon,
               images: amenity?.images ?? [],
@@ -4725,13 +4720,29 @@ function AmenityModal({
           />
         </label>
         <label className="hk-form-label">
+          Categoría
+          <select
+            className="hk-form-select"
+            value={category}
+            onChange={(e) => setCategory(e.target.value as AmenityCategory)}
+          >
+            <option value="hotel">Hotel</option>
+            <option value="room">Habitación</option>
+            <option value="service">Servicio</option>
+          </select>
+        </label>
+        <label className="hk-form-label">
           Horario
           <input
             className="hk-form-select"
             value={schedule}
             onChange={(e) => setSchedule(e.target.value)}
-            placeholder="Ej. 07:00 — 21:00"
+            placeholder="Ej. 07:00 - 21:00"
+            aria-describedby="amenity-schedule-help"
           />
+          <small id="amenity-schedule-help" className="adm-field-help">
+            Formato HH:mm - HH:mm. Déjalo vacío si está disponible todo el día.
+          </small>
         </label>
         <label className="hk-form-label">
           Ícono
@@ -4742,17 +4753,6 @@ function AmenityModal({
             <option value="Sparkles">Spa</option>
             <option value="Star">Terraza</option>
             <option value="Wifi">Wi-Fi</option>
-          </select>
-        </label>
-        <label className="hk-form-label">
-          Disponibilidad
-          <select
-            className="hk-form-select"
-            value={available ? 'si' : 'no'}
-            onChange={(e) => setAvailable(e.target.value === 'si')}
-          >
-            <option value="si">Disponible</option>
-            <option value="no">No disponible</option>
           </select>
         </label>
         <label className="hk-form-label">
@@ -4767,6 +4767,15 @@ function AmenityModal({
           </select>
         </label>
       </div>
+      <label className="hk-form-label">
+        Descripción
+        <textarea
+          className="hk-form-textarea"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="Ej. Piscina climatizada con servicio de bebidas"
+        />
+      </label>
       <div className="adm-modal-section">
         <ImageGalleryField
           label="Foto de la amenidad"

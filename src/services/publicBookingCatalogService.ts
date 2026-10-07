@@ -17,6 +17,7 @@ import {
 } from '@/shared/types/entities/room-type';
 import { HttpError, httpClient } from './http-client';
 import { toMediaImageDtos, type ApiMediaImage } from './mediaService';
+import { normalizeAmenityTime } from '@/shared/utils/amenitySchedule';
 import { mockUtils, simulateLatency } from './mockUtils';
 
 type ApiRoomType = {
@@ -391,8 +392,8 @@ function toPublicAmenityDto(api: ApiPublicAmenity): AmenityDto {
     description: api.description ?? undefined,
     category: api.category,
     location: api.location ?? undefined,
-    opens_at: api.opensAt ?? undefined,
-    closes_at: api.closesAt ?? undefined,
+    opens_at: normalizeAmenityTime(api.opensAt),
+    closes_at: normalizeAmenityTime(api.closesAt),
     active: true,
     images: toMediaImageDtos(api.images),
     created_at: timestamp,

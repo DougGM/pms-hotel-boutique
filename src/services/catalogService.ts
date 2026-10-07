@@ -18,6 +18,7 @@ import {
   type ApiMediaImage,
 } from './mediaService';
 import type { MediaImageAssignmentDto } from '@/shared/types/entities/media-image';
+import { normalizeAmenityTime } from '@/shared/utils/amenitySchedule';
 
 type ApiAmenity = {
   id: string;
@@ -52,8 +53,9 @@ type SaveAmenityData = {
   description?: string;
   category: AmenityDto['category'];
   location?: string;
-  opensAt?: string;
-  closesAt?: string;
+  /** "HH:mm". En una actualización, ausente conserva la hora guardada y `null` la quita. */
+  opensAt?: string | null;
+  closesAt?: string | null;
   active?: boolean;
   /** Ausente: no cambia la galería. Lista vacía: quita todas las imágenes. */
   images?: MediaImageAssignmentDto[];
@@ -81,8 +83,9 @@ function mapAmenityFromApi(api: ApiAmenity): AmenityDto {
     description: api.description,
     category: api.category,
     location: api.location,
-    opens_at: api.opensAt,
-    closes_at: api.closesAt,
+    // El backend envía "HH:mm:ss"; el contrato de amenity es "HH:mm".
+    opens_at: normalizeAmenityTime(api.opensAt),
+    closes_at: normalizeAmenityTime(api.closesAt),
     active: api.active,
     images: toMediaImageDtos(api.images),
     created_at: createdAt,
@@ -115,8 +118,8 @@ function toAmenityRequest(data: SaveAmenityData) {
     description: data.description?.trim() || undefined,
     category: data.category,
     location: data.location?.trim() || undefined,
-    opensAt: data.opensAt || undefined,
-    closesAt: data.closesAt || undefined,
+    opensAt: normalizeAmenityTime(data.opensAt),
+    closesAt: normalizeAmenityTime(data.closesAt),
     active: data.active ?? true,
     images: toImagesRequest(data.images),
   };
@@ -246,8 +249,9 @@ export const catalogService = {
           description: data.description ?? current.description,
           category: data.category ?? current.category,
           location: data.location ?? current.location,
-          opensAt: data.opensAt ?? current.opensAt,
-          closesAt: data.closesAt ?? current.closesAt,
+          // `undefined` conserva el horario guardado; `null` lo quita (servicio continuo).
+          opensAt: data.opensAt === undefined ? current.opensAt : data.opensAt,
+          closesAt: data.closesAt === undefined ? current.closesAt : data.closesAt,
           active: data.active ?? current.active,
           images: data.images,
         }),
