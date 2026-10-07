@@ -799,14 +799,20 @@ async function loadWorkspaceData(role: RoleId): Promise<WorkspaceState> {
     housekeepingData,
     conciergeData,
   ] = await Promise.all([
-    canReadRooms ? roomService.getRooms() : [],
+    // Limpieza obtiene las habitaciones desde housekeeping; evita depender de
+    // `rooms.read` en perfiles personalizados con acceso solo al módulo.
+    canReadRooms && role !== 'housekeeping' ? roomService.getRooms() : [],
     canReadRoomCatalog ? roomService.getRoomTypes() : [],
     canReadRoomCatalog ? roomService.getRoomFeatures() : [],
     canReadBookings ? bookingService.getBookings() : [],
     canReadGuests ? guestService.getGuests() : [],
     ROOM_SERVICE_READ_ROLES.includes(role) ? catalogService.getProducts() : [],
     ROOM_SERVICE_READ_ROLES.includes(role) ? orderService.getOrders() : [],
-    canReadServiceRequests ? serviceRequestService.getRequests() : [],
+    canReadServiceRequests
+      ? role === 'housekeeping'
+        ? safeList(() => serviceRequestService.getRequests())
+        : serviceRequestService.getRequests()
+      : [],
     safeList(() => auditService.getLogs()),
     canReadFinance ? guestAccountService.getCharges() : [],
     canReadFinance ? guestAccountService.getPayments() : [],
@@ -1014,6 +1020,24 @@ async function loadWorkspaceData(role: RoleId): Promise<WorkspaceState> {
     recRoomBlocks,
     recentActivity,
   };
+}
+
+function loadWorkspaceDataWithTimeout(role: RoleId, timeoutMs: number): Promise<WorkspaceState> {
+  let timeoutId: number | undefined;
+  return Promise.race([
+    loadWorkspaceData(role),
+    new Promise<never>((_, reject) => {
+      timeoutId = window.setTimeout(
+        () =>
+          reject(
+            new Error('La carga tardó demasiado. Comprueba tu conexión e inténtalo de nuevo.'),
+          ),
+        timeoutMs,
+      );
+    }),
+  ]).finally(() => {
+    if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+  });
 }
 
 const navByRole: Record<RoleId, NavItem[]> = {
@@ -1337,18 +1361,22 @@ const EMPTY_WORKSPACE_DATA: WorkspaceState = {
 export function PrivateWorkspace(props: PrivateWorkspaceProps) {
   const role = props.role;
   const skipLoad = role === 'admin' || role === 'guest';
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [screen, setScreen] = useState<LoaderState>(
     skipLoad ? { status: 'ready', ...EMPTY_WORKSPACE_DATA } : { status: 'loading' },
   );
 
   useEffect(() => {
-    if (skipLoad) return;
+    if (skipLoad) {
+      setScreen({ status: 'ready', ...EMPTY_WORKSPACE_DATA });
+      return;
+    }
     let active = true;
 
     async function load() {
       setScreen({ status: 'loading' });
       try {
-        const data = await loadWorkspaceData(role);
+        const data = await loadWorkspaceDataWithTimeout(role, 20000);
         if (active) setScreen({ status: 'ready', ...data });
       } catch (cause) {
         if (active) setScreen({ status: 'error', message: getErrorMessage(cause) });
@@ -1359,7 +1387,7 @@ export function PrivateWorkspace(props: PrivateWorkspaceProps) {
     return () => {
       active = false;
     };
-  }, [skipLoad, role]);
+  }, [skipLoad, role, loadAttempt]);
 
   if (screen.status === 'loading') {
     return <LoadingState label="Cargando el panel privado..." />;
@@ -1370,7 +1398,7 @@ export function PrivateWorkspace(props: PrivateWorkspaceProps) {
       <ErrorState
         title="No pudimos cargar el panel privado"
         description={screen.message}
-        onRetry={() => setScreen({ status: 'loading' })}
+        onRetry={() => setLoadAttempt((attempt) => attempt + 1)}
       />
     );
   }
