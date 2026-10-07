@@ -130,9 +130,15 @@ respuesta del POST. Ver `docs/DECISIONES.md`, D-016.
 
 Nota 2026-09-26 (#76): en pantallas orientadas a personas, el nombre completo
 del huesped es la etiqueta primaria cuando puede resolverse por `guestService`;
-`GST-*` se mantiene solo como referencia secundaria. La galeria publica de
-habitaciones vive en `modules/booking-engine/screens/room-media.ts`, se
-reutiliza entre buscador y detalle, y debe conservar fallback si no hay fotos.
+`GST-*` se mantiene solo como referencia secundaria.
+
+Nota 2026-10-07 (#146): las fotos de tipos de habitación, productos y
+amenidades salen del backend (#82), nunca de URLs fijas en el código. Llegan
+como `images` en sus modelos (`shared/types/entities/media-image/`); se suben
+con `services/mediaService.ts` y se asocian al guardar el registro. Para
+mostrarlas se usa `shared/components/CatalogImage.tsx`, que pinta un
+placeholder neutral si el registro no tiene foto (nunca la foto de otro), y
+para editarlas `shared/components/ImageGalleryField.tsx`.
 
 - Una vista sin sesión se crea en `public/pages/`.
 - Una vista autenticada se crea en `private/pages/`; su lógica de negocio se

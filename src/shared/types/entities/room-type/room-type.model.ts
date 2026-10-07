@@ -1,3 +1,5 @@
+import type { MediaImage } from '@/shared/types/entities/media-image';
+
 export interface RoomType {
   id: string;
   code: string;
@@ -7,6 +9,7 @@ export interface RoomType {
   bedConfiguration: string;
   roomFeatureIds: string[];
   active: boolean;
+  images: MediaImage[];
   createdAt: Date;
   updatedAt: Date;
 }

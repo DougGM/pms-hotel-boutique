@@ -4,11 +4,19 @@ import { routePaths } from '@/app/routes';
 import { Button } from '@/shared/components/Button';
 import { EmptyState } from '@/shared/components/EmptyState';
 import { ErrorState } from '@/shared/components/ErrorState';
+import { ImageGalleryField } from '@/shared/components/ImageGalleryField';
 import { Input } from '@/shared/components/Input';
 import { LoadingState } from '@/shared/components/LoadingState';
 import { Select } from '@/shared/components/Select';
 import { roomService } from '@/services/roomService';
 import type { RoomFeature } from '@/shared/types/entities/room-feature';
+import {
+  discardPendingUploads,
+  galleryFromImages,
+  getGallerySaveBlocker,
+  toImageAssignments,
+  type GalleryItem,
+} from '@/shared/utils/mediaGallery';
 import './rooms.css';
 
 type ScreenState =
@@ -70,6 +78,7 @@ export function RoomTypeFormScreen() {
   const [errors, setErrors] = useState<FormErrors>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [gallery, setGallery] = useState<GalleryItem[]>([]);
 
   const loadData = useCallback(async () => {
     setScreen({ status: 'loading' });
@@ -91,8 +100,10 @@ export function RoomTypeFormScreen() {
           roomFeatureIds: roomType.roomFeatureIds,
           active: roomType.active ? 'true' : 'false',
         });
+        setGallery(galleryFromImages(roomType.images));
       } else {
         setForm(initialForm);
+        setGallery([]);
       }
 
       setScreen({ status: 'ready', roomFeatures });
@@ -116,6 +127,11 @@ export function RoomTypeFormScreen() {
     const nextErrors = validateForm(form);
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length) return;
+    const galleryBlocker = getGallerySaveBlocker(gallery);
+    if (galleryBlocker) {
+      setSubmitError(galleryBlocker);
+      return;
+    }
 
     setSubmitting(true);
     setSubmitError(null);
@@ -128,6 +144,7 @@ export function RoomTypeFormScreen() {
         bed_configuration: form.bedConfiguration.trim(),
         room_feature_ids: form.roomFeatureIds,
         active: form.active === 'true',
+        images: toImageAssignments(gallery),
       };
       if (roomTypeId) {
         await roomService.updateRoomType(roomTypeId, data);
@@ -261,13 +278,30 @@ export function RoomTypeFormScreen() {
           onChange={(event) => updateField('description', event.target.value)}
         />
 
+        <div className="rooms-form-full">
+          <ImageGalleryField
+            label="Fotos del tipo de habitación"
+            target="roomType"
+            items={gallery}
+            onChange={(next) => {
+              setGallery(next);
+              setSubmitError(null);
+            }}
+            recordName={form.name || 'el tipo de habitación'}
+            disabled={submitting}
+          />
+        </div>
+
         {submitError && <p className="rooms-error">{submitError}</p>}
 
         <div className="rooms-actions">
           <Button
             type="button"
             variant="secondary"
-            onClick={() => navigate(routePaths.pms.roomTypes)}
+            onClick={() => {
+              void discardPendingUploads(gallery);
+              navigate(routePaths.pms.roomTypes);
+            }}
           >
             Cancelar
           </Button>

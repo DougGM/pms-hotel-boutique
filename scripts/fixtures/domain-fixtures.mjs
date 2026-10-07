@@ -10,6 +10,34 @@ export const roomFeatures = [
   },
 ];
 
+export const mediaImages = [
+  {
+    id: 'MED-01',
+    alt_text: 'Cama matrimonial con vista al jardin',
+    position: 0,
+    primary: true,
+    width: 1600,
+    height: 1067,
+    urls: {
+      thumb: 'http://localhost:8080/api/v1/public/media/MED-01/thumb',
+      medium: 'http://localhost:8080/api/v1/public/media/MED-01/medium',
+      large: 'http://localhost:8080/api/v1/public/media/MED-01/large',
+    },
+  },
+  {
+    id: 'MED-02',
+    position: 1,
+    primary: false,
+    width: 960,
+    height: 640,
+    urls: {
+      thumb: 'http://localhost:8080/api/v1/public/media/MED-02/thumb',
+      medium: 'http://localhost:8080/api/v1/public/media/MED-02/medium',
+      large: 'http://localhost:8080/api/v1/public/media/MED-02/large',
+    },
+  },
+];
+
 export const roomTypes = [
   {
     id: 'RT-01',
@@ -20,6 +48,7 @@ export const roomTypes = [
     bed_configuration: '1 cama matrimonial',
     room_feature_ids: ['RF-01'],
     active: true,
+    images: mediaImages,
     created_at: now,
     updated_at: now,
   },
@@ -195,6 +224,7 @@ export const products = [
     price_cents: 1500,
     currency: 'GTQ',
     active: true,
+    images: [],
     created_at: now,
     updated_at: now,
   },
@@ -207,6 +237,7 @@ export const products = [
     price_cents: 2800,
     currency: 'GTQ',
     active: false,
+    images: [],
     created_at: now,
     updated_at: now,
   },
@@ -222,6 +253,7 @@ export const amenities = [
     opens_at: '08:00',
     closes_at: '20:00',
     active: true,
+    images: [],
     created_at: now,
     updated_at: now,
   },
@@ -232,6 +264,7 @@ export const amenities = [
     category: 'hotel',
     location: 'Todo el hotel',
     active: false,
+    images: [],
     created_at: now,
     updated_at: now,
   },

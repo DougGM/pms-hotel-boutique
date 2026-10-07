@@ -62,6 +62,8 @@
   background-size: cover;
   background-position: center;
   position: relative;
+  overflow: hidden;
+  background-color: var(--media-placeholder-bg);
 }
 
 .booking-amenity-image::after,
@@ -258,42 +260,14 @@
 }
 
 .booking-room-visual {
-  background:
-    linear-gradient(
-      180deg,
-      var(--color-legacy-2e211a22) 0%,
-      transparent 42%,
-      var(--color-legacy-2e211a44) 100%
-    ),
-    linear-gradient(135deg, var(--color-legacy-dbe7f0), var(--color-legacy-cfad7b));
-  background-size: cover;
-  background-position: center;
+  background: var(--media-placeholder-bg);
 }
 
-.booking-room-visual-1 {
-  background:
-    linear-gradient(
-      180deg,
-      var(--color-legacy-2e211a22) 0%,
-      transparent 42%,
-      var(--color-legacy-2e211a44) 100%
-    ),
-    linear-gradient(135deg, var(--color-legacy-f0dfbd), var(--color-legacy-dbe7f0));
-  background-size: cover;
-  background-position: center;
-}
-
-.booking-room-visual-2 {
-  background:
-    linear-gradient(
-      180deg,
-      var(--color-legacy-2e211a22) 0%,
-      transparent 42%,
-      var(--color-legacy-2e211a44) 100%
-    ),
-    linear-gradient(135deg, var(--color-legacy-e3d5cb), var(--color-legacy-f0dfbd));
-  background-size: cover;
-  background-position: center;
+/* Foto del backend (o placeholder neutral) debajo del degradado y la etiqueta. */
+.booking-room-photo,
+.booking-amenity-photo {
+  position: absolute;
+  inset: 0;
 }
 
 .booking-room-code {
@@ -537,7 +511,8 @@
   box-shadow: 0 var(--size-legacy-12) var(--size-legacy-25) var(--color-legacy-3b2a1a12);
 }
 
-.booking-photo-card img {
+.booking-photo-card img,
+.booking-photo-card .catalog-image {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -556,6 +531,11 @@
     var(--color-legacy-2e211a55) 100%
   );
   pointer-events: none;
+}
+
+.booking-photo-card--fallback {
+  background: var(--media-placeholder-bg);
+  box-shadow: none;
 }
 
 .booking-photo-card--fallback::after {

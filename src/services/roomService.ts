@@ -21,6 +21,12 @@ import {
 import type { ID } from '@/shared/types/common';
 import { mockUtils, simulateLatency } from './mockUtils';
 import { HttpError, httpClient } from './http-client';
+import {
+  describeImageAssignmentError,
+  toImagesRequest,
+  toMediaImageDtos,
+  type ApiMediaImage,
+} from './mediaService';
 
 type SaveRateDto = {
   room_type_id: ID;
@@ -63,6 +69,7 @@ type ApiRoomType = {
   roomFeatureIds?: string[];
   roomFeatures?: { id: string }[];
   active: boolean;
+  images?: ApiMediaImage[];
   createdAt?: string | null;
   updatedAt?: string | null;
 };
@@ -136,6 +143,7 @@ function toRoomTypeDto(api: ApiRoomType): RoomTypeDto {
     bed_configuration: api.bedConfiguration,
     room_feature_ids: api.roomFeatureIds ?? api.roomFeatures?.map((feature) => feature.id) ?? [],
     active: api.active,
+    images: toMediaImageDtos(api.images),
     created_at: api.createdAt ?? timestamp,
     updated_at: timestamp,
   };
@@ -190,6 +198,7 @@ function toRoomTypeRequest(data: CreateRoomTypeDto | UpdateRoomTypeDto) {
     bedConfiguration: data.bed_configuration?.trim(),
     roomFeatureIds: data.room_feature_ids,
     active: data.active,
+    images: toImagesRequest(data.images),
   };
 }
 
@@ -209,6 +218,8 @@ function toRateRequest(data: SaveRateDto | Partial<SaveRateDto>) {
 
 function getHttpErrorMessage(error: unknown, fallback: string): string {
   if (!(error instanceof HttpError)) return error instanceof Error ? error.message : fallback;
+  const imageMessage = describeImageAssignmentError(error);
+  if (imageMessage) return imageMessage;
   if (error.status === 400) return `${fallback} Revisa los datos enviados.`;
   if (error.status === 401) return 'Tu sesion expiro. Inicia sesion nuevamente.';
   if (error.status === 403) return 'No tienes permisos para operar habitaciones, tipos o tarifas.';

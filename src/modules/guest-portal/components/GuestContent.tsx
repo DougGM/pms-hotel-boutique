@@ -34,14 +34,17 @@ import { housekeepingService } from '@/services/housekeepingService';
 import { notificationService, type Notification } from '@/services/notificationService';
 import { orderService } from '@/services/orderService';
 import { serviceRequestService } from '@/services/serviceRequestService';
+import { CatalogImage } from '@/shared/components/CatalogImage';
 import { ErrorState } from '@/shared/components/ErrorState';
 import { LoadingState } from '@/shared/components/LoadingState';
+import { findPrimaryImage, type MediaImage } from '@/shared/types/entities/media-image';
 import type { Order } from '@/shared/types/entities/order';
 import type { Product } from '@/shared/types/entities/product';
 import type { ServiceRequest } from '@/shared/types/entities/service-request';
 import { toDomainCalendarDate, toDtoCalendarDate } from '@/shared/types/common';
 import { formatCurrency } from '@/shared/utils/currency';
 import { calculateNights } from '@/shared/utils/date';
+import './GuestContent.css';
 import {
   CancelOrderModal,
   CreateBookingModal,
@@ -65,6 +68,7 @@ type GuestAmenity = {
   icon: LucideIcon;
   available: boolean;
   schedule: string;
+  image?: MediaImage;
 };
 
 const AMENITY_ICONS: LucideIcon[] = [
@@ -266,6 +270,7 @@ function toGuestMenuItem(product: Product, id: number): GuestMenuItem {
     price: centsToAmount(product.priceCents),
     category: PRODUCT_CATEGORY_LABELS[product.category] ?? product.category,
     available: product.active,
+    image: findPrimaryImage(product.images),
   };
 }
 
@@ -391,6 +396,7 @@ export function GuestContent({
           description: amenity.description ?? '',
           icon: AMENITY_ICONS[index % AMENITY_ICONS.length],
           available: amenity.active,
+          image: findPrimaryImage(amenity.images),
           schedule:
             amenity.opensAt && amenity.closesAt
               ? `${amenity.opensAt} — ${amenity.closesAt}`
@@ -1145,9 +1151,15 @@ function GuestContentReady({
                 className={`gs-amenity-card ${!am.available ? 'unavailable' : ''}`}
                 key={am.name}
               >
-                <div className="gs-amenity-icon">
-                  <Icon size={22} />
-                </div>
+                {am.image ? (
+                  <div className="gs-amenity-photo">
+                    <CatalogImage image={am.image} variant="thumb" alt={`Foto de ${am.name}`} />
+                  </div>
+                ) : (
+                  <div className="gs-amenity-icon">
+                    <Icon size={22} />
+                  </div>
+                )}
                 <div className="gs-amenity-body">
                   <div>
                     <strong>{am.name}</strong>
@@ -1397,6 +1409,9 @@ function GuestContentReady({
                   className={`gs-menu-card ${!item.available ? 'unavailable' : ''}`}
                   key={item.id}
                 >
+                  <div className="gs-menu-card-photo">
+                    <CatalogImage image={item.image} variant="thumb" alt={`Foto de ${item.name}`} />
+                  </div>
                   <div className="gs-menu-card-body">
                     <div>
                       <strong>{item.name}</strong>

@@ -1,3 +1,5 @@
+import type { MediaImageDto } from '@/shared/types/entities/media-image';
+
 export type AmenityCategoryDto = 'room' | 'hotel' | 'service';
 
 export interface AmenityDTO {
@@ -13,6 +15,8 @@ export interface AmenityDTO {
   opens_at?: string;
   closes_at?: string;
   active: boolean;
+  /** Galería ordenada (backend #82). Vacía si todavía no tiene imagen. */
+  images: MediaImageDto[];
   created_at: string;
   updated_at: string;
 }

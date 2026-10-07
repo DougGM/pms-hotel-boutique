@@ -5,7 +5,6 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { BookingConfirmationScreen } from '@/modules/booking-engine/screens/BookingConfirmationScreen';
 import { BookingFormScreen } from '@/modules/booking-engine/screens/BookingFormScreen';
 import { RoomDetailScreen } from '@/modules/booking-engine/screens/RoomDetailScreen';
-import { getRoomTypeCover, getRoomTypeGallery } from '@/modules/booking-engine/screens/room-media';
 import { httpClient } from '@/services/http-client';
 import {
   PublicBookingError,
@@ -537,12 +536,6 @@ test('RoomDetailScreen: con fechas y huéspedes usa /public/availability', async
   assert.ok(content.includes('2 disponibles para tus fechas'));
   assert.ok(content.includes(formatCurrency(150000, 'GTQ')), 'total del backend');
   assert.ok(!content.includes('9999'), 'la fecha abierta interna no se muestra');
-});
-
-test('room media: resuelve galerías de los tipos demo por code aunque sus id sean UUID', () => {
-  const roomType = { ...apiRoomType, code: 'DLX-DEMO' };
-  assert.equal(getRoomTypeGallery(roomType).length, 3);
-  assert.equal(getRoomTypeCover(roomType), getRoomTypeGallery(roomType)[0].src);
 });
 
 test('RoomDetailScreen: sin huéspedes no consulta ni inventa disponibilidad', async () => {

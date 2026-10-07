@@ -12,6 +12,8 @@ type HttpClientInit = RequestInit & {
     skipAuthorization?: boolean;
     skipRefresh?: boolean;
   };
+  /** `blob` lee el cuerpo como binario (p. ej. una imagen) en vez de JSON o texto. */
+  responseType?: 'blob';
 };
 
 export class HttpError extends Error {
@@ -75,7 +77,10 @@ export class HttpClient {
     hasRetried = false,
   ): Promise<T> {
     const response = await this.fetchResponse(method, path, body, init);
-    const data = await this.parseResponse(response);
+    const data =
+      response.ok && init?.responseType === 'blob'
+        ? await response.blob()
+        : await this.parseResponse(response);
     if (response.ok) return data as T;
 
     if (response.status === 401 && !hasRetried && !init?.auth?.skipRefresh && this.refreshHandler) {
@@ -98,20 +103,23 @@ export class HttpClient {
     const baseUrl = getApiBaseUrl();
     const url = new URL(path.replace(/^\/+/, ''), `${baseUrl.replace(/\/+$/, '')}/`);
     const headers = new Headers(init?.headers);
-    headers.set('Accept', 'application/json');
-    if (body !== undefined || init?.body !== undefined)
+    // Multipart: el navegador arma el Content-Type con su boundary; fijarlo a mano lo rompe.
+    const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
+    if (init?.responseType !== 'blob') headers.set('Accept', 'application/json');
+    if ((body !== undefined || init?.body !== undefined) && !isFormData)
       headers.set('Content-Type', 'application/json');
     if (this.token && !init?.auth?.skipAuthorization)
       headers.set('Authorization', `Bearer ${this.token}`);
 
     const requestInit: RequestInit = { ...(init ?? {}) };
     delete (requestInit as HttpClientInit).auth;
+    delete (requestInit as HttpClientInit).responseType;
     return fetch(url, {
       ...requestInit,
       credentials: requestInit.credentials ?? 'include',
       method,
       headers,
-      body: body === undefined ? requestInit.body : JSON.stringify(body),
+      body: body === undefined ? requestInit.body : isFormData ? body : JSON.stringify(body),
     });
   }
 

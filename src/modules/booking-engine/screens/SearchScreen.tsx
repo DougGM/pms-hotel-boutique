@@ -5,7 +5,6 @@ import {
   Car,
   Check,
   Coffee,
-  Dumbbell,
   ShieldCheck,
   Sparkles,
   UserRound,
@@ -15,14 +14,16 @@ import {
 } from 'lucide-react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { publicBookingCatalogService } from '@/services/publicBookingCatalogService';
+import { CatalogImage } from '@/shared/components/CatalogImage';
 import { EmptyState } from '@/shared/components/EmptyState';
 import { ErrorState } from '@/shared/components/ErrorState';
 import { LoadingState } from '@/shared/components/LoadingState';
+import type { Amenity, AmenityCategory } from '@/shared/types/entities/amenity';
+import { findPrimaryImage } from '@/shared/types/entities/media-image';
 import type { Rate } from '@/shared/types/entities/rate';
 import type { RoomType } from '@/shared/types/entities/room-type';
 import { formatCurrency } from '@/shared/utils/currency';
 import { calculateNights, formatDateGT } from '@/shared/utils/date';
-import { getRoomTypeCover, ROOM_TYPE_COVER_IMAGES } from './room-media';
 import './booking-engine.css';
 
 type SearchStatus = 'idle' | 'loading' | 'success' | 'error';
@@ -34,36 +35,24 @@ type AvailableRoomType = {
   rate?: Rate;
 };
 
-const amenities = [
-  {
-    title: 'Piscina climatizada',
-    detail: 'Terraza tranquila, camastros y servicio de bebidas.',
-    icon: Waves,
-    image:
-      'https://images.pexels.com/photos/261327/pexels-photo-261327.jpeg?auto=compress&cs=tinysrgb&w=900',
-  },
-  {
-    title: 'Desayuno Aurora',
-    detail: 'Café de especialidad, panadería fresca y opciones locales.',
-    icon: Coffee,
-    image:
-      'https://images.pexels.com/photos/1833349/pexels-photo-1833349.jpeg?auto=compress&cs=tinysrgb&w=900',
-  },
-  {
-    title: 'Restaurante & bar',
-    detail: 'Cocina de temporada para cerrar el día sin salir del hotel.',
-    icon: Utensils,
-    image:
-      'https://images.pexels.com/photos/262978/pexels-photo-262978.jpeg?auto=compress&cs=tinysrgb&w=900',
-  },
-  {
-    title: 'Wellness room',
-    detail: 'Gimnasio, spa bajo reserva y amenidades para descansar.',
-    icon: Dumbbell,
-    image:
-      'https://images.pexels.com/photos/3757957/pexels-photo-3757957.jpeg?auto=compress&cs=tinysrgb&w=900',
-  },
-];
+type AmenitiesState =
+  | { status: 'idle' | 'loading' }
+  | { status: 'success'; amenities: Amenity[] }
+  | { status: 'error'; message: string };
+
+/** Ícono de la etiqueta de cada amenidad, por categoría; la foto sale del backend. */
+const AMENITY_CATEGORY_ICONS: Record<AmenityCategory, typeof Sparkles> = {
+  hotel: Waves,
+  room: Coffee,
+  service: Utensils,
+};
+
+function formatAmenitySchedule(amenity: Amenity): string | null {
+  // El backend envía "HH:mm:ss"; en la web pública basta "HH:mm".
+  return amenity.opensAt && amenity.closesAt
+    ? `${amenity.opensAt.slice(0, 5)} - ${amenity.closesAt.slice(0, 5)}`
+    : null;
+}
 
 const policies = [
   {
@@ -167,6 +156,7 @@ export function SearchScreen() {
   const [rangeError, setRangeError] = useState<string | undefined>();
   const [hasSearched, setHasSearched] = useState(false);
   const [guests, setGuests] = useState('2 adultos');
+  const [amenitiesState, setAmenitiesState] = useState<AmenitiesState>({ status: 'idle' });
 
   const scrollToSearch = useCallback(() => {
     document.getElementById('buscar')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -194,6 +184,21 @@ export function SearchScreen() {
   useEffect(() => {
     void loadShowcase();
   }, [loadShowcase]);
+
+  const loadAmenities = useCallback(async () => {
+    setAmenitiesState({ status: 'loading' });
+    try {
+      setAmenitiesState({
+        status: 'success',
+        amenities: await publicBookingCatalogService.getAmenities(),
+      });
+    } catch (cause) {
+      setAmenitiesState({
+        status: 'error',
+        message: cause instanceof Error ? cause.message : 'No fue posible cargar las amenidades.',
+      });
+    }
+  }, []);
 
   const searchAvailability = useCallback(async () => {
     if (!isCompleteStayRange(range)) {
@@ -226,6 +231,8 @@ export function SearchScreen() {
 
   const nights = isCompleteStayRange(range) ? calculateNights(range.start, range.end) : 0;
   const guestCounts = parseGuests(guests);
+  // La disponibilidad no trae imágenes: se toman del catálogo público por id.
+  const imagesByRoomTypeId = new Map(roomTypes.map((roomType) => [roomType.id, roomType.images]));
   const roomCards = hasSearched
     ? results
     : roomTypes.map((roomType) => ({ roomType, availableRooms: undefined, rate: undefined }));
@@ -234,6 +241,10 @@ export function SearchScreen() {
   )
     ? location.hash.replace('#', '')
     : 'habitaciones';
+
+  useEffect(() => {
+    if (publicTab === 'amenidades' && amenitiesState.status === 'idle') void loadAmenities();
+  }, [publicTab, amenitiesState.status, loadAmenities]);
 
   return (
     <section className="booking-search-page">
@@ -399,21 +410,24 @@ export function SearchScreen() {
               <div className="room-cards">
                 {roomCards.map(({ roomType, availableRooms, rate }, index) => {
                   const displayRate = rate ?? findLowestRate(rates, roomType.id);
-                  const coverImage =
-                    getRoomTypeCover(roomType) ??
-                    ROOM_TYPE_COVER_IMAGES[index % ROOM_TYPE_COVER_IMAGES.length];
                   const detailUrl = isCompleteStayRange(range)
                     ? `/rooms/${roomType.id}?checkIn=${dateKey(range.start)}&checkOut=${dateKey(range.end)}&adults=${guestCounts.adults}&children=${guestCounts.children}`
                     : `/rooms/${roomType.id}`;
 
+                  const coverImage = findPrimaryImage(
+                    imagesByRoomTypeId.get(roomType.id) ?? roomType.images,
+                  );
+
                   return (
                     <article className="visitor-room" key={roomType.id}>
-                      <div
-                        className={`room-visual booking-room-visual booking-room-visual-${index % 3}`}
-                        style={{
-                          backgroundImage: `linear-gradient(180deg, rgba(46, 33, 26, 0.08) 0%, transparent 42%, rgba(46, 33, 26, 0.35) 100%), url(${coverImage})`,
-                        }}
-                      >
+                      <div className="room-visual booking-room-visual">
+                        <CatalogImage
+                          className="booking-room-photo"
+                          image={coverImage}
+                          variant="medium"
+                          alt={`Foto de la habitación ${roomType.name}`}
+                          placeholderLabel={roomType.name}
+                        />
                         <span className="room-tag">
                           {availableRooms !== undefined
                             ? `${availableRooms} disponibles`
@@ -481,27 +495,46 @@ export function SearchScreen() {
                 Buscar fechas <ArrowRight size={14} aria-hidden="true" />
               </button>
             </div>
-            <div className="booking-amenity-grid">
-              {amenities.map((amenity) => {
-                const Icon = amenity.icon;
-                return (
-                  <article className="booking-amenity-card" key={amenity.title}>
-                    <div
-                      className="booking-amenity-image"
-                      style={{ backgroundImage: `url(${amenity.image})` }}
-                    >
-                      <span>
-                        <Icon size={18} aria-hidden="true" />
-                      </span>
-                    </div>
-                    <div>
-                      <h3>{amenity.title}</h3>
-                      <p>{amenity.detail}</p>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
+            {amenitiesState.status === 'loading' || amenitiesState.status === 'idle' ? (
+              <LoadingState label="Cargando amenidades..." />
+            ) : null}
+            {amenitiesState.status === 'error' ? (
+              <ErrorState description={amenitiesState.message} onRetry={loadAmenities} />
+            ) : null}
+            {amenitiesState.status === 'success' && amenitiesState.amenities.length === 0 ? (
+              <EmptyState
+                title="Sin amenidades publicadas"
+                description="Pronto compartiremos los servicios del hotel."
+              />
+            ) : null}
+            {amenitiesState.status === 'success' && amenitiesState.amenities.length > 0 ? (
+              <div className="booking-amenity-grid">
+                {amenitiesState.amenities.map((amenity) => {
+                  const Icon = AMENITY_CATEGORY_ICONS[amenity.category] ?? Sparkles;
+                  const schedule = formatAmenitySchedule(amenity);
+                  return (
+                    <article className="booking-amenity-card" key={amenity.id}>
+                      <div className="booking-amenity-image">
+                        <CatalogImage
+                          className="booking-amenity-photo"
+                          image={findPrimaryImage(amenity.images)}
+                          variant="medium"
+                          alt={`Foto de ${amenity.name}`}
+                        />
+                        <span>
+                          <Icon size={18} aria-hidden="true" />
+                          {schedule ?? 'Disponible'}
+                        </span>
+                      </div>
+                      <div>
+                        <h3>{amenity.name}</h3>
+                        {amenity.description ? <p>{amenity.description}</p> : null}
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            ) : null}
             <div className="booking-service-strip">
               <span>
                 <Wifi size={16} aria-hidden="true" /> Wi-Fi de alta velocidad

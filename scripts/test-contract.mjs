@@ -24,6 +24,7 @@ const ENTITIES_WITH_FOLDER = [
   'guest-account',
   'inventory-item',
   'inventory-movement',
+  'media-image',
   'order',
   'payment',
   'permission',

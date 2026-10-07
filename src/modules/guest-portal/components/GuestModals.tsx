@@ -1,5 +1,6 @@
 /* eslint-disable react-refresh/only-export-components -- Helpers compartidos del prototipo Bolt migrado. */
 import { useEffect, useState } from 'react';
+import type { MediaImage } from '@/shared/types/entities/media-image';
 import {
   ArrowRight,
   Ban,
@@ -49,6 +50,8 @@ export type GuestMenuItem = {
   price: number;
   category: string;
   available: boolean;
+  /** Foto principal del producto (backend #82); sin foto se muestra un placeholder neutral. */
+  image?: MediaImage;
 };
 
 export type GuestCartItem = {
