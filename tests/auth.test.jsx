@@ -562,6 +562,13 @@ test('all private entries, including unknown nested URLs, redirect guests to log
   }
 });
 
+test('fuera de desarrollo el login no muestra accesos rápidos ni credenciales demo', async () => {
+  await open('/auth/login');
+  assert.ok(text().includes('Iniciar sesión'));
+  assert.ok(!text().includes('Acceso rápido'));
+  assert.ok(!text().includes('admin@aurora.test'));
+});
+
 test('wrong credentials show an error, retry succeeds, and intended URL is restored', async () => {
   await open('/pms/reception?day=today#calendar');
   await login('recepcion@hotelboutique.test', 'incorrecta');
