@@ -34,10 +34,8 @@ export function PrivateSessionWorkspace({ role, initialNav }: PrivateSessionWork
       sessionUserId={session.user.id}
       sessionRoleLabel={roleLabels[session.role]}
       onLogout={() => {
-        const isGuest = session.role === 'GUEST';
+        navigate(routePaths.public.home, { replace: true, flushSync: true });
         logout();
-        // El huésped vuelve a su acceso con código, no al login del personal (INT-12).
-        navigate(isGuest ? routePaths.public.register : routePaths.public.login, { replace: true });
       }}
     />
   );

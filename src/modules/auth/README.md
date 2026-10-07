@@ -58,6 +58,12 @@ de nuevo.
 limpia la sesion local aunque el backend falle. La clave legacy
 `hotel-aurora.auth.v1` se elimina durante restauracion o limpieza.
 
+La salida voluntaria desde cualquier workspace privado navega a la home publica
+(`/`) con reemplazo de historial, tanto para personal como para huespedes. Esta
+regla no cambia el comportamiento de `RequireSession`: una sesion ausente o
+vencida conserva la redireccion a `/auth/login` o `/auth/register`, incluyendo
+la URL privada de destino cuando corresponde.
+
 ## CORS
 
 El backend local revisado permite `http://localhost:3000` en `CorsConfig`.
