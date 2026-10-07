@@ -241,6 +241,7 @@ function installHousekeepingBackend() {
       },
     ],
     requests: [],
+    denyMaintenanceRead: false,
   };
   const turnover = {
     start: ['dirty', 'cleaning', 'cleaningStartedAt'],
@@ -273,7 +274,9 @@ function installHousekeepingBackend() {
     }
     if (method === 'GET' && path === '/housekeeping/checklists') return json(state.checklists);
     // ServiceRequestController: Limpieza lee housekeeping/maintenance y solo crea maintenance.
-    if (method === 'GET' && path === '/service-requests') return json(state.maintenance);
+    if (method === 'GET' && path === '/service-requests') {
+      return state.denyMaintenanceRead ? json({ status: 403 }, 403) : json(state.maintenance);
+    }
     if (method === 'POST' && path === '/service-requests') {
       const body = JSON.parse(String(init.body ?? '{}'));
       if (body.type !== 'maintenance') return json({ status: 403 }, 403);
@@ -384,8 +387,9 @@ function installHousekeepingBackend() {
   return state;
 }
 
-async function mountHousekeeping() {
+async function mountHousekeeping({ denyMaintenanceRead = false } = {}) {
   hkBackend = installHousekeepingBackend();
+  hkBackend.denyMaintenanceRead = denyMaintenanceRead;
   await act(async () => {
     view = create(
       <MemoryRouter>
@@ -439,6 +443,7 @@ const expectedOpenRequests = () =>
 
 test('limpieza: el panel carga sin pedir datos para los que el rol no tiene permiso', async () => {
   await mountHousekeeping();
+  assert.ok(!hkBackend.requests.includes('GET /rooms'));
   assert.ok(hkBackend.requests.includes('GET /housekeeping/rooms'));
   assert.ok(hkBackend.requests.includes('GET /housekeeping/rooms/stayover-cleanings'));
   assert.deepEqual(
@@ -453,6 +458,12 @@ test('limpieza: el panel carga sin pedir datos para los que el rol no tiene perm
     [],
     'el catálogo de habitaciones exige room-types.read/room-features.read',
   );
+});
+
+test('limpieza: un 403 en solicitudes secundarias no bloquea el panel', async () => {
+  await mountHousekeeping({ denyMaintenanceRead: true });
+  assert.ok(hkBackend.requests.includes('GET /service-requests'));
+  assert.ok(hkBackend.requests.includes('GET /housekeeping/rooms'));
 });
 
 test('limpieza: "Reportar desperfecto" solo aparece en Inicio', async () => {
