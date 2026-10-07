@@ -1027,6 +1027,102 @@ el navegador.
 - Confirmar reservas (`pending` → `confirmed`) y el rate limiting/CAPTCHA del
   POST anónimo son tickets del backend.
 
+## D-017 · #146: las imágenes de catálogo salen solo del backend
+
+**Fecha:** 2026-10-07 · **Estado:** aceptada.
+
+### Contexto
+
+Las páginas públicas mostraban fotos fijas de Pexels: galerías por id en
+`modules/booking-engine/screens/room-media.ts`, portadas repartidas por índice
+en el buscador y una lista de amenidades escrita en el código. El modal de
+productos de Room Service pedía una URL que el backend no guardaba y, si
+quedaba vacía, ponía una foto de Pexels por defecto. Los cambios del hotel no
+se veían en ningún catálogo.
+
+El backend #82 (PR backend #83) agrega almacenamiento S3 compatible y el
+contrato de imágenes:
+
+- `POST /media` (multipart `file` + `target`) sube una imagen y la deja
+  pendiente.
+- Los create/update de tipo de habitación, producto y amenidad aceptan
+  `images: [{ mediaId, altText?, primary? }]`.
+- Las respuestas traen `images` con URLs por variante (`thumb`, `medium`,
+  `large`).
+- `GET /public/media/{id}/{variant}` sirve solo imágenes de registros activos.
+- `GET /media/{id}/content/{variant}` sirve cualquier imagen al personal.
+- `GET /public/amenities` lista las amenidades activas sin sesión.
+
+El contrato completo está en `docs/development/media-images.md` del repo del
+backend.
+
+### Decisión
+
+- **Contrato:** entidad `shared/types/entities/media-image/` (DTO, mapper y
+  modelo). `room-type`, `product` y `amenity` tienen `images: MediaImage[]`
+  (vacía si no hay foto). Los DTO de create/update aceptan
+  `images?: MediaImageAssignmentDto[]`.
+- **Ausente no es vacío:** si un formulario no envía `images`, el backend no
+  toca la galería; `[]` la vacía. Por eso los cambios que no editan fotos (por
+  ejemplo, el interruptor activo/inactivo) no mandan `images`.
+- **Flujo en dos pasos:** `ImageGalleryField` sube cada archivo al elegirlo
+  (`mediaService.uploadImage`) y el formulario envía la lista al guardar. No se
+  guarda mientras una imagen sube o falló (`getGallerySaveBlocker`). Al quitar
+  una imagen subida en la sesión o cancelar el formulario, se borra la
+  pendiente (`discardPendingUploads`); si falla, el backend la limpia a las
+  24 h.
+- **La primera es la principal:** el formulario muestra la principal primero
+  y envía la lista en ese orden, sin marcar `primary`; el backend toma la
+  primera. Para mostrar, `orderGalleryImages` y `findPrimaryImage` respetan el
+  `primary` del backend.
+- **Sin foto, placeholder neutral:** `CatalogImage` muestra la imagen del
+  backend o un placeholder neutral con el nombre del registro, nunca la foto
+  de otro. Si la URL pública falla en una vista de personal (registro
+  inactivo), usa la ruta con token (`staffFallback`).
+- **Vista previa local:** se hace con `URL.createObjectURL(file)`. No se usa
+  Base64 ni `localStorage` para imágenes.
+- **Validación en el navegador:** JPEG, PNG o WebP de hasta 5 MB y hasta 10
+  imágenes por registro, iguales a los límites del backend
+  (`MEDIA_LIMITS`). El backend vuelve a validar el contenido real del archivo.
+- **Errores:** `mediaService` traduce 400, 401, 403, 413, 415, 503 y los
+  errores de red, y `describeImageAssignmentError` traduce los rechazos de
+  `images` (400/409) en los create/update. Los modales de administración
+  muestran el error y siguen abiertos.
+- **Disponibilidad sin fotos:** `GET /public/availability` no trae imágenes;
+  el buscador las toma del catálogo público por id del tipo de habitación.
+
+### Qué NO hacer
+
+- No volver a escribir URLs de fotos en el código para registros del catálogo
+  ni asignar la foto de un registro a otro como si fuera suya.
+- No usar Base64, `localStorage` ni campos de URL libres para imágenes.
+- No enviar `images` cuando el formulario no editó la galería.
+- No fijar `Content-Type` a mano en una petición con `FormData`:
+  `http-client` deja que el navegador arme el boundary.
+
+### Alternativas consideradas
+
+- **Subir las imágenes al guardar el registro:** se descartó porque mezcla
+  dos errores distintos (archivo inválido y datos inválidos) en un mismo
+  envío, y al crear un registro todavía no existe su id para asociarlas.
+- **Marcar la principal con un campo aparte en el formulario:** se descartó
+  porque "la primera es la principal" se entiende sin explicación y se maneja
+  con el mismo control de orden.
+- **Mantener las fotos de ejemplo como respaldo:** se descartó porque es
+  justo lo que el issue prohíbe (mostrar fotos ficticias como si fueran del
+  hotel).
+
+### Pendiente fuera de #146
+
+- Las imágenes de promociones y de la sección "Vive Aurora" del buscador
+  siguen siendo fotos de ejemplo: no son catálogos de este issue.
+- `VisitorScreen` en `private/workspace/PrivateWorkspace.tsx` no se usa y
+  conserva datos y fotos fijas.
+- Errores previos de los modales de administración, encontrados al probar:
+  el de amenidad borra el horario porque el backend envía `HH:mm:ss`, y el de
+  producto sobrescribe la descripción con la categoría. Cada uno queda en su
+  propio issue.
+
 ## Cómo agregar una nueva decisión
 
 Copiar la estructura de D-001: **Contexto** (qué problema había y qué

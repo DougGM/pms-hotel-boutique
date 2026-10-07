@@ -431,6 +431,44 @@ resuelva (agregarlo es trabajo futuro del equipo, no una decisión tomada).
 }
 ```
 
+### 3.6b `media_image` — compartida (**nueva**, #146)
+
+Imagen de catálogo asociada a un `room-type`, `product` o `amenity`. No
+existe sola: llega dentro del campo `images` de esas tres entidades, ordenada
+por `position`. Un registro sin fotos trae `images: []` y se muestra con un
+placeholder neutral. Flujo de carga, límites y reglas en
+[`docs/DECISIONES.md`, D-017](./DECISIONES.md#d-017--146-las-imágenes-de-catálogo-salen-solo-del-backend).
+
+| Campo DTO     | Tipo                                         | Descripción                                      |
+| ------------- | -------------------------------------------- | ------------------------------------------------ |
+| `id`          | `string`                                     |                                                  |
+| `alt_text?`   | `string`                                     | Texto alternativo; ausente si no se cargó        |
+| `position`    | `number`                                     | Orden en la galería, desde 0                     |
+| `primary`     | `boolean`                                    | Imagen principal (portada) del registro          |
+| `width`       | `number`                                     | Píxeles del original ya orientado                |
+| `height`      | `number`                                     |                                                  |
+| `urls`        | `{ thumb: string; medium: string; large: string }` | URLs públicas por variante (320/960/1600 px) |
+
+Al crear o actualizar, el registro recibe `images?: { media_id, alt_text?, primary? }[]`
+con imágenes ya subidas por `POST /media`. Ausente: no cambia la galería;
+lista vacía: la vacía.
+
+```json
+{
+  "id": "6f1c2a8e-…",
+  "alt_text": "Cama king con vista al jardín",
+  "position": 0,
+  "primary": true,
+  "width": 1600,
+  "height": 1067,
+  "urls": {
+    "thumb": "https://api.example.com/api/v1/public/media/6f1c2a8e-…/thumb",
+    "medium": "https://api.example.com/api/v1/public/media/6f1c2a8e-…/medium",
+    "large": "https://api.example.com/api/v1/public/media/6f1c2a8e-…/large"
+  }
+}
+```
+
 ### 3.7 `user` — compartida (puesto de personal, no rol de acceso)
 
 Ver sección 3.12 para la distinción con `session`.
