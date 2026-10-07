@@ -18,11 +18,17 @@ const baseOptions = {
   loader: { '.css': 'empty' },
 };
 
-// Compila StaffLoginPage como lo haría Vite en cada modo y devuelve el código.
-async function bundleLoginPage(dev) {
+// Los dos lugares con login: la página /auth/login y el modal de la web pública.
+const LOGIN_ENTRIES = [
+  'src/public/pages/StaffLoginPage.tsx',
+  'src/public/components/PublicAuthModal.tsx',
+];
+
+// Compila un login como lo haría Vite en cada modo y devuelve el código.
+async function bundleLogin(entry, dev) {
   const result = await build({
     ...baseOptions,
-    entryPoints: ['src/public/pages/StaffLoginPage.tsx'],
+    entryPoints: [entry],
     write: false,
     minify: true,
     define: {
@@ -37,18 +43,20 @@ async function bundleLoginPage(dev) {
   return result.outputFiles.map((file) => file.text).join('\n');
 }
 
-test('producción: el login no incluye el componente ni las credenciales demo', async () => {
-  const code = await bundleLoginPage(false);
-  for (const secret of ['admin@aurora.test', 'huesped1', 'Acceso rápido', 'DevQuickLogin']) {
-    assert.ok(!code.includes(secret), `el bundle de producción no debe contener "${secret}"`);
-  }
-});
+for (const entry of LOGIN_ENTRIES) {
+  test(`producción: ${entry} no incluye el componente ni las credenciales demo`, async () => {
+    const code = await bundleLogin(entry, false);
+    for (const secret of ['admin@aurora.test', 'huesped1', 'Acceso rápido', 'DevQuickLogin']) {
+      assert.ok(!code.includes(secret), `el bundle de producción no debe contener "${secret}"`);
+    }
+  });
 
-test('desarrollo: el login sí incluye los accesos rápidos', async () => {
-  const code = await bundleLoginPage(true);
-  assert.ok(code.includes('admin@aurora.test'));
-  assert.ok(code.includes('Acceso r'));
-});
+  test(`desarrollo: ${entry} sí incluye los accesos rápidos`, async () => {
+    const code = await bundleLogin(entry, true);
+    assert.ok(code.includes('admin@aurora.test'));
+    assert.ok(code.includes('Acceso r'));
+  });
+}
 
 await build({
   ...baseOptions,
