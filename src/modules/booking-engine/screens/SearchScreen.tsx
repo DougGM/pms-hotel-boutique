@@ -22,6 +22,7 @@ import type { Amenity, AmenityCategory } from '@/shared/types/entities/amenity';
 import { findPrimaryImage } from '@/shared/types/entities/media-image';
 import type { Rate } from '@/shared/types/entities/rate';
 import type { RoomType } from '@/shared/types/entities/room-type';
+import { formatAmenitySchedule } from '@/shared/utils/amenitySchedule';
 import { formatCurrency } from '@/shared/utils/currency';
 import { calculateNights, formatDateGT } from '@/shared/utils/date';
 import './booking-engine.css';
@@ -46,13 +47,6 @@ const AMENITY_CATEGORY_ICONS: Record<AmenityCategory, typeof Sparkles> = {
   room: Coffee,
   service: Utensils,
 };
-
-function formatAmenitySchedule(amenity: Amenity): string | null {
-  // El backend envía "HH:mm:ss"; en la web pública basta "HH:mm".
-  return amenity.opensAt && amenity.closesAt
-    ? `${amenity.opensAt.slice(0, 5)} - ${amenity.closesAt.slice(0, 5)}`
-    : null;
-}
 
 const policies = [
   {
@@ -523,7 +517,7 @@ export function SearchScreen() {
                         />
                         <span>
                           <Icon size={18} aria-hidden="true" />
-                          {schedule ?? 'Disponible'}
+                          {schedule || 'Disponible'}
                         </span>
                       </div>
                       <div>

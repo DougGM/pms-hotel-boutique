@@ -1540,6 +1540,65 @@ test('catalogService.getProducts/getAmenities: async, con latencia simulada, dev
   assert.equal(disabledAmenity.active, false);
 });
 
+test('catalogService amenidades (#147): HH:mm, guardar conserva datos y null quita el horario', async () => {
+  const stored = {
+    id: 'amn-147',
+    name: 'Spa',
+    description: 'Spa con sauna',
+    category: 'service',
+    location: 'Nivel 1',
+    opensAt: '09:00:00',
+    closesAt: '18:00:00',
+    active: true,
+    images: [],
+  };
+  const puts = [];
+  globalThis.fetch = async (input, init = {}) => {
+    const path = new URL(String(input)).pathname.replace('/api/v1', '');
+    if ((init.method ?? 'GET') === 'GET' && path === '/admin/amenities')
+      return jsonResponse([stored]);
+    if (init.method === 'PUT' && path === `/admin/amenities/${stored.id}`) {
+      const body = JSON.parse(String(init.body));
+      puts.push(body);
+      return jsonResponse({
+        ...stored,
+        ...body,
+        opensAt: body.opensAt ?? null,
+        closesAt: body.closesAt ?? null,
+      });
+    }
+    return jsonResponse({ message: `Unhandled ${init.method} ${path}` }, 404);
+  };
+
+  const [amenity] = await catalogService.getAdminAmenities();
+  assert.equal(amenity.opensAt, '09:00', 'el Model sigue el contrato "HH:mm"');
+  assert.equal(amenity.closesAt, '18:00');
+
+  await catalogService.updateAmenity(stored.id, { active: false });
+  assert.deepEqual(
+    {
+      description: puts[0].description,
+      category: puts[0].category,
+      location: puts[0].location,
+      opensAt: puts[0].opensAt,
+      closesAt: puts[0].closesAt,
+    },
+    {
+      description: 'Spa con sauna',
+      category: 'service',
+      location: 'Nivel 1',
+      opensAt: '09:00',
+      closesAt: '18:00',
+    },
+    'cambiar solo el estado conserva descripción, categoría, ubicación y horario',
+  );
+
+  const cleared = await catalogService.updateAmenity(stored.id, { opensAt: null, closesAt: null });
+  assert.ok(!('opensAt' in puts[1]) && !('closesAt' in puts[1]), 'null quita el horario');
+  assert.equal(cleared.opensAt, undefined);
+  globalThis.fetch = adminFetchMock;
+});
+
 test('guestAccountService.getAccounts: async, con latencia simulada, devuelve Models', async () => {
   installFinancialFetchMock();
   const accounts = await assertServiceCall('guestAccountService.getAccounts', () =>

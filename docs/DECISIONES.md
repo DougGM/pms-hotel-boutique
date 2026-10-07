@@ -1119,8 +1119,11 @@ backend.
 - `VisitorScreen` en `private/workspace/PrivateWorkspace.tsx` no se usa y
   conserva datos y fotos fijas.
 - Errores previos de los modales de administración, encontrados al probar:
-  el de amenidad borra el horario porque el backend envía `HH:mm:ss` (#147), y
-  el de producto sobrescribe la descripción con la categoría (#148).
+  el de amenidad reemplazaba la descripción por el horario, forzaba la
+  categoría `hotel` e ignoraba en silencio los horarios que no podía leer
+  (#147); el de producto sobrescribe la descripción con la categoría (#148).
+  Desde #147, `opensAt`/`closesAt` llegan normalizados a `HH:mm` desde los
+  servicios (`normalizeAmenityTime` en `shared/utils/amenitySchedule.ts`).
 
 ## Cómo agregar una nueva decisión
 

@@ -31,7 +31,12 @@ await build({
 });
 
 const require = createRequire(import.meta.url);
-const { isAmenityOpenAt } = require(require.resolve('../.cache/shared/utils/amenitySchedule.cjs'));
+const {
+  isAmenityOpenAt,
+  normalizeAmenityTime,
+  formatAmenitySchedule,
+  parseAmenityScheduleInput,
+} = require(require.resolve('../.cache/shared/utils/amenitySchedule.cjs'));
 
 test('guestAccount: balance_cents coincide con cargos menos pagos y depositos activos', () => {
   for (const account of guestAccounts) {
@@ -122,4 +127,51 @@ test('catalogos operativos conservan casos inactivos para auditoria', () => {
   assert.ok(users.some((user) => user.status === 'inactive'));
   assert.ok(products.some((product) => !product.active));
   assert.ok(amenities.some((amenity) => !amenity.active));
+});
+
+// --- #147: horario de amenidad en "HH:mm" y edición sin pérdida -------------
+
+test('normalizeAmenityTime: "HH:mm:ss" del backend pasa a "HH:mm"; lo inválido, a undefined', () => {
+  assert.equal(normalizeAmenityTime('09:00:00'), '09:00');
+  assert.equal(normalizeAmenityTime('18:30'), '18:30');
+  assert.equal(normalizeAmenityTime(' 7:05 '), '07:05');
+  assert.equal(normalizeAmenityTime('24:00'), undefined);
+  assert.equal(normalizeAmenityTime('9 am'), undefined);
+  assert.equal(normalizeAmenityTime(''), undefined);
+  assert.equal(normalizeAmenityTime(null), undefined);
+});
+
+test('formatAmenitySchedule: texto editable en "HH:mm", vacío si no hay horario', () => {
+  assert.equal(
+    formatAmenitySchedule({ opensAt: '09:00:00', closesAt: '18:00:00' }),
+    '09:00 - 18:00',
+  );
+  assert.equal(formatAmenitySchedule({ opensAt: '09:00' }), '');
+  assert.equal(formatAmenitySchedule({}), '');
+});
+
+test('parseAmenityScheduleInput: ida y vuelta, vacío quita el horario y lo inválido se rechaza', () => {
+  const text = formatAmenitySchedule({ opensAt: '09:00:00', closesAt: '18:00:00' });
+  assert.deepEqual(parseAmenityScheduleInput(text), {
+    ok: true,
+    opensAt: '09:00',
+    closesAt: '18:00',
+  });
+  for (const variant of ['07:00 — 21:00', '7:00 a 21:00', '07:00:00-21:00:00']) {
+    assert.deepEqual(
+      parseAmenityScheduleInput(variant),
+      { ok: true, opensAt: '07:00', closesAt: '21:00' },
+      variant,
+    );
+  }
+  assert.deepEqual(parseAmenityScheduleInput('   '), { ok: true, opensAt: null, closesAt: null });
+
+  for (const invalid of ['9 a 6', '09:00', 'Disponible', '25:00 - 26:00']) {
+    const parsed = parseAmenityScheduleInput(invalid);
+    assert.equal(parsed.ok, false, invalid);
+    assert.match(parsed.error, /HH:mm/);
+  }
+  const reversed = parseAmenityScheduleInput('22:00 - 02:00');
+  assert.equal(reversed.ok, false);
+  assert.match(reversed.error, /anterior/);
 });
