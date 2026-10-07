@@ -1119,9 +1119,8 @@ backend.
 - `VisitorScreen` en `private/workspace/PrivateWorkspace.tsx` no se usa y
   conserva datos y fotos fijas.
 - Errores previos de los modales de administración, encontrados al probar:
-  el de amenidad borra el horario porque el backend envía `HH:mm:ss`, y el de
-  producto sobrescribe la descripción con la categoría. Cada uno queda en su
-  propio issue.
+  el de amenidad borra el horario porque el backend envía `HH:mm:ss` (#147), y
+  el de producto sobrescribe la descripción con la categoría (#148).
 
 ## Cómo agregar una nueva decisión
 
