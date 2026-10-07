@@ -164,6 +164,8 @@ type RoomServiceItem = {
   id: number;
   dbId: string;
   name: string;
+  description: string;
+  /** Etiqueta de la categoría real del producto (solo lectura en este modal). */
   category: string;
   price: number;
   available: boolean;
@@ -615,11 +617,19 @@ const adminAmenityFromDomain = (amenity: DomainAmenity, index: number): Amenity 
   images: amenity.images,
 });
 
+const PRODUCT_CATEGORY_LABELS: Record<Product['category'], string> = {
+  foodAndBeverage: 'Alimentos y bebidas',
+  minibar: 'Minibar',
+  shop: 'Tienda',
+  other: 'Otros',
+};
+
 const adminProductFromDomain = (product: Product, index: number): RoomServiceItem => ({
   id: parseDbId(product.id, index + 1),
   dbId: product.id,
   name: product.name,
-  category: 'Room Service',
+  description: product.description ?? '',
+  category: PRODUCT_CATEGORY_LABELS[product.category] ?? product.category,
   price: centsToAmount(product.priceCents),
   available: product.active,
   status: product.active ? 'Activo' : 'Inactivo',
@@ -2890,7 +2900,7 @@ function AdminContentReady({
   // ─── SERVICIOS (AMENIDADES + ROOM SERVICE) ───
   if (nav === 'Servicios' || nav === 'Amenidades' || nav === 'Catálogo de Room Service') {
     const filteredRs = rsItems.filter((i) =>
-      `${i.name} ${i.category}`.toLowerCase().includes(search.toLowerCase()),
+      `${i.name} ${i.category} ${i.description}`.toLowerCase().includes(search.toLowerCase()),
     );
     return (
       <>
@@ -3150,8 +3160,9 @@ function AdminContentReady({
               const payload = {
                 sku: editRsItem?.dbId ? undefined : productSkuFromName(item.name),
                 name: item.name,
-                description: item.category,
-                category: 'food_and_beverage' as const,
+                description: item.description,
+                // Al editar se conserva la categoría guardada; uno nuevo del menú es de alimentos y bebidas.
+                category: editRsItem ? undefined : ('food_and_beverage' as const),
                 priceCents: amountToCents(item.price),
                 currency: 'GTQ' as const,
                 active: item.status === 'Activo',
@@ -3162,6 +3173,7 @@ function AdminContentReady({
                 : await catalogService.createAdminProduct({
                     ...payload,
                     sku: payload.sku ?? productSkuFromName(item.name),
+                    category: 'food_and_beverage',
                   });
               setRsItems((current) =>
                 editRsItem
@@ -4801,9 +4813,8 @@ function RsItemModal({
   onSave: (i: RoomServiceItem, images: MediaImageAssignmentDto[]) => Promise<void>;
 }) {
   const [name, setName] = useState(item?.name ?? '');
-  const [category, setCategory] = useState(item?.category ?? 'Desayunos');
+  const [description, setDescription] = useState(item?.description ?? '');
   const [price, setPrice] = useState(item?.price ?? 0);
-  const [available, setAvailable] = useState(item?.available ?? true);
   const [status, setStatus] = useState<'Activo' | 'Inactivo'>(item?.status ?? 'Activo');
   const [gallery, setGallery] = useState<GalleryItem[]>(() =>
     galleryFromImages(item?.images ?? []),
@@ -4823,9 +4834,11 @@ function RsItemModal({
               id: item?.id ?? 0,
               dbId: item?.dbId ?? '',
               name,
-              category,
+              description,
+              category: item?.category ?? 'Alimentos y bebidas',
               price,
-              available,
+              // La disponibilidad sale del estado: el backend solo guarda `active`.
+              available: status === 'Activo',
               status,
               images: item?.images ?? [],
             },
@@ -4846,20 +4859,6 @@ function RsItemModal({
           />
         </label>
         <label className="hk-form-label">
-          Categoría
-          <select
-            className="hk-form-select"
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-          >
-            <option>Desayunos</option>
-            <option>Almuerzos</option>
-            <option>Cenas</option>
-            <option>Bebidas</option>
-            <option>Snacks</option>
-          </select>
-        </label>
-        <label className="hk-form-label">
           Precio
           <input
             className="hk-form-select"
@@ -4867,17 +4866,6 @@ function RsItemModal({
             value={price}
             onChange={(e) => setPrice(Number(e.target.value))}
           />
-        </label>
-        <label className="hk-form-label">
-          Disponibilidad
-          <select
-            className="hk-form-select"
-            value={available ? 'si' : 'no'}
-            onChange={(e) => setAvailable(e.target.value === 'si')}
-          >
-            <option value="si">Disponible</option>
-            <option value="no">No disponible</option>
-          </select>
         </label>
         <label className="hk-form-label">
           Estado
@@ -4891,6 +4879,15 @@ function RsItemModal({
           </select>
         </label>
       </div>
+      <label className="hk-form-label">
+        Descripción
+        <textarea
+          className="hk-form-textarea"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="Ej. Pan de la casa, pollo, tocino y papas fritas"
+        />
+      </label>
       <div className="adm-modal-section">
         <ImageGalleryField
           label="Foto del producto"

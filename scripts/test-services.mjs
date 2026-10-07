@@ -1599,6 +1599,51 @@ test('catalogService amenidades (#147): HH:mm, guardar conserva datos y null qui
   globalThis.fetch = adminFetchMock;
 });
 
+test('catalogService productos (#148): editar conserva categoría y envía la descripción real', async () => {
+  const stored = {
+    id: 'prd-148',
+    sku: 'RS-AGUA',
+    name: 'Agua mineral',
+    description: 'Agua de manantial 500 ml',
+    category: 'minibar',
+    priceCents: 1200,
+    currency: 'GTQ',
+    active: true,
+    images: [],
+  };
+  const puts = [];
+  globalThis.fetch = async (input, init = {}) => {
+    const path = new URL(String(input)).pathname.replace('/api/v1', '');
+    if ((init.method ?? 'GET') === 'GET' && path === '/admin/room-service/products') {
+      return jsonResponse([stored]);
+    }
+    if (init.method === 'PUT' && path === `/admin/room-service/products/${stored.id}`) {
+      const body = JSON.parse(String(init.body));
+      puts.push(body);
+      return jsonResponse({ ...stored, ...body });
+    }
+    return jsonResponse({ message: `Unhandled ${init.method} ${path}` }, 404);
+  };
+
+  await catalogService.updateAdminProduct(stored.id, { active: false });
+  assert.equal(
+    puts[0].description,
+    'Agua de manantial 500 ml',
+    'cambiar el estado conserva la descripción',
+  );
+  assert.equal(puts[0].category, 'minibar', 'y la categoría guardada');
+
+  const edited = await catalogService.updateAdminProduct(stored.id, {
+    name: 'Agua mineral',
+    description: 'Agua con gas 355 ml',
+    priceCents: 1500,
+  });
+  assert.equal(puts[1].description, 'Agua con gas 355 ml');
+  assert.equal(puts[1].category, 'minibar', 'sin categoría en el formulario no se fuerza otra');
+  assert.equal(edited.description, 'Agua con gas 355 ml');
+  globalThis.fetch = adminFetchMock;
+});
+
 test('guestAccountService.getAccounts: async, con latencia simulada, devuelve Models', async () => {
   installFinancialFetchMock();
   const accounts = await assertServiceCall('guestAccountService.getAccounts', () =>
