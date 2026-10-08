@@ -291,10 +291,15 @@ const roleAccessKey = (groupName: string, item: string) => `${groupName}::${item
 const ALL_PERMISSIONS = ROLE_ACCESS_GROUPS.flatMap((group) =>
   group.items.map((item) => roleAccessKey(group.name, item)),
 );
+const ADMIN_ACCESS_GROUP_NAME = 'ADMINISTRACIÓN';
+const ADMIN_ACCESS_PERMISSION_KEYS =
+  ROLE_ACCESS_GROUPS.find((group) => group.name === ADMIN_ACCESS_GROUP_NAME)?.items.map((item) =>
+    roleAccessKey(ADMIN_ACCESS_GROUP_NAME, item),
+  ) ?? [];
 
-const withProtectedAdminPermissions = (permissions: Record<string, boolean>) => ({
+const withFixedAdminPermissions = (permissions: Record<string, boolean>) => ({
   ...permissions,
-  ...Object.fromEntries(ALL_PERMISSIONS.map((key) => [key, true])),
+  ...Object.fromEntries(ADMIN_ACCESS_PERMISSION_KEYS.map((key) => [key, true])),
 });
 
 const backendPermissionsByAccessKey: Record<string, string[]> = {
@@ -355,14 +360,64 @@ const backendPermissionsByAccessKey: Record<string, string[]> = {
   [roleAccessKey('HUÉSPED', 'Notificaciones')]: ['guest-portal.notifications'],
 };
 
+const adminNavigationPermissionByAccessKey: Record<string, string> = {
+  [roleAccessKey('RECEPCIÓN', 'Resumen')]: 'admin-nav.reception.summary',
+  [roleAccessKey('RECEPCIÓN', 'Calendario')]: 'admin-nav.reception.calendar',
+  [roleAccessKey('RECEPCIÓN', 'Reservas')]: 'admin-nav.reception.reservations',
+  [roleAccessKey('RECEPCIÓN', 'Huéspedes')]: 'admin-nav.reception.guests',
+  [roleAccessKey('RECEPCIÓN', 'Disponibilidad')]: 'admin-nav.reception.availability',
+  [roleAccessKey('RECEPCIÓN', 'Habitaciones')]: 'admin-nav.reception.rooms',
+  [roleAccessKey('RECEPCIÓN', 'Caja')]: 'admin-nav.reception.cash',
+  [roleAccessKey('LIMPIEZA', 'Inicio')]: 'admin-nav.housekeeping.home',
+  [roleAccessKey('LIMPIEZA', 'Habitaciones')]: 'admin-nav.housekeeping.rooms',
+  [roleAccessKey('LIMPIEZA', 'Solicitudes')]: 'admin-nav.housekeeping.requests',
+  [roleAccessKey('LIMPIEZA', 'Historial')]: 'admin-nav.housekeeping.history',
+  [roleAccessKey('ROOM SERVICE', 'Pedidos activos')]: 'admin-nav.room-service.orders',
+  [roleAccessKey('ROOM SERVICE', 'Menú')]: 'admin-nav.room-service.menu',
+  [roleAccessKey('ROOM SERVICE', 'Historial')]: 'admin-nav.room-service.history',
+  [roleAccessKey('ROOM SERVICE', 'Inventario')]: 'admin-nav.room-service.inventory',
+  [roleAccessKey('CONSERJERÍA', 'Solicitudes')]: 'admin-nav.concierge.requests',
+  [roleAccessKey('CONSERJERÍA', 'Por habitación')]: 'admin-nav.concierge.by-room',
+  [roleAccessKey('CONSERJERÍA', 'Historial')]: 'admin-nav.concierge.history',
+  [roleAccessKey('HUÉSPED', 'Inicio')]: 'admin-nav.guest.home',
+  [roleAccessKey('HUÉSPED', 'Mis reservas')]: 'admin-nav.guest.reservations',
+  [roleAccessKey('HUÉSPED', 'Mi estancia')]: 'admin-nav.guest.stay',
+  [roleAccessKey('HUÉSPED', 'Amenidades')]: 'admin-nav.guest.amenities',
+  [roleAccessKey('HUÉSPED', 'Conserjería')]: 'admin-nav.guest.concierge',
+  [roleAccessKey('HUÉSPED', 'Limpieza y artículos')]: 'admin-nav.guest.services',
+  [roleAccessKey('HUÉSPED', 'Room service')]: 'admin-nav.guest.room-service',
+  [roleAccessKey('HUÉSPED', 'Mis solicitudes y pedidos')]: 'admin-nav.guest.requests',
+  [roleAccessKey('HUÉSPED', 'Notificaciones')]: 'admin-nav.guest.notifications',
+};
+
+const adminNavigationPermissionsFromUi = (permissions: Record<string, boolean>) =>
+  Object.entries(permissions)
+    .filter(([key, enabled]) => enabled && !key.startsWith(`${ADMIN_ACCESS_GROUP_NAME}::`))
+    .flatMap(([key]) => {
+      const permission = adminNavigationPermissionByAccessKey[key];
+      return permission ? [permission] : [];
+    })
+    .filter((permission, index, all) => all.indexOf(permission) === index)
+    .sort();
+
 const uiPermissionsFromBackend = (role: Role): Record<string, boolean> => {
   if (role.permissionIds.length === 0) {
     const fallbackPermissions = getRoleDashboardPermissions(role.code);
     return normalizeRoleCode(role.code) === 'admin'
-      ? withProtectedAdminPermissions(fallbackPermissions)
+      ? withFixedAdminPermissions(fallbackPermissions)
       : fallbackPermissions;
   }
   const granted = new Set(role.permissionIds);
+  if (normalizeRoleCode(role.code) === 'admin') {
+    return withFixedAdminPermissions(
+      Object.fromEntries(
+        ALL_PERMISSIONS.map((key) => {
+          const permission = adminNavigationPermissionByAccessKey[key];
+          return [key, permission ? granted.has(permission) : false];
+        }),
+      ),
+    );
+  }
   const permissions = Object.fromEntries(
     ALL_PERMISSIONS.map((key) => {
       const backendKeys = backendPermissionsByAccessKey[key] ?? [];
@@ -372,9 +427,7 @@ const uiPermissionsFromBackend = (role: Role): Record<string, boolean> => {
       ];
     }),
   ) as Record<string, boolean>;
-  return normalizeRoleCode(role.code) === 'admin'
-    ? withProtectedAdminPermissions(permissions)
-    : permissions;
+  return permissions;
 };
 
 const backendPermissionsFromUi = (permissions: Record<string, boolean>): string[] =>
@@ -2249,7 +2302,11 @@ function AdminContentReady({
             onClose={() => setShowRoleModal(false)}
             onSave={async (r) => {
               try {
-                const nextPermissionKeys = backendPermissionsFromUi(r.permissions);
+                const isEditingProtectedAdminRole =
+                  editRole !== null && normalizeRoleCode(editRole.code) === 'admin';
+                const nextPermissionKeys = isEditingProtectedAdminRole
+                  ? adminNavigationPermissionsFromUi(r.permissions)
+                  : backendPermissionsFromUi(r.permissions);
                 let saved = editRole
                   ? await personnelService.updateRole(editRole.dbId, { name: r.name })
                   : await personnelService.createRole({
@@ -2259,9 +2316,7 @@ function AdminContentReady({
                       permissions: nextPermissionKeys,
                     });
 
-                const isEditingProtectedAdminRole =
-                  editRole !== null && normalizeRoleCode(editRole.code) === 'admin';
-                if (editRole && !isEditingProtectedAdminRole) {
+                if (editRole) {
                   saved = await personnelService.updateRolePermissions(
                     editRole.dbId,
                     nextPermissionKeys,
@@ -2272,11 +2327,9 @@ function AdminContentReady({
                 const savedRole = {
                   ...savedRoleBase,
                   permissions: isEditingProtectedAdminRole
-                    ? withProtectedAdminPermissions(r.permissions)
+                    ? withFixedAdminPermissions(r.permissions)
                     : savedRoleBase.permissions,
-                  permissionKeys: isEditingProtectedAdminRole
-                    ? [...(editRole?.permissionKeys ?? savedRoleBase.permissionKeys)]
-                    : savedRoleBase.permissionKeys,
+                  permissionKeys: savedRoleBase.permissionKeys,
                   userCount: editRole?.userCount ?? 0,
                 };
                 setRoles((current) =>
@@ -4113,13 +4166,13 @@ function RoleModal({
   const [description, setDescription] = useState(role?.description ?? '');
   const [permissions, setPermissions] = useState<Record<string, boolean>>(
     isProtectedAdminRole
-      ? withProtectedAdminPermissions(
+      ? withFixedAdminPermissions(
           role?.permissions ?? Object.fromEntries(ALL_PERMISSIONS.map((p) => [p, false])),
         )
       : (role?.permissions ?? Object.fromEntries(ALL_PERMISSIONS.map((p) => [p, false]))),
   );
   const setGroupPermissions = (group: (typeof ROLE_ACCESS_GROUPS)[number], selected: boolean) => {
-    if (isProtectedAdminRole) return;
+    if (isProtectedAdminRole && group.name === ADMIN_ACCESS_GROUP_NAME) return;
     setPermissions((current) => ({
       ...current,
       ...Object.fromEntries(group.items.map((p) => [roleAccessKey(group.name, p), selected])),
@@ -4138,10 +4191,10 @@ function RoleModal({
           name,
           description,
           permissions: isProtectedAdminRole
-            ? withProtectedAdminPermissions(permissions)
+            ? withFixedAdminPermissions(permissions)
             : permissions,
           permissionKeys: backendPermissionsFromUi(
-            isProtectedAdminRole ? withProtectedAdminPermissions(permissions) : permissions,
+            isProtectedAdminRole ? withFixedAdminPermissions(permissions) : permissions,
           ),
           userCount: role?.userCount ?? 0,
         })
@@ -4178,7 +4231,7 @@ function RoleModal({
                   <button
                     type="button"
                     className="button secondary"
-                    disabled={isProtectedAdminRole}
+                    disabled={isProtectedAdminRole && group.name === ADMIN_ACCESS_GROUP_NAME}
                     onClick={() => setGroupPermissions(group, true)}
                   >
                     Seleccionar todo
@@ -4186,7 +4239,7 @@ function RoleModal({
                   <button
                     type="button"
                     className="button secondary"
-                    disabled={isProtectedAdminRole}
+                    disabled={isProtectedAdminRole && group.name === ADMIN_ACCESS_GROUP_NAME}
                     onClick={() => setGroupPermissions(group, false)}
                   >
                     Deseleccionar todo
@@ -4195,7 +4248,8 @@ function RoleModal({
               </div>
               {group.items.map((p) => {
                 const key = roleAccessKey(group.name, p);
-                const isLockedAdminPermission = isProtectedAdminRole;
+                const isLockedAdminPermission =
+                  isProtectedAdminRole && group.name === ADMIN_ACCESS_GROUP_NAME;
                 const checked = isLockedAdminPermission ? true : permissions[key];
                 return (
                   <button
@@ -4205,7 +4259,7 @@ function RoleModal({
                     disabled={isLockedAdminPermission}
                     title={
                       isLockedAdminPermission
-                        ? 'El rol Administración conserva acceso total y sus permisos no se pueden modificar.'
+                        ? 'El grupo Administración permanece habilitado para este rol.'
                         : undefined
                     }
                     onClick={() => setPermissions((cur) => ({ ...cur, [key]: !cur[key] }))}

@@ -191,6 +191,33 @@ const apiRoles = [
       'guest-portal.room-service',
       'guest-portal.requests',
       'guest-portal.notifications',
+      'admin-nav.reception.summary',
+      'admin-nav.reception.calendar',
+      'admin-nav.reception.reservations',
+      'admin-nav.reception.guests',
+      'admin-nav.reception.availability',
+      'admin-nav.reception.rooms',
+      'admin-nav.reception.cash',
+      'admin-nav.housekeeping.home',
+      'admin-nav.housekeeping.rooms',
+      'admin-nav.housekeeping.requests',
+      'admin-nav.housekeeping.history',
+      'admin-nav.room-service.orders',
+      'admin-nav.room-service.menu',
+      'admin-nav.room-service.history',
+      'admin-nav.room-service.inventory',
+      'admin-nav.concierge.requests',
+      'admin-nav.concierge.by-room',
+      'admin-nav.concierge.history',
+      'admin-nav.guest.home',
+      'admin-nav.guest.reservations',
+      'admin-nav.guest.stay',
+      'admin-nav.guest.amenities',
+      'admin-nav.guest.concierge',
+      'admin-nav.guest.services',
+      'admin-nav.guest.room-service',
+      'admin-nav.guest.requests',
+      'admin-nav.guest.notifications',
     ],
   },
   {
@@ -614,62 +641,24 @@ test('each staff role only sees its menu and direct unauthorized URLs are blocke
   }
 });
 
-test('ADMIN keeps full UI access regardless of its backend permission list; other roles do not', () => {
-  // Permisos operativos reales de ADMIN en el backend (migraciones 008 y 010).
-  const realBackendAdminPermissions = [
-    'rooms.read',
-    'rooms.write',
-    'room-types.read',
-    'room-types.write',
-    'room-features.read',
-    'rates.read',
-    'rates.write',
-    'guests.read',
-    'guests.write',
-    'bookings.read',
-    'bookings.write',
-    'bookings.check-in',
-    'bookings.check-out',
-    'booking-companions.read',
-    'booking-companions.write',
-    'housekeeping.read',
-    'housekeeping.write',
-    'room-service.read',
-    'room-service.write',
-    'payments.read',
-    'payments.write',
-    'deposits.read',
-    'deposits.write',
-    'folios.read',
-    'folios.write',
-    'charges.read',
-    'charges.write',
-    'inventory.read',
-    'inventory.write',
-    'cash.read',
-    'cash.write',
-    'concierge.read',
-    'concierge.write',
-  ];
+test('ADMIN keeps its administration group fixed and reads other views from navigation permissions', () => {
   const role = (code, permissionIds) => ({ code, permissionIds });
-  // Sin lista de permisos, ADMIN recibe el conjunto completo de referencia.
+  // Un rol recién creado conserva todas las vistas como valor inicial.
   const full = rolePermissionsFromBackendRoles([role('admin', [])]).admin;
   const fullKeys = Object.keys(full);
   assert.ok(fullKeys.length > 0);
   assert.ok(Object.values(full).every(Boolean));
   assert.equal(full['HUÉSPED::Notificaciones'], true, 'incluye la vista previa del portal');
 
-  for (const permissionIds of [
-    ['bookings.read', 'rooms.write', 'cash.read'],
-    realBackendAdminPermissions,
-  ]) {
-    const admin = rolePermissionsFromBackendRoles([role('admin', permissionIds)]).admin;
-    assert.deepEqual(
-      admin,
-      full,
-      `ADMIN con ${permissionIds.length} permisos debe tener acceso completo`,
-    );
-  }
+  const admin = rolePermissionsFromBackendRoles([
+    role('admin', ['admin-nav.housekeeping.rooms', 'admin-nav.guest.services', 'housekeeping.read']),
+  ]).admin;
+  assert.equal(admin['ADMINISTRACIÓN::Dashboard'], true, 'Administración permanece fija');
+  assert.equal(admin['LIMPIEZA::Habitaciones'], true);
+  assert.equal(admin['HUÉSPED::Limpieza y artículos'], true);
+  assert.equal(admin['LIMPIEZA::Solicitudes'], false);
+  assert.equal(admin['HUÉSPED::Room service'], false);
+  assert.equal(admin['LIMPIEZA::Inicio'], false, 'permisos operativos no habilitan vistas');
 
   const reception = rolePermissionsFromBackendRoles([
     role('reception', ['bookings.read']),

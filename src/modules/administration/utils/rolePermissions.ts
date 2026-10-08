@@ -67,6 +67,11 @@ const ROLE_ACCESS_GROUPS = [
 const ALL_PERMISSIONS = ROLE_ACCESS_GROUPS.flatMap((group) =>
   group.items.map((item) => roleAccessKey(group.name, item)),
 );
+const ADMIN_ACCESS_GROUP_NAME = 'ADMINISTRACIÓN';
+const ADMIN_ACCESS_PERMISSION_KEYS =
+  ROLE_ACCESS_GROUPS.find((group) => group.name === ADMIN_ACCESS_GROUP_NAME)?.items.map((item) =>
+    roleAccessKey(ADMIN_ACCESS_GROUP_NAME, item),
+  ) ?? [];
 
 const backendPermissionsByAccessKey: Record<string, string[]> = {
   [roleAccessKey('ADMINISTRACIÓN', 'Dashboard')]: ['bookings.read', 'rooms.read', 'cash.read'],
@@ -126,6 +131,41 @@ const backendPermissionsByAccessKey: Record<string, string[]> = {
   [roleAccessKey('HUÉSPED', 'Notificaciones')]: ['guest-portal.notifications'],
 };
 
+const adminNavigationPermissionByAccessKey: Record<string, string> = {
+  [roleAccessKey('RECEPCIÓN', 'Resumen')]: 'admin-nav.reception.summary',
+  [roleAccessKey('RECEPCIÓN', 'Calendario')]: 'admin-nav.reception.calendar',
+  [roleAccessKey('RECEPCIÓN', 'Reservas')]: 'admin-nav.reception.reservations',
+  [roleAccessKey('RECEPCIÓN', 'Huéspedes')]: 'admin-nav.reception.guests',
+  [roleAccessKey('RECEPCIÓN', 'Disponibilidad')]: 'admin-nav.reception.availability',
+  [roleAccessKey('RECEPCIÓN', 'Habitaciones')]: 'admin-nav.reception.rooms',
+  [roleAccessKey('RECEPCIÓN', 'Caja')]: 'admin-nav.reception.cash',
+  [roleAccessKey('LIMPIEZA', 'Inicio')]: 'admin-nav.housekeeping.home',
+  [roleAccessKey('LIMPIEZA', 'Habitaciones')]: 'admin-nav.housekeeping.rooms',
+  [roleAccessKey('LIMPIEZA', 'Solicitudes')]: 'admin-nav.housekeeping.requests',
+  [roleAccessKey('LIMPIEZA', 'Historial')]: 'admin-nav.housekeeping.history',
+  [roleAccessKey('ROOM SERVICE', 'Pedidos activos')]: 'admin-nav.room-service.orders',
+  [roleAccessKey('ROOM SERVICE', 'Menú')]: 'admin-nav.room-service.menu',
+  [roleAccessKey('ROOM SERVICE', 'Historial')]: 'admin-nav.room-service.history',
+  [roleAccessKey('ROOM SERVICE', 'Inventario')]: 'admin-nav.room-service.inventory',
+  [roleAccessKey('CONSERJERÍA', 'Solicitudes')]: 'admin-nav.concierge.requests',
+  [roleAccessKey('CONSERJERÍA', 'Por habitación')]: 'admin-nav.concierge.by-room',
+  [roleAccessKey('CONSERJERÍA', 'Historial')]: 'admin-nav.concierge.history',
+  [roleAccessKey('HUÉSPED', 'Inicio')]: 'admin-nav.guest.home',
+  [roleAccessKey('HUÉSPED', 'Mis reservas')]: 'admin-nav.guest.reservations',
+  [roleAccessKey('HUÉSPED', 'Mi estancia')]: 'admin-nav.guest.stay',
+  [roleAccessKey('HUÉSPED', 'Amenidades')]: 'admin-nav.guest.amenities',
+  [roleAccessKey('HUÉSPED', 'Conserjería')]: 'admin-nav.guest.concierge',
+  [roleAccessKey('HUÉSPED', 'Limpieza y artículos')]: 'admin-nav.guest.services',
+  [roleAccessKey('HUÉSPED', 'Room service')]: 'admin-nav.guest.room-service',
+  [roleAccessKey('HUÉSPED', 'Mis solicitudes y pedidos')]: 'admin-nav.guest.requests',
+  [roleAccessKey('HUÉSPED', 'Notificaciones')]: 'admin-nav.guest.notifications',
+};
+
+const withFixedAdminPermissions = (permissions: Record<string, boolean>) => ({
+  ...permissions,
+  ...Object.fromEntries(ADMIN_ACCESS_PERMISSION_KEYS.map((key) => [key, true])),
+});
+
 const normalizeRoleCode = (code: string) => (code === 'room_service' ? 'roomService' : code);
 
 const getRoleDashboardPermissions = (roleCode: string) => {
@@ -141,17 +181,23 @@ const getRoleDashboardPermissions = (roleCode: string) => {
 };
 
 const uiPermissionsFromBackend = (role: Role): Record<string, boolean> => {
-  // ADMIN tiene acceso completo: en el backend ROLE_ADMIN pasa todas las reglas
-  // sin importar su lista de permisos, y esa lista no es editable. Filtrar su
-  // menú con ella ocultaba secciones (p. ej. la vista previa del portal de
-  // huésped, cuyas claves guest-portal.* no existen en el backend).
-  if (normalizeRoleCode(role.code) === 'admin') {
-    return getRoleDashboardPermissions('admin');
-  }
   if (role.permissionIds.length === 0) {
-    return getRoleDashboardPermissions(role.code);
+    const fallbackPermissions = getRoleDashboardPermissions(role.code);
+    return normalizeRoleCode(role.code) === 'admin'
+      ? withFixedAdminPermissions(fallbackPermissions)
+      : fallbackPermissions;
   }
   const granted = new Set(role.permissionIds);
+  if (normalizeRoleCode(role.code) === 'admin') {
+    return withFixedAdminPermissions(
+      Object.fromEntries(
+        ALL_PERMISSIONS.map((key) => {
+          const permission = adminNavigationPermissionByAccessKey[key];
+          return [key, permission ? granted.has(permission) : false];
+        }),
+      ),
+    );
+  }
   const permissions = Object.fromEntries(
     ALL_PERMISSIONS.map((key) => {
       const backendKeys = backendPermissionsByAccessKey[key] ?? [];
