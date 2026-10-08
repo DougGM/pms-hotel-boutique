@@ -42,6 +42,7 @@ import { roomService } from '@/services/roomService';
 import { HttpError } from '@/services/http-client';
 import { CatalogImage } from '@/shared/components/CatalogImage';
 import { ConciergeCatalogPanel } from './ConciergeCatalogPanel';
+import { HousekeepingCatalogPanel } from './HousekeepingCatalogPanel';
 import { ErrorState } from '@/shared/components/ErrorState';
 import { ImageGalleryField } from '@/shared/components/ImageGalleryField';
 import { LoadingState } from '@/shared/components/LoadingState';
@@ -1471,6 +1472,10 @@ export function AdminContent({
 
   if (nav === 'Catálogo de Conserjería') {
     return <ConciergeCatalogPanel onAction={onAction} />;
+  }
+
+  if (nav === 'Catálogo de Limpieza') {
+    return <HousekeepingCatalogPanel onAction={onAction} />;
   }
 
   if (screen.status === 'loading') {

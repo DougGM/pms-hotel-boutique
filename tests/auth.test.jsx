@@ -616,8 +616,8 @@ test('each staff role only sees its menu and direct unauthorized URLs are blocke
     ['limpieza', '/pms/housekeeping', 'Habitaciones', '/pms/cash', 4],
     ['conserjeria', '/pms/concierge', 'Solicitudes', '/pms/cash', 3],
     ['roomservice', '/pms/room-service', 'Pedidos activos', '/pms/users', 4],
-    // 48: incluye el catálogo administrable de Conserjería.
-    ['admin', '/pms/dashboard', 'Administración', null, 48],
+    // Incluye los catálogos administrables de Conserjería y Limpieza.
+    ['admin', '/pms/dashboard', 'Administración', null, 49],
   ];
   for (const [account, expectedPath, section, forbidden, count] of roles) {
     await open('/login');
@@ -628,6 +628,7 @@ test('each staff role only sees its menu and direct unauthorized URLs are blocke
       .findAllByType('button')
       .map((button) => button.findByType('span').children.join(''));
     assert.ok(labels.includes(section), `${account}: ${labels.join(', ')}`);
+    if (account === 'admin') assert.ok(labels.includes('Catálogo de Limpieza'));
     assert.equal(labels.length, count, account);
     if (forbidden) {
       await act(async () => {

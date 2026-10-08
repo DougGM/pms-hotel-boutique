@@ -334,6 +334,7 @@ export const housekeepingService = {
   async createGuestStayoverRequest(data: {
     description: string;
     notes?: string;
+    serviceId?: string;
   }): Promise<ServiceRequest> {
     if (!data.description.trim()) throw new Error('Describe la solicitud.');
     const response = await guestRequest(
@@ -341,6 +342,7 @@ export const housekeepingService = {
         httpClient.post<StayoverCleaningResponse>('/guest/housekeeping/requests', {
           description: data.description.trim(),
           notes: data.notes?.trim() || undefined,
+          serviceId: data.serviceId,
         }),
       'No fue posible enviar tu solicitud de limpieza.',
     );

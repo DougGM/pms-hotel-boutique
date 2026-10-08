@@ -616,6 +616,7 @@ function GuestContentReady({
     itemId?: string;
     quantity?: number;
     conciergeServiceId?: string;
+    housekeepingServiceId?: string;
     notes?: string;
   }) => {
     // Limpieza y artículos se atienden desde Housekeeping; otros pedidos van a Conserjería.
@@ -631,7 +632,10 @@ function GuestContentReady({
                 quantity: data.quantity,
                 notes: `${data.time}${data.notes ? ` · ${data.notes}` : ''}`,
               })
-            : await housekeepingService.createGuestStayoverRequest(payload)
+            : await housekeepingService.createGuestStayoverRequest({
+                ...payload,
+                serviceId: data.housekeepingServiceId,
+              })
           : await serviceRequestService.createGuestConciergeRequest({ ...payload, serviceId: data.conciergeServiceId! });
       const newReq = toGuestRequest(
         request,
