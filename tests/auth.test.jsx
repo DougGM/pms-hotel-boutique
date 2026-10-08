@@ -584,7 +584,6 @@ test('wrong credentials show an error, retry succeeds, and intended URL is resto
 });
 
 test('each staff role only sees its menu and direct unauthorized URLs are blocked', async () => {
-  await open('/login');
   const roles = [
     ['recepcion', '/pms/reception', 'Reservas', '/pms/users', 7],
     ['limpieza', '/pms/housekeeping', 'Habitaciones', '/pms/cash', 4],
@@ -594,6 +593,7 @@ test('each staff role only sees its menu and direct unauthorized URLs are blocke
     ['admin', '/pms/dashboard', 'Administración', null, 47],
   ];
   for (const [account, expectedPath, section, forbidden, count] of roles) {
+    await open('/login');
     await login(`${account}@hotelboutique.test`);
     assert.equal(router.state.location.pathname, expectedPath, account);
     const nav = view.root.findByType('nav');
