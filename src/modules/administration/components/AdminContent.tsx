@@ -291,7 +291,6 @@ const roleAccessKey = (groupName: string, item: string) => `${groupName}::${item
 const ALL_PERMISSIONS = ROLE_ACCESS_GROUPS.flatMap((group) =>
   group.items.map((item) => roleAccessKey(group.name, item)),
 );
-const ADMIN_ACCESS_GROUP_NAME = 'ADMINISTRACIÓN';
 
 const withProtectedAdminPermissions = (permissions: Record<string, boolean>) => ({
   ...permissions,
@@ -2262,7 +2261,7 @@ function AdminContentReady({
 
                 const isEditingProtectedAdminRole =
                   editRole !== null && normalizeRoleCode(editRole.code) === 'admin';
-                if (editRole) {
+                if (editRole && !isEditingProtectedAdminRole) {
                   saved = await personnelService.updateRolePermissions(
                     editRole.dbId,
                     nextPermissionKeys,
@@ -2276,7 +2275,7 @@ function AdminContentReady({
                     ? withProtectedAdminPermissions(r.permissions)
                     : savedRoleBase.permissions,
                   permissionKeys: isEditingProtectedAdminRole
-                    ? nextPermissionKeys
+                    ? [...(editRole?.permissionKeys ?? savedRoleBase.permissionKeys)]
                     : savedRoleBase.permissionKeys,
                   userCount: editRole?.userCount ?? 0,
                 };
@@ -4120,7 +4119,7 @@ function RoleModal({
       : (role?.permissions ?? Object.fromEntries(ALL_PERMISSIONS.map((p) => [p, false]))),
   );
   const setGroupPermissions = (group: (typeof ROLE_ACCESS_GROUPS)[number], selected: boolean) => {
-    if (isProtectedAdminRole && group.name === ADMIN_ACCESS_GROUP_NAME) return;
+    if (isProtectedAdminRole) return;
     setPermissions((current) => ({
       ...current,
       ...Object.fromEntries(group.items.map((p) => [roleAccessKey(group.name, p), selected])),
@@ -4179,7 +4178,7 @@ function RoleModal({
                   <button
                     type="button"
                     className="button secondary"
-                    disabled={isProtectedAdminRole && group.name === ADMIN_ACCESS_GROUP_NAME}
+                    disabled={isProtectedAdminRole}
                     onClick={() => setGroupPermissions(group, true)}
                   >
                     Seleccionar todo
@@ -4187,7 +4186,7 @@ function RoleModal({
                   <button
                     type="button"
                     className="button secondary"
-                    disabled={isProtectedAdminRole && group.name === ADMIN_ACCESS_GROUP_NAME}
+                    disabled={isProtectedAdminRole}
                     onClick={() => setGroupPermissions(group, false)}
                   >
                     Deseleccionar todo
@@ -4196,18 +4195,17 @@ function RoleModal({
               </div>
               {group.items.map((p) => {
                 const key = roleAccessKey(group.name, p);
-                const isLockedAdminPanel =
-                  isProtectedAdminRole && group.name === ADMIN_ACCESS_GROUP_NAME;
-                const checked = isLockedAdminPanel ? true : permissions[key];
+                const isLockedAdminPermission = isProtectedAdminRole;
+                const checked = isLockedAdminPermission ? true : permissions[key];
                 return (
                   <button
                     type="button"
                     key={key}
                     className={`adm-perm-toggle ${checked ? 'on' : ''}`}
-                    disabled={isLockedAdminPanel}
+                    disabled={isLockedAdminPermission}
                     title={
-                      isLockedAdminPanel
-                        ? 'El rol Administracion conserva todos los accesos del panel.'
+                      isLockedAdminPermission
+                        ? 'El rol Administración conserva acceso total y sus permisos no se pueden modificar.'
                         : undefined
                     }
                     onClick={() => setPermissions((cur) => ({ ...cur, [key]: !cur[key] }))}
