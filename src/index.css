@@ -3930,6 +3930,47 @@ button {
   font-size: var(--font-size-xs);
   color: var(--color-legacy-8e8075);
 }
+.hk-request-checklist {
+  flex: 1 0 100%;
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--color-surface);
+  border: var(--size-legacy-1) solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+.hk-request-checklist > p {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+}
+.hk-request-checklist-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+.hk-request-checklist-heading span {
+  color: var(--color-success);
+  font-weight: var(--font-weight-bold);
+}
+.hk-request-checklist-items {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: var(--space-2) var(--space-4);
+}
+.hk-request-checklist-items label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+}
+.hk-request-checklist-items input {
+  accent-color: var(--color-success);
+}
 
 .hk-history-list {
   display: flex;

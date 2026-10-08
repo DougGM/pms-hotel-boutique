@@ -273,6 +273,13 @@ function installHousekeepingBackend() {
       return json(state.stayovers);
     }
     if (method === 'GET' && path === '/housekeeping/checklists') return json(state.checklists);
+    if (method === 'GET' && path === '/housekeeping/checklist-template') {
+      return json({
+        code: 'guest-cleaning',
+        name: 'Limpieza solicitada por huésped',
+        items: ['Cama preparada', 'Baño limpio'],
+      });
+    }
     // ServiceRequestController: Limpieza lee housekeeping/maintenance y solo crea maintenance.
     if (method === 'GET' && path === '/service-requests') {
       return state.denyMaintenanceRead ? json({ status: 403 }, 403) : json(state.maintenance);
@@ -489,7 +496,7 @@ test('limpieza: cada solicitud ofrece solo la acción que su estado permite', as
   );
   const allowed = {
     Pendiente: ['Atender solicitud'],
-    'En proceso': ['Completar solicitud'],
+    'En proceso': ['Completar checklist', 'Completar solicitud'],
     Completada: [],
     Rechazada: [],
   };
@@ -517,6 +524,23 @@ test('limpieza: atender y completar una solicitud avanza sin transición inváli
   assert.ok(!toasts().some((toast) => /rechaz/i.test(toast)), toasts().join());
   assert.equal(navBadge('Solicitudes'), String(openBefore), 'sigue abierta: el badge no cambia');
 
+  const checklist = () =>
+    rowFor().row.findAll((node) => hasClass(node, 'hk-request-checklist-items'))[0];
+  assert.ok(checklist(), 'muestra el checklist al iniciar la atención');
+  assert.deepEqual(
+    checklist()
+      .findAll((node) => node.type === 'input')
+      .map((input) => input.props.checked),
+    [false, false],
+    'las tareas empiezan sin marcar',
+  );
+  for (const input of checklist().findAll((node) => node.type === 'input')) {
+    await act(async () => input.props.onChange());
+    await settle();
+  }
+  await act(async () => buttons('Completar checklist', rowFor().row)[0].props.onClick());
+  await settle();
+
   await act(async () => buttons('Completar solicitud', rowFor().row)[0].props.onClick());
   await settle();
   assert.equal(rowFor().status, 'Completada');
@@ -527,9 +551,12 @@ test('limpieza: atender y completar una solicitud avanza sin transición inváli
       'GET /housekeeping/checklists',
       'POST /housekeeping/checklists',
       'PUT /housekeeping/checklists/check-2',
+      'PUT /housekeeping/checklists/check-2',
+      'PUT /housekeeping/checklists/check-2',
     ],
     'el checklist se crea antes de cerrar la solicitud y se marca completed después',
   );
+  assert.ok(hkBackend.requests.includes('GET /housekeeping/checklist-template'));
   const openAfter = expectedOpenRequests();
   assert.equal(openAfter, openBefore - 1);
   assert.equal(navBadge('Solicitudes'), openAfter ? String(openAfter) : undefined);

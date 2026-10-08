@@ -193,9 +193,7 @@ test('inventario: crea un artículo asociando la imagen subida', async () => {
   });
 
   assert.equal(requests[0].path, '/admin/inventory/items');
-  assert.deepEqual(requests[0].body.images, [
-    { mediaId: 'inventory-image', altText: 'Toallas' },
-  ]);
+  assert.deepEqual(requests[0].body.images, [{ mediaId: 'inventory-image', altText: 'Toallas' }]);
   assert.equal(item.images?.[0].id, 'inventory-image');
 });
 

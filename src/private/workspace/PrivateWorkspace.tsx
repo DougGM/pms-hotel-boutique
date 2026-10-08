@@ -156,6 +156,7 @@ export type GuestRequest = {
   priority: string;
   status: 'Pendiente' | 'En proceso' | 'Completada' | 'Rechazada';
   checklistId?: string;
+  checklist?: HousekeepingChecklist;
 };
 
 export type HistoryEntry = {
@@ -476,6 +477,8 @@ const mapServiceStatus = (status: ServiceRequestStatus): GuestRequest['status'] 
 /** Solicitud de limpieza que todavía requiere trabajo (mismo criterio que Conserjería). */
 const isOpenGuestRequest = (request: GuestRequest) =>
   request.status === 'Pendiente' || request.status === 'En proceso';
+const isGuestItemRequest = (request: GuestRequest) =>
+  request.request.startsWith('Artículos solicitados:');
 
 // --- Limpieza (INT-09) -------------------------------------------------------
 // Habitaciones y tareas stayover salen de `housekeepingService` (backend). La UI
@@ -566,6 +569,7 @@ const toStayoverRequest = (
   priority: 'Media',
   status: mapServiceStatus(request.status),
   checklistId: checklist?.id,
+  checklist,
 });
 
 type HousekeepingData = {
@@ -1901,14 +1905,14 @@ function PrivateWorkspaceReady({
             : contentRole === 'admin'
               ? adminStockNotifications
               : contentRole === 'guest'
-              ? []
-              : [
-                  {
-                    title: 'Reserva activa',
-                    detail: 'Tu estancia y servicios están disponibles',
-                    tone: 'success',
-                  },
-                ];
+                ? []
+                : [
+                    {
+                      title: 'Reserva activa',
+                      detail: 'Tu estancia y servicios están disponibles',
+                      tone: 'success',
+                    },
+                  ];
 
   const notify = (message: string) => {
     setToast(message);
@@ -2188,19 +2192,14 @@ function PrivateWorkspaceReady({
     }
   };
 
-  const saveStayoverChecklist = async (request: GuestRequest, done = false) => {
-    const items = DEFAULT_CLEANING_CHECKLIST.map((label, position) => ({
-      label,
-      done,
-      position,
-    }));
-    if (request.checklistId) {
-      return housekeepingService.saveChecklist(request.checklistId, { items });
-    }
+  const ensureRequestChecklist = async (request: GuestRequest) => {
+    if (request.checklist) return request.checklist;
+    const labels = await housekeepingService.getGuestCleaningChecklistTemplate();
+    if (labels.length === 0) throw new Error('La lista de limpieza no tiene tareas configuradas.');
     return housekeepingService.createChecklist({
       serviceRequestId: request.requestId,
       observations: request.request,
-      items,
+      items: labels.map((label, position) => ({ label, done: false, position })),
     });
   };
 
@@ -2273,12 +2272,22 @@ function PrivateWorkspaceReady({
 
     try {
       const updated = await housekeepingService.startStayoverCleaning(request.requestId);
+      const checklist = isGuestItemRequest(request)
+        ? undefined
+        : await ensureRequestChecklist(request);
       setHkRequests((current) =>
         current.map((item) =>
-          item.id === reqId ? { ...item, status: mapServiceStatus(updated.status) } : item,
+          item.id === reqId
+            ? {
+                ...item,
+                status: mapServiceStatus(updated.status),
+                checklistId: checklist?.id,
+                checklist,
+              }
+            : item,
         ),
       );
-      notify('Limpieza de estancia iniciada correctamente');
+      notify('Limpieza iniciada. Marca cada tarea conforme la completes.');
     } catch (cause) {
       await failHousekeeping(cause);
     }
@@ -2289,19 +2298,16 @@ function PrivateWorkspaceReady({
     if (!req) return;
 
     try {
-      const checklist = await saveStayoverChecklist(req, true);
+      if (!isGuestItemRequest(req) && (!req.checklist || req.checklist.status !== 'completed')) {
+        throw new Error('Completa primero todos los puntos del checklist.');
+      }
       const updated = await housekeepingService.completeStayoverCleaning(req.requestId);
-      const completedChecklist = await housekeepingService.saveChecklist(checklist.id, {
-        status: 'completed',
-        items: checklist.items,
-      });
       setHkRequests((current) =>
         current.map((item) =>
           item.id === reqId
             ? {
                 ...item,
                 status: mapServiceStatus(updated.status),
-                checklistId: completedChecklist.id,
               }
             : item,
         ),
@@ -2317,6 +2323,65 @@ function PrivateWorkspaceReady({
         setHkHistory((prev) => [entry, ...prev]);
       }
       notify('Limpieza de estancia completada correctamente');
+    } catch (cause) {
+      await failHousekeeping(cause);
+    }
+  };
+
+  const prepareRequestChecklist = async (reqId: number) => {
+    const request = hkRequests.find((item) => item.id === reqId);
+    if (!request || isGuestItemRequest(request)) return;
+    try {
+      const checklist = await ensureRequestChecklist(request);
+      setHkRequests((current) =>
+        current.map((item) =>
+          item.id === reqId ? { ...item, checklistId: checklist.id, checklist } : item,
+        ),
+      );
+    } catch (cause) {
+      await failHousekeeping(cause);
+    }
+  };
+
+  const toggleRequestChecklistItem = async (reqId: number, index: number) => {
+    const request = hkRequests.find((item) => item.id === reqId);
+    if (!request?.checklist || request.checklist.status === 'completed') return;
+    const items = request.checklist.items.map((item, itemIndex) =>
+      itemIndex === index ? { ...item, done: !item.done } : item,
+    );
+    try {
+      const checklist = await housekeepingService.saveChecklist(request.checklist.id, {
+        status: 'in_progress',
+        items,
+      });
+      setHkRequests((current) =>
+        current.map((item) =>
+          item.id === reqId ? { ...item, checklistId: checklist.id, checklist } : item,
+        ),
+      );
+    } catch (cause) {
+      await failHousekeeping(cause);
+    }
+  };
+
+  const completeRequestChecklist = async (reqId: number) => {
+    const request = hkRequests.find((item) => item.id === reqId);
+    if (!request?.checklist) return;
+    if (request.checklist.items.some((item) => !item.done)) {
+      notify('Marca todos los puntos antes de cerrar el checklist.');
+      return;
+    }
+    try {
+      const checklist = await housekeepingService.saveChecklist(request.checklist.id, {
+        status: 'completed',
+        items: request.checklist.items,
+      });
+      setHkRequests((current) =>
+        current.map((item) =>
+          item.id === reqId ? { ...item, checklistId: checklist.id, checklist } : item,
+        ),
+      );
+      notify('Checklist de limpieza completado. Ya puedes cerrar la solicitud.');
     } catch (cause) {
       await failHousekeeping(cause);
     }
@@ -3301,6 +3366,9 @@ function PrivateWorkspaceReady({
               onChangeStatus={changeRoomStatus}
               onAttendRequest={attendRequest}
               onCompleteRequest={completeRequest}
+              onPrepareRequestChecklist={prepareRequestChecklist}
+              onToggleRequestChecklist={toggleRequestChecklistItem}
+              onCompleteRequestChecklist={completeRequestChecklist}
               onToggleChecklist={toggleChecklistItem}
               onOpenDetail={(room) => setHkDetailRoomId(room.id)}
               onOpenDefectModal={() => setHkShowDefectModal(true)}
@@ -4320,6 +4388,9 @@ function HousekeepingContent({
   onChangeStatus,
   onAttendRequest,
   onCompleteRequest,
+  onPrepareRequestChecklist,
+  onToggleRequestChecklist,
+  onCompleteRequestChecklist,
   onToggleChecklist,
   onOpenDetail,
   onOpenDefectModal,
@@ -4349,6 +4420,9 @@ function HousekeepingContent({
   onChangeStatus: (id: number, status: RoomStatus) => void;
   onAttendRequest: (id: number) => void;
   onCompleteRequest: (id: number) => void;
+  onPrepareRequestChecklist: (id: number) => void;
+  onToggleRequestChecklist: (id: number, index: number) => void;
+  onCompleteRequestChecklist: (id: number) => void;
   onToggleChecklist: (roomId: number, index: number) => void;
   onOpenDetail: (room: CleaningRoom) => void;
   hkFilter: 'Todos' | RoomStatus;
@@ -4519,13 +4593,67 @@ function HousekeepingContent({
               >
                 {req.status}
               </span>
+              {req.status === 'En proceso' && !isGuestItemRequest(req) && (
+                <div className="hk-request-checklist">
+                  {!req.checklist ? (
+                    <>
+                      <p>Esta solicitud todavía no tiene checklist.</p>
+                      <button
+                        className="button small secondary"
+                        onClick={() => onPrepareRequestChecklist(req.id)}
+                      >
+                        Preparar checklist
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <div className="hk-request-checklist-heading">
+                        <strong>Checklist de limpieza</strong>
+                        <span>
+                          {req.checklist.items.filter((item) => item.done).length}/
+                          {req.checklist.items.length}
+                        </span>
+                      </div>
+                      <div className="hk-request-checklist-items">
+                        {req.checklist.items.map((item, index) => (
+                          <label key={item.id ?? `${item.position}-${item.label}`}>
+                            <input
+                              type="checkbox"
+                              checked={item.done}
+                              disabled={req.checklist?.status === 'completed'}
+                              onChange={() => onToggleRequestChecklist(req.id, index)}
+                            />
+                            <span>{item.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                      {req.checklist.status !== 'completed' && (
+                        <button
+                          className="button small secondary"
+                          disabled={
+                            req.checklist.items.length === 0 ||
+                            req.checklist.items.some((item) => !item.done)
+                          }
+                          onClick={() => onCompleteRequestChecklist(req.id)}
+                        >
+                          Completar checklist
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
               {req.status === 'Pendiente' && (
                 <button className="button small primary" onClick={() => onAttendRequest(req.id)}>
                   Atender solicitud
                 </button>
               )}
               {req.status === 'En proceso' && (
-                <button className="button small primary" onClick={() => onCompleteRequest(req.id)}>
+                <button
+                  className="button small primary"
+                  disabled={!isGuestItemRequest(req) && req.checklist?.status !== 'completed'}
+                  onClick={() => onCompleteRequest(req.id)}
+                >
                   Completar solicitud
                 </button>
               )}
