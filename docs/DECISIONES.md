@@ -1132,3 +1132,34 @@ evidencia lo sustenta), **Decisión** (qué se hizo), **Qué NO hacer**
 (errores concretos que no se deben repetir) y **Alternativas consideradas**
 (qué se descartó y por qué). Enlazar desde `docs/CONTRATO-DATOS.md` cuando
 la decisión afecte una entidad del contrato.
+
+## D-018 · Checklist predeterminada para limpieza de huésped
+
+**Fecha:** 2026-10-08 · **Estado:** aceptada.
+
+### Contexto
+
+Las solicitudes de limpieza exigían que el personal escribiera desde cero los
+puntos de revisión. Los pedidos de artículos comparten el tipo operativo de
+solicitud, pero no deben convertirse en tareas de limpieza.
+
+### Decisión
+
+- Administración configura la checklist predeterminada desde el Catálogo de
+  Limpieza.
+- Una tarea de limpieza recibe una copia de esos puntos en su checklist
+  persistida; los cambios a la plantilla solo afectan tareas futuras.
+- Las solicitudes de entrega de artículos no usan checklist de limpieza.
+
+### Qué NO hacer
+
+- No mantener la plantilla solo en el cliente móvil ni sobrescribir checklists
+  de tareas existentes al editarla.
+- No mostrar la checklist para solicitudes de artículos.
+
+### Alternativas consideradas
+
+- **Escribir los puntos en cada solicitud:** se descarta porque repite trabajo
+  y produce listas inconsistentes.
+- **Actualizar tareas abiertas al guardar la plantilla:** se descarta para
+  conservar el registro operativo de cada solicitud.

@@ -43,6 +43,7 @@ import { HttpError } from '@/services/http-client';
 import { CatalogImage } from '@/shared/components/CatalogImage';
 import { ConciergeCatalogPanel } from './ConciergeCatalogPanel';
 import { HousekeepingCatalogPanel } from './HousekeepingCatalogPanel';
+import { HousekeepingChecklistTemplatePanel } from './HousekeepingChecklistTemplatePanel';
 import { ErrorState } from '@/shared/components/ErrorState';
 import { ImageGalleryField } from '@/shared/components/ImageGalleryField';
 import { LoadingState } from '@/shared/components/LoadingState';
@@ -1475,7 +1476,12 @@ export function AdminContent({
   }
 
   if (nav === 'Catálogo de Limpieza') {
-    return <HousekeepingCatalogPanel onAction={onAction} />;
+    return (
+      <div className="adm-catalog-stack">
+        <HousekeepingCatalogPanel onAction={onAction} />
+        <HousekeepingChecklistTemplatePanel onAction={onAction} />
+      </div>
+    );
   }
 
   if (screen.status === 'loading') {
