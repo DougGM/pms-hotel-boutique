@@ -651,7 +651,11 @@ test('ADMIN keeps its administration group fixed and reads other views from navi
   assert.equal(full['HUÉSPED::Notificaciones'], true, 'incluye la vista previa del portal');
 
   const admin = rolePermissionsFromBackendRoles([
-    role('admin', ['admin-nav.housekeeping.rooms', 'admin-nav.guest.services', 'housekeeping.read']),
+    role('admin', [
+      'admin-nav.housekeeping.rooms',
+      'admin-nav.guest.services',
+      'housekeeping.read',
+    ]),
   ]).admin;
   assert.equal(admin['ADMINISTRACIÓN::Dashboard'], true, 'Administración permanece fija');
   assert.equal(admin['LIMPIEZA::Habitaciones'], true);

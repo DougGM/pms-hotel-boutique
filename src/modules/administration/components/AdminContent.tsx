@@ -4190,9 +4190,7 @@ function RoleModal({
           code: role?.code ?? name.toLowerCase().replace(/\s+/g, '_'),
           name,
           description,
-          permissions: isProtectedAdminRole
-            ? withFixedAdminPermissions(permissions)
-            : permissions,
+          permissions: isProtectedAdminRole ? withFixedAdminPermissions(permissions) : permissions,
           permissionKeys: backendPermissionsFromUi(
             isProtectedAdminRole ? withFixedAdminPermissions(permissions) : permissions,
           ),
