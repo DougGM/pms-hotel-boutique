@@ -806,6 +806,9 @@ button {
   gap: var(--size-legacy-22);
   margin-bottom: var(--size-legacy-22);
 }
+.dashboard-grid {
+  align-items: start;
+}
 .panel {
   background: var(--color-surface);
   border: var(--size-legacy-1) solid var(--color-border);
@@ -8513,6 +8516,12 @@ button {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+}
+.side-panel .adm-alert-list {
+  max-height: 16rem;
+  overflow-y: auto;
+  padding-right: var(--space-2);
+  scrollbar-gutter: stable;
 }
 .adm-alert-row {
   display: flex;

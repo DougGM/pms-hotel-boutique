@@ -56,6 +56,7 @@ import { cashService } from '@/services/cashService';
 import { catalogService } from '@/services/catalogService';
 import { guestAccountService } from '@/services/guestAccountService';
 import { guestService } from '@/services/guestService';
+import { inventoryService } from '@/services/inventoryService';
 import {
   housekeepingService,
   type HousekeepingChecklist,
@@ -109,7 +110,12 @@ type NavItem = {
   role?: RoleId;
   children?: NavChild[];
 };
-type NotificationItem = { title: string; detail: string; tone: 'warning' | 'info' | 'success' };
+type NotificationItem = {
+  title: string;
+  detail: string;
+  tone: 'warning' | 'info' | 'success';
+  destination?: string;
+};
 
 type Task = {
   id: number;
@@ -1431,6 +1437,7 @@ function PrivateWorkspaceReady({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [headerScrolled, setHeaderScrolled] = useState(false);
   const [rolePermissions, setRolePermissions] = useState(defaultRolePermissions);
+  const [adminStockNotifications, setAdminStockNotifications] = useState<NotificationItem[]>([]);
   const [hkRooms, setHkRooms] = useState(initialData.cleaningRooms);
   const [hkRequests, setHkRequests] = useState(initialData.guestRequests);
   const [hkHistory, setHkHistory] = useState(initialData.history);
@@ -1538,6 +1545,35 @@ function PrivateWorkspaceReady({
       .catch(() => {
         // El panel de administracion muestra el error detallado; el sidebar conserva el fallback.
       });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeRole]);
+
+  useEffect(() => {
+    if (activeRole !== 'admin') {
+      setAdminStockNotifications([]);
+      return;
+    }
+
+    let cancelled = false;
+    inventoryService
+      .getItemsBelowMinimum()
+      .then((items) => {
+        if (cancelled) return;
+        setAdminStockNotifications(
+          items.map((item) => ({
+            title: `${item.name}: stock bajo`,
+            detail: `${item.currentQuantity} disponibles · mínimo ${item.minimumQuantity}`,
+            tone: 'warning',
+            destination: scopedNav('admin', 'Gestión de inventario'),
+          })),
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setAdminStockNotifications([]);
+      });
+
     return () => {
       cancelled = true;
     };
@@ -1858,7 +1894,9 @@ function PrivateWorkspaceReady({
                   tone: 'info',
                 },
               ]
-            : contentRole === 'guest' || contentRole === 'admin'
+            : contentRole === 'admin'
+              ? adminStockNotifications
+              : contentRole === 'guest'
               ? []
               : [
                   {
@@ -3099,7 +3137,8 @@ function PrivateWorkspaceReady({
                       className="notification-row"
                       onClick={() => {
                         setShowNotifications(false);
-                        notify(item.title);
+                        if (item.destination) setActiveNav(item.destination);
+                        else notify(item.title);
                       }}
                     >
                       <span className={`notification-dot ${item.tone}`} />{' '}
