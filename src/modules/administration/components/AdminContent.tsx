@@ -292,14 +292,10 @@ const ALL_PERMISSIONS = ROLE_ACCESS_GROUPS.flatMap((group) =>
   group.items.map((item) => roleAccessKey(group.name, item)),
 );
 const ADMIN_ACCESS_GROUP_NAME = 'ADMINISTRACIÓN';
-const ADMIN_PANEL_PERMISSION_KEYS =
-  ROLE_ACCESS_GROUPS.find((group) => group.name === ADMIN_ACCESS_GROUP_NAME)?.items.map((item) =>
-    roleAccessKey(ADMIN_ACCESS_GROUP_NAME, item),
-  ) ?? [];
 
-const withProtectedAdminPanelPermissions = (permissions: Record<string, boolean>) => ({
+const withProtectedAdminPermissions = (permissions: Record<string, boolean>) => ({
   ...permissions,
-  ...Object.fromEntries(ADMIN_PANEL_PERMISSION_KEYS.map((key) => [key, true])),
+  ...Object.fromEntries(ALL_PERMISSIONS.map((key) => [key, true])),
 });
 
 const backendPermissionsByAccessKey: Record<string, string[]> = {
@@ -364,7 +360,7 @@ const uiPermissionsFromBackend = (role: Role): Record<string, boolean> => {
   if (role.permissionIds.length === 0) {
     const fallbackPermissions = getRoleDashboardPermissions(role.code);
     return normalizeRoleCode(role.code) === 'admin'
-      ? withProtectedAdminPanelPermissions(fallbackPermissions)
+      ? withProtectedAdminPermissions(fallbackPermissions)
       : fallbackPermissions;
   }
   const granted = new Set(role.permissionIds);
@@ -378,7 +374,7 @@ const uiPermissionsFromBackend = (role: Role): Record<string, boolean> => {
     }),
   ) as Record<string, boolean>;
   return normalizeRoleCode(role.code) === 'admin'
-    ? withProtectedAdminPanelPermissions(permissions)
+    ? withProtectedAdminPermissions(permissions)
     : permissions;
 };
 
@@ -2277,7 +2273,7 @@ function AdminContentReady({
                 const savedRole = {
                   ...savedRoleBase,
                   permissions: isEditingProtectedAdminRole
-                    ? withProtectedAdminPanelPermissions(r.permissions)
+                    ? withProtectedAdminPermissions(r.permissions)
                     : savedRoleBase.permissions,
                   permissionKeys: isEditingProtectedAdminRole
                     ? nextPermissionKeys
@@ -4118,7 +4114,7 @@ function RoleModal({
   const [description, setDescription] = useState(role?.description ?? '');
   const [permissions, setPermissions] = useState<Record<string, boolean>>(
     isProtectedAdminRole
-      ? withProtectedAdminPanelPermissions(
+      ? withProtectedAdminPermissions(
           role?.permissions ?? Object.fromEntries(ALL_PERMISSIONS.map((p) => [p, false])),
         )
       : (role?.permissions ?? Object.fromEntries(ALL_PERMISSIONS.map((p) => [p, false]))),
@@ -4143,10 +4139,10 @@ function RoleModal({
           name,
           description,
           permissions: isProtectedAdminRole
-            ? withProtectedAdminPanelPermissions(permissions)
+            ? withProtectedAdminPermissions(permissions)
             : permissions,
           permissionKeys: backendPermissionsFromUi(
-            isProtectedAdminRole ? withProtectedAdminPanelPermissions(permissions) : permissions,
+            isProtectedAdminRole ? withProtectedAdminPermissions(permissions) : permissions,
           ),
           userCount: role?.userCount ?? 0,
         })
