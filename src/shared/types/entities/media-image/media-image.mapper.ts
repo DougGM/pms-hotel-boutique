@@ -35,10 +35,10 @@ export const toDTO = (model: MediaImage): MediaImageDto => ({
 });
 
 export const toTargetDTO = (target: MediaTarget): MediaTargetDto =>
-  target === 'roomType' ? 'room_type' : target;
+  target === 'roomType' ? 'room_type' : target === 'inventoryItem' ? 'inventory_item' : target;
 
 export const toTargetDomain = (target: MediaTargetDto): MediaTarget =>
-  target === 'room_type' ? 'roomType' : target;
+  target === 'room_type' ? 'roomType' : target === 'inventory_item' ? 'inventoryItem' : target;
 
 export const toUploadDomain = (dto: MediaUploadDto): MediaUpload => ({
   id: dto.id,

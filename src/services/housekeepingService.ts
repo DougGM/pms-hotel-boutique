@@ -346,6 +346,25 @@ export const housekeepingService = {
     );
     return toServiceRequest(toServiceRequestDto(response));
   },
+  async createGuestHousekeepingItemRequest(data: {
+    itemId: ID;
+    quantity: number;
+    notes?: string;
+  }): Promise<ServiceRequest> {
+    if (!Number.isInteger(data.quantity) || data.quantity < 1 || data.quantity > 5) {
+      throw new Error('La cantidad debe ser de 1 a 5 artículos.');
+    }
+    const response = await guestRequest(
+      () =>
+        httpClient.post<StayoverCleaningResponse>('/guest/housekeeping/item-requests', {
+          itemId: data.itemId,
+          quantity: data.quantity,
+          notes: data.notes?.trim() || undefined,
+        }),
+      'No fue posible solicitar los artículos de limpieza.',
+    );
+    return toServiceRequest(toServiceRequestDto(response));
+  },
   /** El backend decide si la limpieza todavía se puede cancelar. */
   async cancelGuestStayoverRequest(requestId: ID): Promise<ServiceRequest> {
     const response = await guestRequest(

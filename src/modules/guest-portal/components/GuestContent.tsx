@@ -613,15 +613,24 @@ function GuestContentReady({
     type: string;
     description: string;
     time: string;
+    itemId?: string;
+    quantity?: number;
+    notes?: string;
   }) => {
-    // Limpieza va a stayover (Housekeeping); artículos y demás pedidos van a Conserjería.
+    // Limpieza y artículos se atienden desde Housekeeping; otros pedidos van a Conserjería.
     const kind: GuestServiceRequest['kind'] =
-      data.type === 'Limpieza' ? 'housekeeping' : 'concierge';
+      data.type === 'Limpieza' || data.type === 'Artículos' ? 'housekeeping' : 'concierge';
     const payload = { description: data.description, notes: `Horario preferido: ${data.time}` };
     try {
       const request =
         kind === 'housekeeping'
-          ? await housekeepingService.createGuestStayoverRequest(payload)
+          ? data.type === 'Artículos' && data.itemId && data.quantity
+            ? await housekeepingService.createGuestHousekeepingItemRequest({
+                itemId: data.itemId,
+                quantity: data.quantity,
+                notes: `${data.time}${data.notes ? ` · ${data.notes}` : ''}`,
+              })
+            : await housekeepingService.createGuestStayoverRequest(payload)
           : await serviceRequestService.createGuestConciergeRequest(payload);
       const newReq = toGuestRequest(
         request,
@@ -633,7 +642,9 @@ function GuestContentReady({
       setShowRequestService(null);
       onAction(
         kind === 'housekeeping'
-          ? 'Solicitud enviada al equipo de limpieza'
+          ? data.type === 'Artículos'
+            ? 'Solicitud de artículos enviada al equipo de limpieza'
+            : 'Solicitud enviada al equipo de limpieza'
           : 'Solicitud enviada a conserjería',
       );
     } catch (cause) {
@@ -1265,15 +1276,15 @@ function GuestContentReady({
   }
 
   // ─── ROOM SERVICES (Cleaning + Items) ──────────────────────────
-  if (nav === 'Servicios de habitación') {
+  if (nav === 'Limpieza y artículos') {
     const roomRequests = serviceRequests.filter((request) => request.kind === 'housekeeping');
     return (
       <>
         <div className="panel">
           <div className="panel-heading">
             <div>
-              <h3>Servicios de habitación</h3>
-              <p>Solicita limpieza para tu habitación; otros servicios están en tus solicitudes.</p>
+              <h3>Limpieza y artículos</h3>
+              <p>Solicita limpieza o pide artículos disponibles para tu habitación.</p>
             </div>
             <div className="gs-heading-actions">
               <button

@@ -1,4 +1,4 @@
-export type MediaTarget = 'roomType' | 'product' | 'amenity';
+export type MediaTarget = 'roomType' | 'product' | 'amenity' | 'inventoryItem';
 
 export type MediaVariant = 'thumb' | 'medium' | 'large';
 

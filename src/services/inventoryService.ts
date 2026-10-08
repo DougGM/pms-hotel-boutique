@@ -15,8 +15,23 @@ import type {
   InventoryItemCategoryDto,
   InventoryUnitDto,
 } from '@/shared/types/entities/inventory-item';
+import {
+  toDomain as toMediaImage,
+  type MediaImageAssignmentDto,
+} from '@/shared/types/entities/media-image';
+import { toImagesRequest, toMediaImageDtos, type ApiMediaImage } from './mediaService';
 import { simulateLatency } from './mockUtils';
 import { httpClient } from './http-client';
+import { guestRequest } from './guestHttp';
+
+export type GuestHousekeepingItem = {
+  id: string;
+  name: string;
+  description?: string | null;
+  unit: string;
+  currentQuantity: number;
+  images: import('@/shared/types/entities/media-image').MediaImage[];
+};
 
 type ApiInventoryItem = {
   id: string;
@@ -29,6 +44,7 @@ type ApiInventoryItem = {
   minimumQuantity: number;
   lowStock: boolean;
   productId?: string;
+  images?: ApiMediaImage[];
   active: boolean;
   createdAt: string;
   updatedAt: string;
@@ -48,7 +64,7 @@ type ApiInventoryMovement = {
 
 type UpdateInventoryItemData = Partial<
   Pick<InventoryItemDto, 'name' | 'category' | 'current_quantity' | 'minimum_quantity' | 'active'>
->;
+> & { images?: MediaImageAssignmentDto[] };
 
 type CreateInventoryItemData = {
   sku: string;
@@ -58,7 +74,13 @@ type CreateInventoryItemData = {
   unit: InventoryUnitDto;
   minimumQuantity: number;
   active: boolean;
+  images?: MediaImageAssignmentDto[];
 };
+
+type ApiGuestHousekeepingItem = Pick<
+  ApiInventoryItem,
+  'id' | 'name' | 'description' | 'unit' | 'currentQuantity' | 'images'
+>;
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -93,6 +115,7 @@ function toInventoryItemDto(api: ApiInventoryItem): InventoryItemDto {
     current_quantity: api.currentQuantity,
     minimum_quantity: api.minimumQuantity,
     product_id: api.productId,
+    images: toMediaImageDtos(api.images),
     active: api.active,
     created_at: api.createdAt,
     updated_at: api.updatedAt,
@@ -123,6 +146,7 @@ function toUpdateRequest(item: InventoryItem, data: UpdateInventoryItemData) {
     minimumQuantity: data.minimum_quantity ?? item.minimumQuantity,
     productId: item.productId,
     active: data.active ?? item.active,
+    images: toImagesRequest(data.images),
   };
 }
 
@@ -134,6 +158,7 @@ export const inventoryService = {
       sku: data.sku.trim(),
       name: data.name.trim(),
       description: data.description?.trim() || undefined,
+      images: toImagesRequest(data.images),
     });
     return toInventoryItem(toInventoryItemDto(item));
   },
@@ -141,6 +166,17 @@ export const inventoryService = {
     await simulateLatency();
     const items = await httpClient.get<ApiInventoryItem[]>('/inventory/items');
     return items.map(toInventoryItemDto).map(toInventoryItem);
+  },
+  async getGuestHousekeepingItems(): Promise<GuestHousekeepingItem[]> {
+    const items = await guestRequest(
+      () => httpClient.get<ApiGuestHousekeepingItem[]>('/guest/housekeeping/items'),
+      'No se pudieron cargar los artículos de limpieza.',
+    );
+    return items.map((item) => ({
+      ...item,
+      description: item.description ?? undefined,
+      images: toMediaImageDtos(item.images).map(toMediaImage),
+    }));
   },
   async getItemById(id: ID): Promise<InventoryItem | undefined> {
     await simulateLatency();

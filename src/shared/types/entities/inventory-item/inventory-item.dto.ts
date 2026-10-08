@@ -20,9 +20,11 @@ export interface InventoryItemDTO {
   current_quantity: number;
   minimum_quantity: number;
   product_id?: string;
+  images?: MediaImageDTO[];
   active: boolean;
   created_at: string;
   updated_at: string;
 }
 
 export type InventoryItemDto = InventoryItemDTO;
+import type { MediaImageDTO } from '../media-image';

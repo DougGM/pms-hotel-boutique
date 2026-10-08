@@ -8,6 +8,7 @@ import { SearchScreen } from '@/modules/booking-engine/screens/SearchScreen';
 import { RoomTypeFormScreen } from '@/modules/rooms/screens/RoomTypeFormScreen';
 import { catalogService } from '@/services/catalogService';
 import { httpClient } from '@/services/http-client';
+import { inventoryService } from '@/services/inventoryService';
 import { MEDIA_ERROR_MESSAGES, MEDIA_LIMITS, mediaService } from '@/services/mediaService';
 import { publicBookingCatalogService } from '@/services/publicBookingCatalogService';
 import { roomService } from '@/services/roomService';
@@ -150,6 +151,52 @@ test('uploadImage: POST /media multipart con file y target, sin Content-Type man
   assert.equal(uploaded.id, 'm1');
   assert.equal(uploaded.target, 'roomType');
   assert.ok(uploaded.expiresAt instanceof Date);
+});
+
+test('uploadImage: admite artículos de inventario', async () => {
+  handler = () => json(uploadResponse('inventory-image', 'inventory_item'), 201);
+
+  const uploaded = await mediaService.uploadImage('inventoryItem', imageFile());
+
+  assert.equal(requests[0].rawBody.get('target'), 'inventory_item');
+  assert.equal(uploaded.target, 'inventoryItem');
+});
+
+test('inventario: crea un artículo asociando la imagen subida', async () => {
+  handler = (request) =>
+    json(
+      {
+        id: '11111111-1111-4111-8111-111111111111',
+        sku: 'TOALLA-001',
+        name: 'Toallas',
+        category: 'housekeeping',
+        unit: 'unit',
+        currentQuantity: 0,
+        minimumQuantity: 0,
+        lowStock: false,
+        active: true,
+        createdAt: NOW,
+        updatedAt: NOW,
+        images: [apiImage('inventory-image', 0, true, 'Toallas')],
+      },
+      request.method === 'POST' ? 201 : 200,
+    );
+
+  const item = await inventoryService.createItem({
+    sku: 'TOALLA-001',
+    name: 'Toallas',
+    category: 'housekeeping',
+    unit: 'unit',
+    minimumQuantity: 0,
+    active: true,
+    images: [{ media_id: 'inventory-image', alt_text: 'Toallas' }],
+  });
+
+  assert.equal(requests[0].path, '/admin/inventory/items');
+  assert.deepEqual(requests[0].body.images, [
+    { mediaId: 'inventory-image', altText: 'Toallas' },
+  ]);
+  assert.equal(item.images?.[0].id, 'inventory-image');
 });
 
 test('uploadImage: valida formato, tamaño y vacío antes de llamar a la red', async () => {

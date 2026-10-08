@@ -1,6 +1,8 @@
 /* eslint-disable react-refresh/only-export-components -- Helpers compartidos del prototipo Bolt migrado. */
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { MediaImage } from '@/shared/types/entities/media-image';
+import { CatalogImage } from '@/shared/components/CatalogImage';
+import { inventoryService, type GuestHousekeepingItem } from '@/services/inventoryService';
 import {
   ArrowRight,
   Ban,
@@ -772,17 +774,17 @@ export function RequestServiceModal({
   mode: 'Limpieza' | 'Articulos' | 'Conserjería';
   roomNumber?: string;
   onClose: () => void;
-  onSubmit: (data: { type: string; description: string; time: string }) => Promise<void>;
+  onSubmit: (data: {
+    type: string;
+    description: string;
+    time: string;
+    itemId?: string;
+    quantity?: number;
+    notes?: string;
+  }) => Promise<void>;
 }) {
   const cleaningTypes = ['Limpieza de estancia', 'Limpieza de salida', 'Limpieza completa'];
   const timeSlots = ['Lo antes posible', 'Por la mañana', 'Por la tarde', 'Esta noche'];
-  const itemTypes = [
-    'Toallas extra',
-    'Almohadas adicionales',
-    'Artículos de higiene',
-    'Cobijas',
-    'Otros',
-  ];
   const conciergeTypes = [
     'Taxi al aeropuerto',
     'Transporte local',
@@ -791,20 +793,46 @@ export function RequestServiceModal({
     'Tour o actividad',
     'Otra solicitud',
   ];
-  const [selectedType, setSelectedType] = useState(
-    mode === 'Limpieza'
-      ? cleaningTypes[0]
-      : mode === 'Articulos'
-        ? itemTypes[0]
-        : conciergeTypes[0],
+  const [selectedType, setSelectedType] = useState<string>(
+    mode === 'Limpieza' ? cleaningTypes[0] : mode === 'Articulos' ? '' : conciergeTypes[0],
   );
+  const [housekeepingItems, setHousekeepingItems] = useState<GuestHousekeepingItem[]>([]);
+  const [itemsLoading, setItemsLoading] = useState(mode === 'Articulos');
+  const [itemsError, setItemsError] = useState('');
   const [selectedTime, setSelectedTime] = useState(timeSlots[0]);
   const [quantity, setQuantity] = useState(1);
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const loadHousekeepingItems = useCallback(async () => {
+    setItemsLoading(true);
+    setItemsError('');
+    try {
+      const items = await inventoryService.getGuestHousekeepingItems();
+      setHousekeepingItems(items);
+      setSelectedType((current) =>
+        items.some((item) => item.id === current) ? current : (items[0]?.id ?? ''),
+      );
+      setQuantity(1);
+    } catch (cause) {
+      setItemsError(
+        cause instanceof Error ? cause.message : 'No se pudo cargar el inventario de limpieza.',
+      );
+    } finally {
+      setItemsLoading(false);
+    }
+  }, []);
+  useEffect(() => {
+    if (mode === 'Articulos') void loadHousekeepingItems();
+  }, [loadHousekeepingItems, mode]);
+  const selectedItem = housekeepingItems.find((item) => item.id === selectedType);
+  const maxQuantity = Math.min(5, selectedItem?.currentQuantity ?? 0);
+  const canSubmitItems =
+    mode !== 'Articulos' ||
+    (!itemsLoading && !itemsError && maxQuantity > 0 && Boolean(selectedItem));
   const handleSubmit = async () => {
-    if (submitting) return;
-    const baseDescription = mode === 'Articulos' ? `${quantity}× ${selectedType}` : selectedType;
+    if (submitting || !canSubmitItems) return;
+    const baseDescription =
+      mode === 'Articulos' ? `${quantity}× ${selectedItem?.name ?? ''}` : selectedType;
     const description = `${baseDescription}${notes ? ` — ${notes}` : ''}`;
     setSubmitting(true);
     try {
@@ -812,13 +840,15 @@ export function RequestServiceModal({
         type: mode === 'Limpieza' ? 'Limpieza' : mode === 'Articulos' ? 'Artículos' : 'Conserjería',
         description,
         time: selectedTime,
+        itemId: mode === 'Articulos' ? selectedItem?.id : undefined,
+        quantity: mode === 'Articulos' ? quantity : undefined,
+        notes,
       });
     } finally {
       setSubmitting(false);
     }
   };
-  const options =
-    mode === 'Limpieza' ? cleaningTypes : mode === 'Articulos' ? itemTypes : conciergeTypes;
+  const options = mode === 'Limpieza' ? cleaningTypes : conciergeTypes;
   const title =
     mode === 'Limpieza'
       ? 'Limpieza de habitación'
@@ -890,24 +920,67 @@ export function RequestServiceModal({
                 ? 'Artículo'
                 : '¿Con qué necesitas ayuda?'}
           </span>
-          <select
-            className="hk-form-select gs-service-select"
-            value={selectedType}
-            aria-label={
-              mode === 'Limpieza'
-                ? 'Tipo de limpieza'
-                : mode === 'Articulos'
-                  ? 'Artículo'
-                  : 'Tipo de solicitud'
-            }
-            onChange={(event) => setSelectedType(event.target.value)}
-          >
-            {options.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
+          {mode === 'Articulos' ? (
+            <>
+              <select
+                className="hk-form-select gs-service-select"
+                value={selectedType}
+                aria-label="Artículo"
+                disabled={itemsLoading || housekeepingItems.length === 0}
+                onChange={(event) => {
+                  setSelectedType(event.target.value);
+                  setQuantity(1);
+                }}
+              >
+                {housekeepingItems.map((item) => (
+                  <option key={item.id} value={item.id} disabled={item.currentQuantity < 1}>
+                    {item.name} ·{' '}
+                    {item.currentQuantity > 0
+                      ? `${item.currentQuantity} disponibles`
+                      : 'No disponible'}
+                  </option>
+                ))}
+              </select>
+              {itemsLoading && <small className="gs-service-hint">Cargando artículos...</small>}
+              {itemsError && (
+                <div className="gs-service-load-error" role="alert">
+                  <small>{itemsError}</small>
+                  <button
+                    type="button"
+                    className="button secondary"
+                    onClick={loadHousekeepingItems}
+                  >
+                    Reintentar
+                  </button>
+                </div>
+              )}
+              {!itemsLoading && !itemsError && housekeepingItems.length === 0 && (
+                <small className="gs-service-hint">
+                  No hay artículos de limpieza en el inventario.
+                </small>
+              )}
+              {selectedItem && (
+                <CatalogImage
+                  image={selectedItem.images[0]}
+                  alt={selectedItem.name}
+                  className="gs-request-item-image"
+                />
+              )}
+            </>
+          ) : (
+            <select
+              className="hk-form-select gs-service-select"
+              value={selectedType}
+              aria-label={mode === 'Limpieza' ? 'Tipo de limpieza' : 'Tipo de solicitud'}
+              onChange={(event) => setSelectedType(event.target.value)}
+            >
+              {options.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
         {mode === 'Articulos' ? (
           <div className="gs-service-side-fields">
@@ -926,13 +999,15 @@ export function RequestServiceModal({
                 <button
                   type="button"
                   aria-label="Aumentar cantidad"
-                  disabled={quantity >= 5}
-                  onClick={() => setQuantity((q) => Math.min(5, q + 1))}
+                  disabled={quantity >= maxQuantity}
+                  onClick={() => setQuantity((q) => Math.min(maxQuantity, q + 1))}
                 >
                   <Plus size={14} />
                 </button>
               </div>
-              <small className="gs-service-hint">Máximo 5 artículos por solicitud.</small>
+              <small className="gs-service-hint">
+                Disponible: {selectedItem?.currentQuantity ?? 0}. Máximo 5 por solicitud.
+              </small>
             </div>
             {timeField}
           </div>
@@ -955,7 +1030,11 @@ export function RequestServiceModal({
           <button className="button secondary" onClick={onClose} disabled={submitting}>
             Cancelar
           </button>
-          <button className="button primary" onClick={handleSubmit} disabled={submitting}>
+          <button
+            className="button primary"
+            onClick={handleSubmit}
+            disabled={submitting || !canSubmitItems}
+          >
             {submitting ? 'Enviando…' : 'Enviar solicitud'}{' '}
             {!submitting && <ArrowRight size={16} />}
           </button>

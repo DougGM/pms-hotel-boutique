@@ -11,9 +11,11 @@ export interface InventoryItem {
   currentQuantity: number;
   minimumQuantity: number;
   productId?: string;
+  images?: MediaImage[];
   active: boolean;
   /** `true` si `currentQuantity < minimumQuantity` — calculado por el mapper. */
   isBelowMinimum: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
+import type { MediaImage } from '../media-image';

@@ -184,6 +184,7 @@ type InventoryProduct = {
   minStock: number;
   price: number;
   status: 'Activo' | 'Inactivo';
+  images: MediaImage[];
 };
 type InventoryMovement = {
   id: number;
@@ -277,7 +278,7 @@ const ROLE_ACCESS_GROUPS = [
       'Mi estancia',
       'Amenidades',
       'Conserjería',
-      'Servicios de habitación',
+      'Limpieza y artículos',
       'Room service',
       'Mis solicitudes y pedidos',
       'Notificaciones',
@@ -353,7 +354,7 @@ const backendPermissionsByAccessKey: Record<string, string[]> = {
   [roleAccessKey('HUÉSPED', 'Mi estancia')]: ['guest-portal.stay'],
   [roleAccessKey('HUÉSPED', 'Amenidades')]: ['guest-portal.amenities'],
   [roleAccessKey('HUÉSPED', 'Conserjería')]: ['guest-portal.requests'],
-  [roleAccessKey('HUÉSPED', 'Servicios de habitación')]: ['guest-portal.services'],
+  [roleAccessKey('HUÉSPED', 'Limpieza y artículos')]: ['guest-portal.services'],
   [roleAccessKey('HUÉSPED', 'Room service')]: ['guest-portal.room-service'],
   [roleAccessKey('HUÉSPED', 'Mis solicitudes y pedidos')]: ['guest-portal.requests'],
   [roleAccessKey('HUÉSPED', 'Notificaciones')]: ['guest-portal.notifications'],
@@ -521,6 +522,11 @@ const INVENTORY_CATEGORY_LABELS: Record<InventoryItemCategory, string> = {
   maintenance: 'Mantenimiento',
   office: 'Oficina',
 };
+const INVENTORY_CATEGORY_OPTIONS: InventoryItemCategory[] = [
+  'roomService',
+  'housekeeping',
+  'maintenance',
+];
 
 const INVENTORY_UNIT_LABELS: Record<InventoryUnit, string> = {
   unit: 'Unidad',
@@ -1348,6 +1354,7 @@ export function AdminContent({
             minStock: item.minimumQuantity,
             price: product ? centsToAmount(product.priceCents) : 0,
             status: item.active ? 'Activo' : 'Inactivo',
+            images: item.images ?? [],
           };
         });
 
@@ -3507,7 +3514,14 @@ function AdminContentReady({
                 {filtered.map((p) => (
                   <tr key={p.id} className={p.stock <= p.minStock ? 'adm-row-alert' : ''}>
                     <td>
-                      <strong>{p.name}</strong>
+                      <div className="adm-inventory-product">
+                        <CatalogImage
+                          image={findPrimaryImage(p.images)}
+                          alt={p.name}
+                          className="adm-inventory-image"
+                        />
+                        <strong>{p.name}</strong>
+                      </div>
                     </td>
                     <td>{p.category}</td>
                     <td className={p.stock <= p.minStock ? 'terracotta-text' : ''}>
@@ -3600,7 +3614,7 @@ function AdminContentReady({
           <ProductModal
             product={editProduct}
             onClose={() => setShowProductModal(false)}
-            onSave={async (p) => {
+            onSave={async (p, images) => {
               try {
                 if (!editProduct) {
                   if (!p.sku.trim() || !p.name.trim()) {
@@ -3616,6 +3630,7 @@ function AdminContentReady({
                     unit: p.unit,
                     minimumQuantity: p.minStock,
                     active: p.status === 'Activo',
+                    images,
                   });
                   const newItem: InventoryProduct = {
                     id: parseDbId(created.id, inventory.length + 1),
@@ -3629,6 +3644,7 @@ function AdminContentReady({
                     minStock: created.minimumQuantity,
                     price: 0,
                     status: created.active ? 'Activo' : 'Inactivo',
+                    images: created.images ?? [],
                   };
                   setInventory((cur) => [...cur, newItem]);
                   onAction('Insumo creado correctamente con existencias en cero');
@@ -3643,6 +3659,7 @@ function AdminContentReady({
                   current_quantity: p.stock,
                   minimum_quantity: p.minStock,
                   active: p.status === 'Activo',
+                  images,
                 });
                 setInventory((cur) =>
                   cur.map((x) =>
@@ -3658,6 +3675,7 @@ function AdminContentReady({
                           stock: updated.currentQuantity,
                           minStock: updated.minimumQuantity,
                           status: updated.active ? 'Activo' : 'Inactivo',
+                          images: updated.images ?? [],
                         }
                       : x,
                   ),
@@ -4910,7 +4928,7 @@ function ProductModal({
 }: {
   product: InventoryProduct | null;
   onClose: () => void;
-  onSave: (p: InventoryProduct) => void;
+  onSave: (p: InventoryProduct, images: MediaImageAssignmentDto[]) => Promise<void>;
 }) {
   const [name, setName] = useState(product?.name ?? '');
   const [sku, setSku] = useState(product?.sku ?? '');
@@ -4921,26 +4939,38 @@ function ProductModal({
   const [stock, setStock] = useState(product?.stock ?? 0);
   const [minStock, setMinStock] = useState(product?.minStock ?? 0);
   const [status, setStatus] = useState<'Activo' | 'Inactivo'>(product?.status ?? 'Activo');
+  const [gallery, setGallery] = useState<GalleryItem[]>(() =>
+    galleryFromImages(product?.images ?? []),
+  );
+  const save = useModalSave(gallery, onClose);
   return (
     <AdminModal
       title={product ? 'Editar producto' : 'Nuevo producto'}
       eyebrow="GESTIÓN DE INVENTARIO"
-      onClose={onClose}
+      onClose={save.cancel}
+      submitting={save.submitting}
+      error={save.error}
       onSubmit={() =>
-        onSave({
-          id: product?.id ?? 0,
-          dbId: product?.dbId ?? '',
-          sku,
-          categoryCode:
-            INVENTORY_CATEGORY_BY_LABEL[category] ?? product?.categoryCode ?? 'roomService',
-          unit,
-          name,
-          category,
-          stock,
-          minStock,
-          price: product?.price ?? 0,
-          status,
-        })
+        save.submit(() =>
+          onSave(
+            {
+              id: product?.id ?? 0,
+              dbId: product?.dbId ?? '',
+              sku,
+              categoryCode:
+                INVENTORY_CATEGORY_BY_LABEL[category] ?? product?.categoryCode ?? 'roomService',
+              unit,
+              name,
+              category,
+              stock,
+              minStock,
+              price: product?.price ?? 0,
+              status,
+              images: product?.images ?? [],
+            },
+            toImageAssignments(gallery),
+          ),
+        )
       }
       submitLabel={product ? 'Guardar cambios' : 'Crear producto'}
     >
@@ -4974,9 +5004,9 @@ function ProductModal({
             value={category}
             onChange={(e) => setCategory(e.target.value)}
           >
-            {Object.entries(INVENTORY_CATEGORY_LABELS).map(([code, label]) => (
-              <option key={code} value={label}>
-                {label}
+            {INVENTORY_CATEGORY_OPTIONS.map((code) => (
+              <option key={code} value={INVENTORY_CATEGORY_LABELS[code]}>
+                {INVENTORY_CATEGORY_LABELS[code]}
               </option>
             ))}
           </select>
@@ -5033,6 +5063,17 @@ function ProductModal({
             <option value="Inactivo">Inactivo</option>
           </select>
         </label>
+      </div>
+      <div className="adm-modal-section">
+        <ImageGalleryField
+          label="Imagen del artículo"
+          target="inventoryItem"
+          items={gallery}
+          onChange={setGallery}
+          maxImages={1}
+          recordName={name || 'el artículo de inventario'}
+          disabled={save.submitting}
+        />
       </div>
     </AdminModal>
   );

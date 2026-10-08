@@ -8,7 +8,7 @@
  * registro activo — para el personal existe la ruta con token (ver
  * services/mediaService.ts).
  */
-export type MediaTargetDto = 'room_type' | 'product' | 'amenity';
+export type MediaTargetDto = 'room_type' | 'product' | 'amenity' | 'inventory_item';
 
 export type MediaVariantDto = 'thumb' | 'medium' | 'large';
 

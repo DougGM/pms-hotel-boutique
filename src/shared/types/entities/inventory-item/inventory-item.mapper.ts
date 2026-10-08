@@ -1,4 +1,8 @@
 import { toDomainDate, toDtoDate } from '@/shared/types/common';
+import {
+  toDomain as toMediaImage,
+  toDTO as toMediaImageDto,
+} from '../media-image/media-image.mapper';
 import type { InventoryItemDto } from './inventory-item.dto';
 import type { InventoryItem } from './inventory-item.model';
 
@@ -18,6 +22,7 @@ export const toDomain = (dto: InventoryItemDto): InventoryItem => ({
   currentQuantity: dto.current_quantity,
   minimumQuantity: dto.minimum_quantity,
   productId: dto.product_id,
+  ...(dto.images === undefined ? {} : { images: dto.images.map(toMediaImage) }),
   active: dto.active,
   isBelowMinimum: dto.current_quantity < dto.minimum_quantity,
   createdAt: toDomainDate(dto.created_at),
@@ -34,6 +39,7 @@ export const toDTO = (model: InventoryItem): InventoryItemDto => ({
   current_quantity: model.currentQuantity,
   minimum_quantity: model.minimumQuantity,
   product_id: model.productId,
+  ...(model.images === undefined ? {} : { images: model.images.map(toMediaImageDto) }),
   active: model.active,
   created_at: toDtoDate(model.createdAt),
   updated_at: toDtoDate(model.updatedAt),

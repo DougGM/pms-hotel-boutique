@@ -1504,6 +1504,18 @@ button {
   display: inline;
   margin-left: var(--space-2);
 }
+.gs-request-item-image {
+  width: min(100%, 240px);
+  height: 140px;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+}
+.gs-service-load-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
 .gs-service-modal .modal-foot {
   margin-top: var(--space-6);
 }
@@ -8034,6 +8046,19 @@ button {
   color: var(--color-legacy-8a7c72);
   font-size: var(--font-size-legacy-13);
   line-height: 1.4;
+}
+.adm-inventory-product {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 180px;
+}
+.adm-inventory-image {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  overflow: hidden;
+  border-radius: var(--radius-md);
 }
 .adm-table-identity {
   display: flex;
