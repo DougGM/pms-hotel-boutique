@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unused-vars, react-hooks/rules-of-hooks -- Migracion controlada del prototipo Bolt; se conserva la logica original para portarla incrementalmente. */
+/* eslint-disable @typescript-eslint/no-unused-vars -- Migracion controlada del prototipo Bolt; se conserva la logica original para portarla incrementalmente. */
 import { useState } from 'react';
 import {
   ArrowRight,
@@ -209,6 +209,10 @@ export function ReceptionContent({
   onRefresh: () => Promise<void>;
 }) {
   const [refreshingCalendar, setRefreshingCalendar] = useState(false);
+  const [availCheckIn, setAvailCheckIn] = useState('2024-08-31');
+  const [availCheckOut, setAvailCheckOut] = useState('2024-09-02');
+  const [availGuests, setAvailGuests] = useState(2);
+  const [availType, setAvailType] = useState('Todos');
 
   const refreshCalendar = async () => {
     if (refreshingCalendar) return;
@@ -1103,11 +1107,6 @@ export function ReceptionContent({
 
   /* ---------- Disponibilidad ---------- */
   if (nav === 'Disponibilidad') {
-    const [availCheckIn, setAvailCheckIn] = useState('2024-08-31');
-    const [availCheckOut, setAvailCheckOut] = useState('2024-09-02');
-    const [availGuests, setAvailGuests] = useState(2);
-    const [availType, setAvailType] = useState('Todos');
-
     const available = rooms.filter((r) => {
       if (r.status !== 'Disponible') return false;
       if (availType !== 'Todos' && r.type !== availType) return false;
