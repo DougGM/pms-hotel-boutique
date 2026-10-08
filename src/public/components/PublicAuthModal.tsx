@@ -132,7 +132,11 @@ export function PublicAuthModal({ onClose }: PublicAuthModalProps) {
         ) : null}
         <p className="muted visitor-auth-modal-switch">
           ¿Primera vez como huésped?{' '}
-          <Link to={routePaths.public.register} onClick={onClose}>
+          <Link
+            className="staff-login-register-link"
+            to={routePaths.public.register}
+            onClick={onClose}
+          >
             Crea tu acceso con el código de reserva
           </Link>
         </p>

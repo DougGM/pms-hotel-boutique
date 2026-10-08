@@ -65,3 +65,23 @@
   cursor: wait;
   opacity: 0.65;
 }
+
+.staff-login-register-link {
+  color: var(--color-brand-gold-dark);
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: var(--color-brand-gold-dark);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
+}
+
+.staff-login-register-link:hover {
+  color: var(--color-text-primary);
+  text-decoration-thickness: 2px;
+}
+
+.staff-login-register-link:focus-visible {
+  border-radius: 2px;
+  outline: 2px solid var(--color-brand-gold-dark);
+  outline-offset: 3px;
+}

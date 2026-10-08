@@ -128,7 +128,9 @@ function StaffLoginForm() {
 
         <p className="muted">
           ¿Primera vez como huésped?{' '}
-          <Link to={routePaths.public.register}>Crea tu acceso con el código de reserva</Link>
+          <Link className="staff-login-register-link" to={routePaths.public.register}>
+            Crea tu acceso con el código de reserva
+          </Link>
         </p>
         <Link className="button secondary" to={routePaths.public.home}>
           Volver al inicio
