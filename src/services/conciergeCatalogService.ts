@@ -24,10 +24,12 @@ const map = (item: ConciergeServiceDto): ConciergeServiceOption => ({
 
 export const conciergeCatalogService = {
   async getGuestServices(): Promise<ConciergeServiceOption[]> {
-    return (await guestRequest(
-      () => httpClient.get<ConciergeServiceDto[]>('/guest/concierge/services'),
-      'No fue posible cargar los servicios de conserjería.',
-    )).map(map);
+    return (
+      await guestRequest(
+        () => httpClient.get<ConciergeServiceDto[]>('/guest/concierge/services'),
+        'No fue posible cargar los servicios de conserjería.',
+      )
+    ).map(map);
   },
   async getServices(): Promise<ConciergeServiceOption[]> {
     return (await httpClient.get<ConciergeServiceDto[]>('/concierge/services')).map(map);

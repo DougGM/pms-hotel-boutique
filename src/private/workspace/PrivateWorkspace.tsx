@@ -1905,14 +1905,14 @@ function PrivateWorkspaceReady({
             : contentRole === 'admin'
               ? adminStockNotifications
               : contentRole === 'guest'
-              ? []
-              : [
-                  {
-                    title: 'Reserva activa',
-                    detail: 'Tu estancia y servicios están disponibles',
-                    tone: 'success',
-                  },
-                ];
+                ? []
+                : [
+                    {
+                      title: 'Reserva activa',
+                      detail: 'Tu estancia y servicios están disponibles',
+                      tone: 'success',
+                    },
+                  ];
 
   const notify = (message: string) => {
     setToast(message);
@@ -2272,7 +2272,9 @@ function PrivateWorkspaceReady({
 
     try {
       const updated = await housekeepingService.startStayoverCleaning(request.requestId);
-      const checklist = isGuestItemRequest(request) ? undefined : await ensureRequestChecklist(request);
+      const checklist = isGuestItemRequest(request)
+        ? undefined
+        : await ensureRequestChecklist(request);
       setHkRequests((current) =>
         current.map((item) =>
           item.id === reqId
@@ -2331,9 +2333,11 @@ function PrivateWorkspaceReady({
     if (!request || isGuestItemRequest(request)) return;
     try {
       const checklist = await ensureRequestChecklist(request);
-      setHkRequests((current) => current.map((item) => item.id === reqId
-        ? { ...item, checklistId: checklist.id, checklist }
-        : item));
+      setHkRequests((current) =>
+        current.map((item) =>
+          item.id === reqId ? { ...item, checklistId: checklist.id, checklist } : item,
+        ),
+      );
     } catch (cause) {
       await failHousekeeping(cause);
     }
@@ -2350,9 +2354,11 @@ function PrivateWorkspaceReady({
         status: 'in_progress',
         items,
       });
-      setHkRequests((current) => current.map((item) => item.id === reqId
-        ? { ...item, checklistId: checklist.id, checklist }
-        : item));
+      setHkRequests((current) =>
+        current.map((item) =>
+          item.id === reqId ? { ...item, checklistId: checklist.id, checklist } : item,
+        ),
+      );
     } catch (cause) {
       await failHousekeeping(cause);
     }
@@ -2370,9 +2376,11 @@ function PrivateWorkspaceReady({
         status: 'completed',
         items: request.checklist.items,
       });
-      setHkRequests((current) => current.map((item) => item.id === reqId
-        ? { ...item, checklistId: checklist.id, checklist }
-        : item));
+      setHkRequests((current) =>
+        current.map((item) =>
+          item.id === reqId ? { ...item, checklistId: checklist.id, checklist } : item,
+        ),
+      );
       notify('Checklist de limpieza completado. Ya puedes cerrar la solicitud.');
     } catch (cause) {
       await failHousekeeping(cause);
@@ -4590,7 +4598,10 @@ function HousekeepingContent({
                   {!req.checklist ? (
                     <>
                       <p>Esta solicitud todavía no tiene checklist.</p>
-                      <button className="button small secondary" onClick={() => onPrepareRequestChecklist(req.id)}>
+                      <button
+                        className="button small secondary"
+                        onClick={() => onPrepareRequestChecklist(req.id)}
+                      >
                         Preparar checklist
                       </button>
                     </>
@@ -4599,7 +4610,8 @@ function HousekeepingContent({
                       <div className="hk-request-checklist-heading">
                         <strong>Checklist de limpieza</strong>
                         <span>
-                          {req.checklist.items.filter((item) => item.done).length}/{req.checklist.items.length}
+                          {req.checklist.items.filter((item) => item.done).length}/
+                          {req.checklist.items.length}
                         </span>
                       </div>
                       <div className="hk-request-checklist-items">
@@ -4618,7 +4630,10 @@ function HousekeepingContent({
                       {req.checklist.status !== 'completed' && (
                         <button
                           className="button small secondary"
-                          disabled={req.checklist.items.length === 0 || req.checklist.items.some((item) => !item.done)}
+                          disabled={
+                            req.checklist.items.length === 0 ||
+                            req.checklist.items.some((item) => !item.done)
+                          }
                           onClick={() => onCompleteRequestChecklist(req.id)}
                         >
                           Completar checklist

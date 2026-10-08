@@ -24,10 +24,12 @@ const map = (item: HousekeepingServiceDto): HousekeepingServiceOption => ({
 
 export const housekeepingCatalogService = {
   async getGuestServices(): Promise<HousekeepingServiceOption[]> {
-    return (await guestRequest(
-      () => httpClient.get<HousekeepingServiceDto[]>('/guest/housekeeping/services'),
-      'No fue posible cargar las opciones de limpieza.',
-    )).map(map);
+    return (
+      await guestRequest(
+        () => httpClient.get<HousekeepingServiceDto[]>('/guest/housekeeping/services'),
+        'No fue posible cargar las opciones de limpieza.',
+      )
+    ).map(map);
   },
   async getServices(): Promise<HousekeepingServiceOption[]> {
     return (await httpClient.get<HousekeepingServiceDto[]>('/housekeeping/services')).map(map);

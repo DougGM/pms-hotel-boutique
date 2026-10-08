@@ -274,7 +274,11 @@ function installHousekeepingBackend() {
     }
     if (method === 'GET' && path === '/housekeeping/checklists') return json(state.checklists);
     if (method === 'GET' && path === '/housekeeping/checklist-template') {
-      return json({ code: 'guest-cleaning', name: 'Limpieza solicitada por huésped', items: ['Cama preparada', 'Baño limpio'] });
+      return json({
+        code: 'guest-cleaning',
+        name: 'Limpieza solicitada por huésped',
+        items: ['Cama preparada', 'Baño limpio'],
+      });
     }
     // ServiceRequestController: Limpieza lee housekeeping/maintenance y solo crea maintenance.
     if (method === 'GET' && path === '/service-requests') {
@@ -520,10 +524,13 @@ test('limpieza: atender y completar una solicitud avanza sin transición inváli
   assert.ok(!toasts().some((toast) => /rechaz/i.test(toast)), toasts().join());
   assert.equal(navBadge('Solicitudes'), String(openBefore), 'sigue abierta: el badge no cambia');
 
-  const checklist = () => rowFor().row.findAll((node) => hasClass(node, 'hk-request-checklist-items'))[0];
+  const checklist = () =>
+    rowFor().row.findAll((node) => hasClass(node, 'hk-request-checklist-items'))[0];
   assert.ok(checklist(), 'muestra el checklist al iniciar la atención');
   assert.deepEqual(
-    checklist().findAll((node) => node.type === 'input').map((input) => input.props.checked),
+    checklist()
+      .findAll((node) => node.type === 'input')
+      .map((input) => input.props.checked),
     [false, false],
     'las tareas empiezan sin marcar',
   );

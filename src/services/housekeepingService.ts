@@ -394,7 +394,8 @@ export const housekeepingService = {
   },
   async getGuestCleaningChecklistTemplate(): Promise<string[]> {
     const response = await request(
-      () => httpClient.get<HousekeepingChecklistTemplateResponse>('/housekeeping/checklist-template'),
+      () =>
+        httpClient.get<HousekeepingChecklistTemplateResponse>('/housekeeping/checklist-template'),
       'No fue posible cargar la lista de limpieza configurada.',
     );
     return response.items;

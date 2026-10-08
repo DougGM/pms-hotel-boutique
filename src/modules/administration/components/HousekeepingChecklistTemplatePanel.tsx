@@ -5,7 +5,11 @@ import { housekeepingChecklistTemplateService } from '@/services/housekeepingChe
 import { ErrorState } from '@/shared/components/ErrorState';
 import { LoadingState } from '@/shared/components/LoadingState';
 
-export function HousekeepingChecklistTemplatePanel({ onAction }: { onAction: (message: string) => void }) {
+export function HousekeepingChecklistTemplatePanel({
+  onAction,
+}: {
+  onAction: (message: string) => void;
+}) {
   const [templateName, setTemplateName] = useState('');
   const [itemsText, setItemsText] = useState('');
   const [loading, setLoading] = useState(true);
@@ -26,10 +30,15 @@ export function HousekeepingChecklistTemplatePanel({ onAction }: { onAction: (me
     }
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   const save = async () => {
-    const items = itemsText.split('\n').map((item) => item.trim()).filter(Boolean);
+    const items = itemsText
+      .split('\n')
+      .map((item) => item.trim())
+      .filter(Boolean);
     if (!items.length) {
       onAction('La checklist debe incluir al menos un punto.');
       return;
@@ -57,7 +66,9 @@ export function HousekeepingChecklistTemplatePanel({ onAction }: { onAction: (me
           <Save size={16} /> {saving ? 'Guardando...' : 'Guardar checklist'}
         </button>
       </div>
-      {loading ? <LoadingState label="Cargando checklist..." /> : error ? (
+      {loading ? (
+        <LoadingState label="Cargando checklist..." />
+      ) : error ? (
         <ErrorState title="No se pudo cargar la checklist" description={error} onRetry={load} />
       ) : (
         <>
@@ -72,8 +83,8 @@ export function HousekeepingChecklistTemplatePanel({ onAction }: { onAction: (me
             />
           </label>
           <p className="adm-checklist-template-note">
-            Se copia a las nuevas solicitudes de limpieza. Las tareas existentes conservan su checklist.
-            Los pedidos de artículos no usan esta lista.
+            Se copia a las nuevas solicitudes de limpieza. Las tareas existentes conservan su
+            checklist. Los pedidos de artículos no usan esta lista.
           </p>
         </>
       )}

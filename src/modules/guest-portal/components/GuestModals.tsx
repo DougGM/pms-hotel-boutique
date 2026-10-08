@@ -3,8 +3,14 @@ import { useCallback, useEffect, useState } from 'react';
 import type { MediaImage } from '@/shared/types/entities/media-image';
 import { CatalogImage } from '@/shared/components/CatalogImage';
 import { inventoryService, type GuestHousekeepingItem } from '@/services/inventoryService';
-import { conciergeCatalogService, type ConciergeServiceOption } from '@/services/conciergeCatalogService';
-import { housekeepingCatalogService, type HousekeepingServiceOption } from '@/services/housekeepingCatalogService';
+import {
+  conciergeCatalogService,
+  type ConciergeServiceOption,
+} from '@/services/conciergeCatalogService';
+import {
+  housekeepingCatalogService,
+  type HousekeepingServiceOption,
+} from '@/services/housekeepingCatalogService';
 import {
   ArrowRight,
   Ban,
@@ -808,9 +814,13 @@ export function RequestServiceModal({
     try {
       const services = await housekeepingCatalogService.getGuestServices();
       setHousekeepingServices(services);
-      setSelectedType((current) => services.some((service) => service.id === current) ? current : (services[0]?.id ?? ''));
+      setSelectedType((current) =>
+        services.some((service) => service.id === current) ? current : (services[0]?.id ?? ''),
+      );
     } catch (cause) {
-      setHousekeepingError(cause instanceof Error ? cause.message : 'No se pudieron cargar las opciones de limpieza.');
+      setHousekeepingError(
+        cause instanceof Error ? cause.message : 'No se pudieron cargar las opciones de limpieza.',
+      );
     } finally {
       setHousekeepingLoading(false);
     }
@@ -839,9 +849,13 @@ export function RequestServiceModal({
     try {
       const services = await conciergeCatalogService.getGuestServices();
       setConciergeServices(services);
-      setSelectedType((current) => services.some((service) => service.id === current) ? current : (services[0]?.id ?? ''));
+      setSelectedType((current) =>
+        services.some((service) => service.id === current) ? current : (services[0]?.id ?? ''),
+      );
     } catch (cause) {
-      setConciergeError(cause instanceof Error ? cause.message : 'No se pudieron cargar los servicios.');
+      setConciergeError(
+        cause instanceof Error ? cause.message : 'No se pudieron cargar los servicios.',
+      );
     } finally {
       setConciergeLoading(false);
     }
@@ -856,22 +870,25 @@ export function RequestServiceModal({
     if (mode === 'Conserjería') void loadConciergeServices();
   }, [loadConciergeServices, mode]);
   const selectedItem = housekeepingItems.find((item) => item.id === selectedType);
-  const selectedHousekeepingService = housekeepingServices.find((service) => service.id === selectedType);
+  const selectedHousekeepingService = housekeepingServices.find(
+    (service) => service.id === selectedType,
+  );
   const selectedConciergeService = conciergeServices.find((service) => service.id === selectedType);
   const maxQuantity = Math.min(5, selectedItem?.currentQuantity ?? 0);
-  const canSubmitItems = mode === 'Articulos'
-    ? !itemsLoading && !itemsError && maxQuantity > 0 && Boolean(selectedItem)
-    : mode === 'Conserjería'
-      ? !conciergeLoading && !conciergeError && Boolean(selectedConciergeService)
-      : !housekeepingLoading && !housekeepingError && Boolean(selectedHousekeepingService);
+  const canSubmitItems =
+    mode === 'Articulos'
+      ? !itemsLoading && !itemsError && maxQuantity > 0 && Boolean(selectedItem)
+      : mode === 'Conserjería'
+        ? !conciergeLoading && !conciergeError && Boolean(selectedConciergeService)
+        : !housekeepingLoading && !housekeepingError && Boolean(selectedHousekeepingService);
   const handleSubmit = async () => {
     if (submitting || !canSubmitItems) return;
     const baseDescription =
       mode === 'Articulos'
         ? `${quantity}× ${selectedItem?.name ?? ''}`
         : mode === 'Conserjería'
-          ? selectedConciergeService?.name ?? ''
-          : selectedHousekeepingService?.name ?? '';
+          ? (selectedConciergeService?.name ?? '')
+          : (selectedHousekeepingService?.name ?? '');
     const description = `${baseDescription}${notes ? ` — ${notes}` : ''}`;
     setSubmitting(true);
     try {
@@ -902,7 +919,8 @@ export function RequestServiceModal({
         ? 'Por ejemplo, déjalo en la puerta o no tocar el timbre.'
         : selectedConciergeService?.name === 'Taxi al aeropuerto'
           ? 'Indica la hora del vuelo, pasajeros y equipaje.'
-          : selectedConciergeService?.name === 'Transporte local' || selectedConciergeService?.name === 'Traslado privado'
+          : selectedConciergeService?.name === 'Transporte local' ||
+              selectedConciergeService?.name === 'Traslado privado'
             ? 'Indica destino, hora y número de pasajeros.'
             : selectedConciergeService?.name === 'Reserva de restaurante'
               ? 'Indica restaurante, horario y número de personas.'
@@ -1016,12 +1034,33 @@ export function RequestServiceModal({
                 disabled={conciergeLoading || conciergeServices.length === 0}
                 onChange={(event) => setSelectedType(event.target.value)}
               >
-                {conciergeServices.map((service) => <option key={service.id} value={service.id}>{service.name}</option>)}
+                {conciergeServices.map((service) => (
+                  <option key={service.id} value={service.id}>
+                    {service.name}
+                  </option>
+                ))}
               </select>
               {conciergeLoading && <small className="gs-service-hint">Cargando servicios...</small>}
-              {conciergeError && <div className="gs-service-load-error" role="alert"><small>{conciergeError}</small><button type="button" className="button secondary" onClick={loadConciergeServices}>Reintentar</button></div>}
-              {!conciergeLoading && !conciergeError && conciergeServices.length === 0 && <small className="gs-service-hint">No hay servicios disponibles por el momento.</small>}
-              {selectedConciergeService?.description && <small className="gs-service-hint">{selectedConciergeService.description}</small>}
+              {conciergeError && (
+                <div className="gs-service-load-error" role="alert">
+                  <small>{conciergeError}</small>
+                  <button
+                    type="button"
+                    className="button secondary"
+                    onClick={loadConciergeServices}
+                  >
+                    Reintentar
+                  </button>
+                </div>
+              )}
+              {!conciergeLoading && !conciergeError && conciergeServices.length === 0 && (
+                <small className="gs-service-hint">
+                  No hay servicios disponibles por el momento.
+                </small>
+              )}
+              {selectedConciergeService?.description && (
+                <small className="gs-service-hint">{selectedConciergeService.description}</small>
+              )}
             </>
           ) : mode === 'Limpieza' ? (
             <select
@@ -1031,19 +1070,32 @@ export function RequestServiceModal({
               disabled={housekeepingLoading || housekeepingServices.length === 0}
               onChange={(event) => setSelectedType(event.target.value)}
             >
-              {housekeepingServices.map((service) => <option key={service.id} value={service.id}>{service.name}</option>)}
+              {housekeepingServices.map((service) => (
+                <option key={service.id} value={service.id}>
+                  {service.name}
+                </option>
+              ))}
             </select>
           ) : null}
-          {mode === 'Limpieza' && housekeepingLoading && <small className="gs-service-hint">Cargando opciones de limpieza...</small>}
+          {mode === 'Limpieza' && housekeepingLoading && (
+            <small className="gs-service-hint">Cargando opciones de limpieza...</small>
+          )}
           {mode === 'Limpieza' && housekeepingError && (
             <div className="gs-service-load-error" role="alert">
               <small>{housekeepingError}</small>
-              <button type="button" className="button secondary" onClick={loadHousekeepingServices}>Reintentar</button>
+              <button type="button" className="button secondary" onClick={loadHousekeepingServices}>
+                Reintentar
+              </button>
             </div>
           )}
-          {mode === 'Limpieza' && !housekeepingLoading && !housekeepingError && housekeepingServices.length === 0 && (
-            <small className="gs-service-hint">No hay opciones de limpieza disponibles por el momento.</small>
-          )}
+          {mode === 'Limpieza' &&
+            !housekeepingLoading &&
+            !housekeepingError &&
+            housekeepingServices.length === 0 && (
+              <small className="gs-service-hint">
+                No hay opciones de limpieza disponibles por el momento.
+              </small>
+            )}
           {mode === 'Limpieza' && selectedHousekeepingService?.description && (
             <small className="gs-service-hint">{selectedHousekeepingService.description}</small>
           )}
