@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { MediaImage } from '@/shared/types/entities/media-image';
 import { CatalogImage } from '@/shared/components/CatalogImage';
 import { inventoryService, type GuestHousekeepingItem } from '@/services/inventoryService';
+import { conciergeCatalogService, type ConciergeServiceOption } from '@/services/conciergeCatalogService';
 import {
   ArrowRight,
   Ban,
@@ -780,23 +781,19 @@ export function RequestServiceModal({
     time: string;
     itemId?: string;
     quantity?: number;
+    conciergeServiceId?: string;
     notes?: string;
   }) => Promise<void>;
 }) {
   const cleaningTypes = ['Limpieza de estancia', 'Limpieza de salida', 'Limpieza completa'];
   const timeSlots = ['Lo antes posible', 'Por la mañana', 'Por la tarde', 'Esta noche'];
-  const conciergeTypes = [
-    'Taxi al aeropuerto',
-    'Transporte local',
-    'Traslado privado',
-    'Reserva de restaurante',
-    'Tour o actividad',
-    'Otra solicitud',
-  ];
   const [selectedType, setSelectedType] = useState<string>(
-    mode === 'Limpieza' ? cleaningTypes[0] : mode === 'Articulos' ? '' : conciergeTypes[0],
+    mode === 'Limpieza' ? cleaningTypes[0] : '',
   );
   const [housekeepingItems, setHousekeepingItems] = useState<GuestHousekeepingItem[]>([]);
+  const [conciergeServices, setConciergeServices] = useState<ConciergeServiceOption[]>([]);
+  const [conciergeLoading, setConciergeLoading] = useState(mode === 'Conserjería');
+  const [conciergeError, setConciergeError] = useState('');
   const [itemsLoading, setItemsLoading] = useState(mode === 'Articulos');
   const [itemsError, setItemsError] = useState('');
   const [selectedTime, setSelectedTime] = useState(timeSlots[0]);
@@ -821,18 +818,41 @@ export function RequestServiceModal({
       setItemsLoading(false);
     }
   }, []);
+  const loadConciergeServices = useCallback(async () => {
+    setConciergeLoading(true);
+    setConciergeError('');
+    try {
+      const services = await conciergeCatalogService.getGuestServices();
+      setConciergeServices(services);
+      setSelectedType((current) => services.some((service) => service.id === current) ? current : (services[0]?.id ?? ''));
+    } catch (cause) {
+      setConciergeError(cause instanceof Error ? cause.message : 'No se pudieron cargar los servicios.');
+    } finally {
+      setConciergeLoading(false);
+    }
+  }, []);
   useEffect(() => {
     if (mode === 'Articulos') void loadHousekeepingItems();
   }, [loadHousekeepingItems, mode]);
+  useEffect(() => {
+    if (mode === 'Conserjería') void loadConciergeServices();
+  }, [loadConciergeServices, mode]);
   const selectedItem = housekeepingItems.find((item) => item.id === selectedType);
+  const selectedConciergeService = conciergeServices.find((service) => service.id === selectedType);
   const maxQuantity = Math.min(5, selectedItem?.currentQuantity ?? 0);
-  const canSubmitItems =
-    mode !== 'Articulos' ||
-    (!itemsLoading && !itemsError && maxQuantity > 0 && Boolean(selectedItem));
+  const canSubmitItems = mode === 'Articulos'
+    ? !itemsLoading && !itemsError && maxQuantity > 0 && Boolean(selectedItem)
+    : mode === 'Conserjería'
+      ? !conciergeLoading && !conciergeError && Boolean(selectedConciergeService)
+      : true;
   const handleSubmit = async () => {
     if (submitting || !canSubmitItems) return;
     const baseDescription =
-      mode === 'Articulos' ? `${quantity}× ${selectedItem?.name ?? ''}` : selectedType;
+      mode === 'Articulos'
+        ? `${quantity}× ${selectedItem?.name ?? ''}`
+        : mode === 'Conserjería'
+          ? selectedConciergeService?.name ?? ''
+          : selectedType;
     const description = `${baseDescription}${notes ? ` — ${notes}` : ''}`;
     setSubmitting(true);
     try {
@@ -842,13 +862,14 @@ export function RequestServiceModal({
         time: selectedTime,
         itemId: mode === 'Articulos' ? selectedItem?.id : undefined,
         quantity: mode === 'Articulos' ? quantity : undefined,
+        conciergeServiceId: mode === 'Conserjería' ? selectedConciergeService?.id : undefined,
         notes,
       });
     } finally {
       setSubmitting(false);
     }
   };
-  const options = mode === 'Limpieza' ? cleaningTypes : conciergeTypes;
+  const options = cleaningTypes;
   const title =
     mode === 'Limpieza'
       ? 'Limpieza de habitación'
@@ -860,15 +881,15 @@ export function RequestServiceModal({
       ? 'Indica una hora o detalle importante para el equipo de limpieza.'
       : mode === 'Articulos'
         ? 'Por ejemplo, déjalo en la puerta o no tocar el timbre.'
-        : selectedType === 'Taxi al aeropuerto'
+        : selectedConciergeService?.name === 'Taxi al aeropuerto'
           ? 'Indica la hora del vuelo, pasajeros y equipaje.'
-          : selectedType === 'Transporte local' || selectedType === 'Traslado privado'
+          : selectedConciergeService?.name === 'Transporte local' || selectedConciergeService?.name === 'Traslado privado'
             ? 'Indica destino, hora y número de pasajeros.'
-            : selectedType === 'Reserva de restaurante'
+            : selectedConciergeService?.name === 'Reserva de restaurante'
               ? 'Indica restaurante, horario y número de personas.'
-              : selectedType === 'Tour o actividad'
+              : selectedConciergeService?.name === 'Tour o actividad'
                 ? 'Cuéntanos qué actividad te interesa y para cuántas personas.'
-                : 'Cuéntanos qué necesitas y cuándo prefieres recibir ayuda.';
+                : 'Agrega los detalles para que conserjería pueda coordinar el servicio.';
   const timeField = (
     <div className="hk-form-label gs-service-time-field">
       <span>Momento preferido</span>
@@ -967,11 +988,27 @@ export function RequestServiceModal({
                 />
               )}
             </>
+          ) : mode === 'Conserjería' ? (
+            <>
+              <select
+                className="hk-form-select gs-service-select"
+                value={selectedType}
+                aria-label="Servicio de conserjería"
+                disabled={conciergeLoading || conciergeServices.length === 0}
+                onChange={(event) => setSelectedType(event.target.value)}
+              >
+                {conciergeServices.map((service) => <option key={service.id} value={service.id}>{service.name}</option>)}
+              </select>
+              {conciergeLoading && <small className="gs-service-hint">Cargando servicios...</small>}
+              {conciergeError && <div className="gs-service-load-error" role="alert"><small>{conciergeError}</small><button type="button" className="button secondary" onClick={loadConciergeServices}>Reintentar</button></div>}
+              {!conciergeLoading && !conciergeError && conciergeServices.length === 0 && <small className="gs-service-hint">No hay servicios disponibles por el momento.</small>}
+              {selectedConciergeService?.description && <small className="gs-service-hint">{selectedConciergeService.description}</small>}
+            </>
           ) : (
             <select
               className="hk-form-select gs-service-select"
               value={selectedType}
-              aria-label={mode === 'Limpieza' ? 'Tipo de limpieza' : 'Tipo de solicitud'}
+              aria-label="Tipo de limpieza"
               onChange={(event) => setSelectedType(event.target.value)}
             >
               {options.map((option) => (

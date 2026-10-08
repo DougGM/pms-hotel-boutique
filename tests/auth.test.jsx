@@ -616,8 +616,8 @@ test('each staff role only sees its menu and direct unauthorized URLs are blocke
     ['limpieza', '/pms/housekeeping', 'Habitaciones', '/pms/cash', 4],
     ['conserjeria', '/pms/concierge', 'Solicitudes', '/pms/cash', 3],
     ['roomservice', '/pms/room-service', 'Pedidos activos', '/pms/users', 4],
-    // 47: se omiten módulos sin contrato backend visible.
-    ['admin', '/pms/dashboard', 'Administración', null, 47],
+    // 48: incluye el catálogo administrable de Conserjería.
+    ['admin', '/pms/dashboard', 'Administración', null, 48],
   ];
   for (const [account, expectedPath, section, forbidden, count] of roles) {
     await open('/login');

@@ -41,6 +41,7 @@ import { reportingService, type OperationalReport } from '@/services/reportingSe
 import { roomService } from '@/services/roomService';
 import { HttpError } from '@/services/http-client';
 import { CatalogImage } from '@/shared/components/CatalogImage';
+import { ConciergeCatalogPanel } from './ConciergeCatalogPanel';
 import { ErrorState } from '@/shared/components/ErrorState';
 import { ImageGalleryField } from '@/shared/components/ImageGalleryField';
 import { LoadingState } from '@/shared/components/LoadingState';
@@ -1467,6 +1468,10 @@ export function AdminContent({
       active = false;
     };
   }, [reloadKey]);
+
+  if (nav === 'Catálogo de Conserjería') {
+    return <ConciergeCatalogPanel onAction={onAction} />;
+  }
 
   if (screen.status === 'loading') {
     return <LoadingState label="Cargando el panel de administración..." />;

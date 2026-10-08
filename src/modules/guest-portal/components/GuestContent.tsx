@@ -615,12 +615,13 @@ function GuestContentReady({
     time: string;
     itemId?: string;
     quantity?: number;
+    conciergeServiceId?: string;
     notes?: string;
   }) => {
     // Limpieza y artículos se atienden desde Housekeeping; otros pedidos van a Conserjería.
     const kind: GuestServiceRequest['kind'] =
       data.type === 'Limpieza' || data.type === 'Artículos' ? 'housekeeping' : 'concierge';
-    const payload = { description: data.description, notes: `Horario preferido: ${data.time}` };
+    const payload = { description: data.description, notes: `${data.time}${data.notes ? ` · ${data.notes}` : ''}` };
     try {
       const request =
         kind === 'housekeeping'
@@ -631,7 +632,7 @@ function GuestContentReady({
                 notes: `${data.time}${data.notes ? ` · ${data.notes}` : ''}`,
               })
             : await housekeepingService.createGuestStayoverRequest(payload)
-          : await serviceRequestService.createGuestConciergeRequest(payload);
+          : await serviceRequestService.createGuestConciergeRequest({ ...payload, serviceId: data.conciergeServiceId! });
       const newReq = toGuestRequest(
         request,
         serviceRequests.length + 1,

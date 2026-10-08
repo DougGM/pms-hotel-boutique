@@ -183,6 +183,7 @@ export const serviceRequestService = {
     return response.map((item) => toServiceRequest(toServiceRequestDto(item)));
   },
   async createGuestConciergeRequest(data: {
+    serviceId: ID;
     description: string;
     notes?: string;
   }): Promise<ServiceRequest> {
@@ -192,6 +193,7 @@ export const serviceRequestService = {
         httpClient.post<ServiceRequestResponse>('/guest/concierge/requests', {
           description: data.description.trim(),
           notes: data.notes?.trim() || undefined,
+          serviceId: data.serviceId,
         }),
       'No fue posible enviar tu solicitud.',
     );
