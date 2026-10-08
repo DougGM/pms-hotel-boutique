@@ -111,6 +111,13 @@ type SaveChecklistPayload = {
   items: HousekeepingChecklistItem[];
 };
 
+type HousekeepingChecklistTemplateResponse = {
+  code: string;
+  name: string;
+  items: string[];
+  updatedAt: string;
+};
+
 type HousekeepingChecklistStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled';
 
 function toRoomDto(response: HousekeepingRoomResponse): RoomDto {
@@ -384,6 +391,13 @@ export const housekeepingService = {
       'No fue posible cargar los checklists de limpieza.',
     );
     return response.map(toChecklist);
+  },
+  async getGuestCleaningChecklistTemplate(): Promise<string[]> {
+    const response = await request(
+      () => httpClient.get<HousekeepingChecklistTemplateResponse>('/housekeeping/checklist-template'),
+      'No fue posible cargar la lista de limpieza configurada.',
+    );
+    return response.items;
   },
   async createChecklist(data: SaveChecklistPayload & { serviceRequestId: ID }) {
     const response = await request(
