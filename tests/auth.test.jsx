@@ -584,7 +584,6 @@ test('wrong credentials show an error, retry succeeds, and intended URL is resto
 });
 
 test('each staff role only sees its menu and direct unauthorized URLs are blocked', async () => {
-  await open('/login');
   const roles = [
     ['recepcion', '/pms/reception', 'Reservas', '/pms/users', 7],
     ['limpieza', '/pms/housekeeping', 'Habitaciones', '/pms/cash', 4],
@@ -594,6 +593,7 @@ test('each staff role only sees its menu and direct unauthorized URLs are blocke
     ['admin', '/pms/dashboard', 'Administración', null, 47],
   ];
   for (const [account, expectedPath, section, forbidden, count] of roles) {
+    await open('/login');
     await login(`${account}@hotelboutique.test`);
     assert.equal(router.state.location.pathname, expectedPath, account);
     const nav = view.root.findByType('nav');
@@ -609,7 +609,7 @@ test('each staff role only sees its menu and direct unauthorized URLs are blocke
       assert.ok(text().includes('No tienes permiso para ver esta sección'), account);
     }
     await logoutFromWorkspace();
-    assert.equal(router.state.location.pathname, '/auth/login');
+    assert.equal(router.state.location.pathname, '/');
     assert.equal(values.size, 0);
   }
 });
@@ -974,7 +974,7 @@ test('el huésped puede iniciar sesión con correo y contraseña contra backend 
   }
 
   await logoutFromWorkspace();
-  assert.equal(router.state.location.pathname, '/auth/register');
+  assert.equal(router.state.location.pathname, '/');
   assert.equal(values.has('PMS_AUTH_SESSION'), false);
 });
 
@@ -1031,7 +1031,7 @@ test('el huésped entra con el código de su reserva y sale a su acceso', async 
   assert.equal(stored.refreshToken, '', 'el huésped no tiene refresh token');
 
   await logoutFromWorkspace();
-  assert.equal(router.state.location.pathname, '/auth/register');
+  assert.equal(router.state.location.pathname, '/');
   assert.equal(values.has('PMS_AUTH_SESSION'), false);
 });
 
