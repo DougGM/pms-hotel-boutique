@@ -66,6 +66,7 @@ import { orderService } from '@/services/orderService';
 import { personnelService } from '@/services/personnelService';
 import { roomService } from '@/services/roomService';
 import { serviceRequestService } from '@/services/serviceRequestService';
+import { HttpError } from '@/services/http-client';
 import { ErrorState } from '@/shared/components/ErrorState';
 import { LoadingState } from '@/shared/components/LoadingState';
 import { toDomainCalendarDate, toDtoCalendarDate } from '@/shared/types/common';
@@ -786,6 +787,21 @@ async function safeList<T>(load: () => Promise<T[]>): Promise<T[]> {
   }
 }
 
+async function permissionAwareList<T>(load: () => Promise<T[]>): Promise<T[]> {
+  try {
+    return await load();
+  } catch (error) {
+    // Role permissions can be customized per hotel. A denied optional dataset
+    // must not prevent the rest of the employee workspace from loading.
+    if (error instanceof HttpError && error.status === 403) return [];
+    // Some services translate 403s into a localized Error before returning it.
+    if (error instanceof Error && error.message.startsWith('No tienes permisos para operar ')) {
+      return [];
+    }
+    throw error;
+  }
+}
+
 async function loadWorkspaceData(role: RoleId): Promise<WorkspaceState> {
   const canReadRooms = ROOM_READ_ROLES.includes(role);
   const canReadRoomCatalog = ROOM_CATALOG_READ_ROLES.includes(role);
@@ -811,25 +827,29 @@ async function loadWorkspaceData(role: RoleId): Promise<WorkspaceState> {
   ] = await Promise.all([
     // Limpieza obtiene las habitaciones desde housekeeping; evita depender de
     // `rooms.read` en perfiles personalizados con acceso solo al módulo.
-    canReadRooms && role !== 'housekeeping' ? roomService.getRooms() : [],
-    canReadRoomCatalog ? roomService.getRoomTypes() : [],
-    canReadRoomCatalog ? roomService.getRoomFeatures() : [],
-    canReadBookings ? bookingService.getBookings() : [],
-    canReadGuests ? guestService.getGuests() : [],
-    ROOM_SERVICE_READ_ROLES.includes(role) ? catalogService.getProducts() : [],
-    ROOM_SERVICE_READ_ROLES.includes(role) ? orderService.getOrders() : [],
+    canReadRooms && role !== 'housekeeping' ? permissionAwareList(() => roomService.getRooms()) : [],
+    canReadRoomCatalog ? permissionAwareList(() => roomService.getRoomTypes()) : [],
+    canReadRoomCatalog ? permissionAwareList(() => roomService.getRoomFeatures()) : [],
+    canReadBookings ? permissionAwareList(() => bookingService.getBookings()) : [],
+    canReadGuests ? permissionAwareList(() => guestService.getGuests()) : [],
+    ROOM_SERVICE_READ_ROLES.includes(role)
+      ? permissionAwareList(() => catalogService.getProducts())
+      : [],
+    ROOM_SERVICE_READ_ROLES.includes(role) ? permissionAwareList(() => orderService.getOrders()) : [],
     canReadServiceRequests
       ? role === 'housekeeping'
         ? safeList(() => serviceRequestService.getRequests())
-        : serviceRequestService.getRequests()
+        : permissionAwareList(() => serviceRequestService.getRequests())
       : [],
     safeList(() => auditService.getLogs()),
-    canReadFinance ? guestAccountService.getCharges() : [],
-    canReadFinance ? guestAccountService.getPayments() : [],
-    canReadFinance ? guestAccountService.getDeposits() : [],
+    canReadFinance ? permissionAwareList(() => guestAccountService.getCharges()) : [],
+    canReadFinance ? permissionAwareList(() => guestAccountService.getPayments()) : [],
+    canReadFinance ? permissionAwareList(() => guestAccountService.getDeposits()) : [],
     // Solo el rol de Limpieza tiene `housekeeping.read` en el backend.
     role === 'housekeeping' ? fetchHousekeepingData() : null,
-    CONCIERGE_READ_ROLES.includes(role) ? serviceRequestService.getConciergeRequests() : [],
+    CONCIERGE_READ_ROLES.includes(role)
+      ? permissionAwareList(() => serviceRequestService.getConciergeRequests())
+      : [],
   ]);
 
   const recRooms: RecRoom[] = rooms.map((room, index) => {

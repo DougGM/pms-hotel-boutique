@@ -1267,6 +1267,12 @@ function installReceptionBackend() {
     const method = init.method ?? 'GET';
     const body = init.body ? JSON.parse(String(init.body)) : undefined;
     state.requests.push({ call: `${method} ${path}`, body });
+    if (
+      method === 'GET' &&
+      (path.startsWith('/room-service/') || path === '/room-types' || path === '/room-features')
+    ) {
+      return json({ message: 'Forbidden' }, 403);
+    }
     if (method === 'GET' && path === '/bookings') return json([state.booking]);
     if (method === 'GET' && path === '/guests') {
       return json([
@@ -1348,6 +1354,12 @@ test('recepción: carga solicitudes y finanzas globales desde el backend', async
       `recepción consulta ${path}`,
     );
   }
+});
+
+test('recepción: los endpoints sin permiso no bloquean el inicio del panel', async () => {
+  await mountReception();
+  assert.ok(view.root.findAll((node) => hasClass(node, 'side-nav')).length);
+  assert.ok(!text(view.root).includes('No tienes permisos para operar Room Service.'));
 });
 
 test('recepción: cancelar una reserva envía el motivo al backend y muestra la reserva real', async () => {
