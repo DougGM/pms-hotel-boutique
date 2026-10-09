@@ -795,8 +795,15 @@ async function permissionAwareList<T>(load: () => Promise<T[]>): Promise<T[]> {
     // must not prevent the rest of the employee workspace from loading.
     if (error instanceof HttpError && error.status === 403) return [];
     // Some services translate 403s into a localized Error before returning it.
-    if (error instanceof Error && error.message.startsWith('No tienes permisos para operar ')) {
-      return [];
+    if (error instanceof Error) {
+      const message = error.message.trim();
+      if (
+        message === 'Forbidden' ||
+        /^HTTP 403\b/i.test(message) ||
+        message.startsWith('No tienes permisos para operar ')
+      ) {
+        return [];
+      }
     }
     throw error;
   }

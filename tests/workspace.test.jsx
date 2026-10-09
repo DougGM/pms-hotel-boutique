@@ -1360,6 +1360,7 @@ test('recepción: los endpoints sin permiso no bloquean el inicio del panel', as
   await mountReception();
   assert.ok(view.root.findAll((node) => hasClass(node, 'side-nav')).length);
   assert.ok(!text(view.root).includes('No tienes permisos para operar Room Service.'));
+  assert.ok(!text(view.root).includes('Forbidden'));
 });
 
 test('recepción: cancelar una reserva envía el motivo al backend y muestra la reserva real', async () => {
